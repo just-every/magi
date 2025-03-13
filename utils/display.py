@@ -58,7 +58,9 @@ class ProcessBox(Container):
     }
 
     .process-input {
-        height: 5;
+        height: auto;
+        min-height: 1;
+        max-height: 6;
         dock: bottom;
         border: solid #FF00FF;
         background: #000000;
@@ -209,7 +211,9 @@ class MAGIUI(App):
     }
 
     #global-input {
-        height: 5;
+        height: auto;
+        min-height: 1;
+        max-height: 6;
         background: #000000;
         color: #FFFFFF;
         border: solid #FF6600;
