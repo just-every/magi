@@ -21,7 +21,7 @@ class SubmittableTextArea(TextArea):
             self.post_message(self.Submitted(self, self.text))
             return
         # For all other keys, let TextArea handle it normally
-        super().on_key(event)
+        super(TextArea, self).on_key(event)
     
     class Submitted(TextArea.Changed):
         """Posted when the user presses Enter in the TextArea."""
