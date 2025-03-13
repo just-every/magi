@@ -15,7 +15,7 @@ class SubmittableTextArea(TextArea):
     """TextArea that submits on Enter and creates a new line on Shift+Enter."""
     
     async def _on_key(self, event: Key) -> None:
-        if event.key == "enter" and not event.shift and not event.ctrl:
+        if event.key == "enter" and "shift" not in event.key and "ctrl" not in event.key:
             # Submit on plain Enter
             event.prevent_default()
             self.post_message(self.Submitted(self, self.text))
