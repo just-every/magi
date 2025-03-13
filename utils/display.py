@@ -1,5 +1,5 @@
 """
-Display management for Times1000 application using Textual.
+Display management for MAGI application using Textual.
 """
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, Grid
@@ -235,12 +235,21 @@ class ProcessGrid(Grid):
             self.styles.grid_size = 4
 
 
-class Times1000UI(App):
-    """Main application UI for Times1000."""
+class MAGIUI(App):
+    """Main application UI for MAGI."""
     CSS = """
     #main-container {
         height: 100%;
         width: 100%;
+    }
+
+    #header {
+        height: auto;
+        padding: 1;
+        text-align: center;
+        background: $primary;
+        color: $text;
+        text-style: bold;
     }
 
     #global-input-container {
@@ -282,6 +291,7 @@ class Times1000UI(App):
     def compose(self) -> ComposeResult:
         """Create child widgets."""
         with Vertical(id="main-container"):
+            yield Static("[bold]M-A-G-I[/bold]", id="header")
             yield ProcessGrid(id="process-grid")
             with Container(id="global-input-container"):
                 global_input = SubmittableTextArea(id="global-input")
@@ -472,17 +482,32 @@ class Times1000UI(App):
         # Find the focused textarea
         for textarea in self.query("TextArea"):
             if textarea.has_focus:
-                # Add a new line at cursor position
-                current_text = textarea.text
-                cursor_pos = len(textarea.text[:textarea.selection.end[0]])
-                for i in range(textarea.selection.end[0]):
-                    cursor_pos += len(textarea.document[i])
-                cursor_pos += textarea.selection.end[1]
-                
-                # Insert a newline at the cursor position
-                new_text = current_text[:cursor_pos] + "\n" + current_text[cursor_pos:]
-                textarea.text = new_text
-                
-                # Move the cursor one position after the inserted newline
-                textarea.move_cursor((textarea.selection.end[0], textarea.selection.end[1]+1))
+                try:
+                    # Calculate index positions of all line breaks
+                    current_text = textarea.text
+                    line_starts = [0]
+                    for i, char in enumerate(current_text):
+                        if char == '\n':
+                            line_starts.append(i + 1)
+                    
+                    # Get current row and column from selection
+                    row, col = textarea.selection.end
+                    
+                    # Calculate absolute position in string
+                    if row < len(line_starts):
+                        cursor_pos = line_starts[row] + col
+                    else:
+                        cursor_pos = len(current_text)
+                    
+                    # Insert a newline at the cursor position
+                    new_text = current_text[:cursor_pos] + "\n" + current_text[cursor_pos:]
+                    textarea.text = new_text
+                    
+                    # Move the cursor to the beginning of the new line
+                    new_row = row + 1
+                    new_col = 0
+                    textarea.move_cursor((new_row, new_col))
+                except Exception as e:
+                    # Simple fallback if anything goes wrong
+                    textarea.text = textarea.text + "\n"
                 break
