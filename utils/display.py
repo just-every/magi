@@ -249,7 +249,7 @@ class MAGIUI(App):
         Binding("q", "quit", "Quit"),
         Binding("escape", "quit", "Quit"),
         Binding("ctrl+c", "force_quit", "Force Quit", show=False, priority=True),
-        Binding("ctrl+d", "quit", "Quit", show=False, priority=True),
+        Binding("ctrl+d", "force_quit", "Force Quit", show=False, priority=True),
         Binding("ctrl+enter", "submit_form", "Submit Input", show=True),
         Binding("shift+enter", "new_line", "New Line", show=True),
         Binding("alt+enter", "new_line", "New Line", show=True),
@@ -261,6 +261,7 @@ class MAGIUI(App):
         self.on_global_input_callback = None
         self.on_process_input_callback = None
         self.run_after_refresh = None
+        self.last_esc_time = 0  # Track the last time Escape was pressed
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -357,12 +358,22 @@ class MAGIUI(App):
             event.prevent_default()
 
     def action_quit(self):
-        """Show confirmation dialog and quit if confirmed."""
-        def handle_result(confirmed: bool) -> None:
-            if confirmed:
-                self.exit()
+        """Exit on double-Escape or show confirmation dialog."""
+        import time
+        
+        current_time = time.time()
+        # Check if this is a second Escape press within 2 seconds
+        if current_time - self.last_esc_time < 2.0:
+            # Second press, exit immediately
+            self.exit()
+        else:
+            # First press, show confirmation and update timestamp
+            self.last_esc_time = current_time
+            def handle_result(confirmed: bool) -> None:
+                if confirmed:
+                    self.exit()
 
-        self.push_screen(ConfirmScreen("Are you sure you want to quit?"), handle_result)
+            self.push_screen(ConfirmScreen("Press ESC again to exit"), handle_result)
 
     def action_force_quit(self):
         """Force quit without confirmation."""
