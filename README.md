@@ -1,6 +1,6 @@
 # M(ostly) A(utonomous) G(enerative) I(ntelligence) System
 
-The Magi System is optimized for large scale programming tasks. Multiple AI agents work simultaneously time towards multiple goals. It is self-updating with the goal of becoming largely autonomous. 
+The MAGI System is optimized for large scale programming tasks. Multiple AI agents work simultaneously time towards multiple goals. It is self-updating with the goal of becoming largely autonomous. 
 
 ## Features
 
