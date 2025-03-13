@@ -18,12 +18,15 @@ class SubmittableTextArea(TextArea):
         if event.key == "shift+enter":
             # Insert a newline at cursor position
             current_text = self.text
-            cursor_pos = self.cursor_position
+            cursor_pos = len(self.text[:self.selection.end[0]])
+            for i in range(self.selection.end[0]):
+                cursor_pos += len(self.document[i])
+            cursor_pos += self.selection.end[1]
             # Insert a newline at the cursor position
             new_text = current_text[:cursor_pos] + "\n" + current_text[cursor_pos:]
             self.text = new_text
             # Move the cursor one position after the inserted newline
-            self.cursor_position = cursor_pos + 1
+            self.move_cursor((self.selection.end[0], self.selection.end[1]+1))
             event.prevent_default()
             return
         elif event.key == "enter" and "shift" not in event.key and "ctrl" not in event.key:
@@ -125,14 +128,17 @@ class ProcessBox(Container):
         if event.key == "shift+enter":
             # Add a new line at cursor position
             current_text = text_area.text
-            cursor_pos = text_area.cursor_position
+            cursor_pos = len(text_area.text[:text_area.selection.end[0]])
+            for i in range(text_area.selection.end[0]):
+                cursor_pos += len(text_area.document[i])
+            cursor_pos += text_area.selection.end[1]
             
             # Insert a newline at the cursor position
             new_text = current_text[:cursor_pos] + "\n" + current_text[cursor_pos:]
             text_area.text = new_text
             
             # Move the cursor one position after the inserted newline
-            text_area.cursor_position = cursor_pos + 1
+            text_area.move_cursor((text_area.selection.end[0], text_area.selection.end[1]+1))
             event.prevent_default()
         
         # Let Ctrl+Enter submit the form
@@ -289,14 +295,17 @@ class Times1000UI(App):
         if event.key == "shift+enter":
             # Add a new line at cursor position
             current_text = focused_text_area.text
-            cursor_pos = focused_text_area.cursor_position
+            cursor_pos = len(focused_text_area.text[:focused_text_area.selection.end[0]])
+            for i in range(focused_text_area.selection.end[0]):
+                cursor_pos += len(focused_text_area.document[i])
+            cursor_pos += focused_text_area.selection.end[1]
             
             # Insert a newline at the cursor position
             new_text = current_text[:cursor_pos] + "\n" + current_text[cursor_pos:]
             focused_text_area.text = new_text
             
             # Move the cursor one position after the inserted newline
-            focused_text_area.cursor_position = cursor_pos + 1
+            focused_text_area.move_cursor((focused_text_area.selection.end[0], focused_text_area.selection.end[1]+1))
             event.prevent_default()
             
         # Let Ctrl+Enter submit the form
@@ -415,12 +424,15 @@ class Times1000UI(App):
             if textarea.has_focus:
                 # Add a new line at cursor position
                 current_text = textarea.text
-                cursor_pos = textarea.cursor_position
+                cursor_pos = len(textarea.text[:textarea.selection.end[0]])
+                for i in range(textarea.selection.end[0]):
+                    cursor_pos += len(textarea.document[i])
+                cursor_pos += textarea.selection.end[1]
                 
                 # Insert a newline at the cursor position
                 new_text = current_text[:cursor_pos] + "\n" + current_text[cursor_pos:]
                 textarea.text = new_text
                 
                 # Move the cursor one position after the inserted newline
-                textarea.cursor_position = cursor_pos + 1
+                textarea.move_cursor((textarea.selection.end[0], textarea.selection.end[1]+1))
                 break
