@@ -105,11 +105,12 @@ class ProcessBox(Container):
 
     def on_key(self, event: Key):
         """Handle key events for the text area."""
-        # First check if the event originates from a TextArea
-        if not isinstance(event.target, TextArea):
+        # First check if the event is for a TextArea by checking
+        # if it occurred within this container and we can find a TextArea
+        text_area = self.query_one(TextArea)
+        if not text_area.has_focus:
             return
         
-        text_area = event.target
         if event.key == "shift+enter":
             # Add a new line at cursor position
             current_text = text_area.text
@@ -264,35 +265,40 @@ class Times1000UI(App):
         
     def on_key(self, event: Key):
         """Handle key events for the global text area."""
-        # First check if the event originates from a TextArea
-        if not isinstance(event.target, TextArea):
+        # Find the currently focused TextArea
+        focused_text_area = None
+        for text_area in self.query("TextArea"):
+            if text_area.has_focus:
+                focused_text_area = text_area
+                break
+                
+        if focused_text_area is None:
             return
             
-        text_area = event.target
         if event.key == "shift+enter":
             # Add a new line at cursor position
-            current_text = text_area.text
-            cursor_pos = text_area.cursor_position
+            current_text = focused_text_area.text
+            cursor_pos = focused_text_area.cursor_position
             
             # Insert a newline at the cursor position
             new_text = current_text[:cursor_pos] + "\n" + current_text[cursor_pos:]
-            text_area.text = new_text
+            focused_text_area.text = new_text
             
             # Move the cursor one position after the inserted newline
-            text_area.cursor_position = cursor_pos + 1
+            focused_text_area.cursor_position = cursor_pos + 1
             event.prevent_default()
             
         # Let Ctrl+Enter submit the form
         elif event.key == "ctrl+enter":
-            if text_area.id == "global-input" and self.on_global_input_callback:
-                self.on_global_input_callback(text_area.text)
-                text_area.clear()
+            if focused_text_area.id == "global-input" and self.on_global_input_callback:
+                self.on_global_input_callback(focused_text_area.text)
+                focused_text_area.clear()
             # For process inputs, check if it's a process input by looking at the parent
-            elif isinstance(text_area.parent, ProcessBox):
-                process_box = text_area.parent
+            elif isinstance(focused_text_area.parent, ProcessBox):
+                process_box = focused_text_area.parent
                 if self.on_process_input_callback:
-                    self.on_process_input_callback(process_box.process_id, text_area.text)
-                text_area.clear()
+                    self.on_process_input_callback(process_box.process_id, focused_text_area.text)
+                focused_text_area.clear()
             event.prevent_default()
 
     def action_quit(self):
