@@ -12,44 +12,11 @@ from utils.confirm import ConfirmScreen
 
 
 class SubmittableTextArea(TextArea):
-    """TextArea that submits on Enter and creates a new line on Alt+Enter or Meta+Enter."""
+    """TextArea that submits on Enter and creates a new line on Alt+Enter, Meta+Enter or Shift+Enter."""
     
     async def _on_key(self, event: Key) -> None:
-        # Support multiple key combinations for newlines: Alt+Enter, Meta+Enter, Shift+Enter
-        if event.key in ("alt+enter", "meta+enter", "shift+enter"):
-            try:
-                # Calculate index positions of all line breaks
-                current_text = self.text
-                line_starts = [0]
-                for i, char in enumerate(current_text):
-                    if char == '\n':
-                        line_starts.append(i + 1)
-                
-                # Get current row and column from selection
-                row, col = self.selection.end
-                
-                # Calculate absolute position in string
-                if row < len(line_starts):
-                    cursor_pos = line_starts[row] + col
-                else:
-                    cursor_pos = len(current_text)
-                
-                # Insert a newline at the cursor position
-                new_text = current_text[:cursor_pos] + "\n" + current_text[cursor_pos:]
-                self.text = new_text
-                
-                # Move the cursor to the beginning of the new line
-                new_row = row + 1
-                new_col = 0
-                self.move_cursor((new_row, new_col))
-            except Exception:
-                # Simple fallback if anything goes wrong
-                self.text = self.text + "\n"
-                
-            event.prevent_default()
-            return
-        elif event.key == "enter" and "alt" not in event.key and "meta" not in event.key and "ctrl" not in event.key and "shift" not in event.key:
-            # Submit on plain Enter (excluding all modifiers)
+        # Submit on plain Enter (with no modifiers)
+        if event.key == "enter" and "alt" not in event.key and "meta" not in event.key and "ctrl" not in event.key and "shift" not in event.key:
             event.prevent_default()
             self.post_message(self.Submitted(self, self.text))
             return
@@ -154,42 +121,9 @@ class ProcessBox(Container):
         text_area = self.query_one(TextArea)
         if not text_area.has_focus:
             return
-        
-        # Support multiple key combinations for newlines
-        if event.key in ("alt+enter", "meta+enter", "shift+enter"):
-            try:
-                # Calculate index positions of all line breaks
-                current_text = text_area.text
-                line_starts = [0]
-                for i, char in enumerate(current_text):
-                    if char == '\n':
-                        line_starts.append(i + 1)
-                
-                # Get current row and column from selection
-                row, col = text_area.selection.end
-                
-                # Calculate absolute position in string
-                if row < len(line_starts):
-                    cursor_pos = line_starts[row] + col
-                else:
-                    cursor_pos = len(current_text)
-                
-                # Insert a newline at the cursor position
-                new_text = current_text[:cursor_pos] + "\n" + current_text[cursor_pos:]
-                text_area.text = new_text
-                
-                # Move the cursor to the beginning of the new line
-                new_row = row + 1
-                new_col = 0
-                text_area.move_cursor((new_row, new_col))
-            except Exception:
-                # Simple fallback if anything goes wrong
-                text_area.text = text_area.text + "\n"
-                
-            event.prevent_default()
-        
+            
         # Let Ctrl+Enter submit the form
-        elif event.key == "ctrl+enter":
+        if event.key == "ctrl+enter":
             if self.on_input:
                 self.on_input(self.process_id, text_area.text)
             text_area.clear()
@@ -372,7 +306,7 @@ class MAGIUI(App):
         if focused_text_area is None:
             return
             
-        # Support multiple key combinations for newlines
+        # Handle special key combinations for newlines
         if event.key in ("alt+enter", "meta+enter", "shift+enter"):
             try:
                 # Calculate index positions of all line breaks
@@ -515,37 +449,7 @@ class MAGIUI(App):
                 break
                 
     def action_new_line(self):
-        """Insert a new line at cursor position in the currently focused textarea.
-        This action is triggered by the Shift+Enter key binding."""
-        # Find the focused textarea
-        for textarea in self.query("TextArea"):
-            if textarea.has_focus:
-                try:
-                    # Calculate index positions of all line breaks
-                    current_text = textarea.text
-                    line_starts = [0]
-                    for i, char in enumerate(current_text):
-                        if char == '\n':
-                            line_starts.append(i + 1)
-                    
-                    # Get current row and column from selection
-                    row, col = textarea.selection.end
-                    
-                    # Calculate absolute position in string
-                    if row < len(line_starts):
-                        cursor_pos = line_starts[row] + col
-                    else:
-                        cursor_pos = len(current_text)
-                    
-                    # Insert a newline at the cursor position
-                    new_text = current_text[:cursor_pos] + "\n" + current_text[cursor_pos:]
-                    textarea.text = new_text
-                    
-                    # Move the cursor to the beginning of the new line
-                    new_row = row + 1
-                    new_col = 0
-                    textarea.move_cursor((new_row, new_col))
-                except Exception as e:
-                    # Simple fallback if anything goes wrong
-                    textarea.text = textarea.text + "\n"
-                break
+        """This action is a stub. The actual new line functionality is handled in the on_key method.
+        This is just here to support the key binding."""
+        # The actual implementation is in the on_key method
+        pass
