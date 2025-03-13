@@ -26,7 +26,7 @@ class SubmittableTextArea(TextArea):
             self.cursor_position = cursor_pos + 1
             event.prevent_default()
             return
-        elif event.key == "enter" and "ctrl" not in event.key:
+        elif event.key == "enter" and "shift" not in event.key and "ctrl" not in event.key:
             # Submit on plain Enter
             event.prevent_default()
             self.post_message(self.Submitted(self, self.text))
