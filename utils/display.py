@@ -14,14 +14,14 @@ from utils.confirm import ConfirmScreen
 class SubmittableTextArea(TextArea):
     """TextArea that submits on Enter and creates a new line on Shift+Enter."""
     
-    def on_key(self, event: Key) -> None:
+    async def _on_key(self, event: Key) -> None:
         if event.key == "enter" and not event.shift and not event.ctrl:
             # Submit on plain Enter
             event.prevent_default()
             self.post_message(self.Submitted(self, self.text))
             return
         # For all other keys, let TextArea handle it normally
-        super(TextArea, self).on_key(event)
+        await super()._on_key(event)
     
     class Submitted(TextArea.Changed):
         """Posted when the user presses Enter in the TextArea."""
