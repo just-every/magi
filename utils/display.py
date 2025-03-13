@@ -110,7 +110,7 @@ class ProcessBox(Container):
             return
         
         text_area = event.target
-        if str(event.key) == "shift+enter":
+        if event.key == "shift+enter":
             # Add a new line at cursor position
             current_text = text_area.text
             cursor_pos = text_area.cursor_position
@@ -124,7 +124,7 @@ class ProcessBox(Container):
             event.prevent_default()
         
         # Let Ctrl+Enter submit the form
-        elif str(event.key) == "ctrl+enter":
+        elif event.key == "ctrl+enter":
             if self.on_input:
                 self.on_input(self.process_id, text_area.text)
             text_area.clear()
@@ -269,7 +269,7 @@ class Times1000UI(App):
             return
             
         text_area = event.target
-        if str(event.key) == "shift+enter":
+        if event.key == "shift+enter":
             # Add a new line at cursor position
             current_text = text_area.text
             cursor_pos = text_area.cursor_position
@@ -283,7 +283,7 @@ class Times1000UI(App):
             event.prevent_default()
             
         # Let Ctrl+Enter submit the form
-        elif str(event.key) == "ctrl+enter":
+        elif event.key == "ctrl+enter":
             if text_area.id == "global-input" and self.on_global_input_callback:
                 self.on_global_input_callback(text_area.text)
                 text_area.clear()
