@@ -16,17 +16,35 @@ class SubmittableTextArea(TextArea):
     
     async def _on_key(self, event: Key) -> None:
         if event.key == "shift+enter":
-            # Insert a newline at cursor position
-            current_text = self.text
-            cursor_pos = len(self.text[:self.selection.end[0]])
-            for i in range(self.selection.end[0]):
-                cursor_pos += len(self.document[i])
-            cursor_pos += self.selection.end[1]
-            # Insert a newline at the cursor position
-            new_text = current_text[:cursor_pos] + "\n" + current_text[cursor_pos:]
-            self.text = new_text
-            # Move the cursor one position after the inserted newline
-            self.move_cursor((self.selection.end[0], self.selection.end[1]+1))
+            try:
+                # Calculate index positions of all line breaks
+                current_text = self.text
+                line_starts = [0]
+                for i, char in enumerate(current_text):
+                    if char == '\n':
+                        line_starts.append(i + 1)
+                
+                # Get current row and column from selection
+                row, col = self.selection.end
+                
+                # Calculate absolute position in string
+                if row < len(line_starts):
+                    cursor_pos = line_starts[row] + col
+                else:
+                    cursor_pos = len(current_text)
+                
+                # Insert a newline at the cursor position
+                new_text = current_text[:cursor_pos] + "\n" + current_text[cursor_pos:]
+                self.text = new_text
+                
+                # Move the cursor to the beginning of the new line
+                new_row = row + 1
+                new_col = 0
+                self.move_cursor((new_row, new_col))
+            except Exception:
+                # Simple fallback if anything goes wrong
+                self.text = self.text + "\n"
+                
             event.prevent_default()
             return
         elif event.key == "enter" and "shift" not in event.key and "ctrl" not in event.key:
@@ -126,19 +144,35 @@ class ProcessBox(Container):
             return
         
         if event.key == "shift+enter":
-            # Add a new line at cursor position
-            current_text = text_area.text
-            cursor_pos = len(text_area.text[:text_area.selection.end[0]])
-            for i in range(text_area.selection.end[0]):
-                cursor_pos += len(text_area.document[i])
-            cursor_pos += text_area.selection.end[1]
-            
-            # Insert a newline at the cursor position
-            new_text = current_text[:cursor_pos] + "\n" + current_text[cursor_pos:]
-            text_area.text = new_text
-            
-            # Move the cursor one position after the inserted newline
-            text_area.move_cursor((text_area.selection.end[0], text_area.selection.end[1]+1))
+            try:
+                # Calculate index positions of all line breaks
+                current_text = text_area.text
+                line_starts = [0]
+                for i, char in enumerate(current_text):
+                    if char == '\n':
+                        line_starts.append(i + 1)
+                
+                # Get current row and column from selection
+                row, col = text_area.selection.end
+                
+                # Calculate absolute position in string
+                if row < len(line_starts):
+                    cursor_pos = line_starts[row] + col
+                else:
+                    cursor_pos = len(current_text)
+                
+                # Insert a newline at the cursor position
+                new_text = current_text[:cursor_pos] + "\n" + current_text[cursor_pos:]
+                text_area.text = new_text
+                
+                # Move the cursor to the beginning of the new line
+                new_row = row + 1
+                new_col = 0
+                text_area.move_cursor((new_row, new_col))
+            except Exception:
+                # Simple fallback if anything goes wrong
+                text_area.text = text_area.text + "\n"
+                
             event.prevent_default()
         
         # Let Ctrl+Enter submit the form
@@ -293,19 +327,35 @@ class Times1000UI(App):
             return
             
         if event.key == "shift+enter":
-            # Add a new line at cursor position
-            current_text = focused_text_area.text
-            cursor_pos = len(focused_text_area.text[:focused_text_area.selection.end[0]])
-            for i in range(focused_text_area.selection.end[0]):
-                cursor_pos += len(focused_text_area.document[i])
-            cursor_pos += focused_text_area.selection.end[1]
-            
-            # Insert a newline at the cursor position
-            new_text = current_text[:cursor_pos] + "\n" + current_text[cursor_pos:]
-            focused_text_area.text = new_text
-            
-            # Move the cursor one position after the inserted newline
-            focused_text_area.move_cursor((focused_text_area.selection.end[0], focused_text_area.selection.end[1]+1))
+            try:
+                # Calculate index positions of all line breaks
+                current_text = focused_text_area.text
+                line_starts = [0]
+                for i, char in enumerate(current_text):
+                    if char == '\n':
+                        line_starts.append(i + 1)
+                
+                # Get current row and column from selection
+                row, col = focused_text_area.selection.end
+                
+                # Calculate absolute position in string
+                if row < len(line_starts):
+                    cursor_pos = line_starts[row] + col
+                else:
+                    cursor_pos = len(current_text)
+                
+                # Insert a newline at the cursor position
+                new_text = current_text[:cursor_pos] + "\n" + current_text[cursor_pos:]
+                focused_text_area.text = new_text
+                
+                # Move the cursor to the beginning of the new line
+                new_row = row + 1
+                new_col = 0
+                focused_text_area.move_cursor((new_row, new_col))
+            except Exception:
+                # Simple fallback if anything goes wrong
+                focused_text_area.text = focused_text_area.text + "\n"
+                
             event.prevent_default()
             
         # Let Ctrl+Enter submit the form
