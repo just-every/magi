@@ -12,10 +12,11 @@ from utils.confirm import ConfirmScreen
 
 
 class SubmittableTextArea(TextArea):
-    """TextArea that submits on Enter and creates a new line on Shift+Enter."""
+    """TextArea that submits on Enter and creates a new line on Alt+Enter or Meta+Enter."""
     
     async def _on_key(self, event: Key) -> None:
-        if event.key == "shift+enter":
+        # Support multiple key combinations for newlines: Alt+Enter, Meta+Enter, Shift+Enter
+        if event.key in ("alt+enter", "meta+enter", "shift+enter"):
             try:
                 # Calculate index positions of all line breaks
                 current_text = self.text
@@ -47,8 +48,8 @@ class SubmittableTextArea(TextArea):
                 
             event.prevent_default()
             return
-        elif event.key == "enter" and "shift" not in event.key and "ctrl" not in event.key:
-            # Submit on plain Enter
+        elif event.key == "enter" and "alt" not in event.key and "meta" not in event.key and "ctrl" not in event.key and "shift" not in event.key:
+            # Submit on plain Enter (excluding all modifiers)
             event.prevent_default()
             self.post_message(self.Submitted(self, self.text))
             return
@@ -68,10 +69,11 @@ class ProcessBox(Container):
     CSS = """
     .process-box {
         height: 1fr;
-        border: solid green;
+        border: solid #FF6600;
         margin: 1;
         padding: 1;
         display: block;
+        background: #000000;
     }
 
     .process-output {
@@ -79,32 +81,41 @@ class ProcessBox(Container):
         overflow: auto;
         margin-bottom: 1;
         border: solid transparent;
+        color: #FFFFFF;
+        background: #000000;
+    }
+    
+    #process-id {
+        color: #FF6600;
+        font-weight: bold;
     }
 
     .process-input {
         height: 5;
         dock: bottom;
-        border: solid magenta;
+        border: solid #FF00FF;
+        background: #000000;
+        color: #FFFFFF;
     }
 
     .process-box:focus-within {
-        border: solid cyan;
+        border: solid #00FFFF;
     }
 
     Input:focus {
-        border: solid cyan;
+        border: solid #00FFFF;
     }
 
     TextArea:focus {
-        border: solid cyan;
+        border: solid #00FFFF;
     }
 
     .process-output:hover {
-        border: dashed yellow;
+        border: dashed #FFFF00;
     }
 
     .process-input:hover {
-        border: dashed yellow;
+        border: dashed #FFFF00;
     }
     """
 
@@ -118,10 +129,11 @@ class ProcessBox(Container):
     def update_content(self, new_content: str):
         """Update the content of this process output."""
         self.content = new_content
-        self.query_one(".process-output", Static).update(f"[bold]{self.process_id}[/bold]\n{self.content}")
+        process_id = f"[#FF6600 bold]{self.process_id}[/]" 
+        self.query_one(".process-output", Static).update(f"{process_id}\n{self.content}")
 
     def compose(self) -> ComposeResult:
-        yield Static(f"[bold]{self.process_id}[/bold]\n{self.content}", classes="process-output", id=f"output-{self.process_id}")
+        yield Static(f"{self.process_id}\n{self.content}", classes="process-output", id=f"output-{self.process_id}")
         input_widget = SubmittableTextArea(classes="process-input", id=f"input-{self.process_id}")
         input_widget.can_focus = True  # Explicitly make it focusable
         # Enable formatting options
@@ -143,7 +155,8 @@ class ProcessBox(Container):
         if not text_area.has_focus:
             return
         
-        if event.key == "shift+enter":
+        # Support multiple key combinations for newlines
+        if event.key in ("alt+enter", "meta+enter", "shift+enter"):
             try:
                 # Calculate index positions of all line breaks
                 current_text = text_area.text
@@ -197,6 +210,7 @@ class ProcessGrid(Grid):
         grid-rows: 1fr 1fr;
         height: 1fr;
         padding: 1;
+        background: #000000;
     }
     """
 
@@ -241,15 +255,17 @@ class MAGIUI(App):
     #main-container {
         height: 100%;
         width: 100%;
+        background: #000000;
     }
 
     #header {
         height: auto;
         padding: 1;
         text-align: center;
-        background: $primary;
-        color: $text;
+        background: #000000;
+        color: #FF6600;
         text-style: bold;
+        border-bottom: solid #FF6600;
     }
 
     #global-input-container {
@@ -260,14 +276,32 @@ class MAGIUI(App):
 
     #global-input {
         height: 5;
+        background: #000000;
+        color: #FFFFFF;
+        border: solid #FF6600;
     }
 
     Input:focus {
-        border: solid cyan;
+        border: solid #00FFFF;
     }
     
     TextArea:focus {
-        border: solid cyan;
+        border: solid #00FFFF;
+    }
+    
+    Footer {
+        background: #000000;
+        color: #FFFFFF;
+    }
+    
+    Footer > .footer--key {
+        background: #FF6600;
+        color: #000000;
+    }
+    
+    Footer > .footer--highlight {
+        background: #000000;
+        color: #FF6600;
     }
     """
 
@@ -280,6 +314,8 @@ class MAGIUI(App):
         Binding("ctrl+d", "quit", "Quit", show=False, priority=True),
         Binding("ctrl+enter", "submit_form", "Submit Input", show=True),
         Binding("shift+enter", "new_line", "New Line", show=True),
+        Binding("alt+enter", "new_line", "New Line", show=True),
+        Binding("meta+enter", "new_line", "New Line", show=False),
     ]
 
     def __init__(self, **kwargs):
@@ -291,7 +327,7 @@ class MAGIUI(App):
     def compose(self) -> ComposeResult:
         """Create child widgets."""
         with Vertical(id="main-container"):
-            yield Static("[bold]M-A-G-I[/bold]", id="header")
+            yield Static("MAGI", id="header")
             yield ProcessGrid(id="process-grid")
             with Container(id="global-input-container"):
                 global_input = SubmittableTextArea(id="global-input")
@@ -336,7 +372,8 @@ class MAGIUI(App):
         if focused_text_area is None:
             return
             
-        if event.key == "shift+enter":
+        # Support multiple key combinations for newlines
+        if event.key in ("alt+enter", "meta+enter", "shift+enter"):
             try:
                 # Calculate index positions of all line breaks
                 current_text = focused_text_area.text
@@ -478,7 +515,8 @@ class MAGIUI(App):
                 break
                 
     def action_new_line(self):
-        """Insert a new line at cursor position in the currently focused textarea."""
+        """Insert a new line at cursor position in the currently focused textarea.
+        This action is triggered by the Shift+Enter key binding."""
         # Find the focused textarea
         for textarea in self.query("TextArea"):
             if textarea.has_focus:
