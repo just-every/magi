@@ -11,6 +11,7 @@
 ## Docker Commands
 - Build Docker image manually: `python build_docker.py`
 - Set OpenAI API Key: `export OPENAI_API_KEY=your-api-key`
+- Docker containers are automatically cleaned up when the application exits
 
 ## Development Workflow
 1. Test changes with `python main.py -t`
