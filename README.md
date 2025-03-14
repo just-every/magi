@@ -1,4 +1,11 @@
-# M(ostly) A(utonomous) G(enerative) I(ntelligence) System
+MAGI System
+=====
+
+    M(ostly)
+    A(utonomous) 
+    G(enerative) 
+    I(ntelligence)
+
 
 The MAGI System is optimized for large scale programming tasks. Multiple AI agents work simultaneously time towards multiple goals. It is self-updating with the goal of becoming largely autonomous. 
 
@@ -29,10 +36,13 @@ pip install -r requirements.txt
 # Run the application
 python main.py
 
-# Run in test mode (spawns test processes)
+# Run in test mode with auto-exit (spawns test processes)
 python main.py -t
 
-# Run with a specific prompt
+# Run in test mode with a specific command (auto-exits after execution)
+python main.py -t "your command"
+
+# Run with a specific command in normal mode
 python main.py -p "your command"
 ```
 
