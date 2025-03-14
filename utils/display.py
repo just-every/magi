@@ -8,7 +8,7 @@ from textual.reactive import reactive
 from textual.binding import Binding
 from textual.events import Key
 from typing import Dict, List, Callable
-from utils.confirm import ConfirmScreen
+from utils.confirm import ConfirmScreen, ConfirmDialogWithDoubleEscape
 
 
 class SubmittableTextArea(TextArea):
