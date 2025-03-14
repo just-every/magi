@@ -363,7 +363,7 @@ class MAGIUI(App):
                 self.exit()
 
         # Show confirmation dialog
-        self.push_screen(ConfirmDialogWithDoubleEscape("Press ESC again to exit"), handle_result)
+        self.push_screen(ConfirmDialogWithDoubleEscape("Press ESC to exit immediately"), handle_result)
 
     def action_force_quit(self):
         """Force quit without confirmation."""
