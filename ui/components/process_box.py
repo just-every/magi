@@ -3,9 +3,10 @@ Process box components for MAGI UI.
 """
 from textual.app import ComposeResult
 from textual.containers import Container
-from textual.widgets import TextArea, RichLog
-from textual.events import Key
+from textual.widgets import TextArea, RichLog, MarkdownViewer
+from textual.events import Key, MouseEvent
 from typing import Callable
+import re
 
 from ui.components.textarea import SubmittableTextArea
 
@@ -72,20 +73,32 @@ class ProcessBox(Container):
         self.content = content
         self.on_input = on_input
         self.add_class("process-box")
+        self.auto_scroll_enabled = True
+        self.last_content_length = 0
 
     def update_content(self, new_content: str):
         """Update the content of this process output."""
-        self.content = new_content
-        process_id = f"[#FF6600 bold]{self.process_id}[/]" 
         output = self.query_one(RichLog)
         
-        # Clear and write new content
-        output.clear()
-        output.write(process_id)
-        output.write(self.content)
+        # Only update if content has changed
+        if new_content != self.content:
+            # Check if we have new content to append
+            if len(new_content) > len(self.content) and new_content.startswith(self.content):
+                # Append only the new part
+                additional_content = new_content[len(self.content):]
+                output.write(additional_content)
+            else:
+                # Full content replacement needed
+                process_id = f"[#FF6600 bold]{self.process_id}[/]"
+                output.clear()
+                output.write(process_id)
+                output.write(new_content)
+            
+            # Update stored content
+            self.content = new_content
         
-        # Ensure auto-scrolling is enabled
-        output.auto_scroll = True
+        # Set auto-scroll based on user preference
+        output.auto_scroll = self.auto_scroll_enabled
 
     def compose(self) -> ComposeResult:
         # Use RichLog instead of Static for better scrolling
@@ -126,3 +139,12 @@ class ProcessBox(Container):
     def on_click(self) -> None:
         """Focus this process's input when the box is clicked."""
         self.query_one(TextArea).focus()
+    
+    def on_mouse_scroll(self, event: MouseEvent) -> None:
+        """Handle mouse scroll events."""
+        # If user is scrolling up, disable auto-scrolling
+        if event.y < 0:  # Scrolling up
+            self.auto_scroll_enabled = False
+        elif event.y > 0 and self.query_one(RichLog).is_at_end:  # Scrolling down and at end
+            # Re-enable auto-scrolling when user scrolls to the bottom
+            self.auto_scroll_enabled = True
