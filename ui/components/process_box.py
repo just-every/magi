@@ -30,6 +30,15 @@ class ProcessBox(Container):
         border: solid transparent;
         color: #FFFFFF;
         background: #000000;
+        /* Enable text wrapping for long lines */
+        overflow-wrap: normal;
+        word-wrap: break-word;
+    }
+    
+    /* Ensure code blocks wrap properly */
+    .process-output pre {
+        white-space: pre-wrap;
+        word-wrap: break-word;
     }
     
     #process-id {
@@ -77,6 +86,21 @@ class ProcessBox(Container):
         self.auto_scroll_enabled = True
         self.last_content_length = 0
 
+    def _clean_code_blocks(self, content: str) -> str:
+        """Process code blocks to remove the backtick markers but preserve the code."""
+        # Replace ``` code blocks with something that won't trigger markdown formatting
+        # but will still display the code properly
+        
+        # First handle code blocks with language specified
+        pattern = r'```(\w+)\s*\n(.*?)```'
+        content = re.sub(pattern, r'```\n\2```', content, flags=re.DOTALL)
+        
+        # Then handle all code blocks (now without language specifier)
+        pattern = r'```\s*\n(.*?)```'
+        content = re.sub(pattern, r'<pre>\n\1</pre>', content, flags=re.DOTALL)
+        
+        return content
+        
     def update_content(self, new_content: str):
         """Update the content of this process output."""
         output = self.query_one(RichLog)
@@ -88,9 +112,13 @@ class ProcessBox(Container):
                 # Append only the new part
                 additional_content = new_content[len(self.content):]
                 
-                # Process markdown in the additional content
-                if "**" in additional_content or "__" in additional_content or "*" in additional_content:
+                # Process and clean content for markdown rendering
+                if "**" in additional_content or "__" in additional_content or "*" in additional_content or "```" in additional_content:
                     try:
+                        # Clean code blocks first
+                        if "```" in additional_content:
+                            additional_content = self._clean_code_blocks(additional_content)
+                            
                         # Convert markdown to Rich renderable
                         md = RichMarkdown(additional_content)
                         output.write(md)
@@ -105,9 +133,13 @@ class ProcessBox(Container):
                 output.clear()
                 output.write(process_id)
                 
-                # Process markdown in the full content
-                if "**" in new_content or "__" in new_content or "*" in new_content:
+                # Process and clean content for markdown rendering
+                if "**" in new_content or "__" in new_content or "*" in new_content or "```" in new_content:
                     try:
+                        # Clean code blocks first
+                        if "```" in new_content:
+                            new_content = self._clean_code_blocks(new_content)
+                            
                         # Convert markdown to Rich renderable
                         md = RichMarkdown(new_content)
                         output.write(md)
@@ -131,10 +163,15 @@ class ProcessBox(Container):
         
         if self.content:
             # Check for markdown and render it
-            if "**" in self.content or "__" in self.content or "*" in self.content:
+            if "**" in self.content or "__" in self.content or "*" in self.content or "```" in self.content:
                 try:
+                    # Clean code blocks first
+                    cleaned_content = self.content
+                    if "```" in self.content:
+                        cleaned_content = self._clean_code_blocks(self.content)
+                        
                     # Convert markdown to Rich renderable
-                    md = RichMarkdown(self.content)
+                    md = RichMarkdown(cleaned_content)
                     log.write(md)
                 except Exception:
                     log.write(self.content)
