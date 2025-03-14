@@ -2,8 +2,8 @@
 Process box components for MAGI UI.
 """
 from textual.app import ComposeResult
-from textual.containers import Container
-from textual.widgets import TextArea, RichLog, Markdown
+from textual.containers import Container, Vertical
+from textual.widgets import TextArea, RichLog, Markdown, Static
 from textual.events import Key, MouseEvent
 from rich.markdown import Markdown as RichMarkdown
 from typing import Callable
@@ -23,6 +23,21 @@ class ProcessBox(Container):
         display: block;
         background: #000000;
     }
+    
+    .header {
+        height: auto;
+        padding: 0 1;
+        background: #000000;
+    }
+    
+    .process-id {
+        color: #FF6600;
+        background: #000000;
+        font-weight: bold;
+        border-bottom: solid #FF6600;
+        width: 100%;
+        padding: 0 1;
+    }
 
     .process-output {
         height: 1fr;
@@ -39,11 +54,6 @@ class ProcessBox(Container):
     .process-output pre {
         white-space: pre-wrap;
         word-wrap: break-word;
-    }
-    
-    #process-id {
-        color: #FF6600;
-        font-weight: bold;
     }
 
     .process-input {
@@ -141,9 +151,7 @@ class ProcessBox(Container):
                     output.write(additional_content)
             else:
                 # Full content replacement needed
-                process_id = f"[#FF6600 bold]{self.process_id}[/]"
                 output.clear()
-                output.write(process_id)
                 
                 # Process and clean content for markdown rendering
                 if "**" in new_content or "__" in new_content or "*" in new_content or "```" in new_content:
@@ -168,10 +176,13 @@ class ProcessBox(Container):
         output.auto_scroll = self.auto_scroll_enabled
 
     def compose(self) -> ComposeResult:
+        # Add a header with the process ID
+        header_text = Static(self.process_id, classes="process-id")
+        yield header_text
+        
         # Use RichLog instead of Static for better scrolling
         log = RichLog(classes="process-output", id=f"output-{self.process_id}")
         log.auto_scroll = True  # Enable auto-scrolling by default
-        log.write(f"[#FF6600 bold]{self.process_id}[/]")
         
         if self.content:
             # Check for markdown and render it
