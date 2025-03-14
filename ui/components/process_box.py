@@ -3,8 +3,9 @@ Process box components for MAGI UI.
 """
 from textual.app import ComposeResult
 from textual.containers import Container
-from textual.widgets import TextArea, RichLog, MarkdownViewer
+from textual.widgets import TextArea, RichLog, Markdown
 from textual.events import Key, MouseEvent
+from rich.markdown import Markdown as RichMarkdown
 from typing import Callable
 import re
 
@@ -86,13 +87,35 @@ class ProcessBox(Container):
             if len(new_content) > len(self.content) and new_content.startswith(self.content):
                 # Append only the new part
                 additional_content = new_content[len(self.content):]
-                output.write(additional_content)
+                
+                # Process markdown in the additional content
+                if "**" in additional_content or "__" in additional_content or "*" in additional_content:
+                    try:
+                        # Convert markdown to Rich renderable
+                        md = RichMarkdown(additional_content)
+                        output.write(md)
+                    except Exception:
+                        # Fallback if markdown parsing fails
+                        output.write(additional_content)
+                else:
+                    output.write(additional_content)
             else:
                 # Full content replacement needed
                 process_id = f"[#FF6600 bold]{self.process_id}[/]"
                 output.clear()
                 output.write(process_id)
-                output.write(new_content)
+                
+                # Process markdown in the full content
+                if "**" in new_content or "__" in new_content or "*" in new_content:
+                    try:
+                        # Convert markdown to Rich renderable
+                        md = RichMarkdown(new_content)
+                        output.write(md)
+                    except Exception:
+                        # Fallback if markdown parsing fails
+                        output.write(new_content)
+                else:
+                    output.write(new_content)
             
             # Update stored content
             self.content = new_content
@@ -105,8 +128,19 @@ class ProcessBox(Container):
         log = RichLog(classes="process-output", id=f"output-{self.process_id}")
         log.auto_scroll = True  # Enable auto-scrolling by default
         log.write(f"[#FF6600 bold]{self.process_id}[/]")
+        
         if self.content:
-            log.write(self.content)
+            # Check for markdown and render it
+            if "**" in self.content or "__" in self.content or "*" in self.content:
+                try:
+                    # Convert markdown to Rich renderable
+                    md = RichMarkdown(self.content)
+                    log.write(md)
+                except Exception:
+                    log.write(self.content)
+            else:
+                log.write(self.content)
+                
         yield log
         input_widget = SubmittableTextArea(classes="process-input", id=f"input-{self.process_id}")
         input_widget.can_focus = True  # Explicitly make it focusable
