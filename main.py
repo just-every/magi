@@ -13,8 +13,8 @@ import importlib.util
 import subprocess
 import warnings
 
-# Suppress the urllib3 OpenSSL warning
-warnings.filterwarnings("ignore", category=UserWarning, module="urllib3")
+# Suppress only the specific urllib3 OpenSSL warning with LibreSSL
+warnings.filterwarnings("ignore", message=".*OpenSSL 1.1.1\\+.*LibreSSL.*")
 from utils.display import MAGIUI
 
 # Check if Docker module is available
