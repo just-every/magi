@@ -1,6 +1,7 @@
 # MAGI System
 
 ## Key Commands
+- Activate environment: `source ./activate.sh` or `source venv-3.13/bin/activate`
 - Install dependencies: `pip install -r requirements.txt`
 - Install Playwright: `python -m playwright install`
 - Run application: `python main.py`
