@@ -215,12 +215,23 @@ class Process:
             self.input_queue.put_nowait(input_text)
 
     async def stop(self):
-        """Stop the process."""
+        """Stop the process and remove its container."""
         self.running = False
         
-        # Stop Docker container if it exists and Docker is available
+        # Stop and remove Docker container if it exists and Docker is available
         if docker_available and self.docker_manager and not self.test_mode:
-            await self.docker_manager.stop_container(self.process_id)
+            try:
+                # First stop the container
+                await self.docker_manager.stop_container(self.process_id)
+                self.ui.update_process(
+                    self.process_id,
+                    f"Container for {self.command} has been stopped and removed."
+                )
+            except Exception as e:
+                self.ui.update_process(
+                    self.process_id,
+                    f"Error stopping container: {str(e)}"
+                )
 
 
 class ProcessManager:
@@ -239,11 +250,29 @@ class ProcessManager:
         """Cleanup when the manager is deleted."""
         # We can't use async in __del__, so create a task for cleanup
         try:
+            # Ensure that Docker containers are cleaned up
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 loop.create_task(self.cleanup())
+            else:
+                # If we're shutting down outside of an event loop, try to clean up immediately
+                if docker_available:
+                    # Create a new Docker manager to clean up any remaining containers
+                    from utils.docker_manager import DockerManager
+                    docker_manager = DockerManager()
+                    for container in docker_manager.client.containers.list(all=True, filters={"ancestor": "magi-system:latest"}):
+                        try:
+                            container.stop(timeout=1)
+                            container.remove(force=True)
+                            print(f"Removed container {container.id}")
+                        except:
+                            pass
         except:
-            pass
+            # Last-ditch attempt to clean up via a direct Docker command
+            try:
+                os.system("docker rm -f $(docker ps -q -f 'ancestor=magi-system:latest') 2>/dev/null")
+            except:
+                pass
 
     def spawn_process(self, command):
         """Spawn a new process from the command input."""
@@ -296,9 +325,43 @@ def parse_args():
     return parser.parse_args()
 
 
+def cleanup_containers():
+    """Clean up any running containers with our image."""
+    if docker_available:
+        try:
+            import docker
+            client = docker.from_env()
+            containers = client.containers.list(all=True, filters={"ancestor": "magi-system:latest"})
+            for container in containers:
+                try:
+                    container.stop(timeout=1)
+                    container.remove(force=True)
+                    print(f"Cleaned up container {container.id}")
+                except Exception as e:
+                    print(f"Error cleaning up container {container.id}: {str(e)}")
+        except Exception as e:
+            print(f"Error during container cleanup: {str(e)}")
+            # Last resort: use direct system command
+            try:
+                os.system("docker rm -f $(docker ps -q -f 'ancestor=magi-system:latest') 2>/dev/null")
+            except:
+                pass
+
+def signal_handler(sig, frame):
+    """Handle interrupt signals to ensure proper cleanup."""
+    print("\nInterrupted. Cleaning up containers...")
+    cleanup_containers()
+    sys.exit(0)
+
 if __name__ == "__main__":
+    # Set up signal handlers for proper cleanup
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
 
     args = parse_args()
+
+    # Clean up any stale containers from previous runs
+    cleanup_containers()
 
     # Build Docker image if needed and Docker is available
     if docker_available and not check_docker_image_exists():
@@ -332,6 +395,8 @@ if __name__ == "__main__":
             # Auto-exit after a delay in test mode
             async def exit_after_delay():
                 await asyncio.sleep(5)  # Wait for processes to complete
+                # Ensure all containers are cleaned up before exiting
+                await process_manager.cleanup()
                 app.exit()
                 
             asyncio.create_task(exit_after_delay())

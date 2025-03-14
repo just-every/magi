@@ -134,7 +134,8 @@ class DockerManager:
             
             # Remove the container to prevent accumulation
             try:
-                container.remove()
+                container.remove(force=True)  # Force removal even if it's still running
+                print(f"Container {process_id} removed successfully")
             except Exception as rm_e:
                 print(f"Error removing container: {str(rm_e)}")
                 
@@ -190,7 +191,7 @@ class DockerManager:
         except Exception as e:
             return f"Error accessing container: {str(e)}"
     
-    def cleanup(self):
+    async def cleanup(self):
         """Stop and remove all running containers."""
         for process_id, container in list(self.containers.items()):
             try:
@@ -207,6 +208,7 @@ class DockerManager:
                 # Remove the container
                 try:
                     container.remove()
+                    print(f"Container {process_id} removed successfully")
                 except Exception as rm_e:
                     print(f"Error removing container during cleanup: {str(rm_e)}")
             except Exception as e:
