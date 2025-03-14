@@ -91,14 +91,26 @@ class ProcessBox(Container):
         # Replace ``` code blocks with something that won't trigger markdown formatting
         # but will still display the code properly
         
-        # First handle code blocks with language specified
-        pattern = r'```(\w+)\s*\n(.*?)```'
-        content = re.sub(pattern, r'```\n\2```', content, flags=re.DOTALL)
+        # First replace triple backticks with a custom marker to avoid regex complexity
+        content = content.replace("```", "CODEBLOCK_MARKER")
         
-        # Then handle all code blocks (now without language specifier)
-        pattern = r'```\s*\n(.*?)```'
-        content = re.sub(pattern, r'<pre>\n\1</pre>', content, flags=re.DOTALL)
+        # Extract code blocks with language specifier
+        pattern = r'CODEBLOCK_MARKER(\w+)\s*\n(.*?)CODEBLOCK_MARKER'
+        for match in re.finditer(pattern, content, re.DOTALL):
+            language = match.group(1)
+            code = match.group(2)
+            replacement = f"[bold #AAAAAA]Code ({language}):[/]\n[#CCCCCC]{code}[/]"
+            old_block = f"CODEBLOCK_MARKER{language}\n{code}CODEBLOCK_MARKER"
+            content = content.replace(old_block, replacement)
         
+        # Extract code blocks without language specifier
+        pattern = r'CODEBLOCK_MARKER\s*\n(.*?)CODEBLOCK_MARKER'
+        for match in re.finditer(pattern, content, re.DOTALL):
+            code = match.group(1)
+            replacement = f"[bold #AAAAAA]Code:[/]\n[#CCCCCC]{code}[/]"
+            old_block = f"CODEBLOCK_MARKER\n{code}CODEBLOCK_MARKER"
+            content = content.replace(old_block, replacement)
+            
         return content
         
     def update_content(self, new_content: str):
