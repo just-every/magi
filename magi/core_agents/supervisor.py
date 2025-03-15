@@ -7,10 +7,10 @@ import sys
 
 # Import from common utility modules
 from agents import Agent
-from core_agents.code_agent import create_code_agent
-from core_agents.filesystem_agent import create_filesystem_agent
-from core_agents.search_agent import create_search_agent
-from core_agents.browser_agent import create_browser_agent
+from magi.core_agents.code_agent import create_code_agent
+from magi.core_agents.filesystem_agent import create_filesystem_agent
+from magi.core_agents.search_agent import create_search_agent
+from magi.core_agents.browser_agent import create_browser_agent
 
 async def create_supervisor_agent(browser_initializer) -> Agent:
     """Creates the Supervisor agent that orchestrates specialized agents as tools."""

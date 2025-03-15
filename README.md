@@ -1,88 +1,158 @@
 # MAGI System
 
-    M(ostly)
-    A(utonomous) 
-    G(enerative) 
-    I(ntelligence)
+<p align="center">
+<strong>M</strong>ostly<br/>
+<strong>A</strong>utonomous<br/>
+<strong>G</strong>enerative<br/>
+<strong>I</strong>ntelligence
+</p>
 
-The MAGI System is optimized for large scale programming tasks. Multiple AI agents work simultaneously towards multiple goals. It is self-updating with the goal of becoming largely autonomous.
+The MAGI System is designed for complex AI automation tasks through a multi-agent architecture. It enables multiple specialized AI agents to work in concert, each focused on different aspects of problem-solving.
 
-## Architecture
+## Features
 
-The system consists of two main components:
+- **Multi-Agent Architecture**: Specialized agents work collaboratively on complex tasks
+- **Web-Based Interface**: Real-time interaction and monitoring via browser
+- **Docker Integration**: Containerized Python backend for isolation and portability
+- **Extensible Framework**: Add new agent types or enhance existing ones
+- **Persistent Memory**: Conversations and context maintained between sessions
+- **Interactive Sessions**: Send follow-up commands to ongoing processes
+- **Real-Time Updates**: Stream results as they become available
 
-1. **Node.js Web Interface**: A server that manages Docker containers and provides a real-time web interface using Socket.IO
-2. **Python Backend**: A containerized system that runs specialized agents using the OpenAI Agents framework
+## System Architecture
 
-### Key Components
+The MAGI System consists of two primary components that work together:
 
-- **Supervisor Agent**: Central orchestrator that analyzes requests and delegates to specialized agents
-- **Specialized Agents**:
-  - **Code Agent**: Handles programming tasks through Claude CLI
-  - **Filesystem Agent**: Manages file operations via shell commands
-  - **Search Agent**: Performs web searches for information
-  - **Browser Agent**: Executes browser automation tasks (placeholder implementation)
+### 1. Node.js Web Server
 
-## Overview
+- **TypeScript/Express Backend**: Type-safe server implementation
+- **Socket.IO Integration**: Real-time bidirectional communication
+- **Docker Management**: Container creation, monitoring, and cleanup
+- **Modern Web Interface**: Interactive UI with process management
+- **Auto Port Selection**: Finds available ports automatically
 
-- The web interface runs on http://localhost:3001 (or next available port)
-- Socket.io is used for real-time communication
-- Frontend code is written in TypeScript for type safety
-- Backend Python code runs in Docker for isolation and dependency management
-- Core agents include code, browser, filesystem, and search agents
-- All agents are supervised by a central supervisor agent
+### 2. Python Backend (Docker Container)
 
+- **OpenAI Agents Framework**: Built on the latest agent technologies
+- **Agent Specialization**: Purpose-built agents for different tasks
+- **Supervisor Orchestration**: Central coordinator for sub-agents
+- **FIFO Command Interface**: Pass commands to running containers
+- **Stream Processing**: Real-time output streaming
 
-## Installation
+## Agent Capabilities
 
-1. Clone the repository:
-   ```
-   git clone https://github.com/has-context/magi-system.git
-   cd magi-system
-   ```
+| Agent | Responsibility | Tools |
+|-------|----------------|-------|
+| **Supervisor** | Orchestrates other agents | Task planning, delegation |
+| **Code** | Programming tasks | Claude CLI integration |
+| **Filesystem** | File operations | Shell command execution |
+| **Search** | Web research | Web search tools |
+| **Browser** | Website interaction | Playwright automation |
 
-2. Run the automated setup script:
-   ```
-   npm run setup
-   ```
-   
-   The setup script will:
-   - Prompt you for your OpenAI API key (you can get one at https://platform.openai.com/api-keys)
-   - Install Node.js dependencies
-   - Build the Docker image
-   - Set up Claude integration
+## Installation Requirements
 
-   Alternatively, you can perform each step manually:
-   ```
-   # Create a .env file with your OpenAI API key
-   echo "OPENAI_API_KEY=your_api_key_here" > .env
-   
-   # Install dependencies
-   npm ci
-   
-   # Build Docker image
-   docker build -t magi-system:latest -f magi/docker/Dockerfile .
-   
-   # Set up Claude integration
-   npm run setup-claude
-   ```
+- **Node.js**: v16+ (v18+ recommended)
+- **Docker**: Latest version
+- **OpenAI API Key**: Required for agent capabilities
+- **Claude CLI**: Optional but recommended for code tasks
 
+## Getting Started
 
-### Starting the Development Server
+### 1. Clone the Repository
 
-Run the Node.js development server:
+```bash
+git clone https://github.com/has-context/magi-system.git
+cd magi-system
+```
+
+### 2. Installation Options
+
+#### Automated Setup (Recommended)
+
+```bash
+npm run setup
+```
+
+This script will:
+- Prompt for your OpenAI API key
+- Install Node.js dependencies
+- Build the Docker image
+- Set up Claude CLI integration
+
+#### Manual Setup
+
+```bash
+# Create .env file with your API key
+echo "OPENAI_API_KEY=your_api_key_here" > .env
+
+# Install dependencies
+npm ci
+
+# Build Docker image
+docker build -t magi-system:latest -f magi/docker/Dockerfile .
+
+# Set up Claude integration (if available)
+npm run setup-claude
+```
+
+### 3. Starting MAGI System
+
 ```bash
 npm run dev
 ```
 
-This will:
-1. Start the web server
-2. Open your default browser to the web interface
-3. Allow you to interact with the system through the web UI
+The server will:
+1. Start on port 3001 (or the next available port)
+2. Open your browser to the web interface automatically
+3. Build the Docker image if it doesn't exist
 
-### Testing the Python Backend
+## Usage
 
-To test the Python backend:
+### Web Interface
+
+1. **Enter a command in the input field** to start a new process
+2. **Monitor real-time progress** as the system works
+3. **Send follow-up commands** to active processes
+4. **View results directly** in the interface
+5. **Terminate processes** if needed
+
+### Command Line Testing
+
+For testing the Python backend directly:
+
 ```bash
-test/magi.sh "your prompt here"
+test/magi.sh "your command here"
 ```
+
+## Development
+
+### Key Directories
+
+- `/magi/`: Python backend and agent implementation
+  - `/magi/core_agents/`: Specialized agent definitions
+  - `/magi/utils/`: Shared utilities
+  - `/magi/docker/`: Docker configuration
+- `/src/`: TypeScript server implementation
+- `/public/`: Web interface assets
+- `/utils/`: Node.js utility scripts
+- `/test/`: Testing scripts
+
+### Development Workflow
+
+1. Make changes to the code
+2. Lint code with `npm run lint`
+3. Run server with `npm run dev`
+4. Test functionality
+5. Fix any errors
+6. Repeat until everything works correctly
+
+## Troubleshooting
+
+- **Docker Connection Issues**: Ensure Docker is running
+- **Permission Errors**: May need sudo/admin for Docker operations
+- **API Key Problems**: Verify your OpenAI API key is valid
+- **Port Conflicts**: If port 3001 is in use, the system will try alternative ports
+
+## License
+
+See the [LICENSE](LICENSE) file for details.

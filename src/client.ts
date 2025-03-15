@@ -1,27 +1,41 @@
-// Define types for Socket.io events
+/**
+ * MAGI System Client-Side Application
+ * Handles UI interactions and WebSocket communication with the server
+ */
+
+// Type definitions for server events
 interface ProcessCreateEvent {
-  id: string;
-  command: string;
-  status: string;
+  id: string;            // Process identifier (AI-xxxxxx)
+  command: string;       // Command that started the process
+  status: string;        // Initial status (usually 'running')
 }
 
 interface ProcessLogsEvent {
-  id: string;
-  logs: string;
+  id: string;            // Process identifier
+  logs: string;          // Log content (may contain markdown)
 }
 
 interface ProcessUpdateEvent {
-  id: string;
-  status: string;
+  id: string;            // Process identifier
+  status: string;        // New status ('running', 'completed', 'failed', 'terminated')
 }
 
-// Define type for process elements
-interface ProcessElement {
-  box: HTMLElement;
-  logs: HTMLElement;
-  status: HTMLElement;
-  input?: HTMLInputElement;
+// Type definition for process command
+interface ProcessCommand {
+  processId: string;     // Process to send command to
+  command: string;       // Command text
 }
+
+// DOM element references for processes
+interface ProcessElement {
+  box: HTMLElement;      // Container element
+  logs: HTMLElement;     // Log output container
+  status: HTMLElement;   // Status indicator
+  input?: HTMLInputElement; // Optional process-specific input field
+}
+
+// Valid process statuses
+type ProcessStatus = 'running' | 'completed' | 'failed' | 'terminated' | 'ending';
 
 // Wait for DOM to be fully loaded
 document.addEventListener('DOMContentLoaded', () => {
