@@ -1,23 +1,25 @@
 # MAGI System
 
-## Key Commands
-- Activate environment: `source ./activate.sh` or `source venv-3.13/bin/activate`
-- Install dependencies: `pip install -r requirements.txt`
-- Install Playwright: `python -m playwright install`
-- Run application: `python main.py`
-- Run in test mode with auto-exit: `python main.py -t "your command here"`  
-- Test specific command: `python main.py -p "your prompt here"`
+The system contains a node front end which is used to interact with a docker container running a python backend. The node server is responsible for managing the docker containers and streaming output back to the web interface. The web interface is built using TypeScript and React, and uses socket.io for real-time communication.
 
-## Docker Commands
-- Build Docker image manually: `python build_docker.py`
-- Set OpenAI API Key: `export OPENAI_API_KEY=your-api-key`
-- Docker containers are automatically cleaned up when the application exits
+## Structure
+The project is organized as follows:
+- `magi/`: Python backend with agent implementations
+    - `core_agents/`: Specialized agent implementations
+    - `docker/`: Docker configuration
+    - `utils/`: Shared utility modules
+- `src/`: TypeScript source for the Node.js server
+- `public/`: Static web assets
+- `utils/`: Node.js utilities for Docker and setup
 
-## Development Workflow
-1. Test changes with `python main.py -t`
-3. Verify all functionality works
-4. Fix ALL errors found during testing (related or not)
-5. Commit with a descriptive message
-6. Push to GitHub
+## ALWAYS TEST YOUR CHANGES
+1. Make changes to code
+2. Lint all code with `npm run lint` (fix with `npm run lint:fix`)
+3. Test node server with `npm run dev`
+4. Test magi backend with `test/magi.sh "your prompt here"`
+5. Verify all changed functionality works
+6. Fix ALL errors found during testing (related to changes or not)
+7. Repeat steps 2 to 6 until no errors are found
+8. With GitHub, commit final code and push
 
-Changes should ALWAYS be tested after they are made. If any errors are found (regardless if they are related or not) they should be fixed immediately. Once no errors are found, every change should be committed and pushed without confirmation of commit messages.
+Changes should ALWAYS be tested after they are made. If any errors are found (regardless if they are related or not) they should be fixed immediately. Once no errors are found, final code should be committed and pushed as long as the task was completed successfully.

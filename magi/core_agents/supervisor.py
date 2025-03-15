@@ -2,6 +2,10 @@
 supervisor.py - Defines the supervisor agent that orchestrates specialized agents
 """
 
+import os
+import sys
+
+# Import from common utility modules
 from agents import Agent
 from core_agents.code_agent import create_code_agent
 from core_agents.filesystem_agent import create_filesystem_agent
@@ -15,7 +19,7 @@ async def create_supervisor_agent(browser_initializer) -> Agent:
     filesystem_agent = create_filesystem_agent()
     browser_agent = await create_browser_agent(browser_initializer)
     search_agent = await create_search_agent()
-    
+
     return Agent(
         name="Supervisor",
         instructions="""You are an intelligent orchestration engine that efficiently manages specialized expert agents to solve complex tasks. Your core strength is breaking down problems into optimal sub-tasks and delegating them to the most appropriate specialized agent.
@@ -26,7 +30,7 @@ SPECIALIZED AGENTS:
    • Tools: run_claude_code (delegates to Claude CLI)
    • Perfect for: All programming tasks, code modifications, explanations
 
-2. FilesystemAgent: File system operations expert  
+2. FilesystemAgent: File system operations expert
    • Capabilities: File/directory creation, organization, and management
    • Tools: run_shell_command (executes shell commands)
    • Perfect for: Project structure, file operations, system queries

@@ -1,0 +1,578 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Custom fonts */
+@import url('https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=VT323&display=swap');
+
+/* Default dark theme styling */
+:root {
+  --bg-primary: #000;
+  --bg-secondary: #111;
+  --bg-tertiary: #222;
+  --text-primary: #fff;
+  --text-secondary: #ddd;
+  --accent-primary: #f80;
+  --accent-secondary: #3af;
+  --border-color: #333;
+  --border-hover: #444;
+  --status-running-color: #0cf;
+  --status-completed-bg: #223322;
+  --status-completed-color: #6f6;
+  --status-failed-bg: #332222;
+  --status-failed-color: #f66;
+  --status-ending-bg: #333322;
+  --status-ending-color: #f80;
+  --code-bg: #111;
+  --button-bg: #333;
+  --button-hover-bg: #444;
+  --button-text: #fff;
+  --terminate-color: #f66;
+  --focus-shadow: rgba(255, 136, 0, 0.5);
+  --focus-box-shadow: rgba(255, 136, 0, 0.2);
+  --prompt-color: #f80;
+}
+
+/* Light theme via media query */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-primary: #f5f5f5;
+    --bg-secondary: #e8e8e8;
+    --bg-tertiary: #d8d8d8;
+    --text-primary: #333;
+    --text-secondary: #555;
+    --accent-primary: #000;  /* Black text for inputs */
+    --accent-secondary: #0077cc;
+    --border-color: #ccc;
+    --border-hover: #999;
+    --status-running-color: #0088cc;
+    --status-completed-bg: #e8f5e8;
+    --status-completed-color: #2a8735;
+    --status-failed-bg: #f5e8e8;
+    --status-failed-color: #d32f2f;
+    --status-ending-bg: #f5f0e8;
+    --status-ending-color: #e65c00;
+    --code-bg: #e8e8e8;
+    --button-bg: #d8d8d8;
+    --button-hover-bg: #ccc;
+    --button-text: #333;
+    --terminate-color: #d32f2f;
+    --focus-shadow: rgba(66, 153, 225, 0.5);  /* Lighter blue */
+    --focus-box-shadow: rgba(66, 153, 225, 0.2);  /* Lighter blue */
+    --prompt-color: #000;  /* Matching prompt color to input text */
+  }
+}
+
+body {
+  font-family: 'Courier New', monospace;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+  overflow: hidden;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0.5rem;
+  position: relative;
+}
+
+/* Header styles */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  background-color: var(--bg-primary);
+  margin-bottom: 0.5rem;
+  position: relative;
+  transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Centered initial input container */
+#center-input-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  max-width: 600px;
+  opacity: 1;
+  transition: opacity 0.5s ease-out;
+}
+
+#center-command-form {
+  position: relative;
+  width: 100%;
+}
+
+#center-command-input {
+  width: 100%;
+  padding: 0.8rem 0.8rem 0.8rem 2rem;
+  background-color: var(--bg-primary);
+  color: var(--accent-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 0;
+  font-size: 1.2rem;
+  font-family: 'Courier New', monospace;
+  box-sizing: border-box;
+  height: 3.5rem;
+}
+
+#center-command-input::placeholder {
+  color: var(--accent-primary);
+  opacity: 0.5;
+}
+
+#center-command-form::before {
+  content: ">";
+  position: absolute;
+  left: 0.8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--prompt-color);
+  font-weight: bold;
+  font-size: 1.2rem;
+  z-index: 1;
+  font-family: 'Courier New', monospace;
+}
+
+/* Hide header initially */
+#main-header {
+  opacity: 0;
+  transform: translateY(-100%);
+}
+
+header h1 {
+  color: var(--text-primary);
+  font-size: 2rem;
+  text-shadow: 0 0 2px var(--text-primary);
+  font-family: 'Major Mono Display', 'VT323', monospace;
+  letter-spacing: 1rem;
+  margin: 0;
+  text-align: left;
+  white-space: nowrap;
+}
+
+@media (prefers-color-scheme: light) {
+  header h1 {
+    text-shadow: none;
+  }
+  
+  #center-command-input,
+  #command-input,
+  .process-input {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+  
+  .process-input:focus,
+  #command-input:focus,
+  #center-command-input:focus {
+    border-color: #4299e1;
+  }
+}
+
+/* Add blinking cursor effect */
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+#command-input::after {
+  content: "_";
+  position: absolute;
+  right: 10px;
+  animation: blink 1s infinite;
+}
+
+main {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  gap: 4px;
+  padding: 2px;
+  margin-bottom: 0.5rem;
+  min-height: 0; /* Important for flexbox to allow proper sizing */
+}
+
+#command-form {
+  display: flex;
+  flex: 1;
+  margin-left: 2rem;
+  position: relative;
+}
+
+#command-input {
+  width: 100%;
+  padding: 0.5rem 0.5rem 0.5rem 1.5rem;
+  background-color: var(--bg-primary);
+  color: var(--accent-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 0;
+  font-size: 1rem;
+  font-family: 'Courier New', monospace;
+  box-sizing: border-box;
+  height: 2.5rem;
+}
+
+#command-input::placeholder {
+  color: var(--accent-primary);
+  opacity: 0.5;
+}
+
+/* Add accent '>' before input */
+#command-form {
+  position: relative;
+}
+
+#command-form::before {
+  content: ">";
+  position: absolute;
+  left: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--prompt-color);
+  font-weight: bold;
+  z-index: 1;
+  font-family: 'Courier New', monospace;
+}
+
+button {
+  padding: 0.5rem 1rem;
+  background-color: var(--button-bg);
+  color: var(--button-text);
+  border: 1px solid var(--border-hover);
+  border-radius: 0;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-family: 'Courier New', monospace;
+  text-transform: uppercase;
+  transition: all 0.2s ease;
+}
+
+button:hover {
+  background-color: var(--button-hover-bg);
+}
+
+@keyframes splitFadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes gridTransition {
+  0% {
+    opacity: 0.8;
+    transform: scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.process-box {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  min-height: 0;
+  opacity: 1;
+  animation: splitFadeIn 0.5s ease-out;
+}
+
+.process-box:hover {
+  border-color: var(--border-hover);
+}
+
+.process-box.focused {
+  border-color: var(--accent-primary);
+  box-shadow: inset 0 0 0 1px var(--focus-box-shadow);
+}
+
+.process-header {
+  padding: 0.5rem;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.process-id {
+  font-weight: bold;
+  color: var(--accent-primary);
+  font-family: 'Digital', 'Courier New', monospace;
+}
+
+.process-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.process-status {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid;
+  font-size: 0.8rem;
+  font-family: 'Courier New', monospace;
+  text-transform: uppercase;
+}
+
+.status-running {
+  background-color: transparent;
+  color: var(--status-running-color);
+  border-color: transparent;
+}
+
+.status-completed {
+  background-color: var(--status-completed-bg);
+  color: var(--status-completed-color);
+  border-color: var(--status-completed-color);
+}
+
+.status-failed {
+  background-color: var(--status-failed-bg);
+  color: var(--status-failed-color);
+  border-color: var(--status-failed-color);
+}
+
+.status-ending {
+  background-color: var(--status-ending-bg);
+  color: var(--status-ending-color);
+  border-color: var(--status-ending-color);
+}
+
+.status-ending + .process-terminate,
+.status-terminated + .process-terminate {
+  display: none;
+}
+
+.status-terminated {
+  background-color: var(--status-ending-bg);
+  color: var(--status-ending-color);
+  border-color: var(--status-ending-color);
+}
+
+/* Add process box fade out animation */
+@keyframes fadeOutRemove {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0.2;
+    transform: scale(0.95);
+  }
+}
+
+.process-terminate {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  background-color: var(--bg-tertiary);
+  color: var(--terminate-color);
+  border: 1px solid var(--terminate-color);
+}
+
+.process-terminate:hover {
+  background-color: var(--button-hover-bg);
+}
+
+.process-logs {
+  flex: 1;
+  padding: 0.5rem;
+  overflow-y: auto;
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  white-space: normal;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  position: relative;
+  min-height: 0;
+}
+
+/* Markdown styles */
+.process-logs h1, 
+.process-logs h2, 
+.process-logs h3, 
+.process-logs h4, 
+.process-logs h5, 
+.process-logs h6 {
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+.process-logs p {
+  margin-bottom: 0.5rem;
+}
+
+/* Style blockquotes (user input) with orange color and '>' prefix */
+.process-logs blockquote {
+  margin: 0.5rem 0;
+  padding-left: 1rem;
+  border-left: none;
+  color: var(--accent-primary);
+  position: relative;
+}
+
+.process-logs blockquote::before {
+  content: ">";
+  position: absolute;
+  left: 0;
+  color: var(--prompt-color);
+  font-weight: bold;
+  font-family: 'Courier New', monospace;
+}
+
+.process-logs blockquote p {
+  color: var(--accent-primary);
+  margin: 0;
+}
+
+.process-logs pre {
+  background-color: var(--code-bg);
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  overflow-x: auto;
+  margin: 0.5rem 0;
+  white-space: pre;
+}
+
+.process-logs code {
+  background-color: var(--code-bg);
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--border-color);
+  font-family: 'Courier New', monospace;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.process-logs pre code {
+  padding: 0;
+  border: none;
+  background-color: transparent;
+}
+
+.process-logs table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border-color);
+}
+
+.process-logs th, 
+.process-logs td {
+  border: 1px solid var(--border-color);
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.process-logs th {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.process-logs ul, 
+.process-logs ol {
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.process-logs a {
+  color: var(--accent-secondary);
+  text-decoration: none;
+}
+
+.process-logs a:hover {
+  text-decoration: underline;
+}
+
+/* Remove scanline effect */
+
+/* Process input styles */
+.process-input-container {
+  display: none;
+  padding: 0.5rem;
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+
+.process-input-form {
+  position: relative;
+  width: 100%;
+}
+
+.process-input {
+  width: 100%;
+  padding: 0.5rem 0.5rem 0.5rem 1.5rem;
+  background-color: var(--bg-primary);
+  color: var(--accent-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 0;
+  font-size: 0.9rem;
+  font-family: 'Courier New', monospace;
+  resize: none;
+  overflow: hidden;
+  min-height: 2.5rem;
+  max-height: 5rem;
+  line-height: 1.4;
+  transition: border-color 0.3s ease;
+}
+
+.process-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 1px var(--focus-shadow);
+}
+
+.process-input::placeholder {
+  color: var(--accent-primary);
+  opacity: 0.5;
+}
+
+.process-input-form::before {
+  content: ">";
+  position: absolute;
+  left: 0.5rem;
+  top: 1.1rem;
+  transform: translateY(-50%);
+  color: var(--prompt-color);
+  font-weight: bold;
+  z-index: 1;
+  font-family: 'Courier New', monospace;
+}
+
+/* Process box hover style to show input */
+.process-box:hover .process-input-container,
+.process-box.focused .process-input-container {
+  display: block;
+}
+
+/* Make sure the layout adapts for smaller screens */
+@media (max-width: 768px) {
+  main {
+    grid-template-columns: 1fr;
+  }
+}

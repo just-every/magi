@@ -1,0 +1,18 @@
+# Ignore everything by default
+*
+
+# Only include the magi directory
+!magi/
+
+# Ignore unnecessary files in the included directories
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.Python
+**/.env
+**/.venv
+**/env/
+**/venv/
+**/ENV/
+**/Dockerfile

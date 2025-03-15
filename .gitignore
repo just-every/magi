@@ -49,3 +49,9 @@ Desktop.ini
 *.env
 *.env.local
 local_settings.py
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log

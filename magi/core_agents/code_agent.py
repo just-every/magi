@@ -3,36 +3,16 @@ code_agent.py - Specialized agent for writing, explaining and modifying code
 """
 
 from agents import Agent, function_tool
-import subprocess
-from typing import Optional
+from magi.utils.claude import run_claude_cli_sync
 
+# Use the decorator (real or mock)
 @function_tool
-def run_claude_code(prompt: str, working_directory: Optional[str] = None) -> str:
+def run_claude_code(prompt: str, working_directory: str = None) -> str:
     """
     Runs Claude Code CLI with the provided prompt to execute code tasks.
-    Uses --print and --dangerously-skip-permissions flags for non-interactive execution.
+    Uses --dangerously-skip-permissions flags for non-interactive execution.
     """
-    try:
-        # Run claude with specific flags for non-interactive usage
-        command = ["claude", "--print", "--dangerously-skip-permissions", "-p", prompt]
-        
-        result = subprocess.run(
-            command,
-            cwd=working_directory,
-            capture_output=True,
-            text=True,
-            check=False
-        )
-        
-        # Check for any errors
-        if result.returncode != 0:
-            return f"ERROR: Claude execution failed with code {result.returncode}\nSTDERR: {result.stderr}"
-        
-        # Return the output
-        return result.stdout
-        
-    except Exception as e:
-        return f"Error executing Claude Code: {str(e)}"
+    return run_claude_cli_sync(prompt, working_directory)
 
 def create_code_agent() -> Agent:
     """Creates and returns the code agent with appropriate tools and instructions."""

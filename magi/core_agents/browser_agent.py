@@ -3,7 +3,7 @@ browser_agent.py - Specialized agent for direct website interaction via browser
 """
 
 from agents import Agent, ComputerTool, ModelSettings
-from utils.browser_computer import create_browser_tools
+from magi.utils.browser_computer import create_browser_tools
 
 async def create_browser_agent(browser_initializer):
     """Creates a browser agent with navigation and interaction capabilities."""
@@ -11,15 +11,15 @@ async def create_browser_agent(browser_initializer):
     try:
         browser_computer = await browser_initializer()
         print("Browser computer initialized successfully")
-        
-        # Get all browser tools 
+
+        # Get all browser tools
         browser_tools = create_browser_tools(browser_computer)
         print("Browser tools created successfully")
     except Exception as e:
         print(f"Error initializing browser or creating tools: {e}")
         # Re-raise to fail initialization
         raise
-    
+
     return Agent(
         name="BrowserAgent",
         instructions="""You are a browser interaction expert specializing in website navigation and interaction.
@@ -103,14 +103,14 @@ When browsing websites:
             browser_tools["playwright_get_text"],
             browser_tools["playwright_evaluate"],
             browser_tools["playwright_close"],
-            
+
             # HTTP request tools
             browser_tools["playwright_get"],
             browser_tools["playwright_post"],
             browser_tools["playwright_put"],
             browser_tools["playwright_patch"],
             browser_tools["playwright_delete"],
-            
+
             # Legacy tools (for backward compatibility)
             browser_tools["navigate"],
             ComputerTool(browser_computer)

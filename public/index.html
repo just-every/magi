@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MAGI System</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div class="container">
+    <header id="main-header">
+      <h1>MAGI</h1>
+      <form id="command-form">
+        <input type="text" id="command-input" placeholder="NEW TASK..." autocomplete="off">
+      </form>
+    </header>
+    
+    <main id="process-grid">
+      <!-- Process boxes will be dynamically inserted here -->
+    </main>
+    
+    <div id="center-input-container">
+      <form id="center-command-form">
+        <input type="text" id="center-command-input" placeholder="NEW TASK..." autocomplete="off">
+      </form>
+    </div>
+  </div>
+
+  <!-- Process box template -->
+  <template id="process-template">
+    <div class="process-box">
+      <div class="process-box-bg"></div>
+      <div class="process-header">
+        <span class="process-id">MAGI-</span>
+        <div class="process-header-right">
+          <span class="process-status"></span>
+          <button class="process-terminate">END</button>
+        </div>
+      </div>
+      <div class="process-logs"></div>
+      <div class="process-input-container">
+        <form class="process-input-form">
+          <input type="text" class="process-input" placeholder="Send command..." autocomplete="off">
+        </form>
+      </div>
+    </div>
+  </template>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="/js/client.js"></script>
+</body>
+</html>

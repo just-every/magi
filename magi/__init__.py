@@ -1,0 +1,3 @@
+"""
+MAGI System package
+"""
