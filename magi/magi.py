@@ -125,29 +125,30 @@ async def run_magi_command(command: str, agent: str = "supervisor") -> str:
             print(event.data.delta, end="", flush=True)
             continue
 
-        if hasattr(event, 'data') and hasattr(event.data, 'done'):
+        if hasattr(event, 'data') and hasattr(event.data, 'type') and isinstance(event.data.type, str) and event.data.type.endswith(".done"):
             # A delta is done - let's get a new line
-            print(f"\n", end="", flush=True)
+            print("\n", end="", flush=True)
             continue
-      continue
 
-      # For all other events, use recursive conversion and JSON formatting
-      def convert_to_serializable(obj):
-          if hasattr(obj, "__dict__"):
-              return {k: convert_to_serializable(v) for k, v in obj.__dict__.items() if not k.startswith("_")}
-          elif isinstance(obj, (list, tuple)):
-              return [convert_to_serializable(item) for item in obj]
-          elif isinstance(obj, dict):
-              return {k: convert_to_serializable(v) for k, v in obj.items()}
-          elif isinstance(obj, (str, int, float, bool, type(None))):
-              return obj
-          else:
-              return f"{type(obj).__name__}: {str(obj)}"
+        continue
 
-      event_type = event.__class__.__name__
-      event_data = convert_to_serializable(event)
-      event_dict = {"type": event_type, "data": event_data}
-      print(json.dumps(event_dict, indent=2), flush=True)
+        # For all other events, use recursive conversion and JSON formatting
+        def convert_to_serializable(obj):
+            if hasattr(obj, "__dict__"):
+                return {k: convert_to_serializable(v) for k, v in obj.__dict__.items() if not k.startswith("_")}
+            elif isinstance(obj, (list, tuple)):
+                return [convert_to_serializable(item) for item in obj]
+            elif isinstance(obj, dict):
+                return {k: convert_to_serializable(v) for k, v in obj.items()}
+            elif isinstance(obj, (str, int, float, bool, type(None))):
+                return obj
+            else:
+                return f"{type(obj).__name__}: {str(obj)}"
+
+        event_type = event.__class__.__name__
+        event_data = convert_to_serializable(event)
+        event_dict = {"type": event_type, "data": event_data}
+        print(json.dumps(event_dict, indent=2), flush=True)
 
     # Log completion
     print("=== Run complete ===")
@@ -219,6 +220,10 @@ def main():
     # Exit if running in test mode
     if args.test:
         print("\nTesting complete. Exiting.")
+        # Ensure we properly cleanup and close all open resources
+        # This helps prevent lingering tasks during shutdown
+        if sys.version_info >= (3, 9):
+            asyncio.run(asyncio.sleep(0))  # Let any pending tasks complete
         sys.exit(0)
 
     # Start monitoring for commands from named pipe (FIFO)
