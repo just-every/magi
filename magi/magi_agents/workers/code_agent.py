@@ -4,6 +4,8 @@ code_agent.py - Specialized agent for writing, explaining and modifying code
 
 from agents import Agent, ModelSettings, function_tool
 from magi.utils.claude import run_claude_cli_sync
+from magi.utils.file_utils import write_file, read_file
+from magi.magi_agents import FILE_TOOLS_TEXT
 
 # Use the decorator (real or mock)
 @function_tool
@@ -27,6 +29,8 @@ You work with `AICoder` get the job done. In most cases you should just pass you
 
 You can let `AICoder` know this if relevant: You run in a virtual docker environment. You are safe to execute any commands via the shell that you would like. Your environment is the latest version of Debian Bookworm with all the default packages including node and python. You can install new packages as needed - there are no restrictions.
 
+{FILE_TOOLS_TEXT}
+
 SELF-SUFFICIENCY PRINCIPLES:
 Assume you have been given all the information necessary to complete the task.
 1. Use `AICoder` without requesting additional information
@@ -35,7 +39,7 @@ Assume you have been given all the information necessary to complete the task.
 4. Return your final outcome and include any educated guesses you had to make
     """,
         handoff_description="A specialized agent for writing, explaining and modifying code",
-        tools=[AICoder],
+        tools=[AICoder, write_file, read_file],
         model="gpt-4o-mini",
-        model_settings=ModelSettings(tool_choice="required"),
+        model_settings=ModelSettings(truncation="auto", parallel_tool_calls=True),
     )

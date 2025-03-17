@@ -12,11 +12,16 @@ The project is organized as follows:
 - `public/`: Static web assets
 - `utils/`: Node.js utilities for Docker and setup
 
+## How to solve problems
+- Always search the web to ensure you have up-to-date information about packages or code which you are working with.
+- If the first solution fails, do more research before trying something else.
+- **Never** add a simulation or mock code to solve an error. This can be done temporarily for debugging, but it should never be left in the code and a real solution should be implemented. **Always fix the underlying problem.**
+
 ## ALWAYS TEST YOUR CHANGES
 1. Make changes to code
 2. Lint all code with `npm run lint` (fix with `npm run lint:fix`)
-3. Test node server with `npm run dev`
-4. Test magi backend with `test/magi.sh "your prompt here"`
+3. Test magi docker backend with `test/magi-docker.sh -p "your prompt here"`
+4. You can also test individual agents directly with python using `test/magi-python.sh -p "your prompt here" -a codes` where `code` is the name of the agent you want to test (`supervisor`, `code`, `browser`, `shell`, `search`, `reasoning` or `worker`)
 5. Verify all changed functionality works
 6. Fix ALL errors found during testing (related to changes or not)
 7. Repeat steps 2 to 6 until no errors are found

@@ -108,7 +108,7 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
 
     // Create Docker container
     const result = await execPromise(
-      `docker run -d --rm --name ${containerName} -e PROCESS_ID=${processId} -e COMMAND=${command.replace(/'/g, "'\\''")} -e OPENAI_API_KEY=${openaiApiKey || ''} -v ${projectRoot}/magi:/app/magi:rw -v claude_credentials:/claude_shared:rw magi-system:latest`
+      `docker run -d --rm --name ${containerName} -e PROCESS_ID=${processId} -e OPENAI_API_KEY=${openaiApiKey || ''} -v ${projectRoot}/magi:/app/magi:rw -v claude_credentials:/claude_shared:rw -v magi_output:/magi_output:rw magi-system:latest python magi/magi.py -p "${command.replace(/"/g, "\\\"")}"`
     );
 
     const containerId = result.stdout.trim();

@@ -3,6 +3,8 @@ search_agent.py - Specialized agent for web searches and information gathering
 """
 
 from agents import Agent, ModelSettings, WebSearchTool
+from magi.utils.file_utils import write_file, read_file
+from magi.magi_agents import FILE_TOOLS_TEXT
 
 def create_search_agent():
     """Creates a search agent with web search capabilities."""
@@ -32,6 +34,8 @@ To refine search results based on geography, you can specify an approximate loca
 - region: Optional. Free text input for the region, e.g. `California`.
 - timezone: Optional. The IANA timezone, e.g. `America/Los_Angeles`.
 
+{FILE_TOOLS_TEXT}
+
 SELF-SUFFICIENCY PRINCIPLES:
 Assume you have been given all the information necessary to complete the task.
 1. Run your searches without requesting additional information
@@ -40,7 +44,7 @@ Assume you have been given all the information necessary to complete the task.
 4. Return your best possible response and include any educated guesses you had to make
         """,
         handoff_description="A specialized agent for web searches and information gathering",
-        tools=[WebSearchTool()],
+        tools=[WebSearchTool(), write_file, read_file],
         model="gpt-4o",
-        model_settings=ModelSettings(tool_choice="required"),
+        model_settings=ModelSettings(truncation="auto", parallel_tool_calls=True),
     )

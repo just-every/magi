@@ -118,11 +118,18 @@ The server will:
 
 ### Command Line Testing
 
-For testing the Python backend directly:
+For testing the Docker/Python backend directly:
 
 ```bash
-test/magi.sh "your command here"
+test/magi-docker.sh -p "your prompt here"
 ```
+
+You can also test individual agents directly with python using:
+```bash
+test/magi-python.sh -p "your prompt here" -a code
+```
+Where `code` is the name of the agent you want to test;
+`supervisor`, `code`, `browser`, `shell`, `search`, `reasoning` or `worker`.
 
 ## Development
 

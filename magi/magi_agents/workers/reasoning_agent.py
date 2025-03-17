@@ -1,46 +1,36 @@
 """
-search_agent.py - Specialized agent for web searches and information gathering
+reasoning_agent.py - Thinks through complicated problems
 """
 
 from agents import Agent, ModelSettings, WebSearchTool
+from magi.magi_agents import worker_agents_as_tools, AGENT_DESCRIPTIONS, DOCKER_ENV_TEXT, COMMON_WARNINGS, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT
+from magi.utils.file_utils import write_file, read_file
 
-def create_search_agent():
-    """Creates a search agent with web search capabilities."""
+def create_reasoning_agent():
+    """Thinks through complicated problems."""
     # Create the agent with web search tool only
     return Agent(
-        name="SearchAgent",
-        instructions="""You are a web search expert specializing in finding information online.
+        name="ReasoningAgent",
+        instructions=f"""You are an expert at thinking through complicated problems. You have more skills, experience and ability to solve complicated problems than your supervisor.
 
-You should formulate clear and specific search queries. When in doubt a first perform search to clarify refine your approach, then additional searches to retrieve the answer.
+You have been giving a task to think through to find the best solution to. You have a range of tools you can call if you need to, but you can also just complete the task yourself if you're able to come up with a solution. They can be given tasks for their given area of expertise and be expected to complete them without further input in most cases.
 
-**Your tools only know the information you provide them in their input - they have no additional context.**
+YOUR AGENTS:
+1. {AGENT_DESCRIPTIONS["CodeAgent"]}
+2. {AGENT_DESCRIPTIONS["BrowserAgent"]}
+3. {AGENT_DESCRIPTIONS["SearchAgent"]}
+4. {AGENT_DESCRIPTIONS["ShellAgent"]}
 
-SEARCH CONTEXT
-You should always provide `search_context_size` of for searches.
-`search_context_size` values:
-- `high`: Most comprehensive context, highest cost, slower response.
-- `medium` (default): Balanced context, cost, and latency.
-- `low`: Least context, lowest cost, fastest response, but potentially lower answer quality.
-For complex research use `high`. For basic queries use `low`. In all other cases, use `medium`.
+{COMMON_WARNINGS}
 
-USER LOCATION
-To refine search results based on geography, you can specify an approximate location.
-`user_location` values:
-- type: Always `approximate`
-- city: Optional. Free text input for the city, e.g. `San Francisco`.
-- country: Optional. The two-letter ISO country code, e.g. `US`.
-- region: Optional. Free text input for the region, e.g. `California`.
-- timezone: Optional. The IANA timezone, e.g. `America/Los_Angeles`.
+{FILE_TOOLS_TEXT}
 
-SELF-SUFFICIENCY PRINCIPLES:
-Assume you have been given all the information necessary to complete the task.
-1. Run your searches without requesting additional information
-2. If at first you don't succeed, try diverse search queries to explore topics from multiple angles
-3. If in doubt, make an educated guess the best possible approach
-4. Return your best possible response and include any educated guesses you had to make
-        """,
-        handoff_description="A specialized agent for web searches and information gathering",
-        tools=[WebSearchTool()],
-        model="gpt-4o",
-        model_settings=ModelSettings(tool_choice="required"),
+{DOCKER_ENV_TEXT}
+
+{SELF_SUFFICIENCY_TEXT}
+""",
+        handoff_description="A specialized agent for thinking through complicated problems.",
+        model="o3-mini",
+        tools=[*worker_agents_as_tools(include_reasoning=False), write_file, read_file],
+        model_settings=ModelSettings(truncation="auto", parallel_tool_calls=True),
     )

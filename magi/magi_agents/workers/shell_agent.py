@@ -5,6 +5,8 @@ shell_agent.py - Specialized agent for file system operations and project organi
 from agents import Agent, ModelSettings, function_tool
 import subprocess
 from typing import Optional
+from magi.utils.file_utils import write_file, read_file
+from magi.magi_agents import FILE_TOOLS_TEXT
 
 @function_tool
 def bash(command: str, working_directory: Optional[str] = None) -> str:
@@ -32,9 +34,11 @@ You run in a virtual docker environment. You are safe to execute any commands vi
 Your environment is the latest version of Debian Bookworm with all the default packages including node and python.
 You can install new packages as needed - there are no restrictions.
 
-**Your tool only know the information you provide them in their input - they have no additional context.**
+**Your tools only know the information you provide them in their input - they have no additional context.**
 
 Provide your commands to the `bash` tool in series. Look at their output and complete the next command until your task is complete.
+
+{FILE_TOOLS_TEXT}
 
 SELF-SUFFICIENCY PRINCIPLES:
 Assume you have been given all the information necessary to complete the task.
@@ -44,7 +48,7 @@ Assume you have been given all the information necessary to complete the task.
 4. Return your final outcome and include any educated guesses you had to make
     """,
         handoff_description="A specialized agent for file system operations and project organization",
-        tools=[bash],
+        tools=[bash, write_file, read_file],
         model="gpt-4o-mini",
-        model_settings=ModelSettings(tool_choice="required"),
+        model_settings=ModelSettings(truncation="auto", parallel_tool_calls=True),
     )

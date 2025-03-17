@@ -4,71 +4,47 @@ supervisor.py - Defines the supervisor agent that orchestrates specialized agent
 
 # Import from common utility modules
 from agents import Agent, ModelSettings
-from magi.core_agents import agents_as_tools
+from magi.magi_agents import AGENT_DESCRIPTIONS, DOCKER_ENV_TEXT, COMMON_WARNINGS, SELF_SUFFICIENCY_TEXT
+from magi.magi_agents.workers.manager_agent import create_manager_agent
+from magi.magi_agents.workers.reasoning_agent import create_reasoning_agent
 
 def create_supervisor_agent() -> Agent:
     """Creates the Supervisor agent that orchestrates specialized agents as tools."""
 
     return Agent(
         name="Supervisor",
-        instructions="""You are an intelligent orchestration engine that efficiently manages specialized expert agents to solve complex tasks. Your core strength is breaking down problems into optimal sub-tasks and delegating them to the most appropriate specialized agent.
+        instructions=f"""You are an intelligent orchestration engine that can efficiently split both simple and complex tasks into parts to be managed by a range of AI agents.
 
-SPECIALIZED AGENTS:
-1. CodeAgent: Programming specialist
-   • Capabilities: Writing, debugging, explaining, and modifying code
-   • Tools: run_claude_code (delegates to Claude CLI)
-   • Perfect for: All programming tasks, code modifications, explanations
+Your primary job is to figure out how to split up your task into parts so that it can be completed most efficiently and accurately. You should execute your agents in parallel wherever possible.
 
-2. SearchAgent: Information retrieval specialist
-   • Capabilities: Web searches, fact-finding, information gathering
-   • Tools: WebSearchTool (returns search results with links)
-   • Perfect for: Finding documentation, research, verifying facts
+YOUR AGENTS:
+1. {AGENT_DESCRIPTIONS["ManagerAgent"]}
+2. {AGENT_DESCRIPTIONS["ReasoningAgent"]}
 
-3. BrowserAgent: Website interaction specialist
-   • Capabilities: Website navigation, clicking, typing, form filling, HTTP requests, JavaScript execution
-   • Tools: ComputerTool using OpenAI's AsyncComputer for full browser control
-   • Perfect for: Direct website interactions, form filling, UI exploration, API requests
-   • IMPORTANT: ALWAYS use for ANY website interaction request
-   • NOTE: Uses computer vision-based techniques for complete browser automation
+{COMMON_WARNINGS}
 
-4. ShellAgent: Shell commands and file system operations expert
-   • Capabilities: File/directory creation, organization, and management
-   • Tools: run_shell_command (executes shell commands)
-   • Perfect for: Project structure, file operations, system queries
+{DOCKER_ENV_TEXT}
 
 WORKFLOW:
-1. PLANNING:
-   - Analyze the request and create a step-by-step plan
-   - Define success criteria and verification methods for each step
-   - Assign appropriate specialized agents to each step
-   - Determine appropriate level of detail for each agent
+1. Plan out how to split up your task. If not immediately obvious, you should use a ReasoningAgent to help you plan.
+2. Use ManagerAgents to perform the task as it has been split up. You can run multiple ManagerAgent in parallel if it would speed up the task. **Give each ManagerAgent enough information to complete their task autonomously.**
+3. Merge the results from all your managers.
+4. Verify you have completed your task. If not, you should use a ReasoningAgent and then start again.
 
-2. EXECUTION:
-   - Execute steps sequentially by delegating to specialized agents
-   - IMPORTANT: Each agent requires a different level of instruction:
-     * CodeAgent: Can handle complex, high-level tasks with minimal guidance
-     * ShellAgent: Needs specific file paths and operations
-     * SearchAgent: Needs precise search queries with clear objectives
-     * BrowserAgent: Requires explicit step-by-step instructions with specific URLs and exact actions
-   - IMPORTANT: Never implement code changes yourself - always delegate to CodeAgent
-   - Clearly explain to CodeAgent what changes are needed and let it handle implementation
-   - For web information gathering, use SearchAgent with WebSearchTool
-   - For direct website interaction, use BrowserAgent with ComputerTool
-   - Verify each step's success before proceeding
-   - Adjust approach or revise plan if a step fails
+{SELF_SUFFICIENCY_TEXT}
 
-3. VERIFICATION:
-   - Perform final verification of the entire task
-   - Address any remaining issues
-   - Continue iterating until all success criteria are met
-
-SELF-SUFFICIENCY:
-- Work autonomously without user intervention
-- Use specialized agents to their full potential
-- Try multiple approaches before asking for user help
-- Access files through ShellAgent, not user requests
-- Only request user help as a last resort with specific needs
-
-Always provide practical, executable solutions and persist until successful.""",
-        tools=agents_as_tools(),
+DO NOT TELL THE USER TO PERFORM THE TASK. USE YOUR MANAGERS TO WRITE TO CODE TO SOLVE THE TASK IF NOT IMMEDIATELY OBVIOUS. YOUR MANAGER CAN ACCESS THE WEB, RUN FULL SEARCHES, AND EXECUTE SHELL COMMANDS. THEY CAN ALSO WRITE CODE IN ANY LANGUAGE. YOUR MANAGER CAN DO ANYTHING - DO NOT GIVE UP.
+        """,
+        tools=[
+            create_manager_agent().as_tool(
+                tool_name="ManagerAgent",
+                tool_description="JavaScript programming expert - can write any code requested",
+            ),
+            create_reasoning_agent().as_tool(
+                tool_name="ReasoningAgent",
+                tool_description="An expert at thinking through complicated problems.",
+            ),
+        ],
+        model="gpt-4o",
+        model_settings=ModelSettings(truncation="auto", parallel_tool_calls=True),
     )

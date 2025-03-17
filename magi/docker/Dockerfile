@@ -5,7 +5,7 @@ RUN npm install -g @anthropic-ai/claude-code
 
 # Install python dependencies
 RUN --mount=type=cache,target=/root/.cache/pip \
-    --mount=type=bind,source=docker/requirements.txt,target=requirements.txt \
+    --mount=type=bind,source=magi/docker/requirements.txt,target=requirements.txt \
     python -m pip install -r requirements.txt
 
 # Install Playwright dependencies
