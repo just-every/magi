@@ -2,23 +2,12 @@
 supervisor.py - Defines the supervisor agent that orchestrates specialized agents
 """
 
-import os
-import sys
-
 # Import from common utility modules
-from agents import Agent
-from magi.core_agents.code_agent import create_code_agent
-from magi.core_agents.filesystem_agent import create_filesystem_agent
-from magi.core_agents.search_agent import create_search_agent
-from magi.core_agents.browser_agent import create_browser_agent
+from agents import Agent, ModelSettings
+from magi.core_agents import agents_as_tools
 
-async def create_supervisor_agent(browser_initializer) -> Agent:
+def create_supervisor_agent() -> Agent:
     """Creates the Supervisor agent that orchestrates specialized agents as tools."""
-    # Create specialized agents
-    code_agent = create_code_agent()
-    filesystem_agent = create_filesystem_agent()
-    browser_agent = await create_browser_agent(browser_initializer)
-    search_agent = await create_search_agent()
 
     return Agent(
         name="Supervisor",
@@ -30,22 +19,22 @@ SPECIALIZED AGENTS:
    • Tools: run_claude_code (delegates to Claude CLI)
    • Perfect for: All programming tasks, code modifications, explanations
 
-2. FilesystemAgent: File system operations expert
-   • Capabilities: File/directory creation, organization, and management
-   • Tools: run_shell_command (executes shell commands)
-   • Perfect for: Project structure, file operations, system queries
-
-3. SearchAgent: Information retrieval specialist
+2. SearchAgent: Information retrieval specialist
    • Capabilities: Web searches, fact-finding, information gathering
    • Tools: WebSearchTool (returns search results with links)
    • Perfect for: Finding documentation, research, verifying facts
 
-4. BrowserAgent: Website interaction specialist
+3. BrowserAgent: Website interaction specialist
    • Capabilities: Website navigation, clicking, typing, form filling, HTTP requests, JavaScript execution
-   • Tools: Direct Playwright tools (playwright_navigate, playwright_click, etc.) with ComputerTool as backup
+   • Tools: ComputerTool using OpenAI's AsyncComputer for full browser control
    • Perfect for: Direct website interactions, form filling, UI exploration, API requests
    • IMPORTANT: ALWAYS use for ANY website interaction request
-   • NOTE: Always uses direct playwright_* tools for better speed and reliability
+   • NOTE: Uses computer vision-based techniques for complete browser automation
+
+4. ShellAgent: Shell commands and file system operations expert
+   • Capabilities: File/directory creation, organization, and management
+   • Tools: run_shell_command (executes shell commands)
+   • Perfect for: Project structure, file operations, system queries
 
 WORKFLOW:
 1. PLANNING:
@@ -58,7 +47,7 @@ WORKFLOW:
    - Execute steps sequentially by delegating to specialized agents
    - IMPORTANT: Each agent requires a different level of instruction:
      * CodeAgent: Can handle complex, high-level tasks with minimal guidance
-     * FilesystemAgent: Needs specific file paths and operations
+     * ShellAgent: Needs specific file paths and operations
      * SearchAgent: Needs precise search queries with clear objectives
      * BrowserAgent: Requires explicit step-by-step instructions with specific URLs and exact actions
    - IMPORTANT: Never implement code changes yourself - always delegate to CodeAgent
@@ -77,27 +66,9 @@ SELF-SUFFICIENCY:
 - Work autonomously without user intervention
 - Use specialized agents to their full potential
 - Try multiple approaches before asking for user help
-- Access files through FilesystemAgent, not user requests
+- Access files through ShellAgent, not user requests
 - Only request user help as a last resort with specific needs
 
 Always provide practical, executable solutions and persist until successful.""",
-        tools=[
-            # Specialized agents as tools
-            code_agent.as_tool(
-                tool_name="code_agent",
-                tool_description="Delegate coding tasks to a specialized code agent",
-            ),
-            filesystem_agent.as_tool(
-                tool_name="filesystem_agent",
-                tool_description="Delegate filesystem operations to a specialized filesystem agent",
-            ),
-            search_agent.as_tool(
-                tool_name="search_agent",
-                tool_description="Delegate web searches to a specialized search agent",
-            ),
-            browser_agent.as_tool(
-                tool_name="browser_agent",
-                tool_description="Delegate website interactions to a specialized browser agent with direct Playwright tools for navigation, clicking, form filling, screenshots, HTTP requests, and JavaScript execution",
-            ),
-        ],
+        tools=agents_as_tools(),
     )
