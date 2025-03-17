@@ -139,24 +139,33 @@ class LocalPlaywrightComputer(AsyncComputer):
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         try:
-            # Close browser first if it exists
-            if self._browser:
-                await self._browser.close()
+            # Store the browser and playwright locally before nullifying them in the object
+            # This way we're guaranteed to have access to them for cleanup even if other
+            # references to them are changed
+            browser = self._browser
+            playwright = self._playwright
+            
+            # Immediately nullify the object's references to prevent further access
+            self._browser = None
+            self._playwright = None
+            self._page = None
+            
+            # Close browser if it exists
+            if browser:
+                try:
+                    await browser.close()
+                except Exception as e:
+                    print(f"Error closing browser: {e}")
             
             # Then stop playwright if it exists
-            if self._playwright:
-                await self._playwright.stop()
-                
-            # Clean up references
-            self._browser = None
-            self._playwright = None
-            self._page = None
+            if playwright:
+                try:
+                    await playwright.stop()
+                except Exception as e:
+                    print(f"Error stopping playwright: {e}")
+            
         except Exception as e:
             print(f"Error during browser cleanup: {e}")
-            # Still clean up references
-            self._browser = None
-            self._playwright = None
-            self._page = None
 
     @property
     def playwright(self) -> Playwright:
@@ -292,16 +301,11 @@ class CustomAgentHooks(AgentHooks):
             f"### ({self.display_name}) {self.event_counter}: Agent {agent.name} ended with output {output}"
         )
         
-        # Ensure computer resources are properly cleaned up
+        # Properly clean up browser resources using the __aexit__ method
         try:
             if self.computer:
-                # Set resources to None to help with garbage collection
-                if hasattr(self.computer, '_browser'):
-                    self.computer._browser = None
-                if hasattr(self.computer, '_playwright'):
-                    self.computer._playwright = None
-                if hasattr(self.computer, '_page'):
-                    self.computer._page = None
+                # Call __aexit__ to properly clean up resources
+                await self.computer.__aexit__(None, None, None)
         except Exception as e:
             print(f"Error during computer cleanup in on_end: {e}")
 
