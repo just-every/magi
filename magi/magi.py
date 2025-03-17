@@ -220,10 +220,23 @@ def main():
     # Exit if running in test mode
     if args.test:
         print("\nTesting complete. Exiting.")
-        # Ensure we properly cleanup and close all open resources
-        # This helps prevent lingering tasks during shutdown
-        if sys.version_info >= (3, 9):
-            asyncio.run(asyncio.sleep(0))  # Let any pending tasks complete
+        
+        # Set a custom exception hook that ignores specific errors during shutdown
+        def shutdown_excepthook(exc_type, exc_value, exc_traceback):
+            # Filter out event loop errors during shutdown
+            if issubclass(exc_type, RuntimeError) and "Event loop is closed" in str(exc_value):
+                # Silently ignore these errors
+                return
+            # Pass all other exceptions to the original handler
+            original_excepthook(exc_type, exc_value, exc_traceback)
+            
+        # Install the custom hook for the shutdown process
+        sys.excepthook = shutdown_excepthook
+        
+        # Force Python garbage collection to help clean up resources
+        import gc
+        gc.collect()
+        
         sys.exit(0)
 
     # Start monitoring for commands from named pipe (FIFO)
