@@ -4,8 +4,8 @@
   "description": "MAGI System",
   "main": "index.js",
   "scripts": {
-    "build": "tsc && mkdir -p public/js && cp dist/client.js public/js/",
-    "start": "node dist/index.js",
+    "build": "tsc && mkdir -p public/js && cp dist/src/client.js public/js/",
+    "start": "node dist/src/index.js",
     "dev": "nodemon --watch src --exec 'npm run build && npm start' --ext ts",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
@@ -26,12 +26,14 @@
   "homepage": "https://github.com/has-context/magi-system#readme",
   "dependencies": {
     "child_process": "^1.0.2",
+    "dockerode": "^4.0.4",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "marked": "^15.0.7",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {
+    "@types/dockerode": "^3.3.35",
     "@types/express": "^5.0.0",
     "@types/marked": "^5.0.2",
     "@types/node": "^22.13.10",

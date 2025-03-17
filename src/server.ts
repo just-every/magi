@@ -1,6 +1,6 @@
 /**
  * MAGI System Server
- * 
+ *
  * This is the main server module that:
  * - Provides a web interface via Express
  * - Handles WebSocket communication with the client
@@ -19,15 +19,15 @@ import { promisify } from 'util';
 import { exec } from 'child_process';
 
 // Import Docker interface utilities
-import { 
-  isDockerAvailable, 
-  checkDockerImageExists, 
+import {
+  isDockerAvailable,
+  checkDockerImageExists,
   buildDockerImage,
   runDockerContainer,
   stopDockerContainer,
   sendCommandToContainer,
   monitorContainerLogs,
-  cleanupAllContainers 
+  cleanupAllContainers
 } from '../utils/docker_interface';
 
 // Load environment variables from .env file
@@ -37,7 +37,7 @@ dotenv.config();
  * Define a safe exec promise that doesn't throw on non-zero exit codes
  * This is useful for Docker commands where a non-zero exit code might be expected
  * (like checking if a container exists)
- * 
+ *
  * @param command - The shell command to execute
  * @returns Object containing stdout and stderr
  */
@@ -45,9 +45,9 @@ const execPromiseFallback = async (command: string): Promise<{stdout: string, st
   try {
     return await promisify(exec)(command);
   } catch (error: any) {
-    return { 
-      stdout: '', 
-      stderr: error.message || 'Unknown error' 
+    return {
+      stdout: '',
+      stderr: error.message || 'Unknown error'
     };
   }
 };
@@ -115,7 +115,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 // Serve static files
-app.use(express.static(path.join(__dirname, '../public')));
+app.use(express.static(path.join(__dirname, '../../public')));
 
 // Process management
 const processes: Processes = {};
@@ -124,19 +124,21 @@ const processes: Processes = {};
 
 /**
  * Executes a MAGI command in a Docker container
- * 
+ *
  * This function handles:
  * 1. Verifying Docker availability
  * 2. Building the Docker image if needed
  * 3. Starting the container with the command
  * 4. Setting up log monitoring
- * 
+ *
  * @param processId - The unique identifier for this process
  * @param command - The MAGI command to execute
  * @returns Promise that resolves when setup is complete (not when the command finishes)
  */
 async function spawnDockerProcess(processId: string, command: string): Promise<void> {
   try {
+    console.log(`spawnDockerProcess ${processId} command: ${command}`);
+
     // Step 1: Verify Docker is available on the system
     const dockerAvailable = await isDockerAvailable();
     if (!dockerAvailable) {
@@ -150,14 +152,14 @@ async function spawnDockerProcess(processId: string, command: string): Promise<v
     if (!imageExists) {
       updateProcess(processId, 'Docker image not found. Building image...');
       console.log('Building Docker image for MAGI system...');
-      
+
       const buildSuccess = await buildDockerImage({ verbose: false });
       if (!buildSuccess) {
         updateProcessWithError(processId, 'Failed to build Docker image. Cannot run command.');
         console.error('Docker image build failed');
         return;
       }
-      
+
       updateProcess(processId, 'Docker image built successfully.');
       console.log('Docker image built successfully');
     }
@@ -168,7 +170,7 @@ async function spawnDockerProcess(processId: string, command: string): Promise<v
     if (!openaiApiKey) {
       console.warn('Warning: OPENAI_API_KEY not set in environment');
     }
-    
+
     // Get project root directory for volume mounting
     const projectRoot = path.resolve(__dirname, '..');
     console.log(`Using project root: ${projectRoot}`);
@@ -211,13 +213,13 @@ async function spawnDockerProcess(processId: string, command: string): Promise<v
 
 /**
  * Monitors logs and status for a running Docker container
- * 
+ *
  * This function:
  * 1. Sets up log streaming from the container to the client
  * 2. Periodically checks container status
  * 3. Updates process status based on container exit code
  * 4. Cleans up resources when the container exits
- * 
+ *
  * @param processId - The process ID to monitor
  */
 function startLogMonitoring(processId: string): void {
@@ -251,21 +253,21 @@ function startLogMonitoring(processId: string): void {
       // If the container has exited, determine success/failure and clean up
       if (status === 'exited') {
         console.log(`Container ${containerName} has exited, checking exit code`);
-        
+
         // Get the container's exit code
         const { stdout: exitCodeStdout } = await execPromiseFallback(
           `docker inspect --format={{.State.ExitCode}} ${containerName}`
         );
         const exitCode = parseInt(exitCodeStdout.trim(), 10);
-        
+
         // Update process status based on exit code
         if (processes[processId]) {
           // Success (exit code 0) → completed, otherwise → failed
           const newStatus: ProcessStatus = exitCode === 0 ? 'completed' : 'failed';
           processes[processId].status = newStatus;
-          
+
           console.log(`Process ${processId} ${newStatus} with exit code ${exitCode}`);
-          
+
           // Notify clients about status change
           io.emit('process:update', {
             id: processId,
@@ -280,11 +282,11 @@ function startLogMonitoring(processId: string): void {
     } catch (error) {
       // Error usually means container doesn't exist anymore
       console.log(`Container ${containerName} no longer exists or is not inspectable`);
-      
+
       if (processes[processId]) {
         // Mark as completed if we can't determine actual status
         processes[processId].status = 'completed';
-        
+
         // Notify clients
         io.emit('process:update', {
           id: processId,
@@ -306,12 +308,12 @@ function startLogMonitoring(processId: string): void {
 
 /**
  * Updates a process with an error condition
- * 
+ *
  * This function:
  * 1. Marks the process as failed
  * 2. Adds the error message to the logs
  * 3. Notifies all clients about the status change and error message
- * 
+ *
  * @param processId - The ID of the process to update
  * @param errorMessage - The error message to record
  */
@@ -320,12 +322,12 @@ function updateProcessWithError(processId: string, errorMessage: string): void {
     console.error(`Cannot update non-existent process ${processId} with error`);
     return;
   }
-  
+
   console.error(`Process ${processId} failed: ${errorMessage}`);
-  
+
   // Update process status
   processes[processId].status = 'failed';
-  
+
   // Add formatted error to logs
   const errorLog = `[ERROR] ${errorMessage}`;
   processes[processId].logs.push(errorLog);
@@ -345,11 +347,11 @@ function updateProcessWithError(processId: string, errorMessage: string): void {
 
 /**
  * Updates a process with status information
- * 
+ *
  * This function:
  * 1. Adds the message to the process logs
  * 2. Sends the message to all connected clients
- * 
+ *
  * @param processId - The ID of the process to update
  * @param message - The message to add to the logs
  */
@@ -358,10 +360,10 @@ function updateProcess(processId: string, message: string): void {
     console.warn(`Cannot update non-existent process ${processId}`);
     return;
   }
-  
+
   // Log message to server console
   console.log(`Process ${processId}: ${message}`);
-  
+
   // Add to process logs
   processes[processId].logs.push(message);
 
@@ -374,13 +376,13 @@ function updateProcess(processId: string, message: string): void {
 
 /**
  * Stops and removes a Docker container for a specific process
- * 
+ *
  * This function:
  * 1. Cleans up monitoring resources
  * 2. Stops the Docker container
  * 3. Updates the process status
  * 4. Notifies clients about the termination
- * 
+ *
  * @param processId - The ID of the process to stop
  * @returns Promise resolving to true if successful, false otherwise
  */
@@ -390,7 +392,7 @@ async function stopContainer(processId: string): Promise<boolean> {
     console.warn(`Attempted to stop non-existent process ${processId}`);
     return false;
   }
-  
+
   if (!processes[processId].containerId) {
     console.warn(`Process ${processId} has no associated container ID`);
     return false;
@@ -398,7 +400,7 @@ async function stopContainer(processId: string): Promise<boolean> {
 
   try {
     console.log(`Stopping container for process ${processId}`);
-    
+
     // Step 1: Clean up monitoring resources
     // Kill the log monitoring process if it exists
     if (processes[processId].monitorProcess) {
@@ -419,16 +421,16 @@ async function stopContainer(processId: string): Promise<boolean> {
     // Step 3: Update process status and notify clients
     if (success) {
       console.log(`Container for process ${processId} stopped successfully`);
-      
+
       // Update process status
       processes[processId].status = 'terminated';
-      
+
       // Notify all clients about the termination
       io.emit('process:update', {
         id: processId,
         status: 'terminated'
       } as ProcessUpdateEvent);
-      
+
       // Add termination message to logs
       updateProcess(processId, 'Process terminated by user');
     } else {
@@ -460,12 +462,12 @@ io.on('connection', (socket: Socket) => {
       delete processes[id];
     }
   });
-  
+
   // Send current processes to the new client (excluding terminated)
   // This allows the client to see all active processes when they connect
   Object.entries(processes).forEach(([id, process]) => {
     console.log(`Sending process ${id} state to new client ${clientId}`);
-    
+
     // First send the process creation event
     socket.emit('process:create', {
       id,
@@ -516,7 +518,7 @@ io.on('connection', (socket: Socket) => {
    */
   socket.on('process:terminate', async (processId: string) => {
     console.log(`Client ${clientId} requested termination of process ${processId}`);
-    
+
     // Verify the process exists
     if (!processes[processId]) {
       console.warn(`Process ${processId} does not exist, can't terminate`);
@@ -526,10 +528,10 @@ io.on('connection', (socket: Socket) => {
       } as ProcessLogsEvent);
       return;
     }
-    
+
     // Stop the Docker container
     const success = await stopContainer(processId);
-    
+
     if (!success) {
       console.error(`Failed to terminate process ${processId}`);
       socket.emit('process:logs', {
@@ -538,7 +540,7 @@ io.on('connection', (socket: Socket) => {
       } as ProcessLogsEvent);
     }
   });
-  
+
   /**
    * Handler for commands sent to a specific process
    * These are follow-up commands to an existing process
@@ -546,7 +548,7 @@ io.on('connection', (socket: Socket) => {
   socket.on('process:command', async (data: ProcessCommandEvent) => {
     const { processId, command } = data;
     console.log(`Client ${clientId} sent command to process ${processId}: ${command}`);
-    
+
     // Verify the process exists and is running
     if (!processes[processId]) {
       console.warn(`Cannot send command: Process ${processId} does not exist`);
@@ -556,7 +558,7 @@ io.on('connection', (socket: Socket) => {
       } as ProcessLogsEvent);
       return;
     }
-    
+
     if (processes[processId].status !== 'running') {
       console.warn(`Cannot send command: Process ${processId} is not running (status: ${processes[processId].status})`);
       socket.emit('process:logs', {
@@ -565,11 +567,11 @@ io.on('connection', (socket: Socket) => {
       } as ProcessLogsEvent);
       return;
     }
-    
+
     // Process command in the container
     updateProcess(processId, `> ${command}`);
     const success = await sendCommandToContainer(processId, command);
-    
+
     if (!success) {
       console.error(`Failed to send command to container for process ${processId}`);
       updateProcess(processId, `[ERROR] Failed to send command: Unable to communicate with container`);
@@ -600,10 +602,10 @@ async function cleanup(): Promise<void> {
   const runningProcesses = Object.entries(processes)
     .filter(([_, data]) => data.status === 'running' && data.containerId)
     .map(([id, _]) => id);
-  
+
   if (runningProcesses.length > 0) {
     console.log(`Stopping ${runningProcesses.length} running processes: ${runningProcesses.join(', ')}`);
-    
+
     // Stop each container and wait for all to complete
     await Promise.all(
       runningProcesses.map(async (processId) => {
@@ -617,7 +619,7 @@ async function cleanup(): Promise<void> {
   } else {
     console.log('No running processes to stop');
   }
-  
+
   // Step 2: Clean up any intervals
   for (const [processId, processData] of Object.entries(processes)) {
     if (processData.checkInterval) {
@@ -646,7 +648,7 @@ process.on('SIGTERM', async () => {
 
 // Setup Express routes
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public', 'index.html'));
+  res.sendFile(path.join(__dirname, '../../public', 'index.html'));
 });
 
 /**
@@ -668,7 +670,7 @@ async function findAvailablePort(startPort: number): Promise<number> {
       // Try to bind to the port
       const available = await new Promise<boolean>((resolve) => {
         const server = net.createServer();
-        
+
         server.once('error', (err: any) => {
           server.close();
           if (err.code === 'EADDRINUSE') {
@@ -679,29 +681,29 @@ async function findAvailablePort(startPort: number): Promise<number> {
             resolve(false);
           }
         });
-        
+
         server.once('listening', () => {
           server.close();
           resolve(true);
         });
-        
+
         server.listen(port);
       });
-      
+
       if (available) {
         console.log(`Found available port: ${port}`);
         return port;
       }
-      
+
       // Try next port
       port++;
-      
+
     } catch (error) {
       console.error(`Unexpected error checking port ${port}:`, error);
       port++;
     }
   }
-  
+
   // Fallback to a random port if no port found in the range
   const randomPort = 8000 + Math.floor(Math.random() * 1000);
   console.log(`Could not find available port in range ${startPort}-${maxPort}, using random port ${randomPort}`);
@@ -715,7 +717,7 @@ async function findAvailablePort(startPort: number): Promise<number> {
  */
 function openBrowser(url: string): void {
   const platform = process.platform;
-  
+
   let command: string;
   // Select command based on operating system
   switch (platform) {
@@ -729,7 +731,7 @@ function openBrowser(url: string): void {
       command = `xdg-open ${url}`;
       break;
   }
-  
+
   // Execute the command to open the browser
   exec(command, (err: Error | null) => {
     if (err) {
@@ -750,7 +752,7 @@ async function startServer(): Promise<void> {
   try {
     // Find an available port to use
     const port = await findAvailablePort(DEFAULT_PORT);
-    
+
     // Handle server errors
     server.on('error', (err: any) => {
       if (err.code === 'EADDRINUSE') {
@@ -762,7 +764,7 @@ async function startServer(): Promise<void> {
         process.exit(1);
       }
     });
-    
+
     // Start the server
     server.listen(port, () => {
       const address = server.address();
@@ -770,10 +772,10 @@ async function startServer(): Promise<void> {
         console.error('Invalid server address');
         return;
       }
-      
+
       const listeningPort = address.port;
       const url = `http://localhost:${listeningPort}`;
-      
+
       console.log(`
 ┌────────────────────────────────────────────────┐
 │                                                │
@@ -783,7 +785,7 @@ async function startServer(): Promise<void> {
 │                                                │
 └────────────────────────────────────────────────┘
       `);
-      
+
       // Open browser for user convenience
       openBrowser(url);
     });

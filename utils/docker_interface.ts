@@ -6,7 +6,10 @@ import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
+import Docker from 'dockerode';
 
+// Initialize Docker client
+const docker = new Docker();
 const execPromise = promisify(exec);
 
 export interface DockerBuildOptions {
@@ -23,13 +26,25 @@ export interface DockerRunOptions {
 }
 
 /**
+ * Validate container name to prevent injection attacks
+ * @param name The container name to validate
+ * @returns The validated name or throws an error
+ */
+function validateContainerName(name: string): string {
+  if (!name || typeof name !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(name)) {
+    throw new Error(`Invalid container name: ${name}`);
+  }
+  return name;
+}
+
+/**
  * Check if Docker is available on the system
  * @returns True if Docker is available, false otherwise
  */
 export async function isDockerAvailable(): Promise<boolean> {
   try {
-    await execPromise('docker --version');
-    return true;
+    const info = await docker.info();
+    return !!info;
   } catch (error) {
     console.error('Docker is not available:', error);
     return false;
@@ -43,10 +58,12 @@ export async function isDockerAvailable(): Promise<boolean> {
  */
 export async function checkDockerImageExists(tag: string = 'latest'): Promise<boolean> {
   try {
-    const { stdout, stderr } = await execPromise(`docker image inspect magi-system:${tag}`);
-    return true;
+    const images = await docker.listImages({
+      filters: { reference: [`magi-system:${tag}`] }
+    });
+    return images.length > 0;
   } catch (error) {
-    console.error(`Docker image magi-system:${tag} does not exist:`, error);
+    console.error(`Error checking if Docker image magi-system:${tag} exists:`, error);
     return false;
   }
 }
@@ -58,11 +75,24 @@ export async function checkDockerImageExists(tag: string = 'latest'): Promise<bo
  */
 export async function buildDockerImage(options: DockerBuildOptions = {}): Promise<boolean> {
   try {
-    const args: string[] = ['build', '-t', 'magi-system:latest', "-f", path.resolve(__dirname, '../magi/docker/Dockerfile'), path.resolve(__dirname, '../')];
+    const tag = options.tag || 'latest';
+    const dockerfilePath = path.resolve(__dirname, '../magi/docker/Dockerfile');
+    const contextPath = path.resolve(__dirname, '../');
+
+    // Verify dockerfile exists
+    if (!fs.existsSync(dockerfilePath)) {
+      throw new Error(`Dockerfile not found at ${dockerfilePath}`);
+    }
+
+    // Build arguments
+    const buildArgs = ['build', '-t', `magi-system:${tag}`, '-f', dockerfilePath, contextPath];
+    if (options.noCache) {
+      buildArgs.push('--no-cache');
+    }
 
     // Spawn the process
-    console.log(`Building Docker image with command: docker ${args.join(' ')}`);
-    const buildProcess = spawn('docker', args, { stdio: options.verbose ? 'inherit' : 'pipe' });
+    console.log(`Building Docker image with command: docker ${buildArgs.join(' ')}`);
+    const buildProcess = spawn('docker', buildArgs, { stdio: options.verbose ? 'inherit' : 'pipe' });
 
     // If not verbose, collect and log output
     if (!options.verbose) {
@@ -76,7 +106,7 @@ export async function buildDockerImage(options: DockerBuildOptions = {}): Promis
     }
 
     // Wait for process to complete
-    return new Promise((resolve) => {
+    return new Promise<boolean>((resolve) => {
       buildProcess.on('close', (code) => {
         if (code === 0) {
           console.log('Docker image built successfully');
@@ -101,19 +131,64 @@ export async function buildDockerImage(options: DockerBuildOptions = {}): Promis
 export async function runDockerContainer(options: DockerRunOptions): Promise<string> {
   try {
     const { processId, command, openaiApiKey } = options;
-    const containerName = `magi-${processId}`;
 
-    // Get project root directory
-    const projectRoot = options.projectRoot || path.resolve(__dirname, '..');
+    // Input validation
+    if (!processId || typeof processId !== 'string') {
+      throw new Error('Invalid process ID');
+    }
+    if (!command || typeof command !== 'string') {
+      throw new Error('Invalid command');
+    }
 
-    // Create Docker container
-    const result = await execPromise(
-      `docker run -d --rm --name ${containerName} -e PROCESS_ID=${processId} -e OPENAI_API_KEY=${openaiApiKey || ''} -v ${projectRoot}/magi:/app/magi:rw -v claude_credentials:/claude_shared:rw -v magi_output:/magi_output:rw magi-system:latest python magi/magi.py -p "${command.replace(/"/g, "\\\"")}"`
-    );
+    // Generate container name and validate
+    const containerName = validateContainerName(`magi-${processId}`);
 
+    // Get project root directory and normalize
+    const projectRoot = options.projectRoot
+        ? path.resolve(options.projectRoot)
+        : path.resolve(__dirname, '..');
+    
+    // In dist, we need to go up one more level
+    const isBuildDir = projectRoot.endsWith('/dist');
+    const actualProjectRoot = isBuildDir ? path.resolve(projectRoot, '..') : projectRoot;
+
+    // Verify the magi directory exists
+    const magiPath = path.join(actualProjectRoot, 'magi');
+    if (!fs.existsSync(magiPath)) {
+      throw new Error(`Magi directory not found at ${magiPath}`);
+    }
+
+    // Going back to the original approach with improved escaping and validation
+    // Escape double quotes in the command
+    const escapedCommand = command.replace(/"/g, '\\"');
+
+    // Create the docker run command
+    const dockerRunCommand = `docker run -d --rm --name ${containerName} \
+      -e PROCESS_ID=${processId} \
+      ${openaiApiKey ? `-e OPENAI_API_KEY=${openaiApiKey}` : ''} \
+      -v ${magiPath}:/app/magi:rw \
+      -v claude_credentials:/claude_shared:rw \
+      -v magi_output:/magi_output:rw \
+      magi-system:latest \
+      python magi/magi.py -p "${escapedCommand}"`;
+
+    console.log(`Running container with command: ${dockerRunCommand}`);
+
+    // Execute the command and get the container ID
+    const result = await execPromise(dockerRunCommand);
     const containerId = result.stdout.trim();
-    console.log(`Container started with ID: ${containerId}`);
 
+    console.log(`Container started with ID: ${containerId} command: ${escapedCommand}`);
+
+
+    console.log(`docker run -d --rm --name ${containerName} \
+      -e PROCESS_ID=${processId} \
+      ${openaiApiKey ? `-e OPENAI_API_KEY=${openaiApiKey}` : ''} \
+      -v ${magiPath}:/app/magi:rw \
+      -v claude_credentials:/claude_shared:rw \
+      -v magi_output:/magi_output:rw \
+      magi-system:latest \
+      python magi/magi.py -p "${escapedCommand}"`);
     return containerId;
   } catch (error) {
     console.error('Error running Docker container:', error);
@@ -128,10 +203,10 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
  */
 export async function stopDockerContainer(processId: string): Promise<boolean> {
   try {
-    const containerName = `magi-${processId}`;
+    const containerName = validateContainerName(`magi-${processId}`);
 
-    // Stop the container
-    const result = await execPromise(`docker stop ${containerName}`);
+    // Stop the container using docker stop command
+    await execPromise(`docker stop ${containerName}`);
     console.log(`Container ${containerName} stopped`);
 
     return true;
@@ -149,12 +224,16 @@ export async function stopDockerContainer(processId: string): Promise<boolean> {
  */
 export async function sendCommandToContainer(processId: string, command: string): Promise<boolean> {
   try {
-    const containerName = `magi-${processId}`;
+    if (!command || typeof command !== 'string') {
+      throw new Error('Invalid command');
+    }
+
+    const containerName = validateContainerName(`magi-${processId}`);
 
     // Escape single quotes in the command
     const escapedCommand = command.replace(/'/g, "'\\''");
 
-    // Send command to the container
+    // Execute command in the container
     await execPromise(
       `docker exec ${containerName} python -c "import os; open('/tmp/command.fifo', 'w').write('${escapedCommand}\\n');"`
     );
@@ -174,28 +253,34 @@ export async function sendCommandToContainer(processId: string, command: string)
  * @returns Function to stop monitoring
  */
 export function monitorContainerLogs(
-  processId: string,
-  callback: (log: string) => void
+    processId: string,
+    callback: (log: string) => void
 ): () => void {
-  const containerName = `magi-${processId}`;
+  try {
+    const containerName = validateContainerName(`magi-${processId}`);
 
-  // Start the log process
-  const logProcess = spawn('docker', ['logs', '-f', containerName]);
+    // Start the log process (using spawn as it's easier to stream logs this way)
+    const logProcess = spawn('docker', ['logs', '-f', containerName]);
 
-  // Handle stdout
-  logProcess.stdout.on('data', (data) => {
-    callback(data.toString());
-  });
+    // Handle stdout
+    logProcess.stdout.on('data', (data) => {
+      callback(data.toString());
+    });
 
-  // Handle stderr
-  logProcess.stderr.on('data', (data) => {
-    callback(`[ERROR] ${data.toString()}`);
-  });
+    // Handle stderr
+    logProcess.stderr.on('data', (data) => {
+      callback(`[ERROR] ${data.toString()}`);
+    });
 
-  // Return function to stop monitoring
-  return () => {
-    logProcess.kill();
-  };
+    // Return function to stop monitoring
+    return () => {
+      logProcess.kill();
+    };
+  } catch (error) {
+    console.error(`Error monitoring logs for container ${processId}:`, error);
+    // Return empty function in case of error
+    return () => {};
+  }
 }
 
 /**
@@ -204,10 +289,8 @@ export function monitorContainerLogs(
  */
 export async function cleanupAllContainers(): Promise<boolean> {
   try {
-    // Stop all magi containers
+    // Use the original command which already works well
     await execPromise("docker ps -aq -f 'name=magi-' | xargs docker stop 2>/dev/null || true");
-
-    // Additional cleanup for any containers that might have been missed
     await execPromise("docker rm -f $(docker ps -q -f 'ancestor=magi-system:latest') 2>/dev/null || true");
 
     return true;
