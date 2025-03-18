@@ -4,6 +4,6 @@
     "controller/server/**/*.ts"
   ],
   "ext": "ts,json",
-  "ignore": ["node_modules/*", "dist/*", "*.test.ts", "controller/client/**/*"],
+  "ignore": ["node_modules/*", "dist/*", "*.test.ts"],
   "exec": "npm run build && node dist/controller/server/server.js"
 }

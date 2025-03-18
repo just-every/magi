@@ -32,7 +32,7 @@ import {
   sendCommandToContainer,
   monitorContainerLogs,
   cleanupAllContainers
-} from '../../setup/docker_interface';
+} from './docker_interface';
 
 // Load environment variables from .env file
 dotenv.config();
