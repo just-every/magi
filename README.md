@@ -7,7 +7,7 @@
 <strong>I</strong>ntelligence
 </p>
 
-The MAGI System is designed for complex AI automation tasks through a multi-agent architecture. It enables multiple specialized AI agents to work in concert, each focused on different aspects of problem-solving.
+The MAGI System (pronounced “MAH-jeye”) is designed for complex AI automation tasks through a multi-agent architecture. It enables multiple specialized AI agents to work in concert, each focused on different aspects of problem-solving.
 
 ## Features
 
@@ -136,11 +136,15 @@ Where `code` is the name of the agent you want to test;
 ### Key Directories
 
 - `/magi/`: Python backend and agent implementation
-  - `/magi/core_agents/`: Specialized agent definitions
+  - `/magi/magi_agents/`: Specialized agent definitions
   - `/magi/utils/`: Shared utilities
   - `/magi/docker/`: Docker configuration
-- `/src/`: TypeScript server implementation
-- `/public/`: Web interface assets
+- `/controller/`: TypeScript server implementation
+  - `/controller/client/`: Web interface assets
+    - `/controller/client/css/`: Stylesheet files
+    - `/controller/client/html/`: HTML templates
+    - `/controller/client/utils/`: Client utilities
+  - `/controller/server/`: Server implementation
 - `/utils/`: Node.js utility scripts
 - `/test/`: Testing scripts
 

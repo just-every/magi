@@ -172,8 +172,6 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
       magi-system:latest \
       python magi/magi.py -p "${escapedCommand}"`;
 
-    console.log(`Running container with command: ${dockerRunCommand}`);
-
     // Execute the command and get the container ID
     const result = await execPromise(dockerRunCommand);
     const containerId = result.stdout.trim();
