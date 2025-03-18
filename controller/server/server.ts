@@ -21,7 +21,7 @@ import dotenv from 'dotenv';
 import { promisify } from 'util';
 import WebSocket from 'ws';
 import { exec } from 'child_process';
-import { loadAllEnvVars, saveEnvVar, updateServerVersion } from './env_store';
+import {getServerVersion, loadAllEnvVars, saveEnvVar, updateServerVersion} from './env_store';
 
 // Import Docker interface utilities
 import {
@@ -118,7 +118,6 @@ interface ProcessCommandEvent {
 // Event for server information sent to clients
 interface ServerInfoEvent {
   version: string;      // Server version
-  isRestart: boolean;   // Whether this is a restart
 }
 
 const app = express();
@@ -158,146 +157,6 @@ app.use('/client.js', (req, res) => {
 
 // Serve static files from the dist folder
 app.use(express.static(path.join(__dirname, '../client')));
-
-// Set up more reliable file monitoring for live reload
-class LiveReloadManager {
-  private lastReloadTimes: Record<string, number> = {
-    css: 0,
-    html: 0,
-    js: 0,
-    other: 0
-  };
-  private readonly cooldown = 300; // ms
-  private readonly watchPaths: string[];
-  private watchHandlers: Array<{ close: () => void }> = [];
-  private readonly clients: Set<WebSocket>;
-
-  constructor(clients: Set<WebSocket>) {
-    this.clients = clients;
-
-    // Paths to watch for changes
-    this.watchPaths = [
-      // Source CSS files in controller
-      path.join(__dirname, '../../controller/client/css'),
-      // Source HTML files in controller
-      path.join(__dirname, '../../controller/client/html'),
-      // Compiled CSS files in dist
-      path.join(__dirname, '../client/css'),
-      // Compiled HTML files in dist
-      path.join(__dirname, '../client/html'),
-      // Compiled JS files in dist
-      path.join(__dirname, '../client/client.js'),
-    ];
-
-    this.setupWatchers();
-    console.log('Live reload watchers configured for CSS, HTML, and JS files');
-  }
-
-  private setupWatchers(): void {
-    // Clean up any existing watchers
-    this.closeWatchers();
-
-    // Set up new watchers
-    for (const watchPath of this.watchPaths) {
-      try {
-        // Check if the path exists before watching
-        if (fs.existsSync(watchPath)) {
-          const watcher = fs.watch(
-            watchPath,
-            { persistent: true, recursive: true },
-            this.handleFileChange.bind(this)
-          );
-
-          this.watchHandlers.push(watcher);
-          console.log(`✅ Watching for changes: ${watchPath}`);
-        } else {
-          console.warn(`⚠️ Watch path does not exist: ${watchPath}`);
-        }
-      } catch (error) {
-        console.error(`❌ Failed to watch path ${watchPath}:`, error);
-      }
-    }
-  }
-
-  private closeWatchers(): void {
-    for (const watcher of this.watchHandlers) {
-      try {
-        watcher.close();
-      } catch (error) {
-        console.error('Error closing watcher:', error);
-      }
-    }
-    this.watchHandlers = [];
-  }
-
-  private handleFileChange(eventType: string, filename: string | null): void {
-    if (!filename) return;
-
-    // Determine file type for targeted reloads
-    const fileExt = path.extname(filename).toLowerCase();
-    const isCSS = fileExt === '.css';
-    const isHTML = fileExt === '.html';
-    const isJS = fileExt === '.js';
-
-    // Skip some files that trigger a lot of events
-    if (filename.includes('.DS_Store')) {
-      return;
-    }
-
-    // Get the file type category
-    const fileType = isCSS ? 'css' : isHTML ? 'html' : isJS ? 'js' : 'other';
-
-    const now = Date.now();
-    // Debounce rapid changes of the same type
-    if (now - this.lastReloadTimes[fileType] < this.cooldown) {
-      console.log(`🔄 Skipping rapid change: ${filename} (${fileType} debounced)`);
-      return;
-    }
-
-    // Update the timestamp for this file type
-    this.lastReloadTimes[fileType] = now;
-
-    console.log(`📝 File changed: ${filename} (type: ${fileType.toUpperCase()}, event: ${eventType})`);
-
-    // Count active clients
-    let activeClients = 0;
-
-    // Send appropriate reload command to clients
-    this.clients.forEach(client => {
-      if (client.readyState === WebSocket.OPEN) {
-        // Special handling for different file types
-        let reloadType = 'reload'; // Default to full reload
-
-        if (isCSS) {
-          reloadType = 'css-reload'; // CSS files can be reloaded without page refresh
-        } else if (isHTML) {
-          reloadType = 'html-reload'; // HTML needs a full page reload
-        } else if (isJS) {
-          reloadType = 'js-reload'; // JS needs a full page reload
-        }
-
-        client.send(reloadType);
-        activeClients++;
-
-        console.log(`🚀 Sent ${reloadType} to client (${isCSS ? 'CSS only' : 'full reload'})`);
-      }
-    });
-
-    console.log(`📊 Notified ${activeClients} clients about changes`);
-  }
-
-  public restart(): void {
-    this.closeWatchers();
-    this.setupWatchers();
-    console.log('Live reload watchers restarted');
-  }
-}
-
-// Initialize the live reload manager
-const liveReloadManager = new LiveReloadManager(liveReloadClients);
-
-// Expose manager for restart if needed
-(global as any).restartLiveReload = () => liveReloadManager.restart();
 
 // Process management
 const processes: Processes = {};
@@ -631,15 +490,9 @@ async function stopContainer(processId: string): Promise<boolean> {
 io.on('connection', (socket: Socket) => {
   const clientId = socket.id.substring(0, 8);
   console.log(`Client connected: ${clientId}`);
-  
-  // If this is a reconnect after server restart, send server version
-  // The client can use this to determine if it needs to reload
-  const isNodemonRestart = process.env.HAS_RESTARTED === "true";
-  const serverVersion = process.env.SERVER_VERSION || Date.now().toString();
-  
+
   socket.emit('server:info', {
-    version: serverVersion,
-    isRestart: isNodemonRestart
+    version: getServerVersion()
   } as ServerInfoEvent);
 
   // Clean up terminated processes that shouldn't be showing
@@ -928,30 +781,22 @@ function openBrowser(url: string): void {
 async function startServer(): Promise<void> {
   // Load stored environment variables
   loadAllEnvVars();
+  updateServerVersion();
 
   // Get port from environment or use 3001
   const isNodemonRestart = process.env.HAS_RESTARTED === "true";
+  if (!isNodemonRestart) {
+    saveEnvVar('HAS_RESTARTED', "true");
+  }
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
   // MAGI_NODEMON_RESTART will be set by nodemon when restarting
   console.log(`Starting MAGI System Server (port: ${PORT}, restart: ${isNodemonRestart})`);
 
-  // If this is a nodemon restart, update the server version to trigger client reload
-  if (isNodemonRestart) {
-    updateServerVersion();
-  }
-
   try {
     // Only find an available port on first start, otherwise use the configured port
     const port = isNodemonRestart ? PORT : await findAvailablePort(PORT);
-
-    // If this is the first start, store the port for subsequent restarts
-    if (!isNodemonRestart && port !== PORT) {
-      process.env.PORT = port.toString();
-      process.env.HAS_RESTARTED = "true";
-
-      // Persist these values to our file storage
+    if (port !== PORT) {
       saveEnvVar('PORT', port.toString());
-      saveEnvVar('HAS_RESTARTED', "true");
     }
 
     // Handle server errors

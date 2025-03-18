@@ -2,7 +2,7 @@
   "verbose": false,
   "quiet": true,
   "watch": [
-    "controller/"
+    "controller/**/*.*"
   ],
   "exec": "npm run build && node dist/controller/server/server.js",
   "ext": "*",

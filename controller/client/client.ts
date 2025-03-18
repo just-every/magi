@@ -192,6 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
     processHeader.style.backgroundColor = colors.bgColor;
     processHeader.dataset.themeColor = colors.textColor;
     processId.style.color = colors.textColor;
+    processStatus.style.color = colors.textColor;
 
     // Set process information
     processBox.id = `process-${process.id}`;
@@ -544,17 +545,17 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentServerVersion: string | null = null;
 
   // Handle server info messages (version, restart status)
-  socket.on('server:info', (data: {version: string, isRestart: boolean}) => {
-    console.log(`Server info received: version=${data.version}, isRestart=${data.isRestart}`);
-    
+  socket.on('server:info', (data: {version: string}) => {
+    console.log(`Server info received: version=${data.version}`);
+
     // If we have a previous version and it's different from current version,
     // and this is a server restart, reload the page to get the latest code
-    if (currentServerVersion && currentServerVersion !== data.version && data.isRestart) {
+    if (currentServerVersion && currentServerVersion !== data.version) {
       console.log('Server was restarted. Reloading page to get latest code...');
       window.location.reload();
       return;
     }
-    
+
     // Update the stored server version
     currentServerVersion = data.version;
   });

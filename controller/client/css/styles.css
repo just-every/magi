@@ -52,11 +52,8 @@ body {
 }
 
 header h1 {
-  letter-spacing: 1rem;
+  letter-spacing: 0.05rem;
   white-space: nowrap;
-  color: #2196f3; /* Blue color */
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.15);
-  font-weight: 900;
 }
 
 /* Input and form styling */
@@ -183,7 +180,6 @@ header h1 {
 /* Live status badge */
 .status-running {
   background-color: transparent;
-  color: #388e3c !important; /* Green color */
 }
 
 .status-completed {
