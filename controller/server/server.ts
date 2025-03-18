@@ -20,7 +20,14 @@ import dotenv from 'dotenv';
 import { promisify } from 'util';
 import WebSocket from 'ws';
 import { exec } from 'child_process';
-import {getServerVersion, loadAllEnvVars, saveEnvVar, updateServerVersion} from './env_store';
+import {
+  getServerVersion, 
+  loadAllEnvVars, 
+  saveEnvVar, 
+  updateServerVersion,
+  saveUsedColors,
+  loadUsedColors
+} from './env_store';
 
 // Import Docker interface utilities
 import {
@@ -170,34 +177,86 @@ app.use(express.static(path.join(__dirname, '../client')));
 const processes: Processes = {};
 
 /**
+ * Store previously used colors to ensure variety
+ * Each entry is [r, g, b] values
+ * Initialize from stored values if available
+ */
+const usedColors: Array<[number, number, number]> = loadUsedColors();
+
+/**
  * Generate colors for a process header and text
- * Creates complementary colors for consistent visual styling
- * 
+ * Creates distinct colors with maximum difference from existing ones
+ *
  * @returns Object with background and text colors in rgba format
  */
 function generateProcessColors(): { bgColor: string, textColor: string } {
-  // Create base colors, avoid too much yellow by keeping red and green from both being too high
-  let r = Math.floor(Math.random() * 200) + 55; // 55-255
-  let g = Math.floor(Math.random() * 200) + 55; // 55-255
-  let b = Math.floor(Math.random() * 200) + 55; // 55-255
-
-  // Ensure one color dominates to make the theme clear
-  const dominantIndex = Math.floor(Math.random() * 3);
-  if (dominantIndex === 0) {
-    r = Math.min(255, r + 50);
-    g = Math.max(50, g - 30);
-    b = Math.max(50, b - 30);
-  } else if (dominantIndex === 1) {
-    g = Math.min(255, g + 50);
-    r = Math.max(50, r - 30);
-    b = Math.max(50, b - 30);
-  } else {
-    b = Math.min(255, b + 50);
-    r = Math.max(50, r - 30);
-    g = Math.max(50, g - 30);
+  // If we have too many colors stored, we'll start forgetting the oldest ones
+  // to avoid over-constraining our color generation
+  const maxColorMemory = 10;
+  if (usedColors.length > maxColorMemory) {
+    usedColors.shift(); // Remove the oldest color
   }
 
+  // Generate a set of candidate colors to choose from
+  const candidates: Array<[number, number, number]> = [];
+  const numCandidates = 20; // Generate 20 candidates to choose from
+
+  for (let i = 0; i < numCandidates; i++) {
+    // Create base colors, avoid too much yellow by keeping red and green from both being too high
+    let r = Math.floor(Math.random() * 200) + 55; // 55-255
+    let g = Math.floor(Math.random() * 200) + 55; // 55-255
+    let b = Math.floor(Math.random() * 200) + 55; // 55-255
+
+    // Ensure one color dominates to make the theme clear
+    const dominantIndex = Math.floor(Math.random() * 3);
+    if (dominantIndex === 0) {
+      r = Math.min(255, r + 50);
+      g = Math.max(50, g - 30);
+      b = Math.max(50, b - 30);
+    } else if (dominantIndex === 1) {
+      g = Math.min(255, g + 50);
+      r = Math.max(50, r - 30);
+      b = Math.max(50, b - 30);
+    } else {
+      b = Math.min(255, b + 50);
+      r = Math.max(50, r - 30);
+      g = Math.max(50, g - 30);
+    }
+
+    candidates.push([r, g, b]);
+  }
+
+  // Calculate the minimum distance between this color and all used colors
+  // Higher distance means more distinct color
+  function minColorDistance(color: [number, number, number]): number {
+    if (usedColors.length === 0) return Infinity;
+    
+    return Math.min(...usedColors.map(usedColor => {
+      // Calculate Euclidean distance in RGB space
+      const dr = color[0] - usedColor[0];
+      const dg = color[1] - usedColor[1];
+      const db = color[2] - usedColor[2];
+      return Math.sqrt(dr * dr + dg * dg + db * db);
+    }));
+  }
+
+  // Choose the candidate with the maximum minimum distance
+  let bestCandidate = candidates[0];
+  let bestDistance = minColorDistance(bestCandidate);
+
+  for (let i = 1; i < candidates.length; i++) {
+    const distance = minColorDistance(candidates[i]);
+    if (distance > bestDistance) {
+      bestDistance = distance;
+      bestCandidate = candidates[i];
+    }
+  }
+
+  // Add the selected color to our used colors list
+  usedColors.push(bestCandidate);
+
   // Create background with very low alpha
+  const [r, g, b] = bestCandidate;
   const bgColor = `rgba(${r}, ${g}, ${b}, 0.08)`;
 
   // Create darker text version for contrast
@@ -211,43 +270,56 @@ function generateProcessColors(): { bgColor: string, textColor: string } {
  */
 async function retrieveExistingContainers(): Promise<void> {
   console.log('Retrieving existing MAGI containers...');
-  
+
   const containers = await getRunningMagiContainers();
-  
+
   if (containers.length === 0) {
     console.log('No existing MAGI containers found');
     return;
   }
-  
+
   console.log(`Found ${containers.length} existing MAGI containers`);
-  
+
   for (const container of containers) {
     const { id, containerId, command } = container;
-    
+
     // Skip if we're already tracking this process
     if (processes[id]) {
       console.log(`Process ${id} already being tracked, skipping`);
       continue;
     }
-    
+
     console.log(`Resuming monitoring of container ${containerId} with ID ${id}`);
-    
+
     // Generate colors for the process
     const colors = generateProcessColors();
-    
+
     // Set up process tracking
     processes[id] = {
       id,
       command,
       status: 'running',
-      logs: [`[System] Container found after server restart. Original command: ${command}`],
+      logs: [`Connecting to secure MAGI container...`],
       containerId,
       colors
     };
     
+    // Extract the RGB values to store in usedColors
+    const colorMatch = colors.bgColor.match(/rgba\((\d+),\s*(\d+),\s*(\d+)/);
+    if (colorMatch && colorMatch.length >= 4) {
+      const r = parseInt(colorMatch[1], 10);
+      const g = parseInt(colorMatch[2], 10);
+      const b = parseInt(colorMatch[3], 10);
+      
+      // Add to usedColors if valid
+      if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+        usedColors.push([r, g, b]);
+      }
+    }
+
     // Set up log monitoring for the container
     setupLogMonitoring(id);
-    
+
     // Set up container status checking
     setupContainerStatusChecking(id);
   }
@@ -326,7 +398,7 @@ async function spawnDockerProcess(processId: string, command: string): Promise<v
     }
 
     // Step 5: Set up log monitoring
-    updateProcess(processId, 'Running MAGI in secure container.');
+    updateProcess(processId, 'Starting secure MAGI container...');
     // Set up the log monitoring and status checking
     setupLogMonitoring(processId);
     setupContainerStatusChecking(processId);
@@ -344,7 +416,7 @@ async function spawnDockerProcess(processId: string, command: string): Promise<v
 /**
  * Sets up log monitoring for a container
  * Creates and attaches monitoring functions to stream logs from a container
- * 
+ *
  * @param processId - The process ID to monitor logs for
  */
 function setupLogMonitoring(processId: string): void {
@@ -372,12 +444,12 @@ function setupLogMonitoring(processId: string): void {
 /**
  * Sets up container status checking
  * Periodically checks if a container is still running and updates status accordingly
- * 
+ *
  * @param processId - The process ID to check status for
  */
 function setupContainerStatusChecking(processId: string): void {
   const containerName = `magi-${processId}`;
-  
+
   // Set up periodic container status checking
   const statusCheckIntervalMs = 5000; // Check every 5 seconds
   const checkInterval = setInterval(async () => {
@@ -415,7 +487,7 @@ function setupContainerStatusChecking(processId: string): void {
 
         // Clean up monitoring resources
         clearInterval(checkInterval);
-        
+
         // Kill the monitoring process if it exists
         if (processes[processId]?.monitorProcess) {
           processes[processId].monitorProcess.kill();
@@ -439,7 +511,7 @@ function setupContainerStatusChecking(processId: string): void {
 
       // Clean up monitoring resources
       clearInterval(checkInterval);
-      
+
       // Kill the monitoring process if it exists
       if (processes[processId]?.monitorProcess) {
         processes[processId].monitorProcess.kill();
@@ -534,24 +606,24 @@ function updateProcess(processId: string, message: string): void {
  * @returns Promise resolving to true if successful, false otherwise
  */
 async function stopContainer(processId: string): Promise<boolean> {
-  // Validate that the process exists and has a container
+  // Validate that the process exists
   if (!processes[processId]) {
     console.warn(`Attempted to stop non-existent process ${processId}`);
-    return false;
-  }
-
-  if (!processes[processId].containerId) {
-    console.warn(`Process ${processId} has no associated container ID`);
     return false;
   }
 
   try {
     console.log(`Stopping container for process ${processId}`);
 
-    // Step 1: Clean up monitoring resources
+    // Step 1: Clean up monitoring resources first to prevent streaming errors
     // Kill the log monitoring process if it exists
     if (processes[processId].monitorProcess) {
-      processes[processId].monitorProcess.kill();
+      try {
+        processes[processId].monitorProcess.kill();
+      } catch (monitorError) {
+        console.log(`Error killing monitor process for ${processId}: ${monitorError}`);
+        // Continue despite error
+      }
       processes[processId].monitorProcess = undefined;
     }
 
@@ -561,11 +633,29 @@ async function stopContainer(processId: string): Promise<boolean> {
       processes[processId].checkInterval = undefined;
     }
 
+    // If there's no container ID, we can skip the actual container stop
+    if (!processes[processId].containerId) {
+      console.warn(`Process ${processId} has no associated container ID, marking as terminated`);
+
+      // Update process status
+      processes[processId].status = 'terminated';
+
+      // Notify clients
+      io.emit('process:update', {
+        id: processId,
+        status: 'terminated'
+      } as ProcessUpdateEvent);
+
+      updateProcess(processId, 'Process marked as terminated');
+      return true;
+    }
+
     // Step 2: Stop the Docker container
     updateProcess(processId, 'Terminating process...');
     const success = await stopDockerContainer(processId);
 
     // Step 3: Update process status and notify clients
+    // Since we modified stopDockerContainer to be more resilient, we generally expect success to be true
     if (success) {
       console.log(`Container for process ${processId} stopped successfully`);
 
@@ -588,8 +678,15 @@ async function stopContainer(processId: string): Promise<boolean> {
     return success;
   } catch (error: unknown) {
     console.error(`Error stopping container for process ${processId}:`, error);
-    updateProcessWithError(processId, `Failed to terminate: ${error instanceof Error ? error.message : String(error)}`);
-    return false;
+
+    try {
+      updateProcessWithError(processId, `Failed to terminate: ${error instanceof Error ? error.message : String(error)}`);
+    } catch (loggingError) {
+      console.error(`Additional error while logging failure for ${processId}:`, loggingError);
+    }
+
+    // Since this is used during system shutdown, we want to be maximally resilient
+    return true;
   }
 }
 
@@ -653,10 +750,10 @@ io.on('connection', (socket: Socket) => {
 
       // Generate colors for the process
     const colors = generateProcessColors();
-    
+
     // Store colors with the process data
     processes[processId].colors = colors;
-    
+
     // Notify all clients about the new process
     io.emit('process:create', {
       id: processId,
@@ -754,48 +851,160 @@ io.on('connection', (socket: Socket) => {
 async function cleanup(): Promise<void> {
   console.log('MAGI System shutting down - cleaning up resources...');
 
-  // Step 1: Stop all running processes that we know about
+  // Step 1: First cleanup any monitoring processes and intervals
+  for (const [processId, processData] of Object.entries(processes)) {
+    // Kill the monitoring process if it exists
+    if (processData.monitorProcess) {
+      try {
+        processData.monitorProcess.kill();
+        processData.monitorProcess = undefined;
+      } catch (error) {
+        console.log(`Error stopping monitoring process for ${processId}: ${error}`);
+      }
+    }
+
+    // Clear any intervals
+    if (processData.checkInterval) {
+      clearInterval(processData.checkInterval);
+      processData.checkInterval = undefined;
+    }
+  }
+
+  // Step 2: Stop all running processes that we know about
   const runningProcesses = Object.entries(processes)
     .filter(([, data]) => data.status === 'running' && data.containerId)
     .map(([id]) => id);
 
   if (runningProcesses.length > 0) {
-    console.log(`Stopping ${runningProcesses.length} running processes: ${runningProcesses.join(', ')}`);
+    console.log(`Stopping ${runningProcesses.length} running processes in parallel: ${runningProcesses.join(', ')}`);
 
-    // Stop each container and wait for all to complete
-    await Promise.all(
-      runningProcesses.map(async (processId) => {
-        try {
-          await stopContainer(processId);
-        } catch (error: unknown) {
-          console.error(`Error stopping container for process ${processId}:`, error);
+    // Stop all containers in parallel
+    try {
+      await Promise.all(
+        runningProcesses.map(async (processId) => {
+          try {
+            // For parallel termination, skip the client notifications until after all stop operations
+            await stopDockerContainer(processId);
+            if (processes[processId]) {
+              processes[processId].status = 'terminated';
+            }
+          } catch (error: unknown) {
+            console.error(`Error stopping container for process ${processId}:`, error);
+            // We continue despite errors for any individual container
+          }
+          return processId;
+        })
+      );
+
+      // After all containers are stopped, notify clients and update logs
+      for (const processId of runningProcesses) {
+        if (processes[processId] && processes[processId].status === 'terminated') {
+          // Notify clients about termination
+          io.emit('process:update', {
+            id: processId,
+            status: 'terminated'
+          } as ProcessUpdateEvent);
+
+          // Add termination message to logs
+          updateProcess(processId, 'Process terminated by system shutdown');
         }
-      })
-    );
-  }
-
-  // Step 2: Clean up any intervals
-  for (const [/* processId */, processData] of Object.entries(processes)) {
-    if (processData.checkInterval) {
-      clearInterval(processData.checkInterval);
+      }
+    } catch (error: unknown) {
+      console.error("Error during parallel process termination:", error);
     }
   }
 
   // Step 3: Additional cleanup for any containers that might have been missed
-  await cleanupAllContainers();
+  try {
+    await cleanupAllContainers();
+  } catch (error: unknown) {
+    console.error('Error during final container cleanup:', error);
+  }
+
+  // Step 4: Save used colors to persist across restarts
+  try {
+    saveUsedColors(usedColors);
+  } catch (error: unknown) {
+    console.error('Error saving used colors:', error);
+  }
+
+  console.log('Cleanup completed');
 }
+
+// Flag to track if cleanup is already in progress
+let cleanupInProgress = false;
 
 // Register cleanup handlers for various termination signals
 process.on('SIGINT', async () => {
+  // Skip if cleanup is already in progress
+  if (cleanupInProgress) {
+    console.log('Cleanup already in progress, waiting...');
+    return;
+  }
+
+  cleanupInProgress = true;
   console.log('Received SIGINT signal');
-  await cleanup();
-  process.exit(0);
+
+  // Set a maximum time for cleanup (5 seconds) to prevent hanging
+  const MAX_CLEANUP_TIME = 5000; // 5 seconds
+  let cleanupTimedOut = false;
+
+  const cleanupTimeout = setTimeout(() => {
+    console.log('Cleanup taking too long, forcing exit...');
+    cleanupTimedOut = true;
+    process.exit(0);
+  }, MAX_CLEANUP_TIME);
+
+  try {
+    await cleanup();
+    // Cleanup completed normally, clear the timeout
+    clearTimeout(cleanupTimeout);
+  } catch (error) {
+    console.error('Error during cleanup:', error);
+    // Make sure we still clear the timeout on error
+    clearTimeout(cleanupTimeout);
+  }
+
+  // If we haven't timed out, exit with a short delay for final messages
+  if (!cleanupTimedOut) {
+    setTimeout(() => process.exit(0), 100);
+  }
 });
 
 process.on('SIGTERM', async () => {
+  // Skip if cleanup is already in progress
+  if (cleanupInProgress) {
+    console.log('Cleanup already in progress, waiting...');
+    return;
+  }
+
+  cleanupInProgress = true;
   console.log('Received SIGTERM signal');
-  await cleanup();
-  process.exit(0);
+
+  // Set a maximum time for cleanup (5 seconds) to prevent hanging
+  const MAX_CLEANUP_TIME = 5000; // 5 seconds
+  let cleanupTimedOut = false;
+
+  const cleanupTimeout = setTimeout(() => {
+    console.log('Cleanup taking too long, forcing exit...');
+    cleanupTimedOut = true;
+    process.exit(0);
+  }, MAX_CLEANUP_TIME);
+
+  try {
+    await cleanup();
+    // Cleanup completed normally, clear the timeout
+    clearTimeout(cleanupTimeout);
+  } catch (error) {
+    console.error('Error during cleanup:', error);
+    // Make sure we still clear the timeout on error
+    clearTimeout(cleanupTimeout);
+  }
+
+  // If we haven't timed out, exit with a short delay for final messages
+  if (!cleanupTimedOut) {
+    setTimeout(() => process.exit(0), 100);
+  }
 });
 
 // Setup Express routes
@@ -909,7 +1118,7 @@ async function startServer(): Promise<void> {
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
   // MAGI_NODEMON_RESTART will be set by nodemon when restarting
   console.log(`Starting MAGI System Server (port: ${PORT}, restart: ${isNodemonRestart})`);
-  
+
   // If this is a restart, retrieve running MAGI containers
   if (isNodemonRestart) {
     try {

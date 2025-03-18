@@ -117,22 +117,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Function to animate the transition from center input to header
+  // Function to transition from center input to header
   function animateInitialTransition(): void {
-    // First, animate the header in
+    // Show header
     mainHeader.style.opacity = '1';
     mainHeader.style.transform = 'translateY(0)';
 
-    // Then, fade out the center input
-    centerInputContainer.style.opacity = '0';
+    // Hide center input
+    centerInputContainer.style.display = 'none';
 
-    // After animation completes, hide the center input completely
-    setTimeout(() => {
-      centerInputContainer.style.display = 'none';
-
-      // Focus on the header input
-      commandInput.focus();
-    }, 500);
+    // Focus on the header input
+    commandInput.focus();
   }
 
   // Socket event handlers
@@ -171,7 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
     processBox.id = `process-${process.id}`;
     processId.textContent = process.id; // Show the actual AI-xxxx ID
 
-    // Add the process box to the grid
+    // Add the process box to the grid - will be moved to a container later in updateGridLayout
     processGrid.appendChild(clone);
 
     // Get process input elements
@@ -282,9 +277,9 @@ document.addEventListener('DOMContentLoaded', () => {
         processTerminate.style.display = 'none';
 
         // Show ending status
-        processEl.status.textContent = 'ENDING...';
+        processEl.status.textContent = 'terminating...';
         processEl.status.classList.remove('status-running', 'status-completed', 'status-failed', 'status-terminated', 'status-ending');
-        processEl.status.classList.add('status-ending');
+        processEl.status.classList.add('status-ending', 'text-danger');
 
         // Add a failsafe - if the server doesn't respond in 10 seconds, force the UI to show ENDED
         const failsafeTimer = setTimeout(() => {
@@ -306,8 +301,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Update the grid layout
     updateGridLayout();
 
-    // Animate the new process appearance
-    animateNewProcess(processBox);
+    // Setup the new process display
+    processBox.style.opacity = '1';
+    processBox.style.flex = '1';
   }
 
   // Append logs to a process
@@ -368,11 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
         processEl.status.classList.add('bg-warning');
       }
       // Custom label text for certain statuses
-      if (status === 'running') {
-        processEl.status.textContent = 'live';
-      } else {
-        processEl.status.textContent = status;
-      }
+      processEl.status.textContent = status;
 
       // Handle terminated status specially - add fadeout and removal
       if (status === 'terminated') {
@@ -393,11 +385,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Slight delay before starting fadeout to ensure "ENDED" is visible
         setTimeout(() => {
-          // Apply fadeout animation
-          processEl.box.style.animation = 'fadeOutRemove 1.5s ease-out forwards';
+          // No animation, just reduce opacity
+          processEl.box.style.opacity = '0.2';
         }, 500);
 
-        // Remove the process box after animation completes (accounting for the 500ms delay)
+        // Remove the process box after a short delay
         setTimeout(() => {
           // Remove from DOM
           if (processEl.box.parentNode) {
@@ -417,15 +409,15 @@ document.addEventListener('DOMContentLoaded', () => {
             mainHeader.style.opacity = '0';
             mainHeader.style.transform = 'translateY(-100%)';
             centerInputContainer.style.display = 'block';
-            setTimeout(() => {
-              centerInputContainer.style.opacity = '1';
-              centerCommandInput.focus();
-            }, 10);
+            centerInputContainer.style.opacity = '1';
+            centerCommandInput.focus();
           }
-        }, 2000); // 500ms delay + 1500ms animation
+        }, 1000); // Just a short delay
       }
     }
   }
+
+  // setupContainer function removed
 
   // Update the grid layout when processes change
   function updateGridLayout(): void {
@@ -434,80 +426,190 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (count === 0) return;
 
+    // Clear all existing containers first
+    const containers = document.querySelectorAll('.process-container');
+    containers.forEach(container => {
+      // Get all process boxes within this container
+      const boxesInContainer = Array.from(container.querySelectorAll('.process-box'));
+
+      // Move each process box directly under the grid
+      boxesInContainer.forEach(box => {
+        processGrid.appendChild(box);
+      });
+
+      // Remove the empty container
+      if (container.parentNode) {
+        container.parentNode.removeChild(container);
+      }
+    });
+
     // Remove any existing grid styles
     processGrid.style.gridTemplateColumns = '';
     processGrid.style.gridTemplateRows = '';
 
-    // Reset any existing grid-area settings
+    // Reset any existing grid-area settings and flex properties
     processBoxes.forEach(box => {
-      (box as HTMLElement).style.gridArea = '';
+      const boxEl = box as HTMLElement;
+      boxEl.style.gridArea = '';
+      boxEl.style.flex = '1';
+      boxEl.classList.remove('animate-slide-top', 'animate-slide-left', 'animate-grow-width', 'animate-grow-height');
     });
 
     // Determine how to split the screen based on count and create an alternating pattern
     if (count === 1) {
-      // Full screen for first process
-      processGrid.style.gridTemplateColumns = '1fr';
-      processGrid.style.gridTemplateRows = '1fr';
+      // Full screen for first process - nothing special needed
     }
     else if (count === 2) {
-      // Split horizontally for 2 processes
-      processGrid.style.gridTemplateColumns = '1fr 1fr';
-      processGrid.style.gridTemplateRows = '1fr';
+      // Split horizontally for 2 processes using a flex container
+      // Create a horizontal container
+      const container = document.createElement('div');
+      container.className = 'process-container split-horizontal';
+
+      // No animation needed
+
+      // Move both process boxes into the container
+      const boxes = Array.from(processBoxes);
+      container.appendChild(boxes[0]);
+      container.appendChild(boxes[1]);
+
+      // Add the container to the grid
+      processGrid.appendChild(container);
     }
     else if (count === 3) {
-      // For 3 processes, split into 2 columns with the third taking full width of second row
-      processGrid.style.gridTemplateColumns = '1fr 1fr';
-      processGrid.style.gridTemplateRows = '1fr 1fr';
+      // For 3 processes: First row split horizontally, second row full width
+      // Create a horizontal container for the first row
+      const topContainer = document.createElement('div');
+      topContainer.className = 'process-container split-horizontal';
 
-      // Third box takes full second row
+      // Create container for the second row (just one box) - use vertical for single elements
+      const bottomContainer = document.createElement('div');
+      bottomContainer.className = 'process-container split-vertical';
+
+      // No animation needed
+
+      // Move process boxes into containers
       const boxes = Array.from(processBoxes);
-      (boxes[2] as HTMLElement).style.gridColumn = '1 / span 2';
+      topContainer.appendChild(boxes[0]);
+      topContainer.appendChild(boxes[1]);
+      bottomContainer.appendChild(boxes[2]);
+
+      // Add the containers to the grid
+      processGrid.appendChild(topContainer);
+      processGrid.appendChild(bottomContainer);
     }
     else if (count === 4) {
-      // 2x2 grid for 4 processes
-      processGrid.style.gridTemplateColumns = '1fr 1fr';
-      processGrid.style.gridTemplateRows = '1fr 1fr';
-    }
-    else if (count === 5) {
-      // 5 processes: 2x2 + 1 row full width
-      processGrid.style.gridTemplateColumns = '1fr 1fr';
-      processGrid.style.gridTemplateRows = '1fr 1fr 1fr';
+      // 2x2 grid with nested flex containers
+      // Create a container for each row
+      const topContainer = document.createElement('div');
+      topContainer.className = 'process-container split-horizontal';
 
-      // Fifth box takes full third row
+      const bottomContainer = document.createElement('div');
+      bottomContainer.className = 'process-container split-horizontal';
+
+      // No animation needed
+
+      // Move process boxes into containers
       const boxes = Array.from(processBoxes);
-      (boxes[4] as HTMLElement).style.gridColumn = '1 / span 2';
+      topContainer.appendChild(boxes[0]);
+      topContainer.appendChild(boxes[1]);
+      bottomContainer.appendChild(boxes[2]);
+      bottomContainer.appendChild(boxes[3]);
+
+      // Add containers to the grid
+      processGrid.appendChild(topContainer);
+      processGrid.appendChild(bottomContainer);
     }
-    else if (count === 6) {
-      // 6 processes: 3x2 grid
-      processGrid.style.gridTemplateColumns = '1fr 1fr 1fr';
-      processGrid.style.gridTemplateRows = '1fr 1fr';
+    else if (count === 5 || count === 6) {
+      // For 5 processes: 3 rows with alternating splits
+      // First row: 2 horizontal
+      // Second row: 2 horizontal
+      // Third row: 1 or 2 horizontal depending on count
+
+      const topContainer = document.createElement('div');
+      topContainer.className = 'process-container split-horizontal';
+
+      const middleContainer = document.createElement('div');
+      middleContainer.className = 'process-container split-horizontal';
+
+      // Move process boxes into containers
+      const boxes = Array.from(processBoxes);
+
+      // First row: boxes 0 and 1
+      topContainer.appendChild(boxes[0]);
+      topContainer.appendChild(boxes[1]);
+
+      // Second row: boxes 2 and 3
+      middleContainer.appendChild(boxes[2]);
+      middleContainer.appendChild(boxes[3]);
+
+      // Add containers to the grid
+      processGrid.appendChild(topContainer);
+      processGrid.appendChild(middleContainer);
+
+      if (count === 5) {
+        // Put the last box in a vertical container
+        const lastContainer = document.createElement('div');
+        lastContainer.className = 'process-container split-vertical';
+
+        // No animation needed
+
+        lastContainer.appendChild(boxes[4]);
+        processGrid.appendChild(lastContainer);
+      } else {
+        // Create a third row with 2 boxes
+        const bottomContainer = document.createElement('div');
+        bottomContainer.className = 'process-container split-horizontal';
+
+        // No animation needed
+
+        bottomContainer.appendChild(boxes[4]);
+        bottomContainer.appendChild(boxes[5]);
+        processGrid.appendChild(bottomContainer);
+      }
     }
     else {
-      // For more processes, create a grid that's roughly square
-      const cols = Math.ceil(Math.sqrt(count));
-      const rows = Math.ceil(count / cols);
+      // For more processes (7+), organize in rows of 3
+      const boxes = Array.from(processBoxes);
 
-      processGrid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-      processGrid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+      // Calculate how many full rows of 3 we can create
+      const fullRowCount = Math.floor(count / 3);
+      const remainder = count % 3;
+
+      // Create full rows of 3
+      for (let i = 0; i < fullRowCount; i++) {
+        const rowContainer = document.createElement('div');
+        rowContainer.className = 'process-container split-horizontal';
+
+        // Add 3 boxes to this row
+        for (let j = 0; j < 3; j++) {
+          const boxIndex = i * 3 + j;
+          rowContainer.appendChild(boxes[boxIndex]);
+        }
+
+        // No animation needed
+
+        processGrid.appendChild(rowContainer);
+      }
+
+      // Handle remaining boxes
+      if (remainder > 0) {
+        const lastRowContainer = document.createElement('div');
+        lastRowContainer.className = 'process-container split-horizontal';
+
+        // Add remaining boxes
+        for (let k = 0; k < remainder; k++) {
+          const boxIndex = fullRowCount * 3 + k;
+          lastRowContainer.appendChild(boxes[boxIndex]);
+        }
+
+        // No animation needed
+
+        processGrid.appendChild(lastRowContainer);
+      }
     }
   }
 
-  // Add animation when a new process is created
-  function animateNewProcess(processBox: HTMLElement): void {
-    // The animation is now handled by CSS
-    // We just need to refresh all process boxes to trigger transitions
-
-    const allBoxes = document.querySelectorAll('.process-box');
-    allBoxes.forEach(box => {
-      // Force a reflow/repaint to ensure animations work properly
-      (box as HTMLElement).style.animation = 'none';
-      void (box as HTMLElement).offsetWidth; // Trigger reflow
-      (box as HTMLElement).style.animation = 'gridTransition 0.5s ease-out';
-    });
-
-    // Give new process box a specific animation
-    processBox.style.animation = 'splitFadeIn 0.5s ease-out';
-  }
+  // animateNewProcess function removed
 
   // Call once on load and then on window resize
   updateGridLayout();

@@ -4,6 +4,8 @@
  * Simple file-based storage for environment variables that need to persist
  * across nodemon restarts. Variables are stored in the .server directory,
  * which is cleared on each npm run dev execution.
+ * 
+ * Also provides functionality for storing and retrieving used process colors.
  */
 
 import fs from 'fs';
@@ -91,5 +93,33 @@ export function loadAllEnvVars(): void {
     const filePath = path.join(STORAGE_DIR, file);
     const value = fs.readFileSync(filePath, 'utf8');
     process.env[file] = value;
+  }
+}
+
+/**
+ * Save the used process colors to persistent storage
+ * 
+ * @param colors - Array of [r,g,b] color values
+ */
+export function saveUsedColors(colors: Array<[number, number, number]>): void {
+  saveEnvVar('USED_COLORS', JSON.stringify(colors));
+}
+
+/**
+ * Load previously used process colors from storage
+ * 
+ * @returns Array of [r,g,b] color values, or empty array if none found
+ */
+export function loadUsedColors(): Array<[number, number, number]> {
+  const colorsJson = loadEnvVar('USED_COLORS');
+  if (!colorsJson) {
+    return [];
+  }
+  
+  try {
+    return JSON.parse(colorsJson) as Array<[number, number, number]>;
+  } catch (error) {
+    console.error('Error parsing stored colors:', error);
+    return [];
   }
 }
