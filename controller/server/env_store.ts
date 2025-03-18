@@ -51,6 +51,31 @@ export function loadEnvVar(key: string): string | undefined {
 }
 
 /**
+ * Updates the server version to trigger client reload
+ * after a server restart
+ */
+export function updateServerVersion(): void {
+  const newVersion = Date.now().toString();
+  saveEnvVar('SERVER_VERSION', newVersion);
+  return;
+}
+
+/**
+ * Gets the current server version
+ * 
+ * @returns Current server version or a new version if not set
+ */
+export function getServerVersion(): string {
+  const version = loadEnvVar('SERVER_VERSION');
+  if (!version) {
+    const newVersion = Date.now().toString();
+    saveEnvVar('SERVER_VERSION', newVersion);
+    return newVersion;
+  }
+  return version;
+}
+
+/**
  * Loads all stored environment variables into process.env
  */
 export function loadAllEnvVars(): void {
