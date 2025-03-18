@@ -16,7 +16,6 @@ import http from 'http';
 import { Server, Socket } from 'socket.io';
 import { /* spawn, */ ChildProcess } from 'child_process';
 import path from 'path';
-import fs from 'fs';
 import dotenv from 'dotenv';
 import { promisify } from 'util';
 import WebSocket from 'ws';

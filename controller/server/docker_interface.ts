@@ -281,7 +281,7 @@ export async function cleanupAllContainers(): Promise<boolean> {
     await execPromise("docker rm -f $(docker ps -q -f 'ancestor=magi-system:latest') 2>/dev/null || true");
 
     return true;
-  } catch (error) {
+  } catch {
     // Ignore errors from this command, as it might fail if no containers exist
     return true;
   }
@@ -317,8 +317,8 @@ export async function getRunningMagiContainers(): Promise<{id: string, container
         command: originalCommand
       };
     });
-  } catch (error) {
-    console.error('Error getting running MAGI containers:', error);
+  } catch (err) {
+    console.error('Error getting running MAGI containers:', err);
     return [];
   }
 }
