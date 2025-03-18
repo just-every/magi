@@ -14,7 +14,10 @@ module.exports = {
     ],
   },
   resolve: {
-    extensions: ['.tsx', '.ts', '.js']
+    extensions: ['.tsx', '.ts', '.js'],
+    alias: {
+      '@types': path.resolve(__dirname, 'controller/types')
+    }
   },
   output: {
     filename: 'client.js',

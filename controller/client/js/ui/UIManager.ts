@@ -4,7 +4,7 @@
  * Handles UI state and animations
  */
 import { ProcessUI } from './ProcessUI';
-import { ProcessCreateEvent, ProcessLogsEvent, ProcessUpdateEvent } from '../../../types/shared-types';
+import { ProcessCreateEvent, ProcessLogsEvent, ProcessUpdateEvent } from '@types';
 
 export class UIManager {
   private isFirstProcess = true;
