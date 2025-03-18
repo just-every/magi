@@ -366,7 +366,11 @@ function setupContainerStatusChecking(processId: string): void {
 
         // Clean up monitoring resources
         clearInterval(checkInterval);
-        stopLogging();
+        
+        // Kill the monitoring process if it exists
+        if (processes[processId]?.monitorProcess) {
+          processes[processId].monitorProcess.kill();
+        }
       }
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (_) {
@@ -386,7 +390,11 @@ function setupContainerStatusChecking(processId: string): void {
 
       // Clean up monitoring resources
       clearInterval(checkInterval);
-      stopLogging();
+      
+      // Kill the monitoring process if it exists
+      if (processes[processId]?.monitorProcess) {
+        processes[processId].monitorProcess.kill();
+      }
     }
   }, statusCheckIntervalMs);
 
