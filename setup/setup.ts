@@ -3,7 +3,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
-import { execSync, spawn } from 'child_process';
+import { execSync } from 'child_process';
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -18,8 +18,7 @@ console.log('');
 const rootDir = path.resolve(__dirname, '..');
 const envPath = path.join(rootDir, '.env');
 
-// Check if .env already exists
-const envExists = fs.existsSync(envPath);
+// Check if .env file exists (used in the initial setup check)
 
 let openaiApiKey = '';
 
@@ -38,7 +37,7 @@ function getOpenAIKey(): void {
       if (apiKeyMatch && apiKeyMatch[1]) {
         console.log('Current API key found: ' + apiKeyMatch[1].substring(0, 4) + '...' + apiKeyMatch[1].substring(apiKeyMatch[1].length - 4));
       }
-    } catch (err) {
+    } catch {
       // Ignore read errors
     }
     
@@ -93,7 +92,7 @@ function installDependencies(): void {
     execSync('npm ci', { stdio: 'inherit', cwd: rootDir });
     console.log('\x1b[32m%s\x1b[0m', '✓ Dependencies installed successfully');
     buildDockerImage();
-  } catch (error) {
+  } catch {
     console.error('\x1b[31m%s\x1b[0m', 'Failed to install dependencies. Please try again.');
     process.exit(1);
   }
@@ -103,7 +102,7 @@ function checkDockerInstalled(): boolean {
   try {
     execSync('docker --version', { stdio: 'pipe' });
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 }

@@ -13,7 +13,7 @@
     <header id="main-header" class="py-3 pt-4">
       <div class="container mx-auto">
         <div class="d-flex justify-content-between align-items-center">
-          <h1 class="fw-bold">MAGI3</h1>
+          <h1 class="fw-bold">MAGI</h1>
           <form id="command-form" class="flex-grow-1 ms-4">
             <div class="input-group">
               <span class="input-group-text">&gt;</span>
@@ -23,11 +23,11 @@
         </div>
       </div>
     </header>
-    
+
     <main id="process-grid" class="my-2 flex-grow-1 w-100">
       <!-- Process boxes will be dynamically inserted here -->
     </main>
-    
+
     <div id="center-input-container" class="position-absolute top-50 start-50 translate-middle w-75 max-width-md">
       <form id="center-command-form">
         <div class="input-group">
@@ -65,7 +65,7 @@
   <!-- Bootstrap Bundle with Popper -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/client.js"></script>
-  
+
   <!-- Enable live reload of client JS/HTML/CSS -->
   <script>
     // Enhanced live reload system with reconnection and differentiated reload types
@@ -78,10 +78,10 @@
         this.reconnectAttempts = 0;
         this.wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         this.wsUrl = `${this.wsProtocol}//${window.location.host}/livereload`;
-        
+
         // Connect immediately
         this.connect();
-        
+
         // Also attempt reconnect when browser tab becomes visible again
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState === 'visible') {
@@ -92,35 +92,35 @@
           }
         });
       }
-      
+
       connect() {
         try {
           this.ws = new WebSocket(this.wsUrl);
-          
+
           this.ws.onopen = () => {
             console.log('LiveReload connected successfully');
             this.reconnectAttempts = 0;
           };
-          
+
           this.ws.onmessage = (event) => {
             // Handle different reload messages
             if (event.data === 'reload' || event.data === 'html-reload' || event.data === 'js-reload') {
               console.log(`LiveReload: Full page reload triggered by ${event.data}`);
               // Force immediate reload
               window.location.href = window.location.href.split('?')[0] + '?t=' + Date.now();
-            } 
+            }
             else if (event.data === 'css-reload') {
               console.log('LiveReload: CSS reload triggered');
               this.reloadStylesheets();
             }
           };
-          
+
           this.ws.onclose = () => {
             console.log('LiveReload connection closed');
             this.ws = null;
             this.reconnect();
           };
-          
+
           this.ws.onerror = (error) => {
             console.error('LiveReload websocket error:', error);
             // The onclose handler will be called after this
@@ -130,11 +130,11 @@
           this.reconnect();
         }
       }
-      
+
       isConnected() {
         return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
       }
-      
+
       reloadStylesheets() {
         // Refresh CSS by appending timestamp to force reload
         const links = document.querySelectorAll('link[rel="stylesheet"]');
@@ -143,38 +143,38 @@
           if (!link.href.includes('cdn.jsdelivr.net')) {
             const originalHref = link.getAttribute('href').split('?')[0];
             const newHref = `${originalHref}?t=${Date.now()}`;
-            
+
             // Create a new link element to force a reload
             const newLink = document.createElement('link');
             newLink.rel = 'stylesheet';
             newLink.href = newHref;
-            
+
             // Add the new link and then remove the old one
             link.parentNode.insertBefore(newLink, link.nextSibling);
             setTimeout(() => {
               link.parentNode.removeChild(link);
             }, 100);
-            
+
             console.log(`Reloaded stylesheet: ${newHref}`);
           }
         });
       }
-      
+
       reconnect() {
         // Clear any existing reconnect timer
         if (this.reconnectTimer) {
           clearTimeout(this.reconnectTimer);
           this.reconnectTimer = null;
         }
-        
+
         // Check if max attempts reached
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
           console.warn(`Max reconnect attempts (${this.maxReconnectAttempts}) reached, giving up`);
           return;
         }
-        
+
         this.reconnectAttempts++;
-        
+
         // Set timer for reconnect
         this.reconnectTimer = setTimeout(() => {
           console.log(`Attempting to reconnect LiveReload (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
@@ -182,10 +182,10 @@
         }, this.reconnectInterval);
       }
     }
-    
+
     // Initialize live reload client
     const liveReload = new LiveReloadClient();
-    
+
     // For debugging - expose reload function globally
     window.forceReloadCSS = () => {
       console.log('Manually forcing CSS reload...');

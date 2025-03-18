@@ -212,11 +212,11 @@ header h1 {
 }
 
 /* Process logs markdown styling */
-.process-logs h1, 
-.process-logs h2, 
-.process-logs h3, 
-.process-logs h4, 
-.process-logs h5, 
+.process-logs h1,
+.process-logs h2,
+.process-logs h3,
+.process-logs h4,
+.process-logs h5,
 .process-logs h6 {
   margin-top: 1rem;
   margin-bottom: 0.5rem;

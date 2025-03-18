@@ -1,9 +1,12 @@
 {
   "verbose": false,
+  "quiet": true,
   "watch": [
-    "controller/server/**/*.ts"
+    "controller/"
   ],
-  "ext": "ts,json",
-  "ignore": ["node_modules/*", "dist/*", "*.test.ts"],
-  "exec": "npm run build && node dist/controller/server/server.js"
+  "exec": "npm run build && node dist/controller/server/server.js",
+  "ext": "*",
+  "env": {
+    "NODE_ENV": "development"
+  }
 }

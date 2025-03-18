@@ -10,7 +10,7 @@
     "sourceMap": true,
     "declaration": true,
     "removeComments": true,
-    "typeRoots": ["./node_modules/@types", "./controller/client/utils/types"],
+    "typeRoots": ["./node_modules/@types", "./controller/types"],
     "baseUrl": "./",
     "paths": {
       "*": ["node_modules/*"]

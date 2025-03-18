@@ -4,16 +4,14 @@
   "description": "MAGI System",
   "main": "index.js",
   "scripts": {
-    "build": "tsc && npm run copy-assets > /dev/null",
-    "copy-assets": "mkdir -p dist/controller/client/html dist/controller/client/css && cp -r controller/client/css/* dist/controller/client/css/ && cp -r controller/client/html/* dist/controller/client/html/ && echo 'Assets copied at' $(date +%T)",
+    "build": "tsc && rsync -a --exclude=\"*.ts\" controller/client/ dist/controller/client/",
     "start": "node dist/controller/server/server.js",
-    "dev": "NODE_ENV=development nodemon --quiet",
-    "dev:watch-assets": "nodemon --watch controller/client/css --watch controller/client/html --ext css,html --exec \"npm run copy-assets\" --quiet",
-    "dev:full": "concurrently \"npm run dev\" \"npm run dev:watch-assets\"",
-    "lint": "eslint controller/**/*.ts",
-    "lint:fix": "eslint controller/**/*.ts --fix",
-    "setup": "npx tsc setup/setup.ts --esModuleInterop && node dist/setup/setup.js",
-    "setup-claude": "npx tsc setup/claude_setup.ts --esModuleInterop && node dist/setup/claude_setup.js"
+    "cleanup": "rm -rf dist/",
+    "dev": "npm run cleanup && nodemon",
+    "lint": "eslint **/*.ts",
+    "lint:fix": "eslint **/*.ts --fix",
+    "setup": "tsc setup/setup.ts --esModuleInterop && node dist/setup/setup.js",
+    "setup-claude": "tsc setup/claude_setup.ts --esModuleInterop && node dist/setup/claude_setup.js"
   },
   "repository": {
     "type": "git",

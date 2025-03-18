@@ -4,7 +4,7 @@ const typescriptPlugin = require('@typescript-eslint/eslint-plugin');
 
 module.exports = [
   {
-    files: ['controller/**/*.ts'],
+    files: ['controller/**/*.ts', 'setup/**/*.ts'],
     languageOptions: {
       parser: typescriptParser,
       ecmaVersion: 2020,

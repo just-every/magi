@@ -16,3 +16,4 @@
 **/venv/
 **/ENV/
 **/Dockerfile
+**/.server
