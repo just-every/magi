@@ -180,9 +180,10 @@ header h1 {
   background-color: transparent !important;
 }
 
+/* Live status badge */
 .status-running {
   background-color: transparent;
-  color: inherit;
+  color: #388e3c !important; /* Green color */
 }
 
 .status-completed {

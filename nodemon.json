@@ -1,9 +1,9 @@
 {
   "verbose": false,
   "watch": [
-    "controller/**/*.ts"
+    "controller/server/**/*.ts"
   ],
   "ext": "ts,json",
-  "ignore": ["node_modules/*", "dist/*", "*.test.ts"],
+  "ignore": ["node_modules/*", "dist/*", "*.test.ts", "controller/client/**/*"],
   "exec": "npm run build && node dist/controller/server/server.js"
 }
