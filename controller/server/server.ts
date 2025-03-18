@@ -154,7 +154,12 @@ app.use(express.static(path.join(__dirname, '../client')));
 
 // Set up more reliable file monitoring for live reload
 class LiveReloadManager {
-  private lastReloadTime = 0;
+  private lastReloadTimes: Record<string, number> = {
+    css: 0,
+    html: 0,
+    js: 0,
+    other: 0
+  };
   private readonly cooldown = 300; // ms
   private readonly watchPaths: string[];
   private watchHandlers: Array<{ close: () => void }> = [];
@@ -221,15 +226,6 @@ class LiveReloadManager {
   private handleFileChange(eventType: string, filename: string | null): void {
     if (!filename) return;
     
-    const now = Date.now();
-    // Debounce rapid changes
-    if (now - this.lastReloadTime < this.cooldown) {
-      console.log(`🔄 Skipping rapid change: ${filename} (debounced)`);
-      return;
-    }
-    
-    this.lastReloadTime = now;
-    
     // Determine file type for targeted reloads
     const fileExt = path.extname(filename).toLowerCase();
     const isCSS = fileExt === '.css';
@@ -241,7 +237,20 @@ class LiveReloadManager {
       return;
     }
     
-    console.log(`📝 File changed: ${filename} (type: ${isCSS ? 'CSS' : isHTML ? 'HTML' : isJS ? 'JS' : 'other'}, event: ${eventType})`);
+    // Get the file type category
+    const fileType = isCSS ? 'css' : isHTML ? 'html' : isJS ? 'js' : 'other';
+    
+    const now = Date.now();
+    // Debounce rapid changes of the same type
+    if (now - this.lastReloadTimes[fileType] < this.cooldown) {
+      console.log(`🔄 Skipping rapid change: ${filename} (${fileType} debounced)`);
+      return;
+    }
+    
+    // Update the timestamp for this file type
+    this.lastReloadTimes[fileType] = now;
+    
+    console.log(`📝 File changed: ${filename} (type: ${fileType.toUpperCase()}, event: ${eventType})`);
     
     // Count active clients
     let activeClients = 0;
