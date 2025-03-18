@@ -76,8 +76,8 @@ export async function checkDockerImageExists(tag: string = 'latest'): Promise<bo
 export async function buildDockerImage(options: DockerBuildOptions = {}): Promise<boolean> {
   try {
     const tag = options.tag || 'latest';
-    const dockerfilePath = path.resolve(__dirname, '../magi/docker/Dockerfile');
-    const contextPath = path.resolve(__dirname, '../');
+    const dockerfilePath = path.resolve(__dirname, '../../../../magi/docker/Dockerfile');
+    const contextPath = path.resolve(__dirname, '../../../../');
 
     // Verify dockerfile exists
     if (!fs.existsSync(dockerfilePath)) {
@@ -146,8 +146,8 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
     // Get project root directory and normalize
     const projectRoot = options.projectRoot
         ? path.resolve(options.projectRoot)
-        : path.resolve(__dirname, '..');
-    
+        : path.resolve(__dirname, '../../../../');
+
     // In dist, we need to go up one more level
     const isBuildDir = projectRoot.endsWith('/dist');
     const actualProjectRoot = isBuildDir ? path.resolve(projectRoot, '..') : projectRoot;
@@ -178,17 +178,6 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
     const result = await execPromise(dockerRunCommand);
     const containerId = result.stdout.trim();
 
-    console.log(`Container started with ID: ${containerId} command: ${escapedCommand}`);
-
-
-    console.log(`docker run -d --rm --name ${containerName} \
-      -e PROCESS_ID=${processId} \
-      ${openaiApiKey ? `-e OPENAI_API_KEY=${openaiApiKey}` : ''} \
-      -v ${magiPath}:/app/magi:rw \
-      -v claude_credentials:/claude_shared:rw \
-      -v magi_output:/magi_output:rw \
-      magi-system:latest \
-      python magi/magi.py -p "${escapedCommand}"`);
     return containerId;
   } catch (error) {
     console.error('Error running Docker container:', error);

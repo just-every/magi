@@ -9,11 +9,11 @@ import { spawn, exec } from 'child_process';
  */
 export async function setupClaudeAuth(): Promise<boolean> {
   console.log("Setting up Claude authentication...");
-  
+
   try {
     // Check if volume exists, create it if not
     console.log("Checking for claude_credentials volume...");
-    
+
     const volumeExistsResult = await new Promise<string>((resolve, reject) => {
       exec('docker volume ls --filter name=claude_credentials --format "{{.Name}}"', (error, stdout) => {
         if (error) {
@@ -23,7 +23,7 @@ export async function setupClaudeAuth(): Promise<boolean> {
         resolve(stdout.trim());
       });
     });
-    
+
     if (!volumeExistsResult) {
       console.log("Creating shared claude_credentials volume...");
       await new Promise<void>((resolve, reject) => {
@@ -36,7 +36,7 @@ export async function setupClaudeAuth(): Promise<boolean> {
         });
       });
     }
-    
+
     // Setup command to create directories and symlinks in the container before running claude
     const setupCmd = `
       mkdir -p /claude_shared/.claude && \\
@@ -50,10 +50,10 @@ export async function setupClaudeAuth(): Promise<boolean> {
       ls -la /claude_shared/ && \\
       claude --dangerously-skip-permissions
     `;
-    
+
     // Run the container in interactive mode
     console.log("Launching interactive container for Claude authentication...");
-    
+
     const containerIdResult = await new Promise<string>((resolve, reject) => {
       exec(
         `docker run -d --rm -v claude_credentials:/claude_shared -it magi-system:latest sh -c "${setupCmd}"`,
@@ -66,22 +66,22 @@ export async function setupClaudeAuth(): Promise<boolean> {
         }
       );
     });
-    
+
     const containerId = containerIdResult;
-    console.log(`Container started with ID: ${containerId}`);
-    
+    console.log(`Claude container started with ID: ${containerId}`);
+
     // Execute docker attach command as a subprocess so user can interact with it
     const attachCmd = `docker attach ${containerId}`;
     console.log(`Running: ${attachCmd}`);
     console.log("Follow the prompts to authenticate Claude...");
     console.log("Press Ctrl+C to exit the authentication process once finished.");
-    
+
     // Run docker attach in a child process
     const attachProcess = spawn('docker', ['attach', containerId], {
       stdio: 'inherit',
       shell: true
     });
-    
+
     await new Promise<void>((resolve) => {
       attachProcess.on('exit', () => {
         console.log("\nAuthentication process completed.");
@@ -89,7 +89,7 @@ export async function setupClaudeAuth(): Promise<boolean> {
         resolve();
       });
     });
-    
+
     // Verify the volume has the expected files
     try {
       const verifyResult = await new Promise<string>((resolve, reject) => {
@@ -104,13 +104,13 @@ export async function setupClaudeAuth(): Promise<boolean> {
           }
         );
       });
-      
+
       console.log("Volume contents verification:");
       console.log(verifyResult);
     } catch (verifyError) {
       console.log(`Could not verify volume contents: ${verifyError}`);
     }
-    
+
     return true;
   } catch (error) {
     console.log(`Error during Claude authentication: ${error}`);

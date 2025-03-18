@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
-const readline = require('readline');
-const { execSync } = require('child_process');
-const { spawn } = require('child_process');
+import * as fs from 'fs';
+import * as path from 'path';
+import * as readline from 'readline';
+import { execSync, spawn } from 'child_process';
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -24,7 +23,7 @@ const envExists = fs.existsSync(envPath);
 
 let openaiApiKey = '';
 
-function getOpenAIKey() {
+function getOpenAIKey(): void {
   console.log('\x1b[33m%s\x1b[0m', 'Step 1: Setting up OpenAI API Key');
   
   // Check if .env file already exists
@@ -57,7 +56,7 @@ function getOpenAIKey() {
   promptForApiKey();
 }
 
-function promptForApiKey() {
+function promptForApiKey(): void {
   console.log('You need an OpenAI API key to use this system.');
   console.log('Get your API key at: \x1b[34mhttps://platform.openai.com/api-keys\x1b[0m');
   
@@ -73,19 +72,19 @@ function promptForApiKey() {
   });
 }
 
-function saveEnvFile() {
+function saveEnvFile(): void {
   try {
     // Create or update .env file
     fs.writeFileSync(envPath, `OPENAI_API_KEY=${openaiApiKey}\n`);
     console.log('\x1b[32m%s\x1b[0m', '✓ OpenAI API key saved to .env file');
     installDependencies();
   } catch (error) {
-    console.error('\x1b[31m%s\x1b[0m', `Error saving .env file: ${error.message}`);
+    console.error('\x1b[31m%s\x1b[0m', `Error saving .env file: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
 }
 
-function installDependencies() {
+function installDependencies(): void {
   console.log('');
   console.log('\x1b[33m%s\x1b[0m', 'Step 2: Installing npm dependencies');
   
@@ -100,7 +99,7 @@ function installDependencies() {
   }
 }
 
-function checkDockerInstalled() {
+function checkDockerInstalled(): boolean {
   try {
     execSync('docker --version', { stdio: 'pipe' });
     return true;
@@ -109,7 +108,7 @@ function checkDockerInstalled() {
   }
 }
 
-function buildDockerImage() {
+function buildDockerImage(): void {
   console.log('');
   console.log('\x1b[33m%s\x1b[0m', 'Step 3: Building Docker image');
   
@@ -142,7 +141,7 @@ function buildDockerImage() {
     setupClaude();
   } catch (error) {
     console.error('\x1b[31m%s\x1b[0m', 'Failed to build Docker image.');
-    console.error('Error: ', error.message);
+    console.error('Error: ', error instanceof Error ? error.message : String(error));
     
     // Ask if user wants to continue without Docker
     rl.question('Do you want to continue setup without the Docker image? (y/n): ', (answer) => {
@@ -157,7 +156,7 @@ function buildDockerImage() {
   }
 }
 
-function setupClaude() {
+function setupClaude(): void {
   console.log('');
   console.log('\x1b[33m%s\x1b[0m', 'Step 4: Setting up Claude');
   
@@ -186,7 +185,7 @@ function setupClaude() {
     setupComplete();
   } catch (error) {
     console.error('\x1b[31m%s\x1b[0m', 'Failed to set up Claude.');
-    console.error('Error: ', error.message);
+    console.error('Error: ', error instanceof Error ? error.message : String(error));
     
     rl.question('Do you want to continue without Claude setup? (y/n): ', (answer) => {
       if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
@@ -200,7 +199,7 @@ function setupClaude() {
   }
 }
 
-function setupComplete() {
+function setupComplete(): void {
   console.log('');
   console.log('\x1b[36m%s\x1b[0m', '┌─────────────────────────────────────┐');
   console.log('\x1b[36m%s\x1b[0m', '│       SETUP COMPLETE                │');
@@ -226,7 +225,7 @@ if (args.includes('--help') || args.includes('-h')) {
   console.log('  - Claude setup');
   console.log('');
   console.log('Usage:');
-  console.log('  node utils/setup.js [options]');
+  console.log('  ts-node setup/setup.ts [options]');
   console.log('  npm run setup [-- options]');
   console.log('');
   console.log('Options:');
