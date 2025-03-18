@@ -32,7 +32,8 @@ import {
   stopDockerContainer,
   sendCommandToContainer,
   monitorContainerLogs,
-  cleanupAllContainers
+  cleanupAllContainers,
+  getRunningMagiContainers
 } from './docker_interface';
 
 // Load environment variables from .env file
@@ -161,6 +162,49 @@ app.use(express.static(path.join(__dirname, '../client')));
 // Process management
 const processes: Processes = {};
 
+/**
+ * Retrieve existing MAGI containers and set them up for monitoring
+ */
+async function retrieveExistingContainers(): Promise<void> {
+  console.log('Retrieving existing MAGI containers...');
+  
+  const containers = await getRunningMagiContainers();
+  
+  if (containers.length === 0) {
+    console.log('No existing MAGI containers found');
+    return;
+  }
+  
+  console.log(`Found ${containers.length} existing MAGI containers`);
+  
+  for (const container of containers) {
+    const { id, containerId, command } = container;
+    
+    // Skip if we're already tracking this process
+    if (processes[id]) {
+      console.log(`Process ${id} already being tracked, skipping`);
+      continue;
+    }
+    
+    console.log(`Resuming monitoring of container ${containerId} with ID ${id}`);
+    
+    // Set up process tracking
+    processes[id] = {
+      id,
+      command,
+      status: 'running',
+      logs: [`[System] Container found after server restart. Original command: ${command}`],
+      containerId
+    };
+    
+    // Set up log monitoring for the container
+    setupLogMonitoring(id);
+    
+    // Set up container status checking
+    setupContainerStatusChecking(id);
+  }
+}
+
 // Docker functions are now imported from the Docker interface module
 
 /**
@@ -235,7 +279,9 @@ async function spawnDockerProcess(processId: string, command: string): Promise<v
 
     // Step 5: Set up log monitoring
     updateProcess(processId, 'Running MAGI in secure container.');
-    startLogMonitoring(processId);
+    // Set up the log monitoring and status checking
+    setupLogMonitoring(processId);
+    setupContainerStatusChecking(processId);
 
   } catch (error: unknown) {
     // Handle any unexpected errors during the setup process
@@ -248,21 +294,12 @@ async function spawnDockerProcess(processId: string, command: string): Promise<v
 }
 
 /**
- * Monitors logs and status for a running Docker container
- *
- * This function:
- * 1. Sets up log streaming from the container to the client
- * 2. Periodically checks container status
- * 3. Updates process status based on container exit code
- * 4. Cleans up resources when the container exits
- *
- * @param processId - The process ID to monitor
+ * Sets up log monitoring for a container
+ * Creates and attaches monitoring functions to stream logs from a container
+ * 
+ * @param processId - The process ID to monitor logs for
  */
-function startLogMonitoring(processId: string): void {
-  const containerName = `magi-${processId}`;
-  console.log(`Starting log monitoring for container ${containerName}`);
-
-  // Start streaming logs from the container
+function setupLogMonitoring(processId: string): void {
   const stopLogging = monitorContainerLogs(processId, (logData) => {
     if (processes[processId]) {
       // Store logs in memory
@@ -276,6 +313,23 @@ function startLogMonitoring(processId: string): void {
     }
   });
 
+  // Store the stop function for later cleanup
+  if (processes[processId]) {
+    processes[processId].monitorProcess = {
+      kill: stopLogging
+    } as unknown as ChildProcess;
+  }
+}
+
+/**
+ * Sets up container status checking
+ * Periodically checks if a container is still running and updates status accordingly
+ * 
+ * @param processId - The process ID to check status for
+ */
+function setupContainerStatusChecking(processId: string): void {
+  const containerName = `magi-${processId}`;
+  
   // Set up periodic container status checking
   const statusCheckIntervalMs = 5000; // Check every 5 seconds
   const checkInterval = setInterval(async () => {
@@ -791,6 +845,15 @@ async function startServer(): Promise<void> {
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
   // MAGI_NODEMON_RESTART will be set by nodemon when restarting
   console.log(`Starting MAGI System Server (port: ${PORT}, restart: ${isNodemonRestart})`);
+  
+  // If this is a restart, retrieve running MAGI containers
+  if (isNodemonRestart) {
+    try {
+      await retrieveExistingContainers();
+    } catch (error) {
+      console.error('Failed to retrieve existing containers:', error);
+    }
+  }
 
   try {
     // Only find an available port on first start, otherwise use the configured port

@@ -286,3 +286,39 @@ export async function cleanupAllContainers(): Promise<boolean> {
     return true;
   }
 }
+
+/**
+ * Get a list of all running MAGI containers
+ * @returns Promise resolving to an array of objects containing container info
+ */
+export async function getRunningMagiContainers(): Promise<{id: string, containerId: string, command: string}[]> {
+  try {
+    // Get list of running containers with name starting with 'magi-'
+    const { stdout } = await execPromise("docker ps -a --filter 'name=magi-' --filter 'status=running' --format '{{.ID}}|{{.Names}}|{{.Command}}'");
+    
+    if (!stdout.trim()) {
+      return [];
+    }
+    
+    // Parse container info
+    return stdout.trim().split('\n').map(line => {
+      const [containerId, name, command] = line.split('|');
+      
+      // Extract process ID from name (remove 'magi-' prefix)
+      const id = name.replace('magi-', '');
+      
+      // Extract original command (it's in the format 'python -m... "command"')
+      const originalCommandMatch = command.match(/"(.+)"$/);
+      const originalCommand = originalCommandMatch ? originalCommandMatch[1] : '';
+      
+      return {
+        id,
+        containerId,
+        command: originalCommand
+      };
+    });
+  } catch (error) {
+    console.error('Error getting running MAGI containers:', error);
+    return [];
+  }
+}
