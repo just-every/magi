@@ -158,11 +158,10 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
       throw new Error(`Magi directory not found at ${magiPath}`);
     }
 
-    // Going back to the original approach with improved escaping and validation
-    // Escape double quotes in the command
-    const escapedCommand = command.replace(/"/g, '\\"');
+    // Use base64 encoding to avoid escaping issues entirely
+    const base64Command = Buffer.from(command).toString('base64');
 
-    // Create the docker run command
+    // Create the docker run command using base64 encoded command
     const dockerRunCommand = `docker run -d --rm --name ${containerName} \
       -e PROCESS_ID=${processId} \
       ${openaiApiKey ? `-e OPENAI_API_KEY=${openaiApiKey}` : ''} \
@@ -170,7 +169,7 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
       -v claude_credentials:/claude_shared:rw \
       -v magi_output:/magi_output:rw \
       magi-system:latest \
-      python magi/magi.py -p "${escapedCommand}"`;
+      python magi/magi.py --base64 "${base64Command}"`;
 
     // Execute the command and get the container ID
     const result = await execPromise(dockerRunCommand);
@@ -236,12 +235,12 @@ export async function sendCommandToContainer(processId: string, command: string)
 
     const containerName = validateContainerName(`magi-${processId}`);
 
-    // Escape single quotes in the command
-    const escapedCommand = command.replace(/'/g, "'\\''");
-
-    // Execute command in the container
+    // Use base64 encoding to avoid escaping issues entirely
+    const base64Command = Buffer.from(command).toString('base64');
+    
+    // Use "BASE64:" prefix to indicate this is a base64-encoded command
     await execPromise(
-      `docker exec ${containerName} python -c "import os; open('/tmp/command.fifo', 'w').write('${escapedCommand}\\n');"`
+      `docker exec ${containerName} python -c "import os; open('/tmp/command.fifo', 'w').write('BASE64:${base64Command}\\n');"`
     );
 
     console.log(`Command sent to ${processId} successfully`);

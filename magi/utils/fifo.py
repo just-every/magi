@@ -5,6 +5,7 @@ fifo.py - Command processing through named pipes (FIFOs)
 import os
 import time
 import sys
+import base64
 from typing import Callable, Any
 
 def process_commands_from_file(command_processor: Callable[[str], Any], agent: str = "supervisor", filepath: str = "/tmp/command.fifo") -> None:
@@ -38,8 +39,22 @@ def process_commands_from_file(command_processor: Callable[[str], Any], agent: s
                 while True:
                     line = fifo.readline().strip()
                     if line:
-                        # Process each command as it comes in
-                        result = command_processor(line, agent)
+                        try:
+                            # Check if the line starts with a base64 marker
+                            if line.startswith("BASE64:"):
+                                # Extract the base64 part (skip the "BASE64:" prefix)
+                                base64_content = line[7:]
+                                # Decode the base64 content
+                                decoded_line = base64.b64decode(base64_content).decode('utf-8')
+                                command = decoded_line
+                            else:
+                                command = line
+
+                            # Process each command as it comes in
+                            result = command_processor(command, agent)
+                        except Exception as e:
+                            print(f"Error processing command: {str(e)}")
+                        
                         # Flush to ensure the output is visible in Docker logs
                         sys.stdout.flush()
         except Exception as e:

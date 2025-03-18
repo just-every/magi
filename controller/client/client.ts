@@ -258,9 +258,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear input and reset height
         processInput.value = '';
         processInput.style.height = 'auto';
-
-        // Append the command to the logs (client-side only)
-        appendLogs(process.id, `> ${command}`);
       }
     });
 
@@ -358,18 +355,16 @@ document.addEventListener('DOMContentLoaded', () => {
         processEl.status.classList.add('bg-success');
       } else if (status === 'failed') {
         processEl.status.style.color = '';
-        processEl.status.classList.add('bg-danger');
+        processEl.status.classList.add('bg-warning');
       } else if (status === 'ending' || status === 'terminated') {
         processEl.status.style.color = '';
-        processEl.status.classList.add('bg-warning');
+        processEl.status.classList.add('bg-danger');
       }
       // Custom label text for certain statuses
       processEl.status.textContent = status;
 
       // Handle terminated status specially - add fadeout and removal
       if (status === 'terminated') {
-        // Change text to "ENDED" immediately
-        processEl.status.textContent = 'ENDED';
 
         // Make sure the terminate button is hidden
         const terminateButton = processEl.box.querySelector('.process-terminate') as HTMLButtonElement;

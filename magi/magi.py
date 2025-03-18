@@ -190,13 +190,17 @@ def main():
         help="Output full debug log from AI tools",
         action='store_true')
     parser.add_argument("-a", "--agent",
-        help="Run in test mode and don't wait for additional commands",
+        help="Specify which agent to use initially",
         type=str,
         default="supervisor")
     parser.add_argument("-p", "--prompt",
         help="Initial prompt to run at startup",
         type=str,
-        required=True)
+        required=False)
+    parser.add_argument("-b", "--base64",
+        help="Base64-encoded initial prompt to run at startup",
+        type=str,
+        required=False)
     args = parser.parse_args()
 
     # Verify API key is available
@@ -214,8 +218,20 @@ def main():
         from agents import enable_verbose_stdout_logging
         enable_verbose_stdout_logging()
 
-    if args.prompt:
+    # Process prompt (either plain text or base64-encoded)
+    if args.base64:
+        import base64
+        try:
+            decoded_prompt = base64.b64decode(args.base64).decode('utf-8')
+            result = process_command(decoded_prompt, args.agent)
+        except Exception as e:
+            print(f"**Error** Failed to decode base64 prompt: {str(e)}")
+            sys.exit(1)
+    elif args.prompt:
         result = process_command(args.prompt, args.agent)
+    else:
+        print("**Error** Either --prompt or --base64 must be provided")
+        sys.exit(1)
 
     # Exit if running in test mode
     if args.test:

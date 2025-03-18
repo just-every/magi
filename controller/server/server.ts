@@ -21,9 +21,9 @@ import { promisify } from 'util';
 import WebSocket from 'ws';
 import { exec } from 'child_process';
 import {
-  getServerVersion, 
-  loadAllEnvVars, 
-  saveEnvVar, 
+  getServerVersion,
+  loadAllEnvVars,
+  saveEnvVar,
   updateServerVersion,
   saveUsedColors,
   loadUsedColors
@@ -230,7 +230,7 @@ function generateProcessColors(): { bgColor: string, textColor: string } {
   // Higher distance means more distinct color
   function minColorDistance(color: [number, number, number]): number {
     if (usedColors.length === 0) return Infinity;
-    
+
     return Math.min(...usedColors.map(usedColor => {
       // Calculate Euclidean distance in RGB space
       const dr = color[0] - usedColor[0];
@@ -303,14 +303,14 @@ async function retrieveExistingContainers(): Promise<void> {
       containerId,
       colors
     };
-    
+
     // Extract the RGB values to store in usedColors
     const colorMatch = colors.bgColor.match(/rgba\((\d+),\s*(\d+),\s*(\d+)/);
     if (colorMatch && colorMatch.length >= 4) {
       const r = parseInt(colorMatch[1], 10);
       const g = parseInt(colorMatch[2], 10);
       const b = parseInt(colorMatch[3], 10);
-      
+
       // Add to usedColors if valid
       if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
         usedColors.push([r, g, b]);
@@ -822,7 +822,6 @@ io.on('connection', (socket: Socket) => {
     }
 
     // Process command in the container
-    updateProcess(processId, `> ${command}`);
     const success = await sendCommandToContainer(processId, command);
 
     if (!success) {
