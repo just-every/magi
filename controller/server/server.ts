@@ -236,6 +236,11 @@ class LiveReloadManager {
     const isHTML = fileExt === '.html';
     const isJS = fileExt === '.js';
     
+    // Skip some files that trigger a lot of events
+    if (filename.includes('.DS_Store')) {
+      return;
+    }
+    
     console.log(`📝 File changed: ${filename} (type: ${isCSS ? 'CSS' : isHTML ? 'HTML' : isJS ? 'JS' : 'other'}, event: ${eventType})`);
     
     // Count active clients
@@ -244,13 +249,21 @@ class LiveReloadManager {
     // Send appropriate reload command to clients
     this.clients.forEach(client => {
       if (client.readyState === WebSocket.OPEN) {
-        // For CSS, we can just reload the stylesheet without page refresh
-        // For JS and HTML, we need a full page reload
-        const reloadType = isCSS ? 'css-reload' : 'reload';
+        // Special handling for different file types
+        let reloadType = 'reload'; // Default to full reload
+        
+        if (isCSS) {
+          reloadType = 'css-reload'; // CSS files can be reloaded without page refresh
+        } else if (isHTML) {
+          reloadType = 'html-reload'; // HTML needs a full page reload
+        } else if (isJS) {
+          reloadType = 'js-reload'; // JS needs a full page reload
+        }
+        
         client.send(reloadType);
         activeClients++;
         
-        console.log(`🚀 Sent ${reloadType} to client`);
+        console.log(`🚀 Sent ${reloadType} to client (${isCSS ? 'CSS only' : 'full reload'})`);
       }
     });
     

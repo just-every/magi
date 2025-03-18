@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc && npm run copy-assets > /dev/null",
-    "copy-assets": "mkdir -p dist/controller/client/html dist/controller/client/css && cp -r controller/client/css/* dist/controller/client/css/ && cp -r controller/client/html/* dist/controller/client/html/",
+    "copy-assets": "mkdir -p dist/controller/client/html dist/controller/client/css && cp -r controller/client/css/* dist/controller/client/css/ && cp -r controller/client/html/* dist/controller/client/html/ && echo 'Assets copied at' $(date +%T)",
     "start": "node dist/controller/server/server.js",
     "dev": "NODE_ENV=development nodemon --quiet",
     "dev:watch-assets": "nodemon --watch controller/client/css --watch controller/client/html --ext css,html --exec \"npm run copy-assets\" --quiet",
