@@ -4,7 +4,7 @@
   "description": "MAGI System",
   "main": "index.js",
   "scripts": {
-    "build": "tsc && rsync -a --exclude=\"*.ts\" controller/client/ dist/controller/client/",
+    "build": "tsc && webpack && rsync -a --exclude=\"*.ts\" --exclude=\"*.js\" controller/client/ dist/controller/client/",
     "start": "node dist/controller/server/server.js",
     "cleanup": "rm -rf dist/",
     "dev": "npm run cleanup && nodemon",
@@ -46,6 +46,9 @@
     "concurrently": "^9.1.2",
     "eslint": "^9.22.0",
     "nodemon": "^3.1.9",
-    "typescript": "^5.8.2"
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.8.2",
+    "webpack": "^5.98.0",
+    "webpack-cli": "^6.0.1"
   }
 }

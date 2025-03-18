@@ -13,7 +13,8 @@
     "typeRoots": ["./node_modules/@types", "./controller/types"],
     "baseUrl": "./",
     "paths": {
-      "*": ["node_modules/*"]
+      "*": ["node_modules/*"],
+      "shared/*": ["controller/shared/*"]
     }
   },
   "include": ["controller/**/*", "setup/**/*"],
