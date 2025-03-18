@@ -54,6 +54,9 @@ body {
 header h1 {
   letter-spacing: 1rem;
   white-space: nowrap;
+  color: #9c27b0; /* Purple color */
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.1);
+  font-weight: 900;
 }
 
 /* Input and form styling */

@@ -6,7 +6,7 @@
   <title>MAGI System</title>
   <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/styles.css?v=1">
 </head>
 <body>
   <div class="container-fluid px-3">
@@ -138,11 +138,25 @@
         // Refresh CSS by appending timestamp to force reload
         const links = document.querySelectorAll('link[rel="stylesheet"]');
         links.forEach(link => {
-          const url = new URL(link.href);
-          url.searchParams.set('t', Date.now());
-          link.href = url.toString();
+          // Skip CDN links
+          if (!link.href.includes('cdn.jsdelivr.net')) {
+            const originalHref = link.getAttribute('href').split('?')[0];
+            const newHref = `${originalHref}?t=${Date.now()}`;
+            
+            // Create a new link element to force a reload
+            const newLink = document.createElement('link');
+            newLink.rel = 'stylesheet';
+            newLink.href = newHref;
+            
+            // Add the new link and then remove the old one
+            link.parentNode.insertBefore(newLink, link.nextSibling);
+            setTimeout(() => {
+              link.parentNode.removeChild(link);
+            }, 100);
+            
+            console.log(`Reloaded stylesheet: ${newHref}`);
+          }
         });
-        console.log(`Reloaded ${links.length} stylesheets`);
       }
       
       reconnect() {
@@ -170,6 +184,12 @@
     
     // Initialize live reload client
     const liveReload = new LiveReloadClient();
+    
+    // For debugging - expose reload function globally
+    window.forceReloadCSS = () => {
+      console.log('Manually forcing CSS reload...');
+      liveReload.reloadStylesheets();
+    };
   </script>
 </body>
 </html>
