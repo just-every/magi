@@ -154,19 +154,31 @@ app.use(express.static(path.join(__dirname, '../client')));
 
 // Add file watchers to trigger live reload
 const watchDirs = [
-  path.join(__dirname, '../../controller/client')
+  path.join(__dirname, '../../controller/client/css'),
+  path.join(__dirname, '../../controller/client/html'),
+  path.join(__dirname, '../client/client.js')  // Watch compiled JS
 ];
+
+// Track the last reload time to prevent multiple rapid reloads
+let lastReloadTime = 0;
+const RELOAD_COOLDOWN = 300; // ms
 
 watchDirs.forEach(dir => {
   fs.watch(dir, { recursive: true }, (eventType, filename) => {
     if (filename) {
-      console.log(`File changed: ${filename}`);
-      // Notify all connected clients to reload
-      liveReloadClients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send('reload');
-        }
-      });
+      const now = Date.now();
+      // Only reload if it's been more than the cooldown time since last reload
+      if (now - lastReloadTime > RELOAD_COOLDOWN) {
+        lastReloadTime = now;
+        console.log(`File changed: ${filename} in ${dir}`);
+        
+        // Notify all connected clients to reload
+        liveReloadClients.forEach(client => {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send('reload');
+          }
+        });
+      }
     }
   });
 });
@@ -225,7 +237,6 @@ async function spawnDockerProcess(processId: string, command: string): Promise<v
 
     // Get project root directory for volume mounting
     const projectRoot = path.resolve(__dirname, '../../..');
-    console.log(`Using project root: ${projectRoot}`);
 
     // Step 4: Start the Docker container
     const containerId = await runDockerContainer({
@@ -245,7 +256,6 @@ async function spawnDockerProcess(processId: string, command: string): Promise<v
     // Store container ID for future reference
     if (processes[processId]) {
       processes[processId].containerId = containerId;
-      console.log(`Container ${containerId} started for process ${processId}`);
     }
 
     // Step 5: Set up log monitoring
@@ -540,8 +550,6 @@ io.on('connection', (socket: Socket) => {
    * Handler for new command execution requests
    */
   socket.on('command:run', (command: string) => {
-    console.log(`Client ${clientId} requested command execution: ${command}`);
-
     // Generate a unique process ID
     const processId = `AI-${Math.random().toString(36).substring(2, 8)}`;
 
@@ -794,7 +802,7 @@ function openBrowser(url: string): void {
 async function startServer(): Promise<void> {
   // Get default port from environment or use 3001
   const DEFAULT_PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
-  console.log(`Starting MAGI System server (default port: ${DEFAULT_PORT})`);
+  console.log(`Starting MAGI System Server (default port: ${DEFAULT_PORT})`);
 
   try {
     // Find an available port to use
@@ -826,7 +834,7 @@ async function startServer(): Promise<void> {
       console.log(`
 ┌────────────────────────────────────────────────┐
 │                                                │
-│  MAGI System server is running!                │
+│  MAGI System Server is Running!                │
 │                                                │
 │  • Local:    ${url.padEnd(33)} │
 │                                                │

@@ -44,8 +44,8 @@
       <div class="card-header d-flex justify-content-between align-items-center">
         <span class="process-id fw-bold">MAGI-</span>
         <div class="d-flex align-items-center gap-2">
-          <span class="process-status badge"></span>
-          <button class="process-terminate btn btn-sm btn-outline-secondary">END</button>
+          <span class="process-status status-label btn-sm status-running" style="color: rgba(96, 30, 120, 0.9);">running</span>
+          <button class="process-terminate btn btn-sm btn-outline-danger">terminate</button>
         </div>
       </div>
       <div class="process-logs card-body overflow-auto"></div>
@@ -96,11 +96,40 @@
     };
     
     liveReload.onclose = () => {
-      console.log('Live reload connection closed, attempting to reconnect in 2s...');
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
+      console.log('Live reload connection closed, attempting to reconnect...');
+      
+      // Try to reconnect to the LiveReload server without full page reload
+      const tryReconnect = () => {
+        try {
+          const newConnection = new WebSocket(`${wsProtocol}//${window.location.host}/livereload`);
+          
+          newConnection.onopen = () => {
+            console.log('LiveReload reconnected successfully');
+            window.liveReload = newConnection;
+            
+            // Set up event handlers on the new connection
+            setupLiveReloadHandlers(newConnection);
+          };
+          
+          newConnection.onerror = () => {
+            console.log('Failed to reconnect, trying again in 2s...');
+            setTimeout(tryReconnect, 2000);
+          };
+        } catch (e) {
+          console.error('Error reconnecting to LiveReload', e);
+          setTimeout(tryReconnect, 2000);
+        }
+      };
+      
+      // Wait a moment before trying to reconnect
+      setTimeout(tryReconnect, 500);
     };
+    
+    // Helper function to set up event handlers
+    function setupLiveReloadHandlers(connection) {
+      connection.onmessage = liveReload.onmessage;
+      connection.onclose = liveReload.onclose;
+    }
   </script>
 </body>
 </html>

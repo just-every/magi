@@ -190,6 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const colors = generateColors();
     processHeader.style.backgroundColor = colors.bgColor;
+    processHeader.dataset.themeColor = colors.textColor;
     processId.style.color = colors.textColor;
     
     // Set process information
@@ -367,20 +368,29 @@ document.addEventListener('DOMContentLoaded', () => {
       // Remove all status classes
       processEl.status.classList.remove(
         'status-running', 'status-completed', 'status-failed', 'status-terminated', 'status-ending',
-        'bg-secondary', 'bg-success', 'bg-danger', 'bg-warning'
+        'bg-secondary', 'bg-success', 'bg-danger', 'bg-warning', 'bg-light',
+        'btn-light', 'btn-success', 'btn-danger', 'btn-warning'
       );
       
       // Add the appropriate status class
       processEl.status.classList.add(`status-${status}`);
       
-      // Add Bootstrap badge classes
+      // Get the themed color from the header
+      const header = processEl.box.querySelector('.card-header') as HTMLElement;
+      const themeColor = header.dataset.themeColor;
+      
+      // Update status with appropriate styling
       if (status === 'running') {
-        processEl.status.classList.add('bg-secondary');
+        processEl.status.style.color = themeColor || 'rgba(96, 30, 120, 0.9)';
+        processEl.status.classList.add('bg-light');
       } else if (status === 'completed') {
+        processEl.status.style.color = '';
         processEl.status.classList.add('bg-success');
       } else if (status === 'failed') {
+        processEl.status.style.color = '';
         processEl.status.classList.add('bg-danger');
       } else if (status === 'ending' || status === 'terminated') {
+        processEl.status.style.color = '';
         processEl.status.classList.add('bg-warning');
       }
       processEl.status.textContent = status;

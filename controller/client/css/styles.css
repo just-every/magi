@@ -163,9 +163,23 @@ header h1 {
 }
 
 /* Status styling */
+.status-label {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: middle;
+  border-radius: 0.25rem;
+  cursor: default;
+  background-color: transparent !important;
+}
+
 .status-running {
   background-color: transparent;
-  color: var(--status-running-color);
+  color: inherit;
 }
 
 .status-completed {
