@@ -256,7 +256,6 @@ class LiveReloadManager {
     
     console.log(`📊 Notified ${activeClients} clients about changes`);
   }
-  }
 
   public restart(): void {
     this.closeWatchers();
