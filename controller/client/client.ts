@@ -8,6 +8,10 @@ interface ProcessCreateEvent {
   id: string;            // Process identifier (AI-xxxxxx)
   command: string;       // Command that started the process
   status: string;        // Initial status (usually 'running')
+  colors: {              // Process theme colors
+    bgColor: string;     // Background color (rgba format)
+    textColor: string;   // Text color (rgba format)
+  };
 }
 
 interface ProcessLogsEvent {
@@ -156,39 +160,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const processTerminate = clone.querySelector('.process-terminate') as HTMLButtonElement;
     const processHeader = clone.querySelector('.card-header') as HTMLElement;
 
-    // Generate complementary colors for header
-    const generateColors = () => {
-      // Create base colors, avoid too much yellow by keeping red and green from both being too high
-      let r = Math.floor(Math.random() * 200) + 55; // 55-255
-      let g = Math.floor(Math.random() * 200) + 55; // 55-255
-      let b = Math.floor(Math.random() * 200) + 55; // 55-255
-
-      // Ensure one color dominates to make the theme clear
-      const dominantIndex = Math.floor(Math.random() * 3);
-      if (dominantIndex === 0) {
-        r = Math.min(255, r + 50);
-        g = Math.max(50, g - 30);
-        b = Math.max(50, b - 30);
-      } else if (dominantIndex === 1) {
-        g = Math.min(255, g + 50);
-        r = Math.max(50, r - 30);
-        b = Math.max(50, b - 30);
-      } else {
-        b = Math.min(255, b + 50);
-        r = Math.max(50, r - 30);
-        g = Math.max(50, g - 30);
-      }
-
-      // Create background with very low alpha
-      const bgColor = `rgba(${r}, ${g}, ${b}, 0.08)`;
-
-      // Create darker text version for contrast
-      const textColor = `rgba(${Math.floor(r * 0.6)}, ${Math.floor(g * 0.6)}, ${Math.floor(b * 0.6)}, 0.9)`;
-
-      return { bgColor, textColor };
-    };
-
-    const colors = generateColors();
+    // Use the colors provided by the server
+    const colors = process.colors;
     processHeader.style.backgroundColor = colors.bgColor;
     processHeader.dataset.themeColor = colors.textColor;
     processId.style.color = colors.textColor;
