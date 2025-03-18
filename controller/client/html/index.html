@@ -68,68 +68,108 @@
   
   <!-- Enable live reload of client JS/HTML/CSS -->
   <script>
-    // Check for WebSocket connection to the server and reconnect when code is updated
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const liveReload = new WebSocket(`${wsProtocol}//${window.location.host}/livereload`);
-    
-    liveReload.onmessage = (event) => {
-      if (event.data === 'reload') {
-        console.log('Live reload: Refreshing assets...');
-        // Refresh only assets without reloading the whole page
+    // Enhanced live reload system with reconnection and differentiated reload types
+    class LiveReloadClient {
+      constructor() {
+        this.ws = null;
+        this.reconnectTimer = null;
+        this.reconnectInterval = 2000;
+        this.maxReconnectAttempts = 10;
+        this.reconnectAttempts = 0;
+        this.wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        this.wsUrl = `${this.wsProtocol}//${window.location.host}/livereload`;
+        
+        // Connect immediately
+        this.connect();
+        
+        // Also attempt reconnect when browser tab becomes visible again
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            if (!this.isConnected()) {
+              console.log('Tab visible, attempting to reconnect LiveReload...');
+              this.reconnect();
+            }
+          }
+        });
+      }
+      
+      connect() {
+        try {
+          this.ws = new WebSocket(this.wsUrl);
+          
+          this.ws.onopen = () => {
+            console.log('LiveReload connected successfully');
+            this.reconnectAttempts = 0;
+          };
+          
+          this.ws.onmessage = (event) => {
+            // Handle different reload messages
+            if (event.data === 'reload') {
+              console.log('LiveReload: Full page reload triggered');
+              window.location.reload();
+            } 
+            else if (event.data === 'css-reload') {
+              console.log('LiveReload: CSS reload triggered');
+              this.reloadStylesheets();
+            }
+          };
+          
+          this.ws.onclose = () => {
+            console.log('LiveReload connection closed');
+            this.ws = null;
+            this.reconnect();
+          };
+          
+          this.ws.onerror = (error) => {
+            console.error('LiveReload websocket error:', error);
+            // The onclose handler will be called after this
+          };
+        } catch (error) {
+          console.error('Failed to create LiveReload connection:', error);
+          this.reconnect();
+        }
+      }
+      
+      isConnected() {
+        return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
+      }
+      
+      reloadStylesheets() {
+        // Refresh CSS by appending timestamp to force reload
         const links = document.querySelectorAll('link[rel="stylesheet"]');
         links.forEach(link => {
           const url = new URL(link.href);
           url.searchParams.set('t', Date.now());
           link.href = url.toString();
         });
-        
-        // For script changes, we need to reload the page
-        const scripts = document.querySelectorAll('script[src]');
-        for (const script of scripts) {
-          if (script.src.includes('/client.js')) {
-            console.log('Client JS changed, reloading page...');
-            window.location.reload();
-            return;
-          }
-        }
+        console.log(`Reloaded ${links.length} stylesheets`);
       }
-    };
-    
-    liveReload.onclose = () => {
-      console.log('Live reload connection closed, attempting to reconnect...');
       
-      // Try to reconnect to the LiveReload server without full page reload
-      const tryReconnect = () => {
-        try {
-          const newConnection = new WebSocket(`${wsProtocol}//${window.location.host}/livereload`);
-          
-          newConnection.onopen = () => {
-            console.log('LiveReload reconnected successfully');
-            window.liveReload = newConnection;
-            
-            // Set up event handlers on the new connection
-            setupLiveReloadHandlers(newConnection);
-          };
-          
-          newConnection.onerror = () => {
-            console.log('Failed to reconnect, trying again in 2s...');
-            setTimeout(tryReconnect, 2000);
-          };
-        } catch (e) {
-          console.error('Error reconnecting to LiveReload', e);
-          setTimeout(tryReconnect, 2000);
+      reconnect() {
+        // Clear any existing reconnect timer
+        if (this.reconnectTimer) {
+          clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = null;
         }
-      };
-      
-      // Wait a moment before trying to reconnect
-      setTimeout(tryReconnect, 500);
-    };
-    
-    // Helper function to set up event handlers
-    function setupLiveReloadHandlers(connection) {
-      connection.onmessage = liveReload.onmessage;
-      connection.onclose = liveReload.onclose;
+        
+        // Check if max attempts reached
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+          console.warn(`Max reconnect attempts (${this.maxReconnectAttempts}) reached, giving up`);
+          return;
+        }
+        
+        this.reconnectAttempts++;
+        
+        // Set timer for reconnect
+        this.reconnectTimer = setTimeout(() => {
+          console.log(`Attempting to reconnect LiveReload (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+          this.connect();
+        }, this.reconnectInterval);
+      }
     }
+    
+    // Initialize live reload client
+    const liveReload = new LiveReloadClient();
   </script>
 </body>
 </html>

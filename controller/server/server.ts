@@ -152,36 +152,103 @@ app.use('/client.js', (req, res) => {
 // Serve static files from the dist folder
 app.use(express.static(path.join(__dirname, '../client')));
 
-// Add file watchers to trigger live reload
-const watchDirs = [
-  path.join(__dirname, '../../controller/client/css'),
-  path.join(__dirname, '../../controller/client/html'),
-  path.join(__dirname, '../client/client.js')  // Watch compiled JS
-];
+// Set up more reliable file monitoring for live reload
+class LiveReloadManager {
+  private lastReloadTime = 0;
+  private readonly cooldown = 300; // ms
+  private readonly watchPaths: string[];
+  private watchHandlers: Array<{ close: () => void }> = [];
+  private readonly clients: Set<WebSocket>;
 
-// Track the last reload time to prevent multiple rapid reloads
-let lastReloadTime = 0;
-const RELOAD_COOLDOWN = 300; // ms
+  constructor(clients: Set<WebSocket>) {
+    this.clients = clients;
+    
+    // Paths to watch for changes
+    this.watchPaths = [
+      // CSS files
+      path.join(__dirname, '../client/css'),
+      // HTML files
+      path.join(__dirname, '../client/html'),
+      // Compiled JS
+      path.join(__dirname, '../client/client.js'),
+    ];
+    
+    this.setupWatchers();
+    console.log('Live reload watchers configured for CSS, HTML, and JS files');
+  }
 
-watchDirs.forEach(dir => {
-  fs.watch(dir, { recursive: true }, (eventType, filename) => {
-    if (filename) {
-      const now = Date.now();
-      // Only reload if it's been more than the cooldown time since last reload
-      if (now - lastReloadTime > RELOAD_COOLDOWN) {
-        lastReloadTime = now;
-        console.log(`File changed: ${filename} in ${dir}`);
+  private setupWatchers(): void {
+    // Clean up any existing watchers
+    this.closeWatchers();
+
+    // Set up new watchers
+    for (const watchPath of this.watchPaths) {
+      try {
+        const watcher = fs.watch(
+          watchPath, 
+          { persistent: true, recursive: true },
+          this.handleFileChange.bind(this)
+        );
         
-        // Notify all connected clients to reload
-        liveReloadClients.forEach(client => {
-          if (client.readyState === WebSocket.OPEN) {
-            client.send('reload');
-          }
-        });
+        this.watchHandlers.push(watcher);
+        console.log(`Watching for changes: ${watchPath}`);
+      } catch (error) {
+        console.error(`Failed to watch path ${watchPath}:`, error);
       }
     }
-  });
-});
+  }
+
+  private closeWatchers(): void {
+    for (const watcher of this.watchHandlers) {
+      try {
+        watcher.close();
+      } catch (error) {
+        console.error('Error closing watcher:', error);
+      }
+    }
+    this.watchHandlers = [];
+  }
+
+  private handleFileChange(eventType: string, filename: string | null): void {
+    if (!filename) return;
+    
+    const now = Date.now();
+    // Debounce rapid changes
+    if (now - this.lastReloadTime < this.cooldown) return;
+    
+    this.lastReloadTime = now;
+    
+    // Determine file type for targeted reloads
+    const fileExt = path.extname(filename).toLowerCase();
+    const isCSS = fileExt === '.css';
+    const isHTML = fileExt === '.html';
+    const isJS = fileExt === '.js';
+    
+    console.log(`File changed: ${filename} (${isCSS ? 'CSS' : isHTML ? 'HTML' : isJS ? 'JS' : 'other'})`);
+    
+    // Send appropriate reload command to clients
+    this.clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        // For CSS, we can just reload the stylesheet without page refresh
+        // For JS and HTML, we need a full page reload
+        const reloadType = isCSS ? 'css-reload' : 'reload';
+        client.send(reloadType);
+      }
+    });
+  }
+
+  public restart(): void {
+    this.closeWatchers();
+    this.setupWatchers();
+    console.log('Live reload watchers restarted');
+  }
+}
+
+// Initialize the live reload manager
+const liveReloadManager = new LiveReloadManager(liveReloadClients);
+
+// Expose manager for restart if needed
+(global as any).restartLiveReload = () => liveReloadManager.restart();
 
 // Process management
 const processes: Processes = {};
