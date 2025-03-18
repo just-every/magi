@@ -3,8 +3,7 @@
  * 
  * Handles the UI representation of a MAGI process
  */
-import { ProcessElement } from '../types';
-import { ProcessStatus } from 'shared/types';
+import { ProcessElement, ProcessStatus } from 'shared/types';
 
 export class ProcessUI {
   private processElements: Map<string, ProcessElement> = new Map();
