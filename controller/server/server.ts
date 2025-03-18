@@ -165,11 +165,15 @@ class LiveReloadManager {
     
     // Paths to watch for changes
     this.watchPaths = [
-      // CSS files
+      // Source CSS files in controller
+      path.join(__dirname, '../../controller/client/css'),
+      // Source HTML files in controller
+      path.join(__dirname, '../../controller/client/html'),
+      // Compiled CSS files in dist
       path.join(__dirname, '../client/css'),
-      // HTML files
+      // Compiled HTML files in dist
       path.join(__dirname, '../client/html'),
-      // Compiled JS
+      // Compiled JS files in dist
       path.join(__dirname, '../client/client.js'),
     ];
     
@@ -184,16 +188,21 @@ class LiveReloadManager {
     // Set up new watchers
     for (const watchPath of this.watchPaths) {
       try {
-        const watcher = fs.watch(
-          watchPath, 
-          { persistent: true, recursive: true },
-          this.handleFileChange.bind(this)
-        );
-        
-        this.watchHandlers.push(watcher);
-        console.log(`Watching for changes: ${watchPath}`);
+        // Check if the path exists before watching
+        if (fs.existsSync(watchPath)) {
+          const watcher = fs.watch(
+            watchPath, 
+            { persistent: true, recursive: true },
+            this.handleFileChange.bind(this)
+          );
+          
+          this.watchHandlers.push(watcher);
+          console.log(`✅ Watching for changes: ${watchPath}`);
+        } else {
+          console.warn(`⚠️ Watch path does not exist: ${watchPath}`);
+        }
       } catch (error) {
-        console.error(`Failed to watch path ${watchPath}:`, error);
+        console.error(`❌ Failed to watch path ${watchPath}:`, error);
       }
     }
   }
@@ -214,7 +223,10 @@ class LiveReloadManager {
     
     const now = Date.now();
     // Debounce rapid changes
-    if (now - this.lastReloadTime < this.cooldown) return;
+    if (now - this.lastReloadTime < this.cooldown) {
+      console.log(`🔄 Skipping rapid change: ${filename} (debounced)`);
+      return;
+    }
     
     this.lastReloadTime = now;
     
@@ -224,7 +236,10 @@ class LiveReloadManager {
     const isHTML = fileExt === '.html';
     const isJS = fileExt === '.js';
     
-    console.log(`File changed: ${filename} (${isCSS ? 'CSS' : isHTML ? 'HTML' : isJS ? 'JS' : 'other'})`);
+    console.log(`📝 File changed: ${filename} (type: ${isCSS ? 'CSS' : isHTML ? 'HTML' : isJS ? 'JS' : 'other'}, event: ${eventType})`);
+    
+    // Count active clients
+    let activeClients = 0;
     
     // Send appropriate reload command to clients
     this.clients.forEach(client => {
@@ -233,8 +248,14 @@ class LiveReloadManager {
         // For JS and HTML, we need a full page reload
         const reloadType = isCSS ? 'css-reload' : 'reload';
         client.send(reloadType);
+        activeClients++;
+        
+        console.log(`🚀 Sent ${reloadType} to client`);
       }
     });
+    
+    console.log(`📊 Notified ${activeClients} clients about changes`);
+  }
   }
 
   public restart(): void {
