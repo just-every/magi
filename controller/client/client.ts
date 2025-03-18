@@ -393,7 +393,12 @@ document.addEventListener('DOMContentLoaded', () => {
         processEl.status.style.color = '';
         processEl.status.classList.add('bg-warning');
       }
-      processEl.status.textContent = status;
+      // Custom label text for certain statuses
+      if (status === 'running') {
+        processEl.status.textContent = 'live';
+      } else {
+        processEl.status.textContent = status;
+      }
       
       // Handle terminated status specially - add fadeout and removal
       if (status === 'terminated') {

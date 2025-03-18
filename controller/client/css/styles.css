@@ -54,8 +54,8 @@ body {
 header h1 {
   letter-spacing: 1rem;
   white-space: nowrap;
-  color: #9c27b0; /* Purple color */
-  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.1);
+  color: #2196f3; /* Blue color */
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.15);
   font-weight: 900;
 }
 
