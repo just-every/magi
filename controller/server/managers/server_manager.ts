@@ -9,7 +9,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import path from 'path';
 import WebSocket from 'ws';
 import { exec } from 'child_process';
-import { ProcessCommandEvent, ServerInfoEvent } from 'shared/types';
+import { ProcessCommandEvent, ServerInfoEvent } from '../../types/shared-types';
 import {
   getServerVersion,
   loadAllEnvVars,

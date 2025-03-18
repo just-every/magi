@@ -10,7 +10,7 @@ import {
   ProcessCreateEvent,
   ProcessLogsEvent,
   ProcessUpdateEvent
-} from 'shared/types';
+} from '../../types/shared-types';
 import { execPromiseFallback } from '../utils/docker_commands';
 import { generateProcessColors } from './color_manager';
 import {

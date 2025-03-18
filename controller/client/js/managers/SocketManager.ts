@@ -8,7 +8,7 @@ import {
   ProcessLogsEvent, 
   ProcessUpdateEvent,
   ProcessCommandEvent
-} from 'shared/types';
+} from '../../../types/shared-types';
 
 export interface SocketEventHandlers {
   onServerInfo: (version: string) => void;

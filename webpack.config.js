@@ -14,10 +14,7 @@ module.exports = {
     ],
   },
   resolve: {
-    extensions: ['.tsx', '.ts', '.js'],
-    alias: {
-      shared: path.resolve(__dirname, 'controller/shared'),
-    }
+    extensions: ['.tsx', '.ts', '.js']
   },
   output: {
     filename: 'client.js',
