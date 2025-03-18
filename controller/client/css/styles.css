@@ -52,6 +52,7 @@ body {
 }
 
 header h1 {
+  font-family: 'Anta', sans-serif;
   letter-spacing: 0.05rem;
   white-space: nowrap;
 }
