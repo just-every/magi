@@ -113,24 +113,73 @@ async def run_magi_command(command: str, agent: str = "supervisor") -> str:
     all_output: List[str] = []
 
     # Run the command through the selected agent with streaming output
-    print(f"=== Run starting with {agent}===")
+    print(f"[]{json.dumps({"type": "running_command", "agent": agent, "command": command})}", flush=True)
 
     stream = Runner.run_streamed(create_agent(agent), command)
 
     async for event in stream.stream_events():
         # event.delta often includes partial text or function call info
 
-        if hasattr(event, 'data') and hasattr(event.data, 'delta'):
-            # Just print the delta text directly without any formatting
-            print(event.data.delta, end="", flush=True)
+        # Handle the different event types based on class
+        event_class = event.__class__.__name__
+
+        # Process agent updates
+        if event_class == "AgentUpdatedStreamEvent" and hasattr(event, 'new_agent'):
+            try:
+                # Announce agent change
+                event_dict = {
+                    "type": "new_agent",
+                    "agent": {
+                        "name": event.new_agent.name,
+                        "model": event.new_agent.model
+                    }
+                }
+                print(f"[]{json.dumps(event_dict)}", flush=True)
+            except Exception:
+                # Silent error handling to ensure smooth operation
+                pass
             continue
 
-        if hasattr(event, 'data') and hasattr(event.data, 'type') and isinstance(event.data.type, str) and event.data.type.endswith(".done"):
-            # A delta is done - let's get a new line
-            print("\n", end="", flush=True)
+        # Process message outputs
+        elif event_class == "RunItemStreamEvent" and hasattr(event, 'item'):
+            try:
+                # Only process message outputs for now
+                if hasattr(event.item, 'type') and event.item.type == "message_output_item":
+                    # Extract content from raw item
+                    if hasattr(event.item, 'raw_item') and hasattr(event.item.raw_item, 'content'):
+                        # Extract text from content
+                        content = event.item.raw_item.content
+                        text = ""
+
+                        # Handle content based on type
+                        if isinstance(content, list):
+                            # Combine all text parts
+                            for part in content:
+                                if hasattr(part, 'text'):
+                                    text += part.text
+                        elif hasattr(content, 'text'):
+                            # Direct text property
+                            text = content.text
+
+                        # Only output if we have text
+                        if text:
+                            event_dict = {
+                                "type": "agent_output",
+                                "agent": {
+                                    "name": event.item.agent.name,
+                                    "model": event.item.agent.model
+                                },
+                                "output": {"text": text}
+                            }
+                            print(f"[]{json.dumps(event_dict)}", flush=True)
+            except Exception:
+                # Silent error handling to ensure smooth operation
+                pass
             continue
 
-        continue
+        # Skip raw response events - they're handled through RunItemStreamEvent
+        elif event_class == "RawResponsesStreamEvent":
+            continue
 
         # For all other events, use recursive conversion and JSON formatting
         def convert_to_serializable(obj):
@@ -150,8 +199,7 @@ async def run_magi_command(command: str, agent: str = "supervisor") -> str:
         event_dict = {"type": event_type, "data": event_data}
         print(json.dumps(event_dict, indent=2), flush=True)
 
-    # Log completion
-    print("=== Run complete ===")
+    print(f"[]{json.dumps({"type": "waiting_command"})}", flush=True)
 
     # Combine all captured output chunks
     combined_output = ''.join(all_output)
@@ -236,7 +284,7 @@ def main():
     # Exit if running in test mode
     if args.test:
         print("\nTesting complete. Exiting.")
-        
+
         # Set a custom exception hook that ignores specific errors during shutdown
         def shutdown_excepthook(exc_type, exc_value, exc_traceback):
             # Filter out event loop errors during shutdown
@@ -245,14 +293,14 @@ def main():
                 return
             # Pass all other exceptions to the original handler
             original_excepthook(exc_type, exc_value, exc_traceback)
-            
+
         # Install the custom hook for the shutdown process
         sys.excepthook = shutdown_excepthook
-        
+
         # Force Python garbage collection to help clean up resources
         import gc
         gc.collect()
-        
+
         sys.exit(0)
 
     # Start monitoring for commands from named pipe (FIFO)
