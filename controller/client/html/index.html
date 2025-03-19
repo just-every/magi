@@ -13,14 +13,14 @@
   <link rel="stylesheet" href="/css/styles.css?v=1">
 </head>
 <body>
-  <div class="container-fluid px-3">
+  <div class="container-fluid px-0">
     <header id="main-header" class="py-3 pt-4">
       <div class="container mx-auto">
         <div class="d-flex justify-content-between align-items-center">
           <h1 class="fw-bold me-3 mb-0">MAGI</h1>
           <form id="command-form" class="flex-grow-1 ms-4">
             <div class="input-group">
-              <span class="input-group-text">&gt;</span>
+              <span class="input-group-text bg-white">&gt;</span>
               <input type="text" id="command-input" class="form-control" placeholder="Start task..." autocomplete="off">
             </div>
           </form>
@@ -35,7 +35,7 @@
     <div id="center-input-container" class="position-absolute top-50 start-50 translate-middle w-75 max-width-md" style="display: none;">
       <form id="center-command-form">
         <div class="input-group">
-          <span class="input-group-text">&gt;</span>
+          <span class="input-group-text bg-white">&gt;</span>
           <input type="text" id="center-command-input" class="form-control form-control-lg" placeholder="Start task..." autocomplete="off">
         </div>
       </form>
@@ -44,7 +44,7 @@
 
   <!-- Process box template -->
   <template id="process-template">
-    <div class="process-box card w-100 shadow-sm">
+    <div class="process-box card shadow-sm">
       <div class="card-header d-flex justify-content-between align-items-center border-0">
         <span class="process-id fw-bold">MAGI</span>
         <div class="d-flex align-items-center gap-2">

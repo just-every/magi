@@ -9,6 +9,7 @@ import os
 import asyncio
 import time
 import json
+import traceback
 from typing import Dict, List, Optional, Any, Union, Callable
 
 from openai import AsyncOpenAI
@@ -17,6 +18,8 @@ from agents import (
     set_default_openai_client,
     set_default_openai_api,
     set_tracing_disabled,
+    FunctionTool,
+    function_tool
 )
 
 # Import the anthropic library for direct Claude calls
@@ -84,7 +87,7 @@ MODEL_CLASSES = {
     ],
 }
 
-# Tool conversion helpers
+# Tool conversion helpers for non-OpenAI providers
 def convert_openai_tools_to_claude_format(tools: List[Dict[str, Any]], model_name: str) -> List[Dict[str, Any]]:
     """
     Convert OpenAI-format tool definitions to Claude-compatible format.
@@ -99,19 +102,23 @@ def convert_openai_tools_to_claude_format(tools: List[Dict[str, Any]], model_nam
     if not tools:
         return []
     
-    # First, handle direct function objects (may be function_tool decorated functions)
-    if all(callable(t) for t in tools):
-        # Convert tools to OpenAI format first
-        openai_format_tools = []
+    # Handle FunctionTool objects directly
+    if all(isinstance(t, FunctionTool) for t in tools):
+        # Convert FunctionTool objects to Claude format
+        claude_tools = []
         for tool in tools:
-            try:
-                formatted_tool = format_function_tool_for_openai(tool)
-                if formatted_tool:
-                    openai_format_tools.append(formatted_tool)
-            except Exception as e:
-                logger.error(f"Error formatting tool for Claude: {str(e)}")
-        tools = openai_format_tools
+            claude_tool = {
+                "type": "custom", 
+                "custom": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.params_json_schema
+                }
+            }
+            claude_tools.append(claude_tool)
+        return claude_tools
         
+    # Handle dictionary representation of tools
     claude_tools = []
     for tool in tools:
         if tool.get("type") == "function":
@@ -157,19 +164,38 @@ def convert_openai_tools_to_gemini_format(tools: List[Dict[str, Any]]) -> List[D
     if not tools:
         return []
     
-    # First, handle direct function objects (may be function_tool decorated functions)
-    if all(callable(t) for t in tools):
-        # Convert tools to OpenAI format first
-        openai_format_tools = []
+    # Handle FunctionTool objects directly
+    if all(isinstance(t, FunctionTool) for t in tools):
+        # Convert FunctionTool objects to Gemini format
+        gemini_tools = []
         for tool in tools:
-            try:
-                formatted_tool = format_function_tool_for_openai(tool)
-                if formatted_tool:
-                    openai_format_tools.append(formatted_tool)
-            except Exception as e:
-                logger.error(f"Error formatting tool for Gemini: {str(e)}")
-        tools = openai_format_tools
+            # Copy the parameters
+            parameters = tool.params_json_schema.copy()
+            
+            # Ensure the parameters has a type field with an uppercase value
+            if "type" in parameters:
+                parameters["type"] = parameters["type"].upper()
+            else:
+                # Default to OBJECT if no type is specified
+                parameters["type"] = "OBJECT"
+            
+            # Also convert property types to uppercase
+            if "properties" in parameters:
+                for property_name, property_def in parameters["properties"].items():
+                    if "type" in property_def:
+                        property_def["type"] = property_def["type"].upper()
+            
+            gemini_tool = {
+                "function_declarations": [{
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": parameters
+                }]
+            }
+            gemini_tools.append(gemini_tool)
+        return gemini_tools
         
+    # Handle dictionary representation of tools
     gemini_tools = []
     for tool in tools:
         if tool.get("type") == "function":
@@ -202,12 +228,12 @@ def convert_openai_tools_to_gemini_format(tools: List[Dict[str, Any]]) -> List[D
     
     return gemini_tools
 
-def convert_tools_for_provider(tools: List[Dict[str, Any]], provider: str, model_name: str) -> List[Dict[str, Any]]:
+def convert_tools_for_provider(tools: List[Any], provider: str, model_name: str) -> List[Dict[str, Any]]:
     """
     Convert tools to the format required by a specific provider.
     
     Args:
-        tools: List of tools in OpenAI format
+        tools: List of tools (can be FunctionTool objects or dictionaries)
         provider: Provider name (openai, anthropic, google, xai)
         model_name: The model name
         
@@ -217,25 +243,13 @@ def convert_tools_for_provider(tools: List[Dict[str, Any]], provider: str, model
     if not tools:
         return []
         
-    # If we have callable tools (like function_tool decorated functions),
-    # convert them to OpenAI format first
-    if all(callable(t) for t in tools):
-        openai_format_tools = []
-        for tool in tools:
-            try:
-                formatted_tool = format_function_tool_for_openai(tool)
-                if formatted_tool:
-                    openai_format_tools.append(formatted_tool)
-            except Exception as e:
-                logger.error(f"Error formatting tool for {provider}: {str(e)}")
-        tools = openai_format_tools
-        
     if provider == "anthropic":
         return convert_openai_tools_to_claude_format(tools, model_name)
     elif provider == "google":
         return convert_openai_tools_to_gemini_format(tools)
     elif provider in ["openai", "xai"]:
-        # OpenAI and X.AI (Grok) use the same format
+        # OpenAI and X.AI (Grok) use the same format for function definitions
+        # No conversion needed for FunctionTool objects as OpenAI Agents framework handles this
         return tools
     else:
         # Unknown provider, return original tools
@@ -301,6 +315,7 @@ def get_fallback_models(model: str) -> List[str]:
 
     Looks up the model's capability class and returns other models
     in the same class, prioritizing the same provider first.
+    For unknown models, returns a default set of fallbacks.
 
     Args:
         model: The model name to find fallbacks for
@@ -319,8 +334,14 @@ def get_fallback_models(model: str) -> List[str]:
             break
 
     if not model_class:
-        # If model not found in any class, return empty list
-        return []
+        # If model not found in any class, return default fallbacks from each category
+        logger.warning(f"Unknown model '{model}', using default fallbacks")
+        return [
+            "gpt-4o",                 # Standard OpenAI model
+            "claude-3-7-sonnet-latest", # Advanced Anthropic model
+            "gpt-4o-mini",            # Mini OpenAI model
+            "gemini-2.0-flash"        # Google model
+        ]
 
     # First add models from same class and same provider (except self)
     for m in MODEL_CLASSES[model_class]:
@@ -832,8 +853,9 @@ async def call_gemini_directly(
                                         text_value = part_obj.text
                                         if text_value:
                                             response_text = text_value
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Error extracting text from Gemini response structure: {str(e)}")
+                    logger.debug(traceback.format_exc())
             
             # Method 3: Try resolving the response if needed
             if not response_text and hasattr(response, 'resolve'):
@@ -841,13 +863,15 @@ async def call_gemini_directly(
                     resolved_response = response.resolve()
                     if hasattr(resolved_response, 'text'):
                         response_text = resolved_response.text
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Error resolving Gemini response: {str(e)}")
+                    logger.debug(traceback.format_exc())
             
-            # Method 4: If we still don't have text, use fallback
+            # Method 4: If we still don't have text, raise an error
             if not response_text:
-                fallback_text = "I am an AI orchestration engine called MAGI. I'm designed to coordinate different AI agents for complex tasks. I don't have a specific underlying model, but rather I use various models as needed for different tasks."
-                response_text = fallback_text
+                error_msg = f"Failed to extract text from Gemini response. Response structure: {response}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
             
             # Create a properly constructed response object using classes
             class Message:
@@ -1177,73 +1201,82 @@ def patched_run_streamed(agent, input_text, **kwargs):
             elif hasattr(agent, 'system'):
                 system_message = agent.system
                 
-            # Get agent tools if available
-            agent_tools = None
-            openai_formatted_tools = None
-            if hasattr(agent, 'tools') and agent.tools:
-                # Try to convert tools to OpenAI format if they're not already
-                if isinstance(agent.tools, list):
-                    # Create OpenAI-formatted tools from the agent's tools
-                    try:
-                        openai_formatted_tools = []
-                        for tool in agent.tools:
-                            try:
-                                # Use our formatting function
-                                formatted_tool = format_function_tool_for_openai(tool)
-                                if formatted_tool:
-                                    openai_formatted_tools.append(formatted_tool)
-                                else:
-                                    logger.warning(f"Failed to format tool: {getattr(tool, '__name__', 'unknown')}")
-                            except Exception as e:
-                                logger.error(f"Error formatting tool {getattr(tool, '__name__', 'unknown')}: {str(e)}")
-                                logger.warning(f"Could not format tool {getattr(tool, 'name', getattr(tool, '__name__', 'unknown'))}")
-                        
-                        # Log the formatted tools
-                        for i, tool in enumerate(openai_formatted_tools):
-                            function_name = tool.get('function', {}).get('name', 'unknown')
-                            logger.info(f"Tool {i+1}: {function_name}")
-                        
-                        logger.info(f"Prepared {len(openai_formatted_tools)} tools for API call")
-                    except Exception as e:
-                        logger.error(f"Error formatting tools for API: {str(e)}")
-                        openai_formatted_tools = None
-
-            # Special handling for Claude models - try to use direct API first
-            if provider == "anthropic" and ANTHROPIC_AVAILABLE:
-                try:
-                    # Get max_tokens (from agent attribute if available)
-                    max_tokens = getattr(agent, 'max_tokens', None)
-                    if not max_tokens:
-                        # Set default based on model
-                        if "claude-3-7-sonnet" in original_model:
-                            max_tokens = 32000
-                        elif "-sonnet-" in original_model:
-                            max_tokens = 32000
-                        elif "-haiku-" in original_model:
-                            max_tokens = 16000
-                        else:
-                            max_tokens = 4000
-
-                    # Get the model-specific temperature
-                    temp = 0.7
-
-                    # Create parameters dictionary
-                    claude_parameters = {
-                        "max_tokens": max_tokens,
-                        "temperature": temp,
-                    }
+            # Get agent tools if available - we don't need to reformat here
+            # as the @function_tool decorator already handles the schema
+            agent_tools = getattr(agent, 'tools', None)
+                
+            # Special handling for direct API calls when needed
+            # For non-OpenAI providers, use direct API calls
+            if provider != "openai":
+                # Get max_tokens (from agent attribute if available)
+                max_tokens = getattr(agent, 'max_tokens', None)
+                if not max_tokens:
+                    max_tokens = 4096  # Default
                     
-                    # Add tools if available
-                    if openai_formatted_tools:
-                        claude_parameters["tools"] = openai_formatted_tools
+                # Set a provider-appropriate default based on model
+                if provider == "anthropic":
+                    if "claude-3-7-sonnet" in original_model:
+                        max_tokens = 32000
+                    elif "-sonnet-" in original_model:
+                        max_tokens = 32000
+                    elif "-haiku-" in original_model:
+                        max_tokens = 16000
+                elif provider == "google":
+                    if "gemini-2.0-ultra" in original_model:
+                        max_tokens = 8192
+                    elif "gemini-2.0-pro" in original_model:
+                        max_tokens = 8192
+                    else:
+                        max_tokens = 4096
+                elif provider == "xai":
+                    if "grok-2" in original_model:
+                        max_tokens = 8192
+                    else:
+                        max_tokens = 4096
 
-                    # Use the direct Claude API
-                    direct_response = await call_claude_directly(
-                        model_name=original_model,
-                        system_message=system_message,
-                        user_message=input_text,
-                        **claude_parameters
+                # Temperature settings
+                temp = 0.7
+
+                # Create parameters dictionary
+                api_parameters = {
+                    "max_tokens": max_tokens,
+                    "temperature": temp,
+                }
+                
+                # Add tools if available - each provider needs its own format
+                if agent_tools:
+                    api_parameters["tools"] = convert_tools_for_provider(
+                        agent_tools, 
+                        provider, 
+                        original_model
                     )
+
+                try:
+                    # Use the appropriate direct API call based on provider
+                    if provider == "anthropic" and ANTHROPIC_AVAILABLE:
+                        direct_response = await call_claude_directly(
+                            model_name=original_model,
+                            system_message=system_message,
+                            user_message=input_text,
+                            **api_parameters
+                        )
+                    elif provider == "google" and GEMINI_AVAILABLE:
+                        direct_response = await call_gemini_directly(
+                            model_name=original_model,
+                            system_message=system_message,
+                            user_message=input_text,
+                            **api_parameters
+                        )
+                    elif provider == "xai" and GROK_AVAILABLE:
+                        direct_response = await call_grok_directly(
+                            model_name=original_model,
+                            system_message=system_message,
+                            user_message=input_text,
+                            **api_parameters
+                        )
+                    else:
+                        # Fall back to OpenAI client if needed
+                        raise ValueError(f"No direct API available for provider {provider}")
 
                     # Check if we got a valid response
                     if hasattr(direct_response, 'choices') and len(direct_response.choices) > 0:
@@ -1261,119 +1294,12 @@ def patched_run_streamed(agent, input_text, **kwargs):
                             yield SimpleResponseEvent(content=content, model=original_model)
                         
                         return  # Exit the generator after yielding
-
                 except Exception as e:
-                    # Log the error and continue with fallbacks
-                    logger.error(f"Error using direct Anthropic API: {str(e)}")
-                    logger.info("Falling back to standard process")
+                    # Log the error and continue with fallbacks through the OpenAI client
+                    logger.error(f"Error using direct API for {provider}: {str(e)}")
+                    logger.info("Falling back to OpenAI client approach")
 
-            # Special handling for Gemini models
-            elif provider == "google" and GEMINI_AVAILABLE:
-                # Get max_tokens (from agent attribute if available)
-                max_tokens = getattr(agent, 'max_tokens', None)
-                if not max_tokens:
-                    # Set default based on model
-                    if "gemini-2.0-ultra" in original_model:
-                        max_tokens = 8192
-                    elif "gemini-2.0-pro" in original_model:
-                        max_tokens = 8192
-                    else:
-                        max_tokens = 4096
-
-                # Temperature settings
-                temp = 0.7
-
-                # Create parameters dictionary
-                gemini_parameters = {
-                    "max_tokens": max_tokens,
-                    "temperature": temp,
-                }
-                
-                # Add tools if available
-                if openai_formatted_tools:
-                    gemini_parameters["tools"] = openai_formatted_tools
-
-                # Use direct Gemini API
-                direct_response = await call_gemini_directly(
-                    model_name=original_model,
-                    system_message=system_message,
-                    user_message=input_text,
-                    **gemini_parameters
-                )
-
-                # Check if we got a valid response
-                if hasattr(direct_response, 'choices') and len(direct_response.choices) > 0:
-                    # Check if there are tool calls in the response
-                    message = direct_response.choices[0].message
-                    if hasattr(message, 'tool_calls') and message.tool_calls:
-                        # This is a tool call response
-                        tool_calls = message.tool_calls
-                        # Yield the tool call event
-                        yield ToolCallEvent(tool_calls=tool_calls, model=original_model)
-                    else:
-                        # This is a regular text response
-                        content = message.content
-                        # Yield our custom event
-                        yield SimpleResponseEvent(content=content, model=original_model)
-                    
-                    return  # Exit after yielding
-
-            # Special handling for Grok models
-            elif provider == "xai" and GROK_AVAILABLE:
-                try:
-                    # Get max_tokens (from agent attribute if available)
-                    max_tokens = getattr(agent, 'max_tokens', None)
-                    if not max_tokens:
-                        # Set default based on model type
-                        if "grok-2" in original_model:
-                            max_tokens = 4096
-                        else:
-                            max_tokens = 2048
-
-                    # Temperature settings
-                    temp = 0.7
-
-                    # Create parameters dictionary
-                    grok_parameters = {
-                        "max_tokens": max_tokens,
-                        "temperature": temp,
-                    }
-                    
-                    # Add tools if available
-                    if openai_formatted_tools:
-                        grok_parameters["tools"] = openai_formatted_tools
-
-                    # Use direct Grok API
-                    direct_response = await call_grok_directly(
-                        model_name=original_model,
-                        system_message=system_message,
-                        user_message=input_text,
-                        **grok_parameters
-                    )
-
-                    # Check if we got a valid response
-                    if hasattr(direct_response, 'choices') and len(direct_response.choices) > 0:
-                        # Check if there are tool calls in the response
-                        message = direct_response.choices[0].message
-                        if hasattr(message, 'tool_calls') and message.tool_calls:
-                            # This is a tool call response
-                            tool_calls = message.tool_calls
-                            # Yield the tool call event
-                            yield ToolCallEvent(tool_calls=tool_calls, model=original_model)
-                        else:
-                            # This is a regular text response
-                            content = message.content
-                            # Yield our custom event
-                            yield SimpleResponseEvent(content=content, model=original_model)
-                        
-                        return  # Exit after yielding
-
-                except Exception as e:
-                    # Log error and continue with fallbacks
-                    logger.error(f"Error using direct X.AI API: {str(e)}")
-                    logger.info("Falling back to standard process")
-
-            # If direct API calls failed, try fallbacks
+            # If direct API calls failed or we're using OpenAI, try through the OpenAI client
             client_manager = Agent.client_manager
             fallbacks = Agent.fallback_mapping.get(original_model, client_manager.available_fallbacks(original_model))
             models_to_try = [original_model] + fallbacks
@@ -1411,272 +1337,125 @@ def patched_run_streamed(agent, input_text, **kwargs):
                 retries = 0
                 while retries <= max_retries:
                     try:
-                        # For certain providers, directly raise an exception
-                        # to fall through to our simple_run implementation with direct API calls
-                        if provider == "anthropic":
-                            # Bypass the framework for Claude models
-                            raise ValueError(f"Forcing simple_run for Claude model: {model_name}")
-                        elif provider == "google" and GEMINI_AVAILABLE:
-                            # Bypass the framework for Gemini models
-                            raise ValueError(f"Forcing simple_run for Gemini model: {model_name}")
-                        elif provider == "xai" and GROK_AVAILABLE:
-                            # Bypass the framework for Grok models
-                            raise ValueError(f"Forcing simple_run for Grok model: {model_name}")
-                        else:
-                            # Call the original method for other models
-                            stream_result = Runner._original_run_streamed(new_agent, input_text, **kwargs)
-
-                        # Create a very simple run function for direct API calls
-                        async def simple_run():
+                        # Different approach based on provider
+                        if provider == "openai":
+                            # For OpenAI models, always use the OpenAI Agents framework directly
+                            # This uses OpenAIResponsesModel automatically when set_default_openai_api("responses") is called
+                            logger.info(f"Using OpenAI Agents framework with model {model_name}")
+                            
                             try:
-                                # Get the system message from the agent's instructions if available
-                                system_message = ""
-                                if hasattr(new_agent, 'instructions'):
-                                    system_message = new_agent.instructions
-                                elif hasattr(new_agent, 'system'):
-                                    system_message = new_agent.system
-
-                                # Create the parameters dict
-                                params = {
-                                    "model": model_name,
-                                    "messages": [
-                                        {"role": "system", "content": system_message},
-                                        {"role": "user", "content": input_text}
-                                    ]
-                                }
+                                # Get the streaming result from the agents framework
+                                stream_result = Runner._original_run_streamed(new_agent, input_text, **kwargs)
                                 
-                                # Add tools if available
-                                if openai_formatted_tools:
-                                    params["tools"] = openai_formatted_tools
-
-                                # Get provider for the model
-                                provider = MODEL_TO_PROVIDER.get(model_name)
-
-                                # Make a clean copy of kwargs
-                                kwargs_copy = kwargs.copy() if kwargs else {}
-
-                                # Handle models by provider
-                                if provider == "anthropic":
-                                    # For Claude models, use the native Anthropic library
-                                    try:
-                                        # Get max_tokens from agent if available
-                                        max_tokens = kwargs_copy.get("max_tokens", 4096)
-
-                                        # Check if the agent has max_tokens set in agent definition
-                                        if hasattr(new_agent, 'max_tokens'):
-                                            max_tokens = new_agent.max_tokens
-
-                                        # Set limits based on model
-                                        if "claude-3-7-sonnet" in model_name:
-                                            max_tokens = min(max_tokens, 64000)
-                                        elif "-sonnet-" in model_name:
-                                            max_tokens = min(max_tokens, 64000)
-                                        elif "-haiku-" in model_name:
-                                            max_tokens = min(max_tokens, 32000)
-                                        else:
-                                            max_tokens = min(max_tokens, 4096)
-
-                                        # Create special kwargs for Claude
-                                        claude_kwargs = {
-                                            "max_tokens": max_tokens,
-                                            "temperature": kwargs_copy.get("temperature", 0.7)
-                                        }
-                                        
-                                        # Add tools if available - convert to Claude format
-                                        if openai_formatted_tools:
-                                            claude_kwargs["tools"] = convert_tools_for_provider(
-                                                openai_formatted_tools, 
-                                                "anthropic", 
-                                                model_name
-                                            )
-
-                                        response = await call_claude_directly(
-                                            model_name=model_name,
-                                            system_message=system_message,
-                                            user_message=input_text,
-                                            **claude_kwargs
-                                        )
-                                        return response
-                                    except Exception as e:
-                                        logger.error(f"Error using Anthropic library directly: {str(e)}")
-                                        logger.info("Falling back to generic API approach for Claude")
-                                        
-                                        # Only use essential parameters
-                                        filtered_params = {
-                                            k: v for k, v in kwargs_copy.items()
-                                            if k in [
-                                                "model", "messages", "max_tokens", "temperature",
-                                                "top_p", "user", "stream", "tools"
-                                            ]
-                                        }
-                                        
-                                        # Update with filtered parameters
-                                        params.update(filtered_params)
-                                elif provider == "google" and GEMINI_AVAILABLE:
-                                    # For Gemini models, use the native Google GenerativeAI library
-                                    try:
-                                        # Get max_tokens from agent if available
-                                        max_tokens = kwargs_copy.get("max_tokens", 4096)
-
-                                        # Check if the agent has max_tokens set in agent definition
-                                        if hasattr(new_agent, 'max_tokens'):
-                                            max_tokens = new_agent.max_tokens
-
-                                        # Set limits based on model
-                                        if "gemini-2.0-ultra" in model_name:
-                                            max_tokens = min(max_tokens, 16384)
-                                        elif "gemini-2.0-pro" in model_name:
-                                            max_tokens = min(max_tokens, 16384)
-                                        elif "gemini-pro" in model_name:
-                                            max_tokens = min(max_tokens, 8192)
-                                        else:
-                                            max_tokens = min(max_tokens, 4096)
-
-                                        # Create special kwargs for Gemini
-                                        gemini_kwargs = {
-                                            "max_tokens": max_tokens,
-                                            "temperature": kwargs_copy.get("temperature", 0.7)
-                                        }
-                                        
-                                        # Add tools if available - convert to Gemini format
-                                        if openai_formatted_tools:
-                                            gemini_kwargs["tools"] = convert_tools_for_provider(
-                                                openai_formatted_tools, 
-                                                "google", 
-                                                model_name
-                                            )
-
-                                        response = await call_gemini_directly(
-                                            model_name=model_name,
-                                            system_message=system_message,
-                                            user_message=input_text,
-                                            **gemini_kwargs
-                                        )
-                                        return response
-                                    except Exception as e:
-                                        logger.error(f"Error using Google GenerativeAI library directly: {str(e)}")
-                                        logger.info("Falling back to generic API approach for Gemini")
-                                        
-                                        # Only use essential parameters
-                                        filtered_params = {
-                                            k: v for k, v in kwargs_copy.items()
-                                            if k in [
-                                                "model", "messages", "max_tokens", "temperature",
-                                                "top_p", "user", "tools"
-                                            ]
-                                        }
-                                        
-                                        # Update with filtered parameters
-                                        params.update(filtered_params)
-                                elif provider == "xai" and GROK_AVAILABLE:
-                                    # For Grok models, use the direct API call
-                                    try:
-                                        # Get max_tokens from agent if available
-                                        max_tokens = kwargs_copy.get("max_tokens", 4096)
-
-                                        # Check if the agent has max_tokens set in agent definition
-                                        if hasattr(new_agent, 'max_tokens'):
-                                            max_tokens = new_agent.max_tokens
-
-                                        # Set limits based on model
-                                        if "grok-2" in model_name:
-                                            max_tokens = min(max_tokens, 8192)
-                                        else:
-                                            max_tokens = min(max_tokens, 4096)
-
-                                        # Create special kwargs for Grok
-                                        grok_kwargs = {
-                                            "max_tokens": max_tokens,
-                                            "temperature": kwargs_copy.get("temperature", 0.7)
-                                        }
-                                        
-                                        # Add tools if available - Grok uses OpenAI format
-                                        if openai_formatted_tools:
-                                            grok_kwargs["tools"] = convert_tools_for_provider(
-                                                openai_formatted_tools, 
-                                                "xai", 
-                                                model_name
-                                            )
-
-                                        response = await call_grok_directly(
-                                            model_name=model_name,
-                                            system_message=system_message,
-                                            user_message=input_text,
-                                            **grok_kwargs
-                                        )
-                                        return response
-                                    except Exception as e:
-                                        logger.error(f"Error using X.AI API directly: {str(e)}")
-                                        logger.info("Falling back to generic API approach for Grok")
-                                        
-                                        # Only use essential parameters
-                                        filtered_params = {
-                                            k: v for k, v in kwargs_copy.items()
-                                            if k in [
-                                                "model", "messages", "max_tokens", "temperature",
-                                                "top_p", "user", "tools"
-                                            ]
-                                        }
-                                        
-                                        # Update with filtered parameters
-                                        params.update(filtered_params)
-                                else:
-                                    # For OpenAI and other providers
-                                    params.update(kwargs_copy)
-
-                                # Use the client to make a direct completion call
-                                response = await client.chat.completions.create(**params)
-                                return response
+                                # Just pass through all events directly - the framework handles everything
+                                async for event in stream_result.stream_events():
+                                    # Pass the event directly to the caller
+                                    yield event
+                                
+                                # Successfully yielded all events, return from generator
+                                return
                             except Exception as e:
-                                logger.error(f"Error in simple_run: {str(e)}")
+                                logger.error(f"Error using OpenAI Agents framework: {str(e)}")
+                                logger.error(f"Trace: {traceback.format_exc()}")
+                                # Let the retry logic handle this failure
                                 raise
-
-                        # Get the full response
-                        response = await simple_run()
-
-                        # Check if response contains tool calls
-                        has_tool_calls = False
-                        tool_calls = None
-                        
-                        # Try to extract tool calls if they exist
-                        if hasattr(response, 'choices') and len(response.choices) > 0:
-                            if hasattr(response.choices[0], 'message') and hasattr(response.choices[0].message, 'tool_calls'):
-                                tool_calls = response.choices[0].message.tool_calls
-                                if tool_calls:
-                                    has_tool_calls = True
-                        
-                        if has_tool_calls:
-                            # Yield a tool call event
-                            yield ToolCallEvent(tool_calls=tool_calls, model=model_name)
-                            return
                         else:
-                            # Extract content from the response for regular text response
-                            content = None
-
-                            # Try different ways to extract text
-                            # Method 1: Direct structure
-                            if hasattr(response, 'choices') and len(response.choices) > 0:
-                                if hasattr(response.choices[0], 'message') and hasattr(response.choices[0].message, 'content'):
-                                    content = response.choices[0].message.content
-
-                            # Method 2: From text attribute
-                            if not content and hasattr(response, 'text'):
-                                content = response.text
-
-                            # If still no content, use a default message
-                            if not content:
-                                content = "I am an AI model in the MAGI system. I'm designed to provide helpful and accurate information."
-                                logger.warning(f"Using fallback content for {model_name} due to extraction issues")
-
-                            # Extra validation for content to avoid errors
-                            if not content or (isinstance(content, str) and content.strip() == ""):
-                                logger.error(f"Empty content extracted from model {model_name} response")
-                                # Fall back to next model - don't yield empty content
-                                raise ValueError(f"Empty content from model {model_name}")
-
-                            # Yield a simple text response event
-                            yield SimpleResponseEvent(content=content, model=model_name)
-                            return
+                            # For non-OpenAI providers, use direct API calls
+                            logger.info(f"Using direct API call for provider: {provider}")
+                            
+                            # Get max_tokens (from agent attribute if available)
+                            max_tokens = getattr(new_agent, 'max_tokens', 4096)
+                            
+                            # Create special kwargs based on provider
+                            provider_kwargs = {
+                                "max_tokens": max_tokens,
+                                "temperature": kwargs.get("temperature", 0.7)
+                            }
+                            
+                            # Add tools if available
+                            if agent_tools:
+                                provider_kwargs["tools"] = convert_tools_for_provider(
+                                    agent_tools, 
+                                    provider, 
+                                    model_name
+                                )
+                            
+                            # Make the direct API call based on provider
+                            try:
+                                if provider == "anthropic" and ANTHROPIC_AVAILABLE:
+                                    response = await call_claude_directly(
+                                        model_name=model_name,
+                                        system_message=system_message,
+                                        user_message=input_text,
+                                        **provider_kwargs
+                                    )
+                                elif provider == "google" and GEMINI_AVAILABLE:
+                                    response = await call_gemini_directly(
+                                        model_name=model_name,
+                                        system_message=system_message,
+                                        user_message=input_text,
+                                        **provider_kwargs
+                                    )
+                                elif provider == "xai" and GROK_AVAILABLE:
+                                    response = await call_grok_directly(
+                                        model_name=model_name,
+                                        system_message=system_message,
+                                        user_message=input_text,
+                                        **provider_kwargs
+                                    )
+                                else:
+                                    # No direct API implementation available for this provider
+                                    raise ValueError(f"No direct API implementation for provider {provider}")
+                                
+                                # Check if response contains tool calls
+                                has_tool_calls = False
+                                tool_calls = None
+                                
+                                # Try to extract tool calls if they exist
+                                if hasattr(response, 'choices') and len(response.choices) > 0:
+                                    if hasattr(response.choices[0], 'message') and hasattr(response.choices[0].message, 'tool_calls'):
+                                        tool_calls = response.choices[0].message.tool_calls
+                                        if tool_calls:
+                                            has_tool_calls = True
+                                
+                                if has_tool_calls:
+                                    # Yield a tool call event
+                                    yield ToolCallEvent(tool_calls=tool_calls, model=model_name)
+                                    return
+                                else:
+                                    # Extract content from the response for regular text response
+                                    content = None
+        
+                                    # Try different ways to extract text
+                                    # Method 1: Direct structure
+                                    if hasattr(response, 'choices') and len(response.choices) > 0:
+                                        if hasattr(response.choices[0], 'message') and hasattr(response.choices[0].message, 'content'):
+                                            content = response.choices[0].message.content
+        
+                                    # Method 2: From text attribute
+                                    if not content and hasattr(response, 'text'):
+                                        content = response.text
+        
+                                    # If we still can't extract content, that's an error we should debug
+                                    if not content:
+                                        error_msg = f"Failed to extract content from response for model {model_name}. Response structure: {str(response)[:200]}..."
+                                        logger.error(error_msg)
+                                        # Raise an exception to trigger fallback or retry
+                                        raise ValueError(error_msg)
+        
+                                    # Extra validation for empty content
+                                    if isinstance(content, str) and content.strip() == "":
+                                        logger.error(f"Empty content from model {model_name}")
+                                        # Fall back to next model - don't yield empty content
+                                        raise ValueError(f"Empty content from model {model_name}")
+        
+                                    # Yield a simple text response event
+                                    yield SimpleResponseEvent(content=content, model=model_name)
+                                    return
+                            except Exception as e:
+                                # Log the error and let the retry logic handle it
+                                logger.error(f"Error using direct API for {provider}: {str(e)}")
+                                raise
 
                     except Exception as e:
                         # Log the error and retry or move to next model
@@ -1714,213 +1493,16 @@ def apply_runner_patch():
 
     logger.info("Applied patches to Runner.run and Runner.run_streamed")
 
+# Decorator to register a function tool
+@function_tool
 def register_tool(func=None, name=None, description=None):
     """
-    Decorator to register a function as a tool.
-    
-    Args:
-        func: The function to register
-        name: Optional name override (defaults to function name)
-        description: Optional description override (defaults to function docstring)
-    
-    Returns:
-        The registered function with openai_schema method added
+    This is a pass-through function that simply returns the @function_tool decorated function.
+    It is here for backward compatibility with existing code.
     """
-    def decorator(f):
-        # Add openai_schema method to the function
-        def openai_schema():
-            import inspect
-            from typing import get_type_hints
-            
-            # Get function details
-            func_name = name or f.__name__
-            func_desc = description or f.__doc__ or ""
-            params = inspect.signature(f).parameters
-            type_hints = get_type_hints(f)
-            
-            # Build parameters object
-            properties = {}
-            required = []
-            
-            for param_name, param in params.items():
-                if param_name == 'self':
-                    continue
-                    
-                param_type = type_hints.get(param_name, None)
-                type_str = "string"  # Default type
-                
-                if param_type == int:
-                    type_str = "integer"
-                elif param_type == float:
-                    type_str = "number"
-                elif param_type == bool:
-                    type_str = "boolean"
-                    
-                properties[param_name] = {
-                    "type": type_str,
-                    "description": f"Parameter {param_name}"
-                }
-                
-                if param.default == inspect.Parameter.empty:
-                    required.append(param_name)
-            
-            # Create OpenAI function format
-            return {
-                "type": "function",
-                "function": {
-                    "name": func_name,
-                    "description": func_desc.strip(),
-                    "parameters": {
-                        "type": "object",
-                        "properties": properties,
-                        "required": required
-                    }
-                }
-            }
-        
-        # Attach the schema method to the function
-        f.openai_schema = openai_schema
-        return f
-    
-    # Handle both @register_tool and @register_tool(name="x") usage
-    if func is None:
-        return decorator
-    return decorator(func)
-
-def format_function_tool_for_openai(tool):
-    """
-    Format a function_tool decorator wrapped function for OpenAI compatibility.
-    
-    Args:
-        tool: The function_tool wrapped function
-        
-    Returns:
-        Properly formatted tool definition for OpenAI
-    """
-    try:
-        # If tool already has openai_schema method, use it
-        if hasattr(tool, 'openai_schema'):
-            return tool.openai_schema()
-            
-        # If tool has to_openai_function method, use it
-        if hasattr(tool, 'to_openai_function'):
-            return {
-                "type": "function",
-                "function": tool.to_openai_function()
-            }
-            
-        # Fall back to manual conversion
-        import inspect
-        from typing import get_type_hints
-        
-        # Get function details
-        func_name = tool.__name__ if hasattr(tool, '__name__') else "unknown_function"
-        func_desc = tool.__doc__ if hasattr(tool, '__doc__') and tool.__doc__ else "Function tool"
-        
-        # Try to get parameters
-        params = {}
-        required = []
-        
-        if hasattr(tool, '__annotations__'):
-            annotations = tool.__annotations__
-            # Convert annotations to parameter definitions
-            for param_name, param_type in annotations.items():
-                if param_name == 'return':
-                    continue
-                    
-                type_str = "string"  # Default type
-                
-                # Try to convert Python types to JSON Schema types
-                if param_type == int or getattr(param_type, '__origin__', None) == int:
-                    type_str = "integer"
-                elif param_type == float or getattr(param_type, '__origin__', None) == float:
-                    type_str = "number"
-                elif param_type == bool or getattr(param_type, '__origin__', None) == bool:
-                    type_str = "boolean"
-                
-                # Add to parameters
-                params[param_name] = {
-                    "type": type_str,
-                    "description": f"Parameter {param_name}"
-                }
-                
-                # For now, consider all parameters required
-                required.append(param_name)
-        
-        # Try to get parameter info from signature if available
-        try:
-            signature = inspect.signature(tool)
-            for param_name, param in signature.parameters.items():
-                if param_name not in params:
-                    params[param_name] = {
-                        "type": "string",
-                        "description": f"Parameter {param_name}"
-                    }
-                    
-                    if param.default == inspect.Parameter.empty:
-                        if param_name not in required:
-                            required.append(param_name)
-        except Exception:
-            # If we can't get signature, just use what we have
-            pass
-            
-        # Handle RunContextWrapper parameter - common in function_tool decorators
-        if "context" in params and "RunContextWrapper" in str(params["context"]):
-            # The context parameter is added by the function_tool decorator and shouldn't be exposed
-            if "context" in required:
-                required.remove("context")
-            del params["context"]
-        
-        # Create OpenAI function format
-        return {
-            "type": "function",
-            "function": {
-                "name": func_name,
-                "description": func_desc.strip(),
-                "parameters": {
-                    "type": "object",
-                    "properties": params,
-                    "required": required
-                }
-            }
-        }
-    except Exception as e:
-        logger.error(f"Error formatting function tool for OpenAI: {str(e)}")
-        return {
-            "type": "function",
-            "function": {
-                "name": getattr(tool, '__name__', "unknown_function"),
-                "description": getattr(tool, '__doc__', "Function tool"),
-                "parameters": {
-                    "type": "object",
-                    "properties": {},
-                    "required": []
-                }
-            }
-        }
-
-def get_tools_for_model(tools: List[Dict[str, Any]], model_name: str) -> List[Dict[str, Any]]:
-    """
-    Utility function to convert tools to the format required by a specific model.
-    
-    Args:
-        tools: List of tools in OpenAI format
-        model_name: The model name
-        
-    Returns:
-        List of tools in model-specific format
-    """
-    if not tools:
-        return []
-    
-    # Get provider for the model
-    provider = MODEL_TO_PROVIDER.get(model_name)
-    if not provider:
-        logger.warning(f"Unknown provider for model: {model_name}, using OpenAI format")
-        return tools
-    
-    # Convert tools to provider-specific format
-    return convert_tools_for_provider(tools, provider, model_name)
+    # This function should never actually be called
+    # since we're using the @function_tool decorator directly
+    return func
 
 def setup_retry_and_fallback_provider() -> None:
     """
@@ -1960,8 +1542,11 @@ def setup_retry_and_fallback_provider() -> None:
     primary_client = client_manager.clients[primary_provider]
     set_default_openai_client(client=primary_client, use_for_tracing=False)
 
-    # Set default API type to chat completions (most providers support this)
-    set_default_openai_api("chat_completions")
+    # Set default API type to "responses" regardless of provider
+    # This ensures we're using OpenAIResponsesModel which handles tools correctly
+    # For non-OpenAI providers, our direct API implementations are used anyway
+    set_default_openai_api("responses")
+    logger.info("Set default OpenAI API type to 'responses' to ensure proper tool handling")
 
     # Disable tracing by default (can be enabled via environment variable)
     set_tracing_disabled(os.environ.get("MAGI_ENABLE_TRACING", "").lower() != "true")

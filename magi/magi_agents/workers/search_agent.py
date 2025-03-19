@@ -2,6 +2,7 @@
 search_agent.py - Specialized agent for web searches and information gathering
 """
 
+import os
 from agents import Agent, ModelSettings, WebSearchTool
 from magi.utils.file_utils import write_file, read_file
 from magi.magi_agents import FILE_TOOLS_TEXT
@@ -45,6 +46,6 @@ Assume you have been given all the information necessary to complete the task.
         """,
         handoff_description="A specialized agent for web searches and information gathering",
         tools=[WebSearchTool(), write_file, read_file],
-        model="gpt-4o",
+        model=os.environ.get("MAGI_SEARCH_MODEL", "gpt-4o-search-preview"),  # Default to search model
         model_settings=ModelSettings(truncation="auto", parallel_tool_calls=True),
     )

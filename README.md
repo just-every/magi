@@ -176,6 +176,14 @@ MAGI_ENABLE_SELF_OPTIMIZATION=false test/magi-docker.sh -p "your prompt here"
 - `/utils/`: Node.js utility scripts
 - `/test/`: Testing scripts
 
+### Recent Improvements (2025-03-20)
+
+- **Removed Mock Values**: Eliminated fallback text to ensure genuine LLM responses
+- **Enhanced Error Handling**: Full stack traces and proper error propagation
+- **Improved Fallback System**: Intelligent model fallbacks with appropriate defaults
+- **Fixed Test Scripts**: Better testing workflow and environment setup
+- **Reduced Error Suppression**: Exposed previously hidden errors for easier debugging
+
 ### Development Workflow
 
 1. Make changes to the code

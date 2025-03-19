@@ -2,6 +2,7 @@
 shell_agent.py - Specialized agent for file system operations and project organization
 """
 
+import os
 from agents import Agent, ModelSettings, function_tool
 import subprocess
 from typing import Optional
@@ -49,6 +50,6 @@ Assume you have been given all the information necessary to complete the task.
     """,
         handoff_description="A specialized agent for file system operations and project organization",
         tools=[bash, write_file, read_file],
-        model="gpt-4o-mini",
+        model=os.environ.get("MAGI_SHELL_MODEL", "gpt-4o-mini"),  # Default to mini model
         model_settings=ModelSettings(truncation="auto", parallel_tool_calls=True),
     )

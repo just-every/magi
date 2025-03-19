@@ -11,11 +11,19 @@ else
 fi
 
 echo -e "\nInitializing... "
-cd magi/
-python -m venv venv
-source venv/bin/activate
-pip install -q --upgrade pip
-pip install -q -r docker/requirements.txt
-python -m playwright install chromium
+# Change to project root
+cd "$(dirname "$0")/.."
+# Set up venv if it doesn't exist
+if [ ! -d "magi/venv" ]; then
+    cd magi/
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -q --upgrade pip
+    pip install -q -r docker/requirements.txt
+    python -m playwright install chromium
+    cd ..
+else
+    source magi/venv/bin/activate
+fi
 
-python magi.py -t "$@"
+python magi/magi.py -t "$@"

@@ -2,6 +2,7 @@
 browser_agent.py - Specialized agent for direct website interaction via browser
 """
 
+import os
 import asyncio
 from playwright.async_api import Browser, Page, Playwright, async_playwright
 from agents import (
@@ -126,7 +127,7 @@ Assume you have been given all the information necessary to complete the task.
                 tool_description="A fallback browser agent which can be used when the browser agent fails. It uses computer vision to interact with the browser.",
             ),
         ],
-        model="gpt-4o-mini",
+        model=os.environ.get("MAGI_BROWSER_MODEL", "computer-use-preview"),  # Default to vision-capable model
         model_settings=ModelSettings(parallel_tool_calls=True),
         hooks=CustomAgentHooks(display_name="BrowserAgent", computer=computer),
     )

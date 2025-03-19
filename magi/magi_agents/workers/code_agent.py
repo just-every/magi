@@ -2,6 +2,7 @@
 code_agent.py - Specialized agent for writing, explaining and modifying code
 """
 
+import os
 from agents import Agent, ModelSettings, function_tool
 from magi.utils.claude import run_claude_cli_sync
 from magi.utils.file_utils import write_file, read_file
@@ -40,6 +41,6 @@ Assume you have been given all the information necessary to complete the task.
     """,
         handoff_description="A specialized agent for writing, explaining and modifying code",
         tools=[AICoder, write_file, read_file],
-        model="gpt-4o-mini",
+        model=os.environ.get("MAGI_CODE_MODEL", "gpt-4o-mini"),  # Default to mini model
         model_settings=ModelSettings(truncation="auto", parallel_tool_calls=True),
     )

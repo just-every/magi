@@ -16,11 +16,20 @@ module.exports = {
   resolve: {
     extensions: ['.tsx', '.ts', '.js'],
     alias: {
-      '@types': path.resolve(__dirname, 'controller/types')
+      '@types': path.resolve(__dirname, 'controller/shared/types')
     }
   },
   output: {
     filename: 'client.js',
     path: path.resolve(__dirname, 'dist/controller'),
+  },
+  watchOptions: {
+    ignored: /node_modules/,
+    aggregateTimeout: 300,
+    poll: 1000,
+  },
+  devServer: {
+    hot: true,
+    watchFiles: ['controller/client/**/*.ts', 'controller/client/**/*.html', 'controller/client/**/*.css'],
   },
 };

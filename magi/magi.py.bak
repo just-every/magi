@@ -31,12 +31,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def extract_tool_call_data(tool_call):
     """
     Extract data from a tool call object regardless of its format.
-
+    
     Handles different formats including:
     - OpenAI ChatCompletionMessageToolCall objects
     - Dictionary-style objects with 'get' method
     - Objects with direct attribute access
-
+    
     Returns:
         tuple: (tool_id, tool_type, function_name, function_args)
     """
@@ -45,40 +45,40 @@ def extract_tool_call_data(tool_call):
     tool_type = "function"
     function_name = "unknown_function"
     function_args = "{}"
-
+    
     try:
         # Check if it's a ChatCompletionMessageToolCall by class name
         tool_class_name = tool_call.__class__.__name__ if hasattr(tool_call, '__class__') else "unknown"
-
+        
         if tool_class_name == "ChatCompletionMessageToolCall":
             # Handle specific OpenAI object format
             tool_id = getattr(tool_call, 'id', tool_id)
-
+            
             if hasattr(tool_call, 'function'):
                 function_obj = tool_call.function
                 if hasattr(function_obj, 'name'):
                     function_name = function_obj.name
                 if hasattr(function_obj, 'arguments'):
                     function_args = function_obj.arguments
-
+        
         # Handle object with direct attribute access
         elif hasattr(tool_call, 'id') and not isinstance(tool_call, dict):
             tool_id = tool_call.id
             tool_type = getattr(tool_call, 'type', tool_type)
-
+            
             if hasattr(tool_call, 'function'):
                 function_data = tool_call.function
                 if hasattr(function_data, 'name'):
                     function_name = function_data.name
                 if hasattr(function_data, 'arguments'):
                     function_args = function_data.arguments
-
+        
         # Handle dictionary-style access
         elif hasattr(tool_call, 'get'):
             tool_id = tool_call.get("id", tool_id)
             tool_type = tool_call.get("type", tool_type)
             function_data = tool_call.get("function", {})
-
+            
             if isinstance(function_data, dict) and hasattr(function_data, 'get'):
                 function_name = function_data.get("name", function_name)
                 function_args = function_data.get("arguments", function_args)
@@ -88,7 +88,7 @@ def extract_tool_call_data(tool_call):
                     function_args = function_data.arguments
     except Exception as e:
         print(f"Error extracting tool call data: {str(e)}", file=sys.stderr)
-
+    
     # Try to extract name from arguments if function_name is unknown
     try:
         if function_name == "unknown_function" and function_args:
@@ -97,14 +97,45 @@ def extract_tool_call_data(tool_call):
                 function_name = args_dict["name"]
     except:
         pass
-
+    
     return tool_id, tool_type, function_name, function_args
 
-# Configure logging to show full stack traces for all errors
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# Add an exception filter to suppress the "environment" attribute error on exit
+# This helps prevent noise in the logs during shutdown
+original_excepthook = sys.excepthook
+
+def custom_excepthook(exc_type: Type[BaseException], exc_value: BaseException, exc_traceback):
+    """Custom exception hook to filter out known harmless errors during shutdown."""
+    # Get the exception message as a string for pattern matching
+    exc_message = str(exc_value)
+
+    # Check for specific errors to suppress
+    harmless_patterns = [
+        "'dict' object has no attribute 'environment'",
+        "object has no attribute 'environment'",
+        "Event loop is closed",
+        "validation error for ResponseUsage",
+        "input_tokens_details",
+        "ResponseUsage",
+        "pydantic_core._pydantic_core.ValidationError",
+        "forcing direct api call",
+        "forcing simple_run"
+    ]
+    
+    if any(pattern in exc_message for pattern in harmless_patterns):
+        # Suppress known harmless errors
+        return
+
+    # For other errors during Python shutdown, print a simplified message
+    if hasattr(sys, 'is_finalizing') and sys.is_finalizing():
+        print(f"[WARNING] Error during shutdown: {exc_type.__name__}: {exc_value}")
+        return
+
+    # For all other exceptions, use the original exception hook
+    original_excepthook(exc_type, exc_value, exc_traceback)
+
+# Set the custom exception hook
+sys.excepthook = custom_excepthook
 
 # Import required packages and modules
 from agents import Runner, ItemHelpers
@@ -136,50 +167,50 @@ async def run_self_optimized_command(command: str, model: str = None) -> str:
     # Set up logging
     logger = logging.getLogger(__name__)
     logger.info(f"Starting self-optimization for command: {command[:100]}...")
-
+    
     # Check if self-optimization is available
     if not SELF_OPTIMIZATION_AVAILABLE:
         error_msg = "Self-optimization agent not available"
         logger.error(error_msg)
         raise ImportError(error_msg)
-
+    
     # Record start time and initialize output collection
     start_time = time.time()
     all_output: List[str] = []
-
+    
     # Initialize the self-optimization agent
     print(f"[]{json.dumps({'type': 'info', 'message': 'Initializing self-optimization'})}", flush=True)
-
+    
     self_opt_agent = create_self_optimization_agent()
     if model:
         self_opt_agent.model = model
-
+    
     # Prepare optimization prompt
     optimization_prompt = f"""
     I need you to analyze the following task and optimize the MAGI codebase to better handle it:
-
+    
     TASK: {command}
-
+    
     Follow these steps:
     1. Analyze the task to understand what kind of capabilities are needed
     2. Plan how to modify the codebase to better handle this specific task
     3. Make the necessary code changes
     4. Test your changes thoroughly
     5. Execute the original task using your optimized code
-
+    
     Focus on making targeted changes to improve MAGI's capabilities for this specific task.
     """
-
+    
     # Run the self-optimization agent
     print(f"[]{json.dumps({'type': 'running_command', 'agent': 'SelfOptimizationAgent', 'command': 'Analyzing and optimizing for task'})}", flush=True)
-
+    
     # Process stream events from the agent
     stream = Runner.run_streamed(self_opt_agent, optimization_prompt)
-
+    
     async for event in stream.stream_events():
         # Handle the different event types based on class
         event_class = event.__class__.__name__
-
+        
         # Process agent updates
         if event_class == "AgentUpdatedStreamEvent" and hasattr(event, 'new_agent'):
             try:
@@ -193,13 +224,13 @@ async def run_self_optimized_command(command: str, model: str = None) -> str:
             except Exception:
                 pass
             continue
-
+            
         # Handle direct API responses
         elif event_class == "SimpleResponseEvent":
             try:
                 text = getattr(event, 'content', '')
                 model = getattr(event, 'model', 'unknown')
-
+                
                 if text and text.strip():
                     print(f"[]{json.dumps({
                         'type': 'agent_output',
@@ -209,7 +240,7 @@ async def run_self_optimized_command(command: str, model: str = None) -> str:
                         },
                         'output': {'text': text}
                     })}", flush=True)
-
+                    
                     all_output.append(text)
                 else:
                     error_msg = f"Empty content in SimpleResponseEvent from model {model}"
@@ -219,18 +250,18 @@ async def run_self_optimized_command(command: str, model: str = None) -> str:
                 print(f"Error processing SimpleResponseEvent: {str(e)}", file=sys.stderr)
                 raise
             continue
-
+            
         # Handle tool calls
         elif event_class == "ToolCallEvent":
             try:
                 tool_calls = getattr(event, 'tool_calls', [])
                 model = getattr(event, 'model', 'unknown')
-
+                
                 if tool_calls:
                     for tool_call in tool_calls:
                         # Use the utility function to extract data in a consistent way
                         tool_id, tool_type, function_name, function_args = extract_tool_call_data(tool_call)
-
+                        
                         print(f"[]{json.dumps({
                             'type': 'tool_call',
                             'agent': {
@@ -249,7 +280,7 @@ async def run_self_optimized_command(command: str, model: str = None) -> str:
             except Exception as e:
                 print(f"Error processing ToolCallEvent: {str(e)}", file=sys.stderr)
             continue
-
+            
         # Process message outputs
         elif event_class == "RunItemStreamEvent" and hasattr(event, 'item'):
             try:
@@ -258,7 +289,7 @@ async def run_self_optimized_command(command: str, model: str = None) -> str:
                     if hasattr(event.item, 'raw_item') and hasattr(event.item.raw_item, 'content'):
                         content = event.item.raw_item.content
                         text = ""
-
+                        
                         # Extract text based on content type
                         if isinstance(content, list):
                             for part in content:
@@ -266,7 +297,7 @@ async def run_self_optimized_command(command: str, model: str = None) -> str:
                                     text += part.text
                         elif hasattr(content, 'text'):
                             text = content.text
-
+                            
                         if text:
                             print(f"[]{json.dumps({
                                 'type': 'agent_output',
@@ -276,37 +307,36 @@ async def run_self_optimized_command(command: str, model: str = None) -> str:
                                 },
                                 'output': {'text': text}
                             })}", flush=True)
-
+                            
                             all_output.append(text)
-            except Exception as e:
-                print(f"Error processing RunItemStreamEvent: {str(e)}", file=sys.stderr)
-                traceback.print_exc()
+            except Exception:
+                pass
             continue
-
+            
         # Skip raw response events
         elif event_class == "RawResponsesStreamEvent":
             continue
-
+    
     # Calculate elapsed time and log summary
     elapsed_time = time.time() - start_time
     logger.info(f"Self-optimization completed in {elapsed_time:.2f} seconds")
-
+    
     print(f"[]{json.dumps({'type': 'info', 'message': f'Self-optimization complete ({elapsed_time:.2f}s)'})}", flush=True)
-
+    
     # Combine output and store in memory
     combined_output = ''.join(all_output)
     add_output(combined_output)
-
+    
     # Log summary
     logger.info(f"Self-optimization process summary:")
     logger.info(f"- Total tokens processed: {len(combined_output.split())} words")
     logger.info(f"- Total execution time: {elapsed_time:.2f} seconds")
-
+    
     return combined_output
 
 async def run_magi_command(command: str, agent: str = "supervisor", model: str = None) -> str:
     """Execute a command using an agent and capture the results.
-
+    
     Args:
         command: The command string to process (user input)
         agent: The agent type to use (default: "supervisor")
@@ -316,17 +346,17 @@ async def run_magi_command(command: str, agent: str = "supervisor", model: str =
         str: The combined output from all agent interactions
     """
     # Check if self-optimization is enabled and we're using the supervisor agent
-#     if ENABLE_SELF_OPTIMIZATION and agent == "supervisor" and SELF_OPTIMIZATION_AVAILABLE:
-#         try:
-#             # Run the command with self-optimization
-#             print(f"[]{json.dumps({'type': 'info', 'message': 'Using self-optimization'})}", flush=True)
-#             return await run_self_optimized_command(command, model)
-#         except Exception as e:
-#             # If self-optimization fails, fall back to regular execution
-#             print(f"[]{json.dumps({'type': 'error', 'message': f'Self-optimization failed: {str(e)}'})}", flush=True)
-#             print(f"[]{json.dumps({'type': 'info', 'message': 'Falling back to regular execution'})}", flush=True)
-#             # Continue with regular execution below
-
+    if ENABLE_SELF_OPTIMIZATION and agent == "supervisor" and SELF_OPTIMIZATION_AVAILABLE:
+        try:
+            # Run the command with self-optimization
+            print(f"[]{json.dumps({'type': 'info', 'message': 'Using self-optimization'})}", flush=True)
+            return await run_self_optimized_command(command, model)
+        except Exception as e:
+            # If self-optimization fails, fall back to regular execution
+            print(f"[]{json.dumps({'type': 'error', 'message': f'Self-optimization failed: {str(e)}'})}", flush=True)
+            print(f"[]{json.dumps({'type': 'info', 'message': 'Falling back to regular execution'})}", flush=True)
+            # Continue with regular execution below
+    
     # Record command in system memory for context
     add_input(command)
 
@@ -402,20 +432,20 @@ async def run_magi_command(command: str, agent: str = "supervisor", model: str =
                 print(f"Error processing SimpleResponseEvent: {str(e)}", file=sys.stderr)
                 raise
             continue
-
+            
         # Handle ToolCallEvent from our direct API implementations
         elif event_class == "ToolCallEvent":
             try:
                 # Extract tool calls and model info
                 tool_calls = getattr(event, 'tool_calls', [])
                 model = getattr(event, 'model', 'unknown')
-
+                
                 if tool_calls:
                     # Format as tool_call_item which will be processed by the agent framework
                     for tool_call in tool_calls:
                         # Use the utility function to extract data in a consistent way
                         tool_id, tool_type, function_name, function_args = extract_tool_call_data(tool_call)
-
+                        
                         # Create equivalent of tool_call_item event
                         tool_event_dict = {
                             "type": "tool_call",
@@ -473,9 +503,9 @@ async def run_magi_command(command: str, agent: str = "supervisor", model: str =
 
                             # Add output for the combined result
                             all_output.append(text)
-            except Exception as e:
-                print(f"Error processing RunItemStreamEvent during run_magi_command: {str(e)}", file=sys.stderr)
-                traceback.print_exc()
+            except Exception:
+                # Silent error handling to ensure smooth operation
+                pass
             continue
 
         # Skip raw response events - they're handled through RunItemStreamEvent
@@ -551,11 +581,11 @@ def main():
         type=str.lower,
         default=os.environ.get("MAGI_ENABLE_SELF_OPTIMIZATION", "true").lower())
     args = parser.parse_args()
-
+    
     # Update self-optimization flag from command line arguments
     global ENABLE_SELF_OPTIMIZATION
     ENABLE_SELF_OPTIMIZATION = args.self_optimization == "true" and SELF_OPTIMIZATION_AVAILABLE
-
+    
     # Log status of self-optimization
     if args.self_optimization == "true" and not SELF_OPTIMIZATION_AVAILABLE:
         print("**Warning** Self-optimization module not available, feature will be disabled")
@@ -610,7 +640,7 @@ def main():
     # Exit if running in test mode
     if args.test:
         print("\nTesting complete. Exiting.")
-
+        
         # Force Python garbage collection and exit
         import gc
         gc.collect()
@@ -627,3 +657,76 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nMagi system terminated by user.")
         sys.exit(0)
+
+# Add specific function to handle tool calls that may be in different formats
+def extract_tool_call_data(tool_call):
+    """
+    Extract data from a tool call object regardless of its format.
+    
+    Handles different formats including:
+    - OpenAI ChatCompletionMessageToolCall objects
+    - Dictionary-style objects with 'get' method
+    - Objects with direct attribute access
+    
+    Returns:
+        tuple: (tool_id, tool_type, function_name, function_args)
+    """
+    # Default values
+    tool_id = f"call_{hash(str(tool_call))}"
+    tool_type = "function"
+    function_name = "unknown_function"
+    function_args = "{}"
+    
+    try:
+        # Check if it's a ChatCompletionMessageToolCall by class name
+        tool_class_name = tool_call.__class__.__name__ if hasattr(tool_call, '__class__') else "unknown"
+        
+        if tool_class_name == "ChatCompletionMessageToolCall":
+            # Handle specific OpenAI object format
+            tool_id = getattr(tool_call, 'id', tool_id)
+            
+            if hasattr(tool_call, 'function'):
+                function_obj = tool_call.function
+                if hasattr(function_obj, 'name'):
+                    function_name = function_obj.name
+                if hasattr(function_obj, 'arguments'):
+                    function_args = function_obj.arguments
+        
+        # Handle object with direct attribute access
+        elif hasattr(tool_call, 'id') and not isinstance(tool_call, dict):
+            tool_id = tool_call.id
+            tool_type = getattr(tool_call, 'type', tool_type)
+            
+            if hasattr(tool_call, 'function'):
+                function_data = tool_call.function
+                if hasattr(function_data, 'name'):
+                    function_name = function_data.name
+                if hasattr(function_data, 'arguments'):
+                    function_args = function_data.arguments
+        
+        # Handle dictionary-style access
+        elif hasattr(tool_call, 'get'):
+            tool_id = tool_call.get("id", tool_id)
+            tool_type = tool_call.get("type", tool_type)
+            function_data = tool_call.get("function", {})
+            
+            if isinstance(function_data, dict) and hasattr(function_data, 'get'):
+                function_name = function_data.get("name", function_name)
+                function_args = function_data.get("arguments", function_args)
+            elif hasattr(function_data, 'name'):
+                function_name = function_data.name
+                if hasattr(function_data, 'arguments'):
+                    function_args = function_data.arguments
+    except Exception as e:
+        print(f"Error extracting tool call data: {str(e)}", file=sys.stderr)
+    
+    # Try to extract name from arguments if function_name is unknown
+    try:
+        if function_name == "unknown_function" and function_args:
+            args_dict = json.loads(function_args) if isinstance(function_args, str) else function_args
+            if isinstance(args_dict, dict) and "name" in args_dict:
+                function_name = args_dict["name"]
+    except:
+        pass
+    
+    return tool_id, tool_type, function_name, function_args

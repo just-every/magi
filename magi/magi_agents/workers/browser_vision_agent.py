@@ -2,6 +2,7 @@
 browser_vision_agent.py - A specialized agent for using computer vision to interact with the browser
 """
 
+import os
 from agents import (
     Agent,
     ComputerTool,
@@ -60,7 +61,7 @@ Assume you have been given all the information necessary to complete the task.
             read_file,
             ComputerTool(computer)
         ],
-        model="computer-use-preview",
+        model=os.environ.get("MAGI_VISION_MODEL", "computer-use-preview"),  # Default to vision model
         model_settings=ModelSettings(truncation="auto"),
         hooks=CustomAgentHooks(display_name="BrowserVisionAgent", computer=computer),
     )
