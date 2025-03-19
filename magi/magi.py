@@ -73,18 +73,33 @@ from magi.utils.fifo import process_commands_from_file
 from magi.utils.model_provider import setup_retry_and_fallback_provider
 from magi.magi_agents import create_agent
 
-# Import self-optimization components
-from magi.magi_agents.self_optimization_agent import create_self_optimization_agent
+# Import self-optimization components (with try/except to handle missing module)
+try:
+    from magi.magi_agents.self_optimization_agent import create_self_optimization_agent
+    SELF_OPTIMIZATION_AVAILABLE = True
+except ImportError:
+    SELF_OPTIMIZATION_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("Self-optimization agent not available, feature will be disabled")
 
 # Flag to control whether to use self-optimization
-# This can be controlled via environment variable
-ENABLE_SELF_OPTIMIZATION = os.environ.get("MAGI_ENABLE_SELF_OPTIMIZATION", "true").lower() == "true"
+# This can be controlled via environment variable and availability
+ENABLE_SELF_OPTIMIZATION = (
+    os.environ.get("MAGI_ENABLE_SELF_OPTIMIZATION", "true").lower() == "true" and
+    SELF_OPTIMIZATION_AVAILABLE
+)
 
 async def run_self_optimized_command(command: str, model: str = None) -> str:
     """Execute a command using the self-optimization agent to modify the codebase."""
     # Set up logging
     logger = logging.getLogger(__name__)
     logger.info(f"Starting self-optimization for command: {command[:100]}...")
+    
+    # Check if self-optimization is available
+    if not SELF_OPTIMIZATION_AVAILABLE:
+        error_msg = "Self-optimization agent not available"
+        logger.error(error_msg)
+        raise ImportError(error_msg)
     
     # Record start time and initialize output collection
     start_time = time.time()
@@ -261,7 +276,7 @@ async def run_magi_command(command: str, agent: str = "supervisor", model: str =
         str: The combined output from all agent interactions
     """
     # Check if self-optimization is enabled and we're using the supervisor agent
-    if ENABLE_SELF_OPTIMIZATION and agent == "supervisor":
+    if ENABLE_SELF_OPTIMIZATION and agent == "supervisor" and SELF_OPTIMIZATION_AVAILABLE:
         try:
             # Run the command with self-optimization
             print(f"[]{json.dumps({'type': 'info', 'message': 'Using self-optimization'})}", flush=True)
@@ -503,7 +518,11 @@ def main():
     
     # Update self-optimization flag from command line arguments
     global ENABLE_SELF_OPTIMIZATION
-    ENABLE_SELF_OPTIMIZATION = args.self_optimization == "true"
+    ENABLE_SELF_OPTIMIZATION = args.self_optimization == "true" and SELF_OPTIMIZATION_AVAILABLE
+    
+    # Log status of self-optimization
+    if args.self_optimization == "true" and not SELF_OPTIMIZATION_AVAILABLE:
+        print("**Warning** Self-optimization module not available, feature will be disabled")
 
     # Verify API key is available
     if not os.environ.get('OPENAI_API_KEY'):
