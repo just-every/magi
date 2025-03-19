@@ -32,7 +32,7 @@
       <!-- Process boxes will be dynamically inserted here -->
     </main>
 
-    <div id="center-input-container" class="position-absolute top-50 start-50 translate-middle w-75 max-width-md">
+    <div id="center-input-container" class="position-absolute top-50 start-50 translate-middle w-75 max-width-md" style="display: none;">
       <form id="center-command-form">
         <div class="input-group">
           <span class="input-group-text">&gt;</span>
@@ -44,8 +44,8 @@
 
   <!-- Process box template -->
   <template id="process-template">
-    <div class="process-box card w-100">
-      <div class="card-header d-flex justify-content-between align-items-center">
+    <div class="process-box card w-100 shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center border-0">
         <span class="process-id fw-bold">MAGI</span>
         <div class="d-flex align-items-center gap-2">
           <span class="process-status status-label btn-sm status-running">running</span>
@@ -53,11 +53,11 @@
         </div>
       </div>
       <div class="process-logs card-body overflow-auto"></div>
-      <div class="process-input-container card-footer bg-light">
+      <div class="process-input-container card-footer bg-transparent p-2 border-0">
         <form class="process-input-form">
           <div class="input-group">
             <span class="input-group-text">&gt;</span>
-            <input type="text" class="process-input form-control" placeholder="Send command..." autocomplete="off">
+            <input type="text" class="process-input form-control" placeholder="Send reply..." autocomplete="off">
           </div>
         </form>
       </div>
@@ -68,8 +68,8 @@
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <!-- Bootstrap Bundle with Popper -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  
-  
+
+
   <script src="/client.js"></script>
 
 </body>

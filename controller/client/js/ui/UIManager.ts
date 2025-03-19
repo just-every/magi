@@ -133,6 +133,9 @@ export class UIManager {
    * Function to transition from center input to header
    */
   animateInitialTransition(): void {
+    // Add transition for smooth animation
+    this.mainHeader.style.transition = 'all 0.5s cubic-bezier(0.25, 1, 0.5, 1)';
+
     // Show header
     this.mainHeader.style.opacity = '1';
     this.mainHeader.style.transform = 'translateY(0)';
@@ -172,14 +175,26 @@ export class UIManager {
     setTimeout(() => {
       const processCount = this.processUI.getProcessCount();
       if (processCount > 0) {
-        // If there are existing processes, show the header and hide the center input
+        // If there are existing processes, immediately set the correct UI state without animations
         this.isFirstProcess = false;
+
+        // Directly set final state without transitions
         this.mainHeader.style.opacity = '1';
         this.mainHeader.style.transform = 'translateY(0)';
-        this.centerInputContainer.style.opacity = '0';
+
+        // Ensure center input remains hidden
         this.centerInputContainer.style.display = 'none';
+        this.centerInputContainer.style.opacity = '0';
+
+        // Focus the header input
+        this.commandInput.focus();
       } else {
-        // Focus on the center input if no processes
+        // Add transition for smooth animation when no processes exist
+        this.mainHeader.style.transition = 'all 0.5s cubic-bezier(0.25, 1, 0.5, 1)';
+
+        // Show and focus the center input if no processes
+        this.centerInputContainer.style.display = 'block';
+        this.centerInputContainer.style.opacity = '1';
         this.centerCommandInput.focus();
       }
     }, 100);

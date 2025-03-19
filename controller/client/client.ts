@@ -45,6 +45,5 @@ document.addEventListener('DOMContentLoaded', () => {
     onConnect: () => uiManager.handleConnect()
   });
 
-  // Focus the center input initially
-  centerCommandInput.focus();
+  // Don't focus input immediately - the connection handler will determine the right input to focus
 });
