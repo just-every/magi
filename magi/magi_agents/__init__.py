@@ -39,32 +39,115 @@ Assume you have been given all the information necessary to complete the task.
 - Return your best possible response and include any educated guesses you had to make"""
 
 
-def create_agent(agent: str = "supervisor") -> Agent:
-    """Create a single agent."""
-
+def create_agent(agent: str = "supervisor", model: str = None) -> Agent:
+    """
+    Create a single agent.
+    
+    Args:
+        agent: The type of agent to create
+        model: Optional model override
+    
+    Returns:
+        Agent: The configured agent
+    """
+    # Create the agent based on the type
     if agent == "supervisor":
         from magi.magi_agents.supervisor_agent import create_supervisor_agent
-        return create_supervisor_agent()
+        agent_instance = create_supervisor_agent()
     elif agent == "code":
         from magi.magi_agents.workers.code_agent import create_code_agent
-        return create_code_agent()
+        agent_instance = create_code_agent()
     elif agent == "browser":
         from magi.magi_agents.workers.browser_agent import create_browser_agent
-        return create_browser_agent()
+        agent_instance = create_browser_agent()
     elif agent == "shell":
         from magi.magi_agents.workers.shell_agent import create_shell_agent
-        return create_shell_agent()
+        agent_instance = create_shell_agent()
     elif agent == "search":
         from magi.magi_agents.workers.search_agent import create_search_agent
-        return create_search_agent()
+        agent_instance = create_search_agent()
     elif agent == "reasoning":
         from magi.magi_agents.workers.reasoning_agent import create_reasoning_agent
-        return create_reasoning_agent()
+        agent_instance = create_reasoning_agent()
     elif agent == "worker":
         from magi.magi_agents.workers.manager_agent import create_manager_agent
-        return create_manager_agent()
-
-    raise ValueError(f"Unknown agent type: {agent}")
+        agent_instance = create_manager_agent()
+    else:
+        raise ValueError(f"Unknown agent type: {agent}")
+    
+    # Override the model if specified
+    if model:
+        agent_instance.model = model
+        
+        # Apply model-specific settings
+        from agents import ModelSettings
+        from magi.utils.model_provider import MODEL_TO_PROVIDER
+        
+        # Get the provider for this model
+        provider = MODEL_TO_PROVIDER.get(model)
+        
+        # If this is a Claude model, modify settings
+        if provider == "anthropic":
+            import logging
+            logging.info(f"Applying Claude-specific settings for model {model}")
+            
+            # Claude models don't support parallel_tool_calls
+            agent_instance.model_settings = ModelSettings(
+                truncation="auto", 
+                parallel_tool_calls=False  # Disable parallel tool calls for Claude
+            )
+            
+            # Limit max tokens used by Claude 
+            max_tokens = 4096
+            if "-sonnet-" in model:
+                max_tokens = 32000
+            if "claude-3-7-sonnet" in model:
+                max_tokens = 32000
+                
+            # Store the max tokens as an attribute on the agent
+            agent_instance.max_tokens = max_tokens
+        
+        # If this is a Grok model, modify settings
+        elif provider == "xai":
+            import logging
+            logging.info(f"Applying Grok-specific settings for model {model}")
+            
+            # Grok models don't support parallel_tool_calls
+            agent_instance.model_settings = ModelSettings(
+                truncation="auto", 
+                parallel_tool_calls=False  # Disable parallel tool calls for Grok
+            )
+            
+            # Limit max tokens used by Grok
+            max_tokens = 4096
+            if "grok-2" in model:
+                max_tokens = 8192
+                
+            # Store the max tokens as an attribute on the agent
+            agent_instance.max_tokens = max_tokens
+        
+        # If this is a Gemini model, modify settings 
+        elif provider == "google":
+            import logging
+            logging.info(f"Applying Gemini-specific settings for model {model}")
+            
+            # Gemini models might not support parallel_tool_calls
+            agent_instance.model_settings = ModelSettings(
+                truncation="auto", 
+                parallel_tool_calls=False  # Disable parallel tool calls for Gemini
+            )
+            
+            # Limit max tokens used by Gemini
+            max_tokens = 4096
+            if "gemini-2.0-ultra" in model or "gemini-1.5-pro" in model:
+                max_tokens = 16384
+            elif "gemini-2.0-flash" in model or "gemini-1.5-flash" in model or "gemini-pro" in model:
+                max_tokens = 8192
+                
+            # Store the max tokens as an attribute on the agent
+            agent_instance.max_tokens = max_tokens
+            
+    return agent_instance
 
 
 def worker_agents_as_tools(include_reasoning = True) -> list:

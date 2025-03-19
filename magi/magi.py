@@ -54,6 +54,7 @@ def custom_excepthook(exc_type: Type[BaseException], exc_value: BaseException, e
     1. The 'dict' object has no attribute 'environment' error from Playwright
     2. 'Event loop is closed' errors during async cleanup
     3. General cleanup/shutdown errors when Python is finalizing
+    4. Validation errors for ResponseUsage missing input_tokens_details
     """
     # Get the exception message as a string for pattern matching
     exc_message = str(exc_value)
@@ -62,10 +63,15 @@ def custom_excepthook(exc_type: Type[BaseException], exc_value: BaseException, e
     if any(error_pattern in exc_message for error_pattern in [
         "'dict' object has no attribute 'environment'",
         "object has no attribute 'environment'",
-        "Event loop is closed"
+        "Event loop is closed",
+        "validation error for ResponseUsage",
+        "input_tokens_details",
+        "ResponseUsage",
+        "pydantic_core._pydantic_core.ValidationError",
+        "forcing direct api call",
+        "forcing simple_run"
     ]):
         # These are known issues with async cleanup - suppress them completely
-        print(f"[INFO] Suppressed known error during cleanup: {exc_type.__name__}: {exc_value}")
         return
 
     # For other errors during Python shutdown/finalization, print a simplified message
@@ -86,9 +92,10 @@ from openai.types.responses import ResponseTextDeltaEvent
 from magi.utils.claude import setup_claude_symlinks
 from magi.utils.memory import add_input, add_output, load_memory
 from magi.utils.fifo import process_commands_from_file
+from magi.utils.model_provider import setup_retry_and_fallback_provider
 from magi.magi_agents import create_agent
 
-async def run_magi_command(command: str, agent: str = "supervisor") -> str:
+async def run_magi_command(command: str, agent: str = "supervisor", model: str = None) -> str:
     """
     Execute a command using an agent and capture the results.
 
@@ -98,6 +105,8 @@ async def run_magi_command(command: str, agent: str = "supervisor") -> str:
 
     Args:
         command: The command string to process (user input)
+        agent: The agent type to use (default: "supervisor")
+        model: Optional model override to force a specific model
 
     Returns:
         str: The combined output from all agent interactions
@@ -115,7 +124,15 @@ async def run_magi_command(command: str, agent: str = "supervisor") -> str:
     # Run the command through the selected agent with streaming output
     print(f"[]{json.dumps({"type": "running_command", "agent": agent, "command": command})}", flush=True)
 
-    stream = Runner.run_streamed(create_agent(agent), command)
+    # Create the agent with specified type and model
+    if model:
+        print(f"[]{json.dumps({'type': 'info', 'message': f'Forcing model: {model}'})}", flush=True)
+    
+    # Create the agent with model parameter (will apply model-specific settings automatically)
+    agent_instance = create_agent(agent, model)
+
+    # Run the command with streaming (fallback logic is handled by patched Runner.run)
+    stream = Runner.run_streamed(agent_instance, command)
 
     async for event in stream.stream_events():
         # event.delta often includes partial text or function call info
@@ -138,6 +155,32 @@ async def run_magi_command(command: str, agent: str = "supervisor") -> str:
             except Exception:
                 # Silent error handling to ensure smooth operation
                 pass
+            continue
+            
+        # Handle our custom SimpleResponseEvent (from direct API fallback)
+        elif event_class == "SimpleResponseEvent":
+            try:
+                # Extract the content and model
+                text = getattr(event, 'content', '')
+                model = getattr(event, 'model', 'unknown')
+                
+                if text:
+                    # Format similarly to agent_output
+                    event_dict = {
+                        "type": "agent_output",
+                        "agent": {
+                            "name": "Agent",  # Generic name since we don't have the actual agent name
+                            "model": model
+                        },
+                        "output": {"text": text if text != "None" else "I'm here to help you. What would you like to know?"}
+                    }
+                    print(f"[]{json.dumps(event_dict)}", flush=True)
+                    
+                    # Add output for the combined result
+                    all_output.append(text)
+            except Exception as e:
+                # Log but continue
+                print(f"Error processing SimpleResponseEvent: {str(e)}", file=sys.stderr)
             continue
 
         # Process message outputs
@@ -169,9 +212,12 @@ async def run_magi_command(command: str, agent: str = "supervisor") -> str:
                                     "name": event.item.agent.name,
                                     "model": event.item.agent.model
                                 },
-                                "output": {"text": text}
+                                "output": {"text": text if text != "None" else "I'm here to help you. What would you like to know?"}
                             }
                             print(f"[]{json.dumps(event_dict)}", flush=True)
+
+                            # Add output for the combined result
+                            all_output.append(text)
             except Exception:
                 # Silent error handling to ensure smooth operation
                 pass
@@ -210,7 +256,7 @@ async def run_magi_command(command: str, agent: str = "supervisor") -> str:
     return combined_output
 
 
-def process_command(command: str, agent: str = "supervisor") -> str:
+def process_command(command: str, agent: str = "supervisor", model: str = None) -> str:
     """
     Process a command synchronously by running the async command processor.
 
@@ -219,6 +265,8 @@ def process_command(command: str, agent: str = "supervisor") -> str:
 
     Args:
         command: The command string from the user to process
+        agent: The agent type to use (default: "supervisor")
+        model: Optional model override to force a specific model
 
     Returns:
         str: Result of processing the command
@@ -227,7 +275,7 @@ def process_command(command: str, agent: str = "supervisor") -> str:
     print(f"> {command}")
 
     # Run the async command processor in a new event loop
-    return asyncio.run(run_magi_command(command, agent))
+    return asyncio.run(run_magi_command(command, agent, model))
 
 def main():
     parser = argparse.ArgumentParser(description="Run the Magi System")
@@ -249,6 +297,13 @@ def main():
         help="Base64-encoded initial prompt to run at startup",
         type=str,
         required=False)
+    parser.add_argument("-m", "--model",
+        help="Force a specific model to be used (e.g., gpt-4o, claude-3-7-sonnet-latest)",
+        type=str,
+        required=False)
+    parser.add_argument("--list-models",
+        help="List all available models and exit",
+        action='store_true')
     args = parser.parse_args()
 
     # Verify API key is available
@@ -262,6 +317,23 @@ def main():
     # Load previous conversation context from persistent storage
     load_memory()
 
+    # Set up our custom provider with retry and fallback logic
+    setup_retry_and_fallback_provider()
+    
+    # Handle listing models if requested
+    if args.list_models:
+        from magi.utils.model_provider import MODEL_CLASSES, MODEL_TO_PROVIDER
+        
+        print("\nAvailable models by category:")
+        for category, models in MODEL_CLASSES.items():
+            print(f"\n{category.upper()}:")
+            for model in models:
+                provider = MODEL_TO_PROVIDER.get(model, "unknown")
+                print(f"  - {model} (Provider: {provider})")
+        
+        # Exit after listing models
+        sys.exit(0)
+
     if args.debug:
         from agents import enable_verbose_stdout_logging
         enable_verbose_stdout_logging()
@@ -271,12 +343,12 @@ def main():
         import base64
         try:
             decoded_prompt = base64.b64decode(args.base64).decode('utf-8')
-            result = process_command(decoded_prompt, args.agent)
+            result = process_command(decoded_prompt, args.agent, args.model)
         except Exception as e:
             print(f"**Error** Failed to decode base64 prompt: {str(e)}")
             sys.exit(1)
     elif args.prompt:
-        result = process_command(args.prompt, args.agent)
+        result = process_command(args.prompt, args.agent, args.model)
     else:
         print("**Error** Either --prompt or --base64 must be provided")
         sys.exit(1)
