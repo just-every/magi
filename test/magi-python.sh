@@ -18,5 +18,4 @@ pip install -q --upgrade pip
 pip install -q -r docker/requirements.txt
 python -m playwright install chromium
 
-echo -e "\nTesting... \n"
 python magi.py -t "$@"

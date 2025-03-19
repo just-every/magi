@@ -12,7 +12,6 @@ export DOCKER_CLI_HINTS=false
 docker build --quiet -t magi-system:latest -f magi/docker/Dockerfile .
 
 # Run the docker container with all env variables from .env (removed -d to see output)
-echo -e "\nTesting... \n"
 docker run --rm --name $CONTAINER_NAME \
     -e PROCESS_ID=AI-test \
     -e TEST_SCRIPT=true \
