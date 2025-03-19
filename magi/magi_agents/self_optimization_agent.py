@@ -281,5 +281,5 @@ Start with simple changes before significant modifications. Focus on agent selec
             read_file
         ],
         model=os.environ.get("MAGI_REASONING_MODEL", "claude-3-7-sonnet-latest"),
-        model_settings=ModelSettings(truncation="auto", parallel_tool_calls=True),
+        model_settings=ModelSettings(truncation="auto"),
     )

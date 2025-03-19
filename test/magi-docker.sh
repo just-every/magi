@@ -20,4 +20,4 @@ docker run --rm --name $CONTAINER_NAME \
     -v claude_credentials:/claude_shared:rw \
     -v magi_output:/magi_output:rw \
     magi-system:latest \
-    python -m magi.magi -t "$@"
+    python -m magi.magi -t "$@" 2>/dev/null

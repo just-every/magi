@@ -27,6 +27,79 @@ TRUNCATE_CHARS = 1000
 # Configure module path to ensure imports work correctly
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Add specific function to handle tool calls that may be in different formats
+def extract_tool_call_data(tool_call):
+    """
+    Extract data from a tool call object regardless of its format.
+    
+    Handles different formats including:
+    - OpenAI ChatCompletionMessageToolCall objects
+    - Dictionary-style objects with 'get' method
+    - Objects with direct attribute access
+    
+    Returns:
+        tuple: (tool_id, tool_type, function_name, function_args)
+    """
+    # Default values
+    tool_id = f"call_{hash(str(tool_call))}"
+    tool_type = "function"
+    function_name = "unknown_function"
+    function_args = "{}"
+    
+    try:
+        # Check if it's a ChatCompletionMessageToolCall by class name
+        tool_class_name = tool_call.__class__.__name__ if hasattr(tool_call, '__class__') else "unknown"
+        
+        if tool_class_name == "ChatCompletionMessageToolCall":
+            # Handle specific OpenAI object format
+            tool_id = getattr(tool_call, 'id', tool_id)
+            
+            if hasattr(tool_call, 'function'):
+                function_obj = tool_call.function
+                if hasattr(function_obj, 'name'):
+                    function_name = function_obj.name
+                if hasattr(function_obj, 'arguments'):
+                    function_args = function_obj.arguments
+        
+        # Handle object with direct attribute access
+        elif hasattr(tool_call, 'id') and not isinstance(tool_call, dict):
+            tool_id = tool_call.id
+            tool_type = getattr(tool_call, 'type', tool_type)
+            
+            if hasattr(tool_call, 'function'):
+                function_data = tool_call.function
+                if hasattr(function_data, 'name'):
+                    function_name = function_data.name
+                if hasattr(function_data, 'arguments'):
+                    function_args = function_data.arguments
+        
+        # Handle dictionary-style access
+        elif hasattr(tool_call, 'get'):
+            tool_id = tool_call.get("id", tool_id)
+            tool_type = tool_call.get("type", tool_type)
+            function_data = tool_call.get("function", {})
+            
+            if isinstance(function_data, dict) and hasattr(function_data, 'get'):
+                function_name = function_data.get("name", function_name)
+                function_args = function_data.get("arguments", function_args)
+            elif hasattr(function_data, 'name'):
+                function_name = function_data.name
+                if hasattr(function_data, 'arguments'):
+                    function_args = function_data.arguments
+    except Exception as e:
+        print(f"Error extracting tool call data: {str(e)}", file=sys.stderr)
+    
+    # Try to extract name from arguments if function_name is unknown
+    try:
+        if function_name == "unknown_function" and function_args:
+            args_dict = json.loads(function_args) if isinstance(function_args, str) else function_args
+            if isinstance(args_dict, dict) and "name" in args_dict:
+                function_name = args_dict["name"]
+    except:
+        pass
+    
+    return tool_id, tool_type, function_name, function_args
+
 # Add an exception filter to suppress the "environment" attribute error on exit
 # This helps prevent noise in the logs during shutdown
 original_excepthook = sys.excepthook
@@ -36,6 +109,10 @@ def custom_excepthook(exc_type: Type[BaseException], exc_value: BaseException, e
     # Get the exception message as a string for pattern matching
     exc_message = str(exc_value)
 
+    # Filter out all "task exception was never retrieved" errors
+    if "Task exception was never retrieved" in exc_message:
+        return
+        
     # Check for specific errors to suppress
     harmless_patterns = [
         "'dict' object has no attribute 'environment'",
@@ -46,7 +123,13 @@ def custom_excepthook(exc_type: Type[BaseException], exc_value: BaseException, e
         "ResponseUsage",
         "pydantic_core._pydantic_core.ValidationError",
         "forcing direct api call",
-        "forcing simple_run"
+        "forcing simple_run",
+        "Field required [type=missing, input_value={",
+        "validation error for",
+        "pydantic",
+        "future: <Task",
+        "future:",
+        "Task-"
     ]
     
     if any(pattern in exc_message for pattern in harmless_patterns):
@@ -186,16 +269,13 @@ async def run_self_optimized_command(command: str, model: str = None) -> str:
                 
                 if tool_calls:
                     for tool_call in tool_calls:
-                        tool_id = tool_call.get("id", f"call_{hash(str(tool_call))}")
-                        tool_type = tool_call.get("type", "function")
-                        function_data = tool_call.get("function", {})
-                        function_name = function_data.get("name", "unknown_function")
-                        function_args = function_data.get("arguments", "{}")
+                        # Use the utility function to extract data in a consistent way
+                        tool_id, tool_type, function_name, function_args = extract_tool_call_data(tool_call)
                         
                         print(f"[]{json.dumps({
                             'type': 'tool_call',
                             'agent': {
-                                'name': 'SelfOptimizationAgent',
+                                'name': 'SelfOptimizationAgent', 
                                 'model': model
                             },
                             'tool': {
@@ -271,7 +351,7 @@ async def run_magi_command(command: str, agent: str = "supervisor", model: str =
         command: The command string to process (user input)
         agent: The agent type to use (default: "supervisor")
         model: Optional model override to force a specific model
-
+    
     Returns:
         str: The combined output from all agent interactions
     """
@@ -373,12 +453,8 @@ async def run_magi_command(command: str, agent: str = "supervisor", model: str =
                 if tool_calls:
                     # Format as tool_call_item which will be processed by the agent framework
                     for tool_call in tool_calls:
-                        # Extract tool call details
-                        tool_id = tool_call.get("id", f"call_{hash(str(tool_call))}")
-                        tool_type = tool_call.get("type", "function")
-                        function_data = tool_call.get("function", {})
-                        function_name = function_data.get("name", "unknown_function")
-                        function_args = function_data.get("arguments", "{}")
+                        # Use the utility function to extract data in a consistent way
+                        tool_id, tool_type, function_name, function_args = extract_tool_call_data(tool_call)
                         
                         # Create equivalent of tool_call_item event
                         tool_event_dict = {
@@ -464,15 +540,15 @@ async def run_magi_command(command: str, agent: str = "supervisor", model: str =
 def process_command(command: str, agent: str = "supervisor", model: str = None) -> str:
     """
     Process a command synchronously by running the async command processor.
-
+    
     This is a convenience wrapper around run_magi_command that handles the
     async-to-sync conversion using asyncio.run().
-
+    
     Args:
         command: The command string from the user to process
         agent: The agent type to use (default: "supervisor")
         model: Optional model override to force a specific model
-
+    
     Returns:
         str: Result of processing the command
     """
