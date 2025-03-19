@@ -48,6 +48,19 @@ The MAGI System consists of two primary components that work together:
 | **Filesystem** | File operations | Shell command execution |
 | **Search** | Web research | Web search tools |
 | **Browser** | Website interaction | Playwright automation |
+| **Self-Optimization** | Code modification | Repo management, code editing |
+
+### Self-Optimization
+
+The MAGI System includes a powerful self-optimization feature that:
+
+1. Analyzes incoming tasks to determine required capabilities
+2. Creates a copy of the codebase in a temporary directory
+3. Modifies the code to better handle the specific task
+4. Tests the modifications thoroughly
+5. Executes the task using the optimized code
+
+This enables the system to adapt itself to better handle specific types of tasks, improving performance and capabilities over time. The feature can be enabled or disabled via command-line arguments or environment variables.
 
 ## Installation Requirements
 
@@ -129,7 +142,22 @@ You can also test individual agents directly with python using:
 test/magi-python.sh -p "your prompt here" -a code
 ```
 Where `code` is the name of the agent you want to test;
-`supervisor`, `code`, `browser`, `shell`, `search`, `reasoning` or `worker`.
+`supervisor`, `code`, `browser`, `shell`, `search`, `reasoning`, `worker`, or `self-optimization`.
+
+#### Self-Optimization Options
+
+Enable or disable the self-optimization feature using the `--self-optimization` flag:
+
+```bash
+test/magi-docker.sh -p "your prompt here" --self-optimization true
+test/magi-docker.sh -p "your prompt here" --self-optimization false
+```
+
+You can also control this feature using the `MAGI_ENABLE_SELF_OPTIMIZATION` environment variable:
+
+```bash
+MAGI_ENABLE_SELF_OPTIMIZATION=false test/magi-docker.sh -p "your prompt here"
+```
 
 ## Development
 

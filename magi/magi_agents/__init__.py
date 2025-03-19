@@ -15,6 +15,7 @@ AGENT_DESCRIPTIONS = {
     "ShellAgent": "ShellAgent - Shell commands and file system operations expert. Can read the current file system and perform any kind of bash command requested.",
     "ReasoningAgent": "ReasoningAgent - An expert at thinking through complicated problems. Has more skills, experience and ability to solve complicated problems than standard agents. Particularly useful for breaking down complex tasks that have multiple possible solutions or require deeper analysis.",
     "ManagerAgent": "ManagerAgent - A highly knowledgeable AI manager who is given discrete tasks to work on. Manages groups of workers who are specialized at writing code, searching the web, using a browser, and running shell commands. Managers can also think for themselves and can be largely autonomous.",
+    "SelfOptimizationAgent": "SelfOptimizationAgent - A specialized agent for optimizing the MAGI codebase to better handle specific tasks. It can analyze tasks, plan code modifications, implement changes, and test them. This agent enables MAGI to adapt itself for improved performance on specific tasks.",
 }
 
 # Common warnings text
@@ -72,6 +73,9 @@ def create_agent(agent: str = "supervisor", model: str = None) -> Agent:
     elif agent == "worker":
         from magi.magi_agents.workers.manager_agent import create_manager_agent
         agent_instance = create_manager_agent()
+    elif agent == "self-optimization":
+        from magi.magi_agents.self_optimization_agent import create_self_optimization_agent
+        agent_instance = create_self_optimization_agent()
     else:
         raise ValueError(f"Unknown agent type: {agent}")
     
