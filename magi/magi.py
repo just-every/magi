@@ -8,26 +8,9 @@ Event Structure Documentation:
 ------------------------------
 When processing events from result.stream_events(), the following event types are handled:
 
-1. raw_response_event
-   - Contains raw response data, including text deltas for streaming output.
-   - Properties: data (ResponseTextDeltaEvent or other response types).
-   - Used for real-time token streaming.
-
-2. agent_updated_stream_event
-   - Signals a transition to a different specialized agent.
-   - Properties: new_agent (Agent object with name, instructions, tools).
-   - Logged as "[AGENT] Switched to: {agent_name}".
-
-3. run_item_stream_event
-   - Contains various processing items (tool calls, outputs, messages).
-   - Properties: item (with type and type-specific properties).
-   - Common item.type values:
-     * tool_call_item: When a tool is invoked. Logged as "[TOOL CALL]".
-     * tool_call_output_item: Results from tool invocation. Logged as "[TOOL RESULT]".
-     * message_output_item: Text output from an agent. Logged as "[MESSAGE]".
-
-Each event type has different property structures and requires careful error
-handling to extract information reliably across different agent implementations.
+1. raw_response_event: Contains raw response data for streaming output
+2. agent_updated_stream_event: Signals transition to a different specialized agent
+3. run_item_stream_event: Contains processing items (tool calls, outputs, messages)
 """
 import sys
 import os
@@ -49,20 +32,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 original_excepthook = sys.excepthook
 
 def custom_excepthook(exc_type: Type[BaseException], exc_value: BaseException, exc_traceback):
-    """
-    Custom exception hook to filter out known harmless errors during shutdown.
-
-    This hook specifically handles:
-    1. The 'dict' object has no attribute 'environment' error from Playwright
-    2. 'Event loop is closed' errors during async cleanup
-    3. General cleanup/shutdown errors when Python is finalizing
-    4. Validation errors for ResponseUsage missing input_tokens_details
-    """
+    """Custom exception hook to filter out known harmless errors during shutdown."""
     # Get the exception message as a string for pattern matching
     exc_message = str(exc_value)
 
     # Check for specific errors to suppress
-    if any(error_pattern in exc_message for error_pattern in [
+    harmless_patterns = [
         "'dict' object has no attribute 'environment'",
         "object has no attribute 'environment'",
         "Event loop is closed",
@@ -72,17 +47,18 @@ def custom_excepthook(exc_type: Type[BaseException], exc_value: BaseException, e
         "pydantic_core._pydantic_core.ValidationError",
         "forcing direct api call",
         "forcing simple_run"
-    ]):
-        # These are known issues with async cleanup - suppress them completely
+    ]
+    
+    if any(pattern in exc_message for pattern in harmless_patterns):
+        # Suppress known harmless errors
         return
 
-    # For other errors during Python shutdown/finalization, print a simplified message
+    # For other errors during Python shutdown, print a simplified message
     if hasattr(sys, 'is_finalizing') and sys.is_finalizing():
-        # Just print a short message instead of the full traceback
         print(f"[WARNING] Error during shutdown: {exc_type.__name__}: {exc_value}")
         return
 
-    # For all other exceptions, use the original exception hook with full traceback
+    # For all other exceptions, use the original exception hook
     original_excepthook(exc_type, exc_value, exc_traceback)
 
 # Set the custom exception hook
@@ -105,40 +81,23 @@ from magi.magi_agents.self_optimization_agent import create_self_optimization_ag
 ENABLE_SELF_OPTIMIZATION = os.environ.get("MAGI_ENABLE_SELF_OPTIMIZATION", "true").lower() == "true"
 
 async def run_self_optimized_command(command: str, model: str = None) -> str:
-    """
-    Execute a command using the self-optimization agent first to modify the codebase.
-    
-    This function runs the self-optimization agent to analyze the task and optimize
-    the codebase, then executes the command using the optimized code.
-    
-    Args:
-        command: The command string to process (user input)
-        model: Optional model override to force a specific model
-        
-    Returns:
-        str: The combined output from the self-optimization and task execution
-        
-    Raises:
-        Exception: If any step of the self-optimization process fails
-    """
+    """Execute a command using the self-optimization agent to modify the codebase."""
     # Set up logging
     logger = logging.getLogger(__name__)
     logger.info(f"Starting self-optimization for command: {command[:100]}...")
     
-    # Record the start time for performance metrics
+    # Record start time and initialize output collection
     start_time = time.time()
-    # Collection of all output chunks for final result
     all_output: List[str] = []
     
     # Initialize the self-optimization agent
     print(f"[]{json.dumps({'type': 'info', 'message': 'Initializing self-optimization'})}", flush=True)
     
-    # Create the self-optimization agent
     self_opt_agent = create_self_optimization_agent()
     if model:
         self_opt_agent.model = model
     
-    # Prepare a prompt for the self-optimization agent
+    # Prepare optimization prompt
     optimization_prompt = f"""
     I need you to analyze the following task and optimize the MAGI codebase to better handle it:
     
@@ -151,188 +110,139 @@ async def run_self_optimized_command(command: str, model: str = None) -> str:
     4. Test your changes thoroughly
     5. Execute the original task using your optimized code
     
-    Be thorough in your analysis and implementation. Focus on making targeted changes
-    to improve MAGI's capabilities for this specific task.
+    Focus on making targeted changes to improve MAGI's capabilities for this specific task.
     """
     
     # Run the self-optimization agent
     print(f"[]{json.dumps({'type': 'running_command', 'agent': 'SelfOptimizationAgent', 'command': 'Analyzing and optimizing for task'})}", flush=True)
     
-    # Use the streaming API for the self-optimization agent
+    # Process stream events from the agent
     stream = Runner.run_streamed(self_opt_agent, optimization_prompt)
     
     async for event in stream.stream_events():
-        # Process events from the self-optimization agent
-        # Similar event handling as in the main run_magi_command function
-        
         # Handle the different event types based on class
         event_class = event.__class__.__name__
         
         # Process agent updates
         if event_class == "AgentUpdatedStreamEvent" and hasattr(event, 'new_agent'):
             try:
-                # Announce agent change
-                event_dict = {
-                    "type": "new_agent",
-                    "agent": {
-                        "name": event.new_agent.name,
-                        "model": event.new_agent.model
+                print(f"[]{json.dumps({
+                    'type': 'new_agent',
+                    'agent': {
+                        'name': event.new_agent.name,
+                        'model': event.new_agent.model
                     }
-                }
-                print(f"[]{json.dumps(event_dict)}", flush=True)
+                })}", flush=True)
             except Exception:
-                # Silent error handling to ensure smooth operation
                 pass
             continue
             
-        # Handle our custom SimpleResponseEvent (from direct API fallback)
+        # Handle direct API responses
         elif event_class == "SimpleResponseEvent":
             try:
-                # Extract the content and model
                 text = getattr(event, 'content', '')
                 model = getattr(event, 'model', 'unknown')
                 
-                # Make sure text is not empty or just whitespace
                 if text and text.strip():
-                    # Format similarly to agent_output
-                    event_dict = {
-                        "type": "agent_output",
-                        "agent": {
-                            "name": "SelfOptimizationAgent",
-                            "model": model
+                    print(f"[]{json.dumps({
+                        'type': 'agent_output',
+                        'agent': {
+                            'name': 'SelfOptimizationAgent',
+                            'model': model
                         },
-                        "output": {"text": text}
-                    }
-                    print(f"[]{json.dumps(event_dict)}", flush=True)
+                        'output': {'text': text}
+                    })}", flush=True)
                     
-                    # Add output for the combined result
                     all_output.append(text)
                 else:
-                    # Log error but don't suppress it
                     error_msg = f"Empty content in SimpleResponseEvent from model {model}"
                     print(f"ERROR: {error_msg}", file=sys.stderr)
-                    # Raise an exception to trigger fallback to another model
                     continue
             except Exception as e:
-                # Log error
                 print(f"Error processing SimpleResponseEvent: {str(e)}", file=sys.stderr)
                 raise
             continue
             
-        # Handle ToolCallEvent from our direct API implementations
+        # Handle tool calls
         elif event_class == "ToolCallEvent":
             try:
-                # Extract tool calls and model info
                 tool_calls = getattr(event, 'tool_calls', [])
                 model = getattr(event, 'model', 'unknown')
                 
                 if tool_calls:
-                    # Format as tool_call_item which will be processed by the agent framework
                     for tool_call in tool_calls:
-                        # Extract tool call details
                         tool_id = tool_call.get("id", f"call_{hash(str(tool_call))}")
                         tool_type = tool_call.get("type", "function")
                         function_data = tool_call.get("function", {})
                         function_name = function_data.get("name", "unknown_function")
                         function_args = function_data.get("arguments", "{}")
                         
-                        # Create equivalent of tool_call_item event
-                        tool_event_dict = {
-                            "type": "tool_call",
-                            "agent": {
-                                "name": "SelfOptimizationAgent",
-                                "model": model
+                        print(f"[]{json.dumps({
+                            'type': 'tool_call',
+                            'agent': {
+                                'name': 'SelfOptimizationAgent',
+                                'model': model
                             },
-                            "tool": {
-                                "id": tool_id,
-                                "type": tool_type,
-                                "name": function_name,
-                                "arguments": function_args
+                            'tool': {
+                                'id': tool_id,
+                                'type': tool_type,
+                                'name': function_name,
+                                'arguments': function_args
                             }
-                        }
-                        print(f"[]{json.dumps(tool_event_dict)}", flush=True)
+                        })}", flush=True)
                 else:
                     logger.warning(f"Empty tool_calls in ToolCallEvent from model {model}")
             except Exception as e:
-                # Log error
                 print(f"Error processing ToolCallEvent: {str(e)}", file=sys.stderr)
             continue
             
         # Process message outputs
         elif event_class == "RunItemStreamEvent" and hasattr(event, 'item'):
             try:
-                # Only process message outputs for now
+                # Only process message outputs
                 if hasattr(event.item, 'type') and event.item.type == "message_output_item":
-                    # Extract content from raw item
                     if hasattr(event.item, 'raw_item') and hasattr(event.item.raw_item, 'content'):
-                        # Extract text from content
                         content = event.item.raw_item.content
                         text = ""
                         
-                        # Handle content based on type
+                        # Extract text based on content type
                         if isinstance(content, list):
-                            # Combine all text parts
                             for part in content:
                                 if hasattr(part, 'text'):
                                     text += part.text
                         elif hasattr(content, 'text'):
-                            # Direct text property
                             text = content.text
                             
-                        # Only output if we have text
                         if text:
-                            event_dict = {
-                                "type": "agent_output",
-                                "agent": {
-                                    "name": event.item.agent.name,
-                                    "model": event.item.agent.model
+                            print(f"[]{json.dumps({
+                                'type': 'agent_output',
+                                'agent': {
+                                    'name': event.item.agent.name,
+                                    'model': event.item.agent.model
                                 },
-                                "output": {"text": text}
-                            }
-                            print(f"[]{json.dumps(event_dict)}", flush=True)
+                                'output': {'text': text}
+                            })}", flush=True)
                             
-                            # Add output for the combined result
                             all_output.append(text)
             except Exception:
-                # Silent error handling to ensure smooth operation
                 pass
             continue
             
-        # Skip raw response events - they're handled through RunItemStreamEvent
+        # Skip raw response events
         elif event_class == "RawResponsesStreamEvent":
             continue
-            
-        # For all other events, use recursive conversion and JSON formatting
-        def convert_to_serializable(obj):
-            if hasattr(obj, "__dict__"):
-                return {k: convert_to_serializable(v) for k, v in obj.__dict__.items() if not k.startswith("_")}
-            elif isinstance(obj, (list, tuple)):
-                return [convert_to_serializable(item) for item in obj]
-            elif isinstance(obj, dict):
-                return {k: convert_to_serializable(v) for k, v in obj.items()}
-            elif isinstance(obj, (str, int, float, bool, type(None))):
-                return obj
-            else:
-                return f"{type(obj).__name__}: {str(obj)}"
-                
-        event_type = event.__class__.__name__
-        event_data = convert_to_serializable(event)
-        event_dict = {"type": event_type, "data": event_data}
-        print(json.dumps(event_dict, indent=2), flush=True)
     
-    # Calculate and log the elapsed time
+    # Calculate elapsed time and log summary
     elapsed_time = time.time() - start_time
     logger.info(f"Self-optimization completed in {elapsed_time:.2f} seconds")
     
     print(f"[]{json.dumps({'type': 'info', 'message': f'Self-optimization complete ({elapsed_time:.2f}s)'})}", flush=True)
     
-    # Return the combined output
+    # Combine output and store in memory
     combined_output = ''.join(all_output)
-    
-    # Store result in memory for context in future commands
     add_output(combined_output)
     
-    # Log a summary of the self-optimization process
+    # Log summary
     logger.info(f"Self-optimization process summary:")
     logger.info(f"- Total tokens processed: {len(combined_output.split())} words")
     logger.info(f"- Total execution time: {elapsed_time:.2f} seconds")
@@ -340,13 +250,8 @@ async def run_self_optimized_command(command: str, model: str = None) -> str:
     return combined_output
 
 async def run_magi_command(command: str, agent: str = "supervisor", model: str = None) -> str:
-    """
-    Execute a command using an agent and capture the results.
-
-    This function serves as the main API for executing commands in the MAGI system.
-    It initializes the agent, processes the command, captures and stores
-    the output, and handles any errors that occur during processing.
-
+    """Execute a command using an agent and capture the results.
+    
     Args:
         command: The command string to process (user input)
         agent: The agent type to use (default: "supervisor")
@@ -354,9 +259,6 @@ async def run_magi_command(command: str, agent: str = "supervisor", model: str =
 
     Returns:
         str: The combined output from all agent interactions
-
-    Raises:
-        No exceptions are raised directly; errors are captured and returned as error messages
     """
     # Check if self-optimization is enabled and we're using the supervisor agent
     if ENABLE_SELF_OPTIMIZATION and agent == "supervisor":
@@ -529,23 +431,9 @@ async def run_magi_command(command: str, agent: str = "supervisor", model: str =
         elif event_class == "RawResponsesStreamEvent":
             continue
 
-        # For all other events, use recursive conversion and JSON formatting
-        def convert_to_serializable(obj):
-            if hasattr(obj, "__dict__"):
-                return {k: convert_to_serializable(v) for k, v in obj.__dict__.items() if not k.startswith("_")}
-            elif isinstance(obj, (list, tuple)):
-                return [convert_to_serializable(item) for item in obj]
-            elif isinstance(obj, dict):
-                return {k: convert_to_serializable(v) for k, v in obj.items()}
-            elif isinstance(obj, (str, int, float, bool, type(None))):
-                return obj
-            else:
-                return f"{type(obj).__name__}: {str(obj)}"
-
+        # For all other events, log event type only
         event_type = event.__class__.__name__
-        event_data = convert_to_serializable(event)
-        event_dict = {"type": event_type, "data": event_data}
-        print(json.dumps(event_dict, indent=2), flush=True)
+        print(f"[]{json.dumps({'type': 'event', 'event_type': event_type})}", flush=True)
 
     print(f"[]{json.dumps({"type": "waiting_command"})}", flush=True)
 
@@ -667,23 +555,10 @@ def main():
     # Exit if running in test mode
     if args.test:
         print("\nTesting complete. Exiting.")
-
-        # Set a custom exception hook that ignores specific errors during shutdown
-        def shutdown_excepthook(exc_type, exc_value, exc_traceback):
-            # Filter out event loop errors during shutdown
-            if issubclass(exc_type, RuntimeError) and "Event loop is closed" in str(exc_value):
-                # Silently ignore these errors
-                return
-            # Pass all other exceptions to the original handler
-            original_excepthook(exc_type, exc_value, exc_traceback)
-
-        # Install the custom hook for the shutdown process
-        sys.excepthook = shutdown_excepthook
-
-        # Force Python garbage collection to help clean up resources
+        
+        # Force Python garbage collection and exit
         import gc
         gc.collect()
-
         sys.exit(0)
 
     # Start monitoring for commands from named pipe (FIFO)
