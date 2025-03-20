@@ -69,8 +69,7 @@ export class OpenAIProvider implements ModelProvider {
 
       // Collect tool call data as it streams in
       let currentToolCall: any = null;
-      let currentMessage = '';
-      
+
       // Process the response stream
       try {
         // @ts-ignore - OpenAI's stream is AsyncIterable but TypeScript doesn't recognize it properly
@@ -78,70 +77,60 @@ export class OpenAIProvider implements ModelProvider {
           // For verbose debugging - uncomment this
           // console.log(`Stream event type: ${event.type}`);
           // console.log('Stream event structure:', JSON.stringify(event, null, 2));
-          
+
           // Handle response.output_text.delta - new format for text chunks
           if (event.type === 'response.output_text.delta') {
             const textDelta = event.delta;
             if (textDelta) {
-              currentMessage += textDelta;
               yield {
-                type: 'message',
+                type: 'message_delta',
                 model,
                 content: textDelta
               };
             }
           }
-          
+
           // Handle text.delta - newer format
           else if (event.type === 'text.delta' && event.delta && event.delta.value) {
-            currentMessage += event.delta.value;
             yield {
-              type: 'message',
+              type: 'message_delta',
               model,
               content: event.delta.value
             };
           }
-          
+
           // Handle response.content.delta - older format
           else if (event.type === 'response.content.delta') {
-            currentMessage += event.delta;
             yield {
-              type: 'message',
+              type: 'message_delta',
               model,
               content: event.delta
             };
           }
-          
+
           // Handle response.content_part.added - might contain text
-          else if (event.type === 'response.content_part.added' && 
-                  event.part && 
-                  event.part.type === 'output_text' && 
+          else if (event.type === 'response.content_part.added' &&
+                  event.part &&
+                  event.part.type === 'output_text' &&
                   event.part.text) {
             if (event.part.text && event.part.text.length > 0) {
               yield {
-                type: 'message',
+                type: 'message_complete',
                 model,
                 content: event.part.text
               };
             }
           }
-          
+
           // Handle output_text.done - complete text message
           else if (event.type === 'response.output_text.done' && event.text) {
-            // Emit the full text if we haven't already sent it in chunks
-            if (currentMessage !== event.text) {
-              const remainingText = event.text.substring(currentMessage.length);
-              if (remainingText.length > 0) {
-                yield {
-                  type: 'message',
-                  model,
-                  content: remainingText
-                };
-              }
-              currentMessage = event.text;
-            }
+            yield {
+              type: 'message_complete',
+              model,
+              content: event.text
+            };
           }
-          
+
           // Handle function_call.started - new format
           else if (event.type === 'function_call.started' && event.function_call) {
             currentToolCall = {
@@ -153,24 +142,24 @@ export class OpenAIProvider implements ModelProvider {
               }
             };
           }
-          
+
           // Handle function call argument deltas - new format
-          else if (event.type === 'function_call.argument.delta' && 
-                  currentToolCall && 
-                  event.delta && 
+          else if (event.type === 'function_call.argument.delta' &&
+                  currentToolCall &&
+                  event.delta &&
                   event.delta.value) {
             currentToolCall.function.arguments += event.delta.value;
           }
-          
+
           // Handle function call completion - new format
-          else if (event.type === 'function_call.completed' && 
-                  currentToolCall && 
+          else if (event.type === 'function_call.completed' &&
+                  currentToolCall &&
                   event.function_call) {
             // Use complete arguments if provided
             if (event.function_call.arguments) {
               currentToolCall.function.arguments = event.function_call.arguments;
             }
-            
+
             // Only emit if we have valid arguments
             if (currentToolCall.function.arguments) {
               yield {
@@ -179,14 +168,14 @@ export class OpenAIProvider implements ModelProvider {
                 tool_calls: [currentToolCall as ToolCall]
               };
             }
-            
+
             // Reset for next function call
             currentToolCall = null;
           }
-          
+
           // Handle response.output_item.added - old format for function calls
-          else if (event.type === 'response.output_item.added' && 
-                  event.item && 
+          else if (event.type === 'response.output_item.added' &&
+                  event.item &&
                   event.item.type === 'function_call') {
             currentToolCall = {
               id: event.item.id || event.item.call_id || `call_${Date.now()}`,
@@ -197,49 +186,49 @@ export class OpenAIProvider implements ModelProvider {
               }
             };
           }
-          
+
           // Handle response.function_call_arguments.delta - old format
-          else if (event.type === 'response.function_call_arguments.delta' && 
+          else if (event.type === 'response.function_call_arguments.delta' &&
                   currentToolCall) {
             currentToolCall.function.arguments += event.delta;
           }
-          
+
           // Handle response.function_call_arguments.done - old format
-          else if (event.type === 'response.function_call_arguments.done' && 
+          else if (event.type === 'response.function_call_arguments.done' &&
                   currentToolCall) {
             // Use complete arguments if provided
             if (event.arguments) {
               currentToolCall.function.arguments = event.arguments;
             }
-            
+
             // Emit the tool call
             yield {
               type: 'tool_calls',
               model,
               tool_calls: [currentToolCall as ToolCall]
             };
-            
+
             // Reset for next tool call
             currentToolCall = null;
           }
-          
+
           // Handle response.output_item.done for function calls - old format
-          else if (event.type === 'response.output_item.done' && 
+          else if (event.type === 'response.output_item.done' &&
                   event.item &&
-                  event.item.type === 'function_call' && 
+                  event.item.type === 'function_call' &&
                   currentToolCall) {
             // Use complete arguments if provided
             if (event.item.arguments) {
               currentToolCall.function.arguments = event.item.arguments;
             }
-            
+
             // Emit the tool call
             yield {
               type: 'tool_calls',
               model,
               tool_calls: [currentToolCall as ToolCall]
             };
-            
+
             // Reset for next tool call
             currentToolCall = null;
           }
@@ -254,8 +243,8 @@ export class OpenAIProvider implements ModelProvider {
       }
 
       // If we have a partial tool call that wasn't completed, emit it now
-      if (currentToolCall && 
-          currentToolCall.function && 
+      if (currentToolCall &&
+          currentToolCall.function &&
           currentToolCall.function.name) {
         yield {
           type: 'tool_calls',

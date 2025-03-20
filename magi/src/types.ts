@@ -86,7 +86,7 @@ export interface LLMResponse extends LLMMessage {
 /**
  * Streaming event types
  */
-export type StreamEventType = 'message' | 'tool_calls' | 'agent_updated' | 'error';
+export type StreamEventType = 'message_delta' | 'message_complete' | 'tool_calls' | 'agent_updated' | 'error';
 
 /**
  * Base streaming event interface
@@ -100,7 +100,7 @@ export interface StreamEvent {
  * Message streaming event
  */
 export interface MessageEvent extends StreamEvent {
-  type: 'message';
+  type: 'message_delta' | 'message_complete';
   content: string;
 }
 

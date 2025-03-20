@@ -81,15 +81,12 @@ export async function runMagiCommand(
     agentType: AgentType = 'supervisor',
     model?: string,
     isTestMode: boolean = false
-): Promise<string> {
+): Promise<void> {
     // Record command in system memory for context
     addHistory({
         role: "user",
         content: command,
     });
-
-    // Collection of all output chunks for final result
-    const allOutput: string[] = [];
 
     try {
         // Initialize communication system with process ID from env
@@ -104,7 +101,7 @@ export async function runMagiCommand(
 
         // Create the agent with model parameter
         const agent = createAgent(agentType, model);
-        comm.send('running', { agent: { name: agent.name, model: agent.model }});
+        comm.send('running', { agent: { name: agent.name, model: agent.model }, command });
 
         // Run the command with streaming
         const history = getHistory();
@@ -114,20 +111,22 @@ export async function runMagiCommand(
         for await (const event of stream) {
             // Handle different event types
             switch (event.type) {
-                case 'message':
+                case 'message_delta':
+                case 'message_complete':
                     // Add the message content to output
                     const message = event as MessageEvent;
                     if (message.content && message.content.trim()) {
-                        allOutput.push(message.content);
 
-                        addHistory({
-                            role: "assistant",
-                            content: message.content,
-                        });
+                        if( event.type === 'message_complete') {
+                            addHistory({
+                                role: "assistant",
+                                content: message.content,
+                            });
+                        }
 
                         // Send progress update via WebSocket
                         comm.send(
-                            'message',
+                            event.type,
                             { message }
                         );
                     }
@@ -184,15 +183,8 @@ export async function runMagiCommand(
             }
         }
 
-        console.log('[System] Command execution completed');
-
-        // Combine all captured output chunks
-        const combinedOutput = allOutput.join('\n');
-
-        // Send final result through WebSocket
-        comm.send('complete', combinedOutput);
-
-        return combinedOutput;
+        // Send a final result through WebSocket
+        comm.send('command_complete', { command });
     } catch (error: any) {
         // Handle any error that occurred during agent execution
         console.error(`Error running agent command: ${error?.message || String(error)}`);
@@ -208,8 +200,6 @@ export async function runMagiCommand(
         } catch (commError) {
             console.error('Failed to send error via WebSocket:', commError);
         }
-
-        return errorMessage;
     }
 }
 
@@ -221,7 +211,7 @@ export function processCommand(
     agentType: AgentType = 'supervisor',
     model?: string,
     isTestMode: boolean = false
-): Promise<string> {
+): Promise<void> {
     // Log the incoming command
     console.log(`> ${command}`);
 
