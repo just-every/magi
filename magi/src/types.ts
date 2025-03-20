@@ -140,13 +140,6 @@ export type StreamingEvent = MessageEvent | ToolCallEvent | AgentUpdatedEvent | 
  * Model provider interface
  */
 export interface ModelProvider {
-  createResponse(
-    model: string,
-    messages: Array<LLMMessage>,
-    tools?: ToolDefinition[],
-    settings?: ModelSettings
-  ): Promise<LLMResponse>;
-
   createResponseStream(
     model: string,
     messages: Array<LLMMessage>,

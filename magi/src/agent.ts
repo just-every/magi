@@ -152,36 +152,6 @@ export async function handleToolCall(toolCall: ToolCall): Promise<any> {
  */
 export class Runner {
   /**
-   * Run an agent non-streaming (returns complete response)
-   */
-  static async run(
-    agent: Agent,
-    input: string,
-    conversationHistory: Array<{role: string, content: string}> = []
-  ): Promise<LLMResponse> {
-    // Get the model provider
-    const provider = getModelProvider();
-
-    // Prepare messages with conversation history and the current input
-    const messages = [
-      // Add developer message with instructions
-      { role: 'developer', content: agent.instructions },
-      // Add conversation history
-      ...conversationHistory,
-      // Add the current user input
-      { role: 'user', content: input }
-    ];
-
-    // Run the completion
-    return await provider.createResponse(
-      agent.model,
-      messages,
-      agent.tools,
-      agent.modelSettings
-    );
-  }
-
-  /**
    * Run an agent with streaming responses
    */
   static async *runStreamed(
