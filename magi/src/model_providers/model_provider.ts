@@ -1,6 +1,6 @@
 /**
  * Model provider for the MAGI system.
- * 
+ *
  * This module provides a unified interface to interact with OpenAI's models
  * and handles streaming responses.
  */
@@ -40,7 +40,7 @@ export class OpenAIProvider implements ModelProvider {
   /**
    * Create a completion using the OpenAI API
    */
-  async createCompletion(
+  async createResponse(
     model: string,
     messages: Array<{ role: string; content: string; name?: string }>,
     tools?: ToolDefinition[],
@@ -61,7 +61,7 @@ export class OpenAIProvider implements ModelProvider {
         ...(settings?.seed ? { seed: settings.seed } : {}),
         ...(settings?.tool_choice ? { tool_choice: settings.tool_choice } : {})
       };
-      
+
       // Convert and add tools if provided
       if (tools && tools.length > 0) {
         requestParams.tools = convertToOpenAITools(tools);
@@ -80,7 +80,7 @@ export class OpenAIProvider implements ModelProvider {
       }
 
       // Safely extract tool calls if present
-      if (completion?.choices?.[0]?.message?.tool_calls && 
+      if (completion?.choices?.[0]?.message?.tool_calls &&
           completion.choices[0].message.tool_calls.length > 0) {
         // Safe to access since we've checked it exists and has length > 0
         const toolCallsList = completion.choices[0].message.tool_calls;
@@ -121,7 +121,7 @@ export class OpenAIProvider implements ModelProvider {
   /**
    * Create a streaming completion using the OpenAI API
    */
-  async *createCompletionStream(
+  async *createResponseStream(
     model: string,
     messages: Array<{ role: string; content: string; name?: string }>,
     tools?: ToolDefinition[],
@@ -143,7 +143,7 @@ export class OpenAIProvider implements ModelProvider {
         ...(settings?.seed ? { seed: settings.seed } : {}),
         ...(settings?.tool_choice ? { tool_choice: settings.tool_choice } : {})
       };
-      
+
       // Convert and add tools if provided
       if (tools && tools.length > 0) {
         requestParams.tools = convertToOpenAITools(tools);
@@ -164,10 +164,10 @@ export class OpenAIProvider implements ModelProvider {
           // Safely extract relevant data with type checking
           const choices = chunk.choices;
           if (!choices || choices.length === 0) continue;
-          
+
           const choice = choices[0];
           const delta = choice.delta;
-          
+
           // Handle text content
           if (delta?.content) {
             yield {
@@ -176,39 +176,39 @@ export class OpenAIProvider implements ModelProvider {
               content: delta.content
             };
           }
-          
+
           // Handle tool calls
           if (delta?.tool_calls && delta.tool_calls.length > 0) {
             for (const toolCallDelta of delta.tool_calls) {
               // Guard against invalid tool calls
               if (toolCallDelta.index === undefined) continue;
-              
+
               const index = toolCallDelta.index.toString();
-              
+
               // Initialize this tool call if it's the first chunk
               if (!currentToolCalls[index]) {
                 currentToolCalls[index] = {
                   id: toolCallDelta.id || `call_${index}`,
                   type: 'function',
-                  function: { 
+                  function: {
                     name: '',
                     arguments: ''
                   }
                 };
               }
-              
+
               // Update the function name if provided
               if (toolCallDelta.function?.name) {
                 currentToolCalls[index].function.name += toolCallDelta.function.name;
               }
-              
+
               // Update the function arguments if provided
               if (toolCallDelta.function?.arguments) {
                 currentToolCalls[index].function.arguments += toolCallDelta.function.arguments;
               }
             }
           }
-          
+
           // Emit completed tool calls when finished
           if (choice?.finish_reason === 'tool_calls' || choice?.finish_reason === 'stop') {
             const completedToolCalls = Object.values(currentToolCalls);
@@ -218,7 +218,7 @@ export class OpenAIProvider implements ModelProvider {
                 model,
                 tool_calls: completedToolCalls as ToolCall[]
               };
-              
+
               // Reset for next batch
               currentToolCalls = {};
             }
@@ -232,18 +232,18 @@ export class OpenAIProvider implements ModelProvider {
           error: String(streamError)
         };
       }
-      
+
       // If the stream ended without yielding tool calls but we have some, yield them now
       // This handles cases where the stream ends without a finish_reason
       const remainingToolCalls = Object.values(currentToolCalls);
       if (remainingToolCalls.length > 0) {
         // Validate the tool calls before yielding
-        const validToolCalls = remainingToolCalls.filter(call => 
-          call.function && 
-          typeof call.function.name === 'string' && 
+        const validToolCalls = remainingToolCalls.filter(call =>
+          call.function &&
+          typeof call.function.name === 'string' &&
           call.function.name.length > 0
         );
-        
+
         if (validToolCalls.length > 0) {
           yield {
             type: 'tool_calls',
@@ -252,7 +252,7 @@ export class OpenAIProvider implements ModelProvider {
           };
         }
       }
-      
+
     } catch (error) {
       console.error(`Error in OpenAI streaming completion:`, error);
       yield {

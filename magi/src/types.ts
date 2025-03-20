@@ -55,7 +55,7 @@ export interface ModelSettings {
 }
 
 /**
- * Tool call data structure 
+ * Tool call data structure
  */
 export interface ToolCall {
   id: string;
@@ -69,10 +69,18 @@ export interface ToolCall {
 /**
  * Response data from the LLM
  */
-export interface LLMResponse {
+export interface LLMMessage {
+  name?: string | undefined;
+  role: string;
   content: string | null;
-  tool_calls?: ToolCall[];
+}
+
+/**
+ * Response data from the LLM
+ */
+export interface LLMResponse extends LLMMessage {
   role: 'assistant';
+  tool_calls?: ToolCall[];
 }
 
 /**
@@ -132,16 +140,16 @@ export type StreamingEvent = MessageEvent | ToolCallEvent | AgentUpdatedEvent | 
  * Model provider interface
  */
 export interface ModelProvider {
-  createCompletion(
+  createResponse(
     model: string,
-    messages: Array<{ role: string; content: string; name?: string; }>,
+    messages: Array<LLMMessage>,
     tools?: ToolDefinition[],
     settings?: ModelSettings
   ): Promise<LLMResponse>;
-  
-  createCompletionStream(
+
+  createResponseStream(
     model: string,
-    messages: Array<{ role: string; content: string; name?: string; }>,
+    messages: Array<LLMMessage>,
     tools?: ToolDefinition[],
     settings?: ModelSettings
   ): AsyncGenerator<StreamingEvent>;

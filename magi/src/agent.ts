@@ -1,12 +1,20 @@
 /**
  * Agent framework for the MAGI system.
- * 
+ *
  * This module defines the Agent class and the runner for executing LLM agents
  * with tools.
  */
 
-import { AgentDefinition, ToolDefinition, ModelSettings, StreamingEvent, ToolCall, LLMResponse } from './types.js';
-import { getModelProvider } from './utils/model_provider.js';
+import {
+  AgentDefinition,
+  ToolDefinition,
+  ModelSettings,
+  StreamingEvent,
+  ToolCall,
+  LLMResponse,
+  LLMMessage
+} from './types.js';
+import { getModelProvider } from './model_providers/model_provider.js';
 import { toolImplementations } from './utils/tools.js';
 import { fileToolImplementations } from './utils/file_utils.js';
 
@@ -26,7 +34,7 @@ export class Agent {
   model: string;
   handoff_description?: string;
   modelSettings?: ModelSettings;
-  
+
   constructor(definition: AgentDefinition, modelSettings?: ModelSettings) {
     this.name = definition.name;
     this.instructions = definition.instructions;
@@ -35,7 +43,7 @@ export class Agent {
     this.handoff_description = definition.handoff_description;
     this.modelSettings = modelSettings;
   }
-  
+
   /**
    * Create a tool from this agent that can be used by other agents
    */
@@ -62,7 +70,7 @@ export class Agent {
       }
     };
   }
-  
+
   /**
    * Make a copy of this agent
    */
@@ -85,9 +93,9 @@ export async function handleToolCall(toolCall: ToolCall): Promise<any> {
   if (!toolCall.function || !toolCall.function.name) {
     throw new Error('Invalid tool call structure: missing function name');
   }
-  
+
   const { function: { name, arguments: argsString } } = toolCall;
-  
+
   // Parse the arguments with better error handling
   let args: Record<string, any>;
   try {
@@ -102,13 +110,13 @@ export async function handleToolCall(toolCall: ToolCall): Promise<any> {
     console.error(`Arguments string: ${argsString}`);
     throw new Error(`Invalid JSON in tool arguments: ${error?.message || String(error)}`);
   }
-  
+
   // Find the tool implementation
   const implementation = allToolImplementations[name];
   if (!implementation) {
     throw new Error(`Tool implementation not found for: ${name}`);
   }
-  
+
   // Call the implementation with the parsed arguments
   try {
     if (typeof args === 'object' && args !== null) {
@@ -119,7 +127,7 @@ export async function handleToolCall(toolCall: ToolCall): Promise<any> {
       const paramNames = paramMatch && paramMatch[1]
         ? paramMatch[1].split(',').map(p => p.trim().split('=')[0].trim())
         : [];
-      
+
       // Map args to parameters in correct order
       if (paramNames.length > 0) {
         const orderedArgs = paramNames.map(param => args[param]);
@@ -153,55 +161,55 @@ export class Runner {
   ): Promise<LLMResponse> {
     // Get the model provider
     const provider = getModelProvider();
-    
+
     // Prepare messages with conversation history and the current input
     const messages = [
-      // Add system message with instructions
-      { role: 'system', content: agent.instructions },
+      // Add developer message with instructions
+      { role: 'developer', content: agent.instructions },
       // Add conversation history
       ...conversationHistory,
       // Add the current user input
       { role: 'user', content: input }
     ];
-    
+
     // Run the completion
-    return await provider.createCompletion(
+    return await provider.createResponse(
       agent.model,
       messages,
       agent.tools,
       agent.modelSettings
     );
   }
-  
+
   /**
    * Run an agent with streaming responses
    */
   static async *runStreamed(
     agent: Agent,
     input: string,
-    conversationHistory: Array<{role: string, content: string}> = []
+    conversationHistory: Array<LLMMessage> = []
   ): AsyncGenerator<StreamingEvent> {
     // Get the model provider
     const provider = getModelProvider();
-    
+
     // Prepare messages with conversation history and the current input
     const messages = [
-      // Add system message with instructions
-      { role: 'system', content: agent.instructions },
+      // Add a developer message with instructions
+      { role: 'developer', content: agent.instructions },
       // Add conversation history
       ...conversationHistory,
       // Add the current user input
       { role: 'user', content: input }
     ];
-    
+
     // Create a streaming generator
-    const stream = provider.createCompletionStream(
+    const stream = provider.createResponseStream(
       agent.model,
       messages,
       agent.tools,
       agent.modelSettings
     );
-    
+
     // Forward all events from the stream
     for await (const event of stream) {
       yield event;

@@ -19,6 +19,7 @@ import {
 import { ProcessManager } from './process_manager';
 import { cleanupAllContainers } from './container_manager';
 import { saveUsedColors } from './color_manager';
+import { CommunicationManager } from './communication_manager';
 
 export class ServerManager {
   private app = express();
@@ -27,6 +28,7 @@ export class ServerManager {
   private wss = new WebSocket.Server({ noServer: true });
   private liveReloadClients = new Set<WebSocket>();
   private processManager: ProcessManager;
+  private communicationManager: CommunicationManager;
   private cleanupInProgress = false;
 
   constructor() {
@@ -35,6 +37,9 @@ export class ServerManager {
     this.setupWebSockets();
     this.setupRoutes();
     this.setupSignalHandlers();
+    
+    // Initialize the communication manager after the server is set up
+    this.communicationManager = new CommunicationManager(this.server, this.processManager);
   }
 
   /**
@@ -72,6 +77,9 @@ export class ServerManager {
         this.wss.handleUpgrade(request, socket, head, (ws) => {
           this.wss.emit('connection', ws, request);
         });
+      } else if (pathname.startsWith('/ws/magi/')) {
+        // We don't need to do anything here as the CommunicationManager
+        // will handle these connections after it's initialized
       } else {
         socket.destroy();
       }
@@ -204,8 +212,27 @@ export class ServerManager {
       });
       return;
     }
+    
+    // First try to terminate using WebSocket if available
+    if (this.communicationManager.hasActiveConnection(processId)) {
+      // Try graceful shutdown via WebSocket first
+      console.log(`Attempting graceful termination of ${processId} via WebSocket`);
+      const wsSuccess = await this.communicationManager.stopProcess(processId);
+      
+      if (wsSuccess) {
+        console.log(`Process ${processId} gracefully terminating via WebSocket`);
+        this.processManager.updateProcess(
+          processId,
+          `[INFO] Gracefully shutting down...`
+        );
+        
+        // Give it a moment to shut down cleanly before forcing
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
 
-    // Stop the process
+    // Forcefully stop the container in case graceful shutdown fails or isn't available
+    console.log(`Forcefully stopping container for process ${processId}`);
     const success = await this.processManager.stopProcess(processId);
 
     if (!success) {
@@ -246,11 +273,28 @@ export class ServerManager {
       return;
     }
 
+    // Try WebSocket communication first
+    let success = false;
+    if (this.communicationManager.hasActiveConnection(processId)) {
+      success = await this.communicationManager.sendCommand(processId, command);
+      if (success) {
+        console.log(`Command sent to process ${processId} successfully via WebSocket`);
+        this.processManager.updateProcess(
+          processId,
+          `[INFO] Command sent via WebSocket`
+        );
+        return;
+      }
+    }
+    
+    // Fallback to FIFO if WebSocket fails or isn't available
+    console.log(`WebSocket communication failed or not available for ${processId}, falling back to FIFO`);
+    
     // Import here to avoid circular dependency
     const { sendCommandToContainer } = require('./container_manager');
 
-    // Process command in the container
-    const success = await sendCommandToContainer(processId, command);
+    // Process command in the container using the legacy method
+    success = await sendCommandToContainer(processId, command);
 
     if (!success) {
       console.error(`Failed to send command to container for process ${processId}`);
@@ -259,7 +303,7 @@ export class ServerManager {
         `[ERROR] Failed to send command: Unable to communicate with container`
       );
     } else {
-      console.log(`Command sent to process ${processId} successfully`);
+      console.log(`Command sent to process ${processId} successfully via FIFO`);
       // The command response will come through container logs
     }
   }
@@ -309,17 +353,24 @@ export class ServerManager {
   private async cleanup(): Promise<void> {
     console.log('MAGI System shutting down - cleaning up resources...');
 
-    // Step 1: Clean up processes
+    // Step 1: Close all WebSocket connections
+    try {
+      this.communicationManager.closeAllConnections();
+    } catch (error: unknown) {
+      console.error('Error closing WebSocket connections:', error);
+    }
+
+    // Step 2: Clean up processes
     await this.processManager.cleanup();
 
-    // Step 2: Additional cleanup for any containers that might have been missed
+    // Step 3: Additional cleanup for any containers that might have been missed
     try {
       await cleanupAllContainers();
     } catch (error: unknown) {
       console.error('Error during final container cleanup:', error);
     }
 
-    // Step 3: Save used colors to persist across restarts
+    // Step 4: Save used colors to persist across restarts
     try {
       saveUsedColors();
     } catch (error: unknown) {

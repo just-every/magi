@@ -9,7 +9,8 @@ import {parseArgs} from 'node:util';
 import {Runner, handleToolCall} from './agent.js';
 import {ToolCallEvent, MessageEvent, AgentUpdatedEvent} from './types.js';
 import {createAgent, AgentType} from './magi_agents/index.js';
-import {addInput, addOutput, loadMemory, getConversationHistory} from './utils/memory.js';
+import {addHistory, getHistory} from './utils/history.js';
+import {initCommunication, CommandMessage} from './utils/communication.js';
 
 // Parse command line arguments
 function parseCommandLineArgs() {
@@ -78,18 +79,24 @@ async function processToolCall(toolCall: ToolCallEvent): Promise<string> {
 export async function runMagiCommand(
     command: string,
     agentType: AgentType = 'supervisor',
-    model?: string
+    model?: string,
+    isTestMode: boolean = false
 ): Promise<string> {
     // Record command in system memory for context
-    addInput(command);
+    addHistory({
+        role: "user",
+        content: command,
+    });
 
     // Collection of all output chunks for final result
     const allOutput: string[] = [];
 
-    // Run the command through the selected agent with streaming output
-    console.log(`Running command with ${agentType} agent: ${command.substring(0, 100)}...`);
-
     try {
+        // Initialize communication system with process ID from env
+        const processId = process.env.PROCESS_ID || `magi-${Date.now()}`;
+        const comm = initCommunication(processId, isTestMode);
+        comm.send('command', {command});
+
         // Create the agent with specified type and model
         if (model) {
             console.log(`Forcing model: ${model}`);
@@ -97,11 +104,10 @@ export async function runMagiCommand(
 
         // Create the agent with model parameter
         const agent = createAgent(agentType, model);
-
-        // Get conversation history
-        const history = getConversationHistory();
+        comm.send('running', { agent: { name: agent.name, model: agent.model }});
 
         // Run the command with streaming
+        const history = getHistory();
         const stream = Runner.runStreamed(agent, command, history);
 
         // Process streaming events
@@ -110,10 +116,20 @@ export async function runMagiCommand(
             switch (event.type) {
                 case 'message':
                     // Add the message content to output
-                    const messageEvent = event as MessageEvent;
-                    if (messageEvent.content && messageEvent.content.trim()) {
-                        console.log(`[${agent.name}] Output: ${messageEvent.content.substring(0, 100)}...`);
-                        allOutput.push(messageEvent.content);
+                    const message = event as MessageEvent;
+                    if (message.content && message.content.trim()) {
+                        allOutput.push(message.content);
+
+                        addHistory({
+                            role: "assistant",
+                            content: message.content,
+                        });
+
+                        // Send progress update via WebSocket
+                        comm.send(
+                            'message',
+                            { message }
+                        );
                     }
                     break;
 
@@ -128,11 +144,23 @@ export async function runMagiCommand(
 
                     console.log(`[${agent.name}] Tool calls: ${toolNames}`);
 
+                    // Send tool call progress via WebSocket
+                    comm.send(
+                        'tool_call',
+                        {toolCallEvent}
+                    );
+
                     // Process the tool calls
                     const toolResult = await processToolCall(toolCallEvent);
 
                     // Log result (truncated)
                     console.log(`[${agent.name}] Tool result: ${toolResult.substring(0, 100)}...`);
+
+                    // Send tool result via WebSocket
+                    comm.send(
+                        'tool_result',
+                        {toolResult}
+                    );
 
                     // Re-inject the tool result as part of the conversation
                     // (Done internally by the agent framework for streaming scenarios)
@@ -161,8 +189,8 @@ export async function runMagiCommand(
         // Combine all captured output chunks
         const combinedOutput = allOutput.join('\n');
 
-        // Store result in memory for context in future commands
-        addOutput(combinedOutput);
+        // Send final result through WebSocket
+        comm.send('complete', combinedOutput);
 
         return combinedOutput;
     } catch (error: any) {
@@ -172,8 +200,14 @@ export async function runMagiCommand(
         // Return error message as output
         const errorMessage = `Error executing command: ${error?.message || String(error)}`;
 
-        // Store error result in memory
-        addOutput(errorMessage);
+        // Send error through WebSocket
+        try {
+            const processId = process.env.PROCESS_ID || `magi-${Date.now()}`;
+            const comm = initCommunication(processId);
+            comm.send('error', { error });
+        } catch (commError) {
+            console.error('Failed to send error via WebSocket:', commError);
+        }
 
         return errorMessage;
     }
@@ -185,13 +219,14 @@ export async function runMagiCommand(
 export function processCommand(
     command: string,
     agentType: AgentType = 'supervisor',
-    model?: string
+    model?: string,
+    isTestMode: boolean = false
 ): Promise<string> {
     // Log the incoming command
     console.log(`> ${command}`);
 
     // Run the command
-    return runMagiCommand(command, agentType, model);
+    return runMagiCommand(command, agentType, model, isTestMode);
 }
 
 /**
@@ -201,14 +236,30 @@ async function main() {
     // Parse command line arguments
     const args = parseCommandLineArgs();
 
+    // Set up process ID from env var
+    const processId = process.env.PROCESS_ID || `magi-${Date.now()}`;
+    console.log(`Initializing with process ID: ${processId}`);
+
+    // Set up WebSocket communication (pass test flag from args)
+    const comm = initCommunication(processId, args.test);
+
+    // Set up command listener
+    comm.onCommand((cmd: CommandMessage) => {
+        console.log(`Received command via WebSocket: ${cmd.command}`);
+        if (cmd.command === 'stop') {
+            console.log('Received stop command, terminating...');
+            process.exit(0);
+        }
+    });
+
     // Verify API key is available
     if (!process.env.OPENAI_API_KEY) {
         console.error('**Error** OPENAI_API_KEY environment variable not set');
+
+        // Send error via WebSocket
+        comm.send('error', { error: 'OPENAI_API_KEY environment variable not set' });
         process.exit(1);
     }
-
-    // Load previous conversation context from persistent storage
-    loadMemory();
 
     // Handle listing models if requested
     if (args['list-models']) {
@@ -243,7 +294,8 @@ async function main() {
         await processCommand(
             promptText,
             args.agent as AgentType,
-            args.model
+            args.model,
+            args.test === true
         );
 
         // When running in test mode, exit after completion

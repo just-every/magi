@@ -15,12 +15,14 @@ else
     exit 1
 fi
 
-echo -e "\nInitializing... "
+echo -e "\nInstalling... "
 # Change to project root
 cd "$(dirname "$0")/.."
 
 cd magi/
-npm ci
+npm install --prefer-offline
+
+echo -e "\nBuilding... "
 npm run build
 
 echo -e "\nTesting... "

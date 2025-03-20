@@ -16,10 +16,12 @@
   "license": "ISC",
   "dependencies": {
     "dotenv": "^16.4.7",
-    "openai": "^4.88.0"
+    "openai": "^4.88.0",
+    "ws": "^8.18.1"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
+    "@types/ws": "^8.18.0",
     "@typescript-eslint/eslint-plugin": "^8.26.1",
     "@typescript-eslint/parser": "^8.26.1",
     "eslint": "^9.22.0",

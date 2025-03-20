@@ -112,10 +112,12 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
     // Create the docker run command using base64 encoded command
     const dockerRunCommand = `docker run -d --rm --name ${containerName} \
       -e PROCESS_ID=${processId} \
+      -e HOST_HOSTNAME=host.docker.internal \
       --env-file ${path.resolve(projectRoot, '.env')} \
       -v ${magiPath}:/app/magi:rw \
       -v claude_credentials:/claude_shared:rw \
       -v magi_output:/magi_output:rw \
+      --add-host=host.docker.internal:host-gateway \
       magi-system:latest \
       node /app/magi/dist/magi.js --base64 "${base64Command}"`;
 
@@ -168,6 +170,9 @@ export async function stopDockerContainer(processId: string): Promise<boolean> {
 
 /**
  * Send a command to a running MAGI System Docker container
+ * Note: This method is kept for backward compatibility
+ * The preferred way to communicate with containers is via the CommunicationManager
+ * 
  * @param processId The process ID of the container
  * @param command The command to send
  * @returns Promise resolving to true if successful, false otherwise
@@ -184,11 +189,13 @@ export async function sendCommandToContainer(processId: string, command: string)
     const base64Command = Buffer.from(command).toString('base64');
 
     // Use "BASE64:" prefix to indicate this is a base64-encoded command
+    // Note: This method is legacy and uses FIFO files. 
+    // New containers should use WebSockets via the CommunicationManager
     await execPromise(
       `docker exec ${containerName} python -c "import os; open('/tmp/command.fifo', 'w').write('BASE64:${base64Command}\\n');"`
     );
 
-    console.log(`Command sent to ${processId} successfully`);
+    console.log(`Command sent to ${processId} successfully via legacy FIFO method`);
     return true;
   } catch (error) {
     console.error(`Error sending command to container: ${error}`);
@@ -198,6 +205,9 @@ export async function sendCommandToContainer(processId: string, command: string)
 
 /**
  * Start monitoring logs from a MAGI System Docker container
+ * Note: This is a fallback method for containers that do not use WebSockets
+ * The preferred way to get logs is via the CommunicationManager
+ * 
  * @param processId The process ID of the container
  * @param callback Function to call with each log chunk
  * @returns Function to stop monitoring
@@ -214,7 +224,26 @@ export function monitorContainerLogs(
 
     // Handle stdout
     logProcess.stdout.on('data', (data) => {
-      callback(data.toString());
+      const logData = data.toString();
+      callback(logData);
+      
+      // Try to parse JSON from logs for backward compatibility
+      try {
+        // If the log line is valid JSON matching our message format,
+        // we can extract structured data from it
+        if (logData.trim().startsWith('{') && logData.includes('"type"')) {
+          const jsonData = JSON.parse(logData);
+          
+          // If this is a valid message with processId, type, and data
+          if (jsonData.processId && jsonData.type && jsonData.data) {
+            // No need to do anything here - the logs will be processed by the callback
+            // This is just to validate that it's a proper message format
+          }
+        }
+      } catch (jsonError) {
+        // Not valid JSON or not our format, that's okay
+        // This is just plain log data
+      }
     });
 
     // Handle stderr
