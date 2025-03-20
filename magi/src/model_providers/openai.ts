@@ -38,7 +38,7 @@ export class OpenAIProvider implements ModelProvider {
   }
 
   /**
-   * Create a streaming completion using the OpenAI API
+   * Create a streaming completion using the OpenAI Responses API
    */
   async *createResponseStream(
     model: string,
@@ -47,14 +47,19 @@ export class OpenAIProvider implements ModelProvider {
     settings?: ModelSettings
   ): AsyncGenerator<StreamingEvent> {
     try {
-      // Create the request params
-      const requestParams: any = {
+      // Prepare the input for responses.create
+      const input = {
         model,
         messages: messages.map(msg => ({
           role: msg.role,
           content: msg.content,
           ...(msg.name ? { name: msg.name } : {})
-        })),
+        }))
+      };
+
+      // Prepare the parameters with optional settings
+      const requestParams: any = {
+        input,
         stream: true,
         // Add optional parameters
         ...(settings?.temperature ? { temperature: settings.temperature } : {}),
@@ -63,88 +68,84 @@ export class OpenAIProvider implements ModelProvider {
         ...(settings?.tool_choice ? { tool_choice: settings.tool_choice } : {})
       };
 
-      // Convert and add tools if provided
+      // Add tools if provided
       if (tools && tools.length > 0) {
         requestParams.tools = convertToOpenAITools(tools);
       }
 
-      // Create the streaming response
-      const stream = await this.client.chat.completions.create(requestParams);
+      // Create the streaming response using the newer responses API
+      const stream = await this.client.responses.create(requestParams);
 
       // Collect text content for tool calls (which might be streamed in chunks)
       let currentToolCalls: Record<string, any> = {};
 
       // Handle each chunk manually with proper typings
       try {
-        // OpenAI's stream is not directly compatible with for-await-of
-        // Use its custom AsyncIterable implementation
+        // Process the response stream
         // @ts-ignore - OpenAI's stream is AsyncIterable but TypeScript doesn't recognize it
         for await (const chunk of stream) {
-          // Safely extract relevant data with type checking
-          const choices = chunk.choices;
-          if (!choices || choices.length === 0) continue;
+          if (chunk.choices && chunk.choices.length > 0) {
+            const choice = chunk.choices[0];
+            
+            // Handle text content (delta.text in responses API)
+            if (choice.delta?.text) {
+              yield {
+                type: 'message',
+                model,
+                content: choice.delta.text
+              };
+            }
 
-          const choice = choices[0];
-          const delta = choice.delta;
+            // Handle tool calls
+            if (choice.delta?.tool_calls && choice.delta.tool_calls.length > 0) {
+              for (const toolCallDelta of choice.delta.tool_calls) {
+                // Guard against invalid tool calls
+                if (toolCallDelta.index === undefined) continue;
 
-          // Handle text content
-          if (delta?.content) {
-            yield {
-              type: 'message',
-              model,
-              content: delta.content
-            };
-          }
+                const index = toolCallDelta.index.toString();
 
-          // Handle tool calls
-          if (delta?.tool_calls && delta.tool_calls.length > 0) {
-            for (const toolCallDelta of delta.tool_calls) {
-              // Guard against invalid tool calls
-              if (toolCallDelta.index === undefined) continue;
+                // Initialize this tool call if it's the first chunk
+                if (!currentToolCalls[index]) {
+                  currentToolCalls[index] = {
+                    id: toolCallDelta.id || `call_${index}`,
+                    type: 'function',
+                    function: {
+                      name: '',
+                      arguments: ''
+                    }
+                  };
+                }
 
-              const index = toolCallDelta.index.toString();
+                // Update the function name if provided
+                if (toolCallDelta.function?.name) {
+                  currentToolCalls[index].function.name += toolCallDelta.function.name;
+                }
 
-              // Initialize this tool call if it's the first chunk
-              if (!currentToolCalls[index]) {
-                currentToolCalls[index] = {
-                  id: toolCallDelta.id || `call_${index}`,
-                  type: 'function',
-                  function: {
-                    name: '',
-                    arguments: ''
-                  }
-                };
-              }
-
-              // Update the function name if provided
-              if (toolCallDelta.function?.name) {
-                currentToolCalls[index].function.name += toolCallDelta.function.name;
-              }
-
-              // Update the function arguments if provided
-              if (toolCallDelta.function?.arguments) {
-                currentToolCalls[index].function.arguments += toolCallDelta.function.arguments;
+                // Update the function arguments if provided
+                if (toolCallDelta.function?.arguments) {
+                  currentToolCalls[index].function.arguments += toolCallDelta.function.arguments;
+                }
               }
             }
-          }
 
-          // Emit completed tool calls when finished
-          if (choice?.finish_reason === 'tool_calls' || choice?.finish_reason === 'stop') {
-            const completedToolCalls = Object.values(currentToolCalls);
-            if (completedToolCalls.length > 0) {
-              yield {
-                type: 'tool_calls',
-                model,
-                tool_calls: completedToolCalls as ToolCall[]
-              };
+            // Emit completed tool calls when finished
+            if (choice.finish_reason === 'tool_calls' || choice.finish_reason === 'stop') {
+              const completedToolCalls = Object.values(currentToolCalls);
+              if (completedToolCalls.length > 0) {
+                yield {
+                  type: 'tool_calls',
+                  model,
+                  tool_calls: completedToolCalls as ToolCall[]
+                };
 
-              // Reset for next batch
-              currentToolCalls = {};
+                // Reset for next batch
+                currentToolCalls = {};
+              }
             }
           }
         }
       } catch (streamError) {
-        console.error('Error processing stream:', streamError);
+        console.error('Error processing response stream:', streamError);
         yield {
           type: 'error',
           model,
