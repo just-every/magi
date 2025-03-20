@@ -2,9 +2,9 @@
   "verbose": false,
   "quiet": true,
   "watch": [
-    "controller/**/*.*"
+    "src/**/*.*"
   ],
-  "exec": "npm run build && node dist/controller/server/server.js",
+  "exec": "npm run build && node dist/server/server.js",
   "ext": "*",
   "env": {
     "NODE_ENV": "development"

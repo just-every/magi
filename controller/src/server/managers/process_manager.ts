@@ -1,11 +1,11 @@
 /**
  * Process Manager Module
- * 
+ *
  * Manages all MAGI system processes, including creation, monitoring, and termination.
  */
 import { ChildProcess } from 'child_process';
 import { Socket, Server } from 'socket.io';
-import { 
+import {
   ProcessStatus,
   ProcessCreateEvent,
   ProcessLogsEvent,
@@ -24,6 +24,7 @@ import {
   monitorContainerLogs,
   getRunningMagiContainers
 } from './container_manager';
+import path from "path";
 
 /**
  * Process data interface
@@ -54,14 +55,14 @@ interface Processes {
 export class ProcessManager {
   private processes: Processes = {};
   private io: Server;
-  
+
   constructor(io: Server) {
     this.io = io;
   }
 
   /**
    * Get all active processes
-   * 
+   *
    * @returns Object mapping process IDs to their data
    */
   getAllProcesses(): Processes {
@@ -70,7 +71,7 @@ export class ProcessManager {
 
   /**
    * Get a specific process by ID
-   * 
+   *
    * @param processId - The ID of the process to get
    * @returns The process data or undefined if not found
    */
@@ -80,7 +81,7 @@ export class ProcessManager {
 
   /**
    * Create a new process
-   * 
+   *
    * @param processId - Unique ID for the process
    * @param command - Command to execute
    * @returns The created process data
@@ -114,7 +115,7 @@ export class ProcessManager {
 
   /**
    * Updates a process with an error condition
-   * 
+   *
    * @param processId - The ID of the process to update
    * @param errorMessage - The error message to record
    */
@@ -148,7 +149,7 @@ export class ProcessManager {
 
   /**
    * Updates a process with status information
-   * 
+   *
    * @param processId - The ID of the process to update
    * @param message - The message to add to the logs
    */
@@ -211,22 +212,12 @@ export class ProcessManager {
         console.log('Docker image built successfully');
       }
 
-      // Step 3: Prepare environment variables and paths
-      // Get API keys from environment
-      const openaiApiKey = process.env.OPENAI_API_KEY || '';
-      if (!openaiApiKey) {
-        console.warn('Warning: OPENAI_API_KEY not set in environment');
-      }
-
       // Get project root directory for volume mounting
-      const projectRoot = process.cwd();
 
       // Step 4: Start the Docker container
       const containerId = await runDockerContainer({
         processId,
-        command,
-        openaiApiKey,
-        projectRoot
+        command
       });
 
       // Handle container start failure
@@ -243,7 +234,7 @@ export class ProcessManager {
 
       // Step 5: Set up log monitoring
       this.updateProcess(processId, 'Starting secure MAGI container...');
-      
+
       // Set up the log monitoring and status checking
       this.setupLogMonitoring(processId);
       this.setupContainerStatusChecking(processId);
@@ -458,7 +449,7 @@ export class ProcessManager {
 
       try {
         this.updateProcessWithError(
-          processId, 
+          processId,
           `Failed to terminate: ${error instanceof Error ? error.message : String(error)}`
         );
       } catch (loggingError) {
@@ -589,7 +580,7 @@ export class ProcessManager {
 
   /**
    * Remove a process from management
-   * 
+   *
    * @param processId - The ID of the process to remove
    */
   removeProcess(processId: string): void {

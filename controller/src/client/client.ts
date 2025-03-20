@@ -8,7 +8,6 @@ import { SocketManager } from './js/managers/SocketManager';
 // Wait for DOM to be fully loaded
 document.addEventListener('DOMContentLoaded', () => {
   // DOM elements
-  const processGrid = document.getElementById('process-grid') as HTMLElement;
   const mainHeader = document.getElementById('main-header') as HTMLElement;
   const commandForm = document.getElementById('command-form') as HTMLFormElement;
   const commandInput = document.getElementById('command-input') as HTMLInputElement;
@@ -19,7 +18,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize the UI Manager
   const uiManager = new UIManager(
-    processGrid,
     processTemplate,
     mainHeader,
     centerInputContainer,

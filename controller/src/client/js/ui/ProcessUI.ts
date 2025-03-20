@@ -15,7 +15,6 @@ declare global {
 
 export class ProcessUI {
   private processElements: Map<string, ProcessElement> = new Map();
-  private processGrid: HTMLElement;
   private processTemplate: HTMLTemplateElement;
   private canvasContainer!: HTMLElement; // initialized in setupInfiniteCanvas
   private infiniteCanvas: InfiniteCanvas | null = null;
@@ -23,12 +22,11 @@ export class ProcessUI {
   private processContainerWrapper!: HTMLElement; // initialized in setupInfiniteCanvas
   private translateX: number = 0;
   private translateY: number = 0;
+  private gap: number = 40; // how wide a gap between boxes should be
 
   constructor(
-    processGrid: HTMLElement,
     processTemplate: HTMLTemplateElement
   ) {
-    this.processGrid = processGrid;
     this.processTemplate = processTemplate;
 
     // Setup infinite canvas container
@@ -92,12 +90,6 @@ export class ProcessUI {
       header.style.zIndex = '100';
       header.style.pointerEvents = 'auto';
     }
-
-    // Make the process-grid transparent and ensure it doesn't block interaction with the canvas
-    this.processGrid.style.background = 'transparent';
-    this.processGrid.style.position = 'relative';
-    this.processGrid.style.zIndex = '10';
-    this.processGrid.style.pointerEvents = 'none';
 
     // Set up panning and zooming
     this.setupPanAndZoom();
@@ -215,9 +207,24 @@ export class ProcessUI {
 
       if (modifierKeyPressed) {
         e.preventDefault();
-        const delta = -Math.sign(e.deltaY) * 0.1;
+
+        // Also normalize the delta across different browsers/devices
+        const normalizedDelta = Math.abs(e.deltaY) > 100
+          ? e.deltaY / 100 // For browsers that use pixels
+          : e.deltaY;      // For browsers that use lines
+
+        const delta = -Math.sign(normalizedDelta) * 0.1;
+
+        // Apply the delta with a smoother curve based on current zoom level
+        // This makes zooming slower when zoomed out, and even slower when zoomed in
+        // Logarithmic scaling to make zoom feel consistent at all levels
+        let zoomFactor = delta * (0.1 + 0.05 * Math.log(this.zoomLevel + 0.5));
+
+        // Apply stronger dampening when zoomed out
+        zoomFactor *= this.zoomLevel;
+
         const oldZoom = this.zoomLevel;
-        this.zoomLevel = Math.min(Math.max(0.1, this.zoomLevel + delta), 3); // Limit zoom between 0.1x and 3x
+        this.zoomLevel = Math.min(Math.max(0.1, this.zoomLevel + zoomFactor), 3); // Limit zoom between 0.1x and 3x
 
         // Adjust translateX and translateY to zoom toward mouse position
         const rect = this.canvasContainer.getBoundingClientRect();
@@ -244,14 +251,7 @@ export class ProcessUI {
     const resetButton = document.createElement('button');
     resetButton.className = 'reset-zoom-button btn btn-sm btn-light';
     resetButton.textContent = 'Show All';
-    resetButton.style.position = 'fixed'; // Use fixed positioning to ensure it's always visible
-    resetButton.style.top = '10px';
-    resetButton.style.right = '10px';
-    resetButton.style.zIndex = '1001'; // Higher than header to ensure it's clickable
-    resetButton.style.display = 'none'; // Initially hidden
-    resetButton.style.opacity = '0.8';
-    resetButton.style.transition = 'opacity 0.3s';
-    resetButton.style.pointerEvents = 'auto'; // Ensure it can be clicked
+
 
     // Add hover effect
     resetButton.addEventListener('mouseover', () => {
@@ -298,10 +298,25 @@ export class ProcessUI {
     if (this.processElements.size === 1) {
       // If only one process, go to 1:1 scale centered
       const singleProcess = Array.from(this.processElements.values())[0];
+      const box = singleProcess.box;
 
+      // Get viewport dimensions and account for header
+      const viewportWidth = this.canvasContainer.clientWidth;
+      const header = document.getElementById('main-header');
+      const headerHeight = header ? header.offsetHeight : 0;
+      const viewportHeight = this.canvasContainer.clientHeight - headerHeight;
+
+      // Calculate position to center the process box
+      const boxLeft = parseFloat(box.style.left) || 0;
+      const boxTop = parseFloat(box.style.top) || 0;
+      const boxWidth = parseFloat(box.style.width) || 0;
+      const boxHeight = parseFloat(box.style.height) || 0;
+
+      // Center the box in the viewport, accounting for header
       this.zoomLevel = 1;
-      this.translateX = 0;
-      this.translateY = 0;
+      this.translateX = (viewportWidth - boxWidth) / 2 - boxLeft;
+      this.translateY = headerHeight + (viewportHeight - boxHeight) / 2 - boxTop;
+
       this.updateTransform();
     } else {
       // Otherwise fit all processes
@@ -394,13 +409,13 @@ export class ProcessUI {
 
     // Check if this is the first process box
     const isFirstBox = this.processElements.size === 0;
-    
+
     // For first box, disable transitions initially
     if (isFirstBox) {
       // Disable transitions to skip initial animation
       processBox.style.position = 'absolute';
       processBox.style.transition = 'none';
-      
+
       // Set initial opacity to 1 to prevent fade-in
       processBox.style.opacity = '1';
     } else {
@@ -413,7 +428,6 @@ export class ProcessUI {
     this.processContainerWrapper.appendChild(clone);
 
     // Get process input elements
-    const processInputContainer = processBox.querySelector('.process-input-container') as HTMLElement;
     const processInputForm = processBox.querySelector('.process-input-form') as HTMLFormElement;
     const processInput = processBox.querySelector('.process-input') as HTMLInputElement;
 
@@ -709,7 +723,6 @@ export class ProcessUI {
     const maxHeight = Math.min(1500, Math.max(500, Math.round(maxWidth*(containerHeight/containerWidth))));
     const boxWidth = Math.min(containerWidth, maxWidth);
     const boxHeight = Math.min(containerHeight, maxHeight);
-    const gap = 20; // Gap between boxes - restored to original value
 
     // Calculate the number of boxes per row
     let boxesPerRow;
@@ -730,14 +743,14 @@ export class ProcessUI {
       box.style.position = 'absolute';
       box.style.width = `${boxWidth}px`;
       box.style.height = `${boxHeight}px`;
-      box.style.left = `${col * (boxWidth + gap)}px`;
-      box.style.top = `${row * (boxHeight + gap)}px`;
+      box.style.left = `${col * (boxWidth + this.gap)}px`;
+      box.style.top = `${row * (boxHeight + this.gap)}px`;
     });
 
     // Calculate the total width and height of the grid
-    const totalWidth = boxesPerRow * (boxWidth + gap) - gap;
+    const totalWidth = boxesPerRow * (boxWidth + this.gap) - this.gap;
     const totalRows = Math.ceil(count / boxesPerRow);
-    const totalHeight = totalRows * (boxHeight + gap) - gap;
+    const totalHeight = totalRows * (boxHeight + this.gap) - this.gap;
 
     // Set the wrapper size to contain all boxes
     this.processContainerWrapper.style.width = `${totalWidth}px`;
@@ -745,7 +758,7 @@ export class ProcessUI {
 
     // Auto-zoom to fit all processes
     this.autoZoomToFit();
-    
+
     // Re-enable transitions after the layout is complete
     // Use setTimeout to ensure the initial layout is applied without animation
     if (count === 1 && this.processElements.size === 1) {
@@ -754,7 +767,7 @@ export class ProcessUI {
         if (this.canvasContainer.dotBackground) {
           this.canvasContainer.dotBackground.style.transition = 'transform 0.1s ease-out';
         }
-        
+
         boxes.forEach(box => {
           box.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
         });
@@ -772,12 +785,16 @@ export class ProcessUI {
     const wrapperWidth = parseFloat(this.processContainerWrapper.style.width);
     const wrapperHeight = parseFloat(this.processContainerWrapper.style.height);
     const viewportWidth = this.canvasContainer.clientWidth;
-    const viewportHeight = this.canvasContainer.clientHeight;
+
+    // Account for header height when calculating available viewport height
+    const header = document.getElementById('main-header');
+    const headerHeight = header ? header.offsetHeight : 0;
+    const viewportHeight = this.canvasContainer.clientHeight - headerHeight;
 
     // Calculate the zoom level needed to fit the content
-    // Using padding factor of 0.95 to leave some margin around the edges
-    const zoomX = (viewportWidth / wrapperWidth) * 0.98;
-    const zoomY = (viewportHeight / wrapperHeight) * 0.98;
+    // Using gap to leave some margin around the edges
+    const zoomX = ((viewportWidth - (this.gap*2)) / wrapperWidth);
+    const zoomY = ((viewportHeight - (this.gap*2)) / wrapperHeight);
 
     // Use the smaller of the two zoom levels to ensure everything fits
     let newZoom = Math.min(zoomX, zoomY);
@@ -790,7 +807,9 @@ export class ProcessUI {
 
     // Calculate the position to center the content
     this.translateX = (viewportWidth - wrapperWidth * newZoom) / 2;
-    this.translateY = (viewportHeight - wrapperHeight * newZoom) / 2;
+
+    // Add headerHeight to the Y translation to position content below the header
+    this.translateY = headerHeight + (viewportHeight - wrapperHeight * newZoom) / 2;
 
     // For first process box (skip animation completely)
     if (this.processElements.size === 1) {
@@ -843,13 +862,13 @@ export class ProcessUI {
     // Get the process box
     const box = processEl.box;
 
-    // Calculate the box's position in the grid
-    const boxRect = box.getBoundingClientRect();
-    const wrapperRect = this.processContainerWrapper.getBoundingClientRect();
+    // Get the process box position (not using getBoundingClientRect to avoid lint warnings)
 
-    // Get viewport dimensions
+    // Get viewport dimensions and account for header
     const viewportWidth = this.canvasContainer.clientWidth;
-    const viewportHeight = this.canvasContainer.clientHeight;
+    const header = document.getElementById('main-header');
+    const headerHeight = header ? header.offsetHeight : 0;
+    const viewportHeight = this.canvasContainer.clientHeight - headerHeight;
 
     // Set zoom to 100%
     this.zoomLevel = 1;
@@ -860,9 +879,9 @@ export class ProcessUI {
     const boxWidth = parseFloat(box.style.width) || 0;
     const boxHeight = parseFloat(box.style.height) || 0;
 
-    // Center the box in the viewport
+    // Center the box in the viewport, accounting for header
     this.translateX = (viewportWidth - boxWidth) / 2 - boxLeft;
-    this.translateY = (viewportHeight - boxHeight) / 2 - boxTop;
+    this.translateY = headerHeight + (viewportHeight - boxHeight) / 2 - boxTop;
 
     // Apply the transform with a smooth transition
     this.processContainerWrapper.style.transition = 'transform 0.5s ease-out';

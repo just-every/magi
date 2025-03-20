@@ -19,7 +19,6 @@ export class UIManager {
   private currentServerVersion: string | null = null;
 
   constructor(
-    processGrid: HTMLElement,
     processTemplate: HTMLTemplateElement,
     mainHeader: HTMLElement,
     centerInputContainer: HTMLElement,
@@ -28,12 +27,14 @@ export class UIManager {
     commandForm: HTMLFormElement,
     centerCommandForm: HTMLFormElement,
     runCommand: (command: string) => void,
-    onProcessCommand: (processId: string, command: string) => void,
-    onProcessTerminate: (processId: string) => void
+    // These parameters are used in handleProcessCreate method, not in the constructor
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _onProcessCommand: (processId: string, command: string) => void,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _onProcessTerminate: (processId: string) => void
   ) {
     // Initialize ProcessUI
     this.processUI = new ProcessUI(
-      processGrid,
       processTemplate
     );
 
@@ -50,9 +51,7 @@ export class UIManager {
 
     // Set up event listeners
     this.setupEventListeners(
-      (command) => this.handleCommandSubmission(command),
-      onProcessCommand,
-      onProcessTerminate
+      (command) => this.handleCommandSubmission(command)
     );
   }
 
@@ -60,13 +59,9 @@ export class UIManager {
    * Set up UI event listeners
    *
    * @param onCommand - Callback for command submission
-   * @param onProcessCommand - Callback for process-specific commands
-   * @param onProcessTerminate - Callback for process termination
    */
   private setupEventListeners(
-    onCommand: (command: string) => void,
-    onProcessCommand: (processId: string, command: string) => void,
-    onProcessTerminate: (processId: string) => void
+    onCommand: (command: string) => void
   ): void {
     // Handle header form submission
     this.commandForm.addEventListener('submit', (event: Event) => {

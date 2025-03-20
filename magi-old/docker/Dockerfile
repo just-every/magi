@@ -1,19 +1,20 @@
-FROM node:23-slim
-
-# Update npm
-RUN npm install -g npm
-
-# Install node dependencies
-RUN --mount=type=cache,target=/root/.npm \
-    --mount=type=bind,source=magi/package.json,target=package.json \
-    --mount=type=bind,source=magi/package-lock.json,target=package-lock.json \
-    npm ci
+FROM nikolaik/python-nodejs:python3.13-nodejs23-slim
 
 # Install claude code
 RUN npm install -g @anthropic-ai/claude-code
 
-# Install Playwright dependencies in root
-RUN npx playwright install-deps chromium
+# Install python dependencies
+RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=bind,source=magi/docker/requirements.txt,target=requirements.txt \
+    python -m pip install -r requirements.txt
+
+# Install Playwright dependencies
+RUN playwright install-deps chromium
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+ENV PYTHONDONTWRITEBYTECODE=1
 
 # Create a non-root user
 RUN useradd -m magi_user
@@ -39,7 +40,14 @@ WORKDIR /app
 
 # Install browser for the non-root user and create required directories
 RUN mkdir -p /home/magi_user/.cache && \
+    mkdir -p /home/magi_user/screenshots && \
     chmod -R 777 /home/magi_user/.cache
 
 # Install Playwright chromium for magi_user
-RUN npx playwright install --only-shell chromium
+RUN playwright install chromium
+
+# Set environment variable for Playwright
+ENV PLAYWRIGHT_BROWSERS_PATH=/home/magi_user/.cache/ms-playwright
+
+# Command to run when container starts
+CMD ["python", "magi/magi.py"]

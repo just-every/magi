@@ -1,0 +1,28 @@
+{
+  "name": "magi",
+  "version": "1.0.0",
+  "description": "MAGI System TypeScript Implementation",
+  "main": "dist/magi.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/magi.js",
+    "dev": "npm run build && npm start",
+    "lint": "tsc --noEmit && eslint \"src/**/*.ts\"",
+    "lint:fix": "tsc --noEmit && eslint \"src/**/*.ts\" --fix",
+    "test": "node dist/index.js",
+    "test:prompt": "node dist/index.js"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "openai": "^4.88.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@typescript-eslint/eslint-plugin": "^8.26.1",
+    "@typescript-eslint/parser": "^8.26.1",
+    "eslint": "^9.22.0",
+    "typescript": "^5.8.2"
+  }
+}

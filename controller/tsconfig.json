@@ -6,17 +6,17 @@
     "esModuleInterop": true,
     "strict": true,
     "outDir": "./dist",
-    "rootDir": "./",
+    "rootDir": "./src",
     "sourceMap": true,
     "declaration": true,
     "removeComments": true,
-    "typeRoots": ["./node_modules/@types", "./controller/src/types/shared-types"],
+    "typeRoots": ["./node_modules/@types", "./src/types/shared-types"],
     "baseUrl": "./",
     "paths": {
       "*": ["node_modules/*"],
-      "@types": ["controller/src/types/shared-types"]
+      "@types": ["src/types/shared-types"]
     }
   },
-  "include": ["controller/src/**/*"],
-  "exclude": ["node_modules", "controller/dist"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

@@ -95,8 +95,6 @@ This script will:
 #### Manual Setup
 
 ```bash
-# Create .env file with your API key
-echo "OPENAI_API_KEY=your_api_key_here" > .env
 
 # Install dependencies
 npm ci
@@ -137,9 +135,9 @@ For testing the Docker/Python backend directly:
 test/magi-docker.sh -p "your prompt here"
 ```
 
-You can also test individual agents directly with python using:
+You can also test individual agents directly with node using:
 ```bash
-test/magi-python.sh -p "your prompt here" -a code
+test/magi-node.sh -p "your prompt here" -a code
 ```
 Where `code` is the name of the agent you want to test;
 `supervisor`, `code`, `browser`, `shell`, `search`, `reasoning`, `worker`, or `self-optimization`.

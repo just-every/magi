@@ -2,7 +2,7 @@ const path = require('path');
 
 module.exports = {
   mode: 'development',
-  entry: './controller/client/client.ts',
+  entry: './src/client/client.ts',
   devtool: 'source-map',
   module: {
     rules: [
@@ -16,12 +16,12 @@ module.exports = {
   resolve: {
     extensions: ['.tsx', '.ts', '.js'],
     alias: {
-      '@types': path.resolve(__dirname, 'controller/shared/types')
+      '@types': path.resolve(__dirname, 'src/types/shared-types')
     }
   },
   output: {
     filename: 'client.js',
-    path: path.resolve(__dirname, 'dist/controller'),
+    path: path.resolve(__dirname, 'dist'),
   },
   watchOptions: {
     ignored: /node_modules/,
@@ -30,6 +30,6 @@ module.exports = {
   },
   devServer: {
     hot: true,
-    watchFiles: ['controller/client/**/*.ts', 'controller/client/**/*.html', 'controller/client/**/*.css'],
+    watchFiles: ['src/client/**/*.ts', 'src/client/**/*.html', 'src/client/**/*.css'],
   },
 };

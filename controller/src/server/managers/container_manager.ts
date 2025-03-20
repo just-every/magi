@@ -1,15 +1,15 @@
 /**
  * Container Manager Module
- * 
+ *
  * Higher-level container management functionality for MAGI System.
  */
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
-import { 
-  validateContainerName, 
-  execPromise, 
-  execPromiseFallback 
+import {
+  validateContainerName,
+  execPromise,
+  execPromiseFallback
 } from '../utils/docker_commands';
 
 export interface DockerBuildOptions {
@@ -21,8 +21,6 @@ export interface DockerBuildOptions {
 export interface DockerRunOptions {
   processId: string;
   command: string;
-  openaiApiKey?: string;
-  projectRoot?: string;
 }
 
 /**
@@ -87,7 +85,7 @@ export async function buildDockerImage(options: DockerBuildOptions = {}): Promis
  */
 export async function runDockerContainer(options: DockerRunOptions): Promise<string> {
   try {
-    const { processId, command, openaiApiKey } = options;
+    const { processId, command } = options;
 
     // Input validation
     if (!processId || typeof processId !== 'string') {
@@ -97,20 +95,13 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
       throw new Error('Invalid command');
     }
 
+    const projectRoot = path.resolve(process.cwd(), '..');
+
     // Generate container name and validate
     const containerName = validateContainerName(`magi-${processId}`);
 
-    // Get project root directory and normalize
-    const projectRoot = options.projectRoot
-        ? path.resolve(options.projectRoot)
-        : path.resolve(__dirname, '../../../../../');
-
-    // In dist, we need to go up one more level
-    const isBuildDir = projectRoot.endsWith('/dist');
-    const actualProjectRoot = isBuildDir ? path.resolve(projectRoot, '..') : projectRoot;
-
     // Verify the magi directory exists
-    const magiPath = path.join(actualProjectRoot, 'magi');
+    const magiPath = path.join(projectRoot, 'magi');
     if (!fs.existsSync(magiPath)) {
       throw new Error(`Magi directory not found at ${magiPath}`);
     }
@@ -121,21 +112,16 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
     // Create the docker run command using base64 encoded command
     const dockerRunCommand = `docker run -d --rm --name ${containerName} \
       -e PROCESS_ID=${processId} \
-      ${openaiApiKey ? `-e OPENAI_API_KEY=${openaiApiKey}` : ''} \
+      --env-file ${path.resolve(projectRoot, '.env')} \
       -v ${magiPath}:/app/magi:rw \
       -v claude_credentials:/claude_shared:rw \
       -v magi_output:/magi_output:rw \
       magi-system:latest \
-      python magi/magi.py --base64 "${base64Command}"`;
+      node /app/magi/dist/magi.js --base64 "${base64Command}"`;
 
-    console.log(`Running Docker container for process ${processId} with command: ${command}`);
-    
     // Execute the command and get the container ID
     const result = await execPromise(dockerRunCommand);
-    const containerId = result.stdout.trim();
-    
-    console.log(`Docker container started for process ${processId}, container ID: ${containerId}`);
-    return containerId;
+    return result.stdout.trim();
   } catch (error) {
     console.error('Error running Docker container:', error);
     return '';
@@ -196,7 +182,7 @@ export async function sendCommandToContainer(processId: string, command: string)
 
     // Use base64 encoding to avoid escaping issues entirely
     const base64Command = Buffer.from(command).toString('base64');
-    
+
     // Use "BASE64:" prefix to indicate this is a base64-encoded command
     await execPromise(
       `docker exec ${containerName} python -c "import os; open('/tmp/command.fifo', 'w').write('BASE64:${base64Command}\\n');"`

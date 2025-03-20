@@ -1,22 +1,32 @@
-// eslint.config.js
-const typescriptParser = require('@typescript-eslint/parser');
-const typescriptPlugin = require('@typescript-eslint/eslint-plugin');
+// Import the recommended rules from eslint and @typescript-eslint
+import eslint from '@eslint/js';
+import tseslint from 'typescript-eslint';
 
-module.exports = [
+export default [
+  // Base configuration with ESLint defaults
+  eslint.configs.recommended,
+  ...tseslint.configs.recommended,
+
+  // Project-specific configuration
   {
-    files: ['controller/**/*.ts', 'setup/**/*.ts'],
     languageOptions: {
-      parser: typescriptParser,
-      ecmaVersion: 2020,
+      parser: tseslint.parser,
+      ecmaVersion: 2022,
       sourceType: 'module',
+      parserOptions: {
+        project: ['./tsconfig.json', './controller/tsconfig.json', './magi/tsconfig.json']
+      },
     },
     plugins: {
-      '@typescript-eslint': typescriptPlugin
+      '@typescript-eslint': tseslint.plugin,
     },
     rules: {
-      '@typescript-eslint/no-unused-vars': 'warn',
-      '@typescript-eslint/explicit-module-boundary-types': 'off',
-      '@typescript-eslint/no-explicit-any': 'warn'
-    }
+      '@typescript-eslint/no-explicit-any': 'off',
+      'no-console': 'off',
+      'semi': ['error', 'always'],
+      'quotes': ['error', 'single', { 'avoidEscape': true }],
+    },
+    ignores: ['**/dist/**', '**/node_modules/**', 'setup/**'],
+    files: ['controller/src/**/*.ts', 'magi/src/**/*.ts'],
   }
 ];

@@ -1,6 +1,6 @@
 /**
  * Color Manager Module
- * 
+ *
  * Handles the generation and persistence of process theme colors.
  */
 import { saveData, loadData } from '../utils/storage';
@@ -26,7 +26,7 @@ export function initColorManager(): void {
 
 /**
  * Save the used process colors to persistent storage
- * 
+ *
  * @param colors - Array of [r,g,b] color values
  */
 export function saveUsedColors(colors: Array<RGBColor> = usedColors): void {
@@ -35,7 +35,7 @@ export function saveUsedColors(colors: Array<RGBColor> = usedColors): void {
 
 /**
  * Load previously used process colors from storage
- * 
+ *
  * @returns Array of [r,g,b] color values, or empty array if none found
  */
 export function loadUsedColors(): Array<RGBColor> {
@@ -43,7 +43,7 @@ export function loadUsedColors(): Array<RGBColor> {
   if (!colorsJson) {
     return [];
   }
-  
+
   try {
     return JSON.parse(colorsJson) as Array<RGBColor>;
   } catch (error) {
@@ -55,7 +55,7 @@ export function loadUsedColors(): Array<RGBColor> {
 /**
  * Calculate the minimum distance between a color and all used colors
  * Higher distance means more distinct color
- * 
+ *
  * @param color - The RGB color to check
  * @returns The minimum distance to any used color
  */
@@ -131,7 +131,7 @@ export function generateProcessColors(): { bgColor: string, textColor: string } 
 
   // Create background with very low alpha
   const [r, g, b] = bestCandidate;
-  const bgColor = `rgba(${r}, ${g}, ${b}, 0.08)`;
+  const bgColor = `rgba(${r}, ${g}, ${b}, 0.2)`;
 
   // Create darker text version for contrast
   const textColor = `rgba(${Math.floor(r * 0.6)}, ${Math.floor(g * 0.6)}, ${Math.floor(b * 0.6)}, 0.9)`;
