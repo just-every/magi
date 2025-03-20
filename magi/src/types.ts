@@ -39,6 +39,7 @@ export interface AgentDefinition {
   instructions: string;
   tools: ToolDefinition[];
   model: string;
+  modelClass?: string;
   handoff_description?: string;
 }
 

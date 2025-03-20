@@ -19,6 +19,28 @@ function convertToOpenAITools(tools: ToolDefinition[]): any[] {
   }));
 }
 
+// Add web_search_preview for GPT-4o models
+function addWebSearchPreviewIfNeeded(model: string, toolsArray: any[]): any[] {
+  // Only add web_search_preview to models that support it (gpt-4o)
+  if (model.startsWith('gpt-4o')) {
+    // Check if we already have a search tool defined to avoid duplicates
+    const hasSearchTool = toolsArray.some(tool => 
+      tool.name === 'web_search' || 
+      tool.name === 'search_news' || 
+      tool.name === 'search_with_location'
+    );
+    
+    // If we have search tools, inject web_search_preview
+    if (hasSearchTool) {
+      console.log(`Adding web_search_preview for model: ${model}`);
+      return [...toolsArray, { type: 'web_search_preview' }];
+    }
+  }
+  
+  // Return original array if conditions not met
+  return toolsArray;
+}
+
 /**
  * OpenAI model provider implementation
  */
@@ -54,15 +76,33 @@ export class OpenAIProvider implements ModelProvider {
         stream: true,
         // OpenAI Responses API expects the messages array as input
         input: messages,
-        // Add optional parameters
-        ...(settings?.temperature ? { temperature: settings.temperature } : {}),
-        ...(settings?.top_p ? { top_p: settings.top_p } : {}),
-        ...(settings?.tool_choice ? { tool_choice: settings.tool_choice } : {})
       };
+      
+      // Add model-specific parameters
+      // o3 models don't support temperature and top_p
+      if (!model.startsWith('o3-')) {
+        if (settings?.temperature !== undefined) {
+          requestParams.temperature = settings.temperature;
+        }
+        
+        if (settings?.top_p !== undefined) {
+          requestParams.top_p = settings.top_p;
+        }
+      } else {
+        console.log(`[OpenAI] Skipping temperature/top_p settings for ${model} which doesn't support them`);
+      }
+      
+      // Add other settings that work across models
+      if (settings?.tool_choice) {
+        requestParams.tool_choice = settings.tool_choice;
+      }
 
       // Add tools if provided
       if (tools && tools.length > 0) {
-        requestParams.tools = convertToOpenAITools(tools);
+        // Convert our tools to OpenAI format
+        const openaiTools = convertToOpenAITools(tools);
+        // Add web_search_preview for GPT-4o models if there are search tools
+        requestParams.tools = addWebSearchPreviewIfNeeded(model, openaiTools);
       }
 
       const stream = await this.client.responses.create(requestParams);
@@ -78,8 +118,18 @@ export class OpenAIProvider implements ModelProvider {
           // console.log(`Stream event type: ${event.type}`);
           // console.log('Stream event structure:', JSON.stringify(event, null, 2));
 
+          // Handle web_search events from web_search_preview
+          if (event.type === 'web_search.results') {
+            // Log that we received web search results, but we don't emit them directly
+            console.log(`Received web_search.results from OpenAI`, 
+              event.results ? `Count: ${event.results.length}` : 'No results');
+            
+            // We don't need to yield an event here, as the model will use these results internally
+            // and generate appropriate content that will come through as text deltas
+          }
+          
           // Handle response.output_text.delta - new format for text chunks
-          if (event.type === 'response.output_text.delta') {
+          else if (event.type === 'response.output_text.delta') {
             const textDelta = event.delta;
             if (textDelta) {
               yield {

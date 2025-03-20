@@ -11,6 +11,7 @@ import {ToolCallEvent, MessageEvent, AgentUpdatedEvent} from './types.js';
 import {createAgent, AgentType} from './magi_agents/index.js';
 import {addHistory, getHistory} from './utils/history.js';
 import {initCommunication, CommandMessage} from './utils/communication.js';
+import {MODEL_GROUPS} from './magi_agents/constants.js';
 
 // Parse command line arguments
 function parseCommandLineArgs() {
@@ -21,6 +22,7 @@ function parseCommandLineArgs() {
         prompt: {type: 'string' as const, short: 'p'},
         base64: {type: 'string' as const, short: 'b'},
         model: {type: 'string' as const, short: 'm'},
+        'model-class': {type: 'string' as const, short: 'c'},
         'list-models': {type: 'boolean' as const, default: false}
     };
 
@@ -48,20 +50,61 @@ async function processToolCall(toolCall: ToolCallEvent): Promise<string> {
                 // Validate tool call
                 if (!call || !call.function || !call.function.name) {
                     console.error(`Invalid tool call structure:`, call);
-                    results.push({error: "Invalid tool call structure"});
+                    results.push({
+                        tool: null,
+                        error: "Invalid tool call structure",
+                        input: call
+                    });
                     continue;
+                }
+
+                // Parse arguments for better logging
+                let parsedArgs = {};
+                try {
+                    if (call.function.arguments && call.function.arguments.trim()) {
+                        parsedArgs = JSON.parse(call.function.arguments);
+                    }
+                } catch (parseError) {
+                    console.error(`Error parsing arguments:`, parseError);
+                    parsedArgs = { _raw: call.function.arguments };
                 }
 
                 // Handle the tool call
                 const result = await handleToolCall(call);
-                results.push(result);
+                
+                // Add structured response with tool name, input and output
+                results.push({
+                    tool: call.function.name,
+                    input: parsedArgs,
+                    output: result
+                });
 
                 // Log tool call
                 const {function: {name}} = call;
                 console.log(`[Tool] ${name} executed successfully`);
             } catch (error) {
                 console.error(`Error executing tool:`, error);
-                results.push({error: String(error)});
+                
+                // Include tool name and input in error response
+                let toolName = "unknown";
+                let toolInput = {};
+                
+                if (call && call.function) {
+                    toolName = call.function.name || "unknown";
+                    try {
+                        if (call.function.arguments && call.function.arguments.trim()) {
+                            toolInput = JSON.parse(call.function.arguments);
+                        }
+                    } catch (e) {
+                        toolInput = { _raw: call.function.arguments };
+                    }
+                }
+                
+                results.push({
+                    tool: toolName,
+                    input: toolInput,
+                    error: String(error)
+                });
             }
         }
 
@@ -80,7 +123,8 @@ export async function runMagiCommand(
     command: string,
     agentType: AgentType = 'supervisor',
     model?: string,
-    isTestMode: boolean = false
+    isTestMode: boolean = false,
+    modelClass?: string
 ): Promise<void> {
     // Record command in system memory for context
     addHistory({
@@ -94,14 +138,17 @@ export async function runMagiCommand(
         const comm = initCommunication(processId, isTestMode);
         comm.send('command', {command});
 
-        // Create the agent with specified type and model
+        // Create the agent with specified type, model, and modelClass
         if (model) {
             console.log(`Forcing model: ${model}`);
         }
+        if (modelClass) {
+            console.log(`Using model class: ${modelClass}`);
+        }
 
-        // Create the agent with model parameter
-        const agent = createAgent(agentType, model);
-        comm.send('running', { agent: { name: agent.name, model: agent.model }, command });
+        // Create the agent with model and modelClass parameters
+        const agent = createAgent(agentType, model, modelClass);
+        comm.send('running', { agent: { name: agent.name, model: agent.model, modelClass: agent.modelClass }, command });
 
         // Run the command with streaming
         const history = getHistory();
@@ -124,10 +171,14 @@ export async function runMagiCommand(
                             });
                         }
 
-                        // Send progress update via WebSocket
+                        // Send progress update via WebSocket with agent info
                         comm.send(
                             event.type,
-                            { message }
+                            { 
+                                message,
+                                agent: agent.name,
+                                model: agent.model
+                            }
                         );
                     }
                     break;
@@ -143,22 +194,60 @@ export async function runMagiCommand(
 
                     console.log(`[${agent.name}] Tool calls: ${toolNames}`);
 
-                    // Send tool call progress via WebSocket
+                    // Format detailed tool calls for logging
+                    const detailedToolCalls = toolCallEvent.tool_calls.map(call => {
+                        let parsedArgs = {};
+                        try {
+                            if (call.function.arguments && call.function.arguments.trim()) {
+                                parsedArgs = JSON.parse(call.function.arguments);
+                            }
+                        } catch (parseError) {
+                            console.error(`Error parsing tool arguments:`, parseError);
+                            parsedArgs = { _raw: call.function.arguments };
+                        }
+                        
+                        return {
+                            id: call.id,
+                            name: call.function.name,
+                            arguments: parsedArgs
+                        };
+                    });
+
+                    // Send detailed tool call progress via WebSocket
                     comm.send(
                         'tool_call',
-                        {toolCallEvent}
+                        {
+                            type: 'tool_call',
+                            agent: agent.name,
+                            model: agent.model,
+                            calls: detailedToolCalls
+                        }
                     );
 
                     // Process the tool calls
                     const toolResult = await processToolCall(toolCallEvent);
 
+                    // Parse tool results for better logging
+                    let parsedResults;
+                    try {
+                        parsedResults = JSON.parse(toolResult);
+                    } catch (e) {
+                        parsedResults = toolResult;
+                    }
+
                     // Log result (truncated)
                     console.log(`[${agent.name}] Tool result: ${toolResult.substring(0, 100)}...`);
 
-                    // Send tool result via WebSocket
+                    // Send detailed tool result via WebSocket
                     comm.send(
                         'tool_result',
-                        {toolResult}
+                        {
+                            type: 'tool_result',
+                            agent: agent.name,
+                            model: agent.model,
+                            results: parsedResults,
+                            calls: detailedToolCalls
+                        }
                     );
 
                     // Re-inject the tool result as part of the conversation
@@ -210,13 +299,55 @@ export function processCommand(
     command: string,
     agentType: AgentType = 'supervisor',
     model?: string,
-    isTestMode: boolean = false
+    isTestMode: boolean = false,
+    modelClass?: string
 ): Promise<void> {
     // Log the incoming command
     console.log(`> ${command}`);
 
     // Run the command
-    return runMagiCommand(command, agentType, model, isTestMode);
+    return runMagiCommand(command, agentType, model, isTestMode, modelClass);
+}
+
+/**
+ * Check environment variables for model provider API keys
+ */
+function checkModelProviderApiKeys(): boolean {
+    let hasValidKey = false;
+    
+    // Check OpenAI API key
+    if (process.env.OPENAI_API_KEY) {
+        console.log('✓ OpenAI API key found');
+        hasValidKey = true;
+    } else {
+        console.warn('⚠ OPENAI_API_KEY environment variable not set');
+    }
+    
+    // Check Anthropic (Claude) API key
+    if (process.env.ANTHROPIC_API_KEY) {
+        console.log('✓ Anthropic API key found');
+        hasValidKey = true;
+    } else {
+        console.warn('⚠ ANTHROPIC_API_KEY environment variable not set');
+    }
+    
+    // Check Google API key for Gemini
+    if (process.env.GOOGLE_API_KEY) {
+        console.log('✓ Google API key found');
+        hasValidKey = true;
+    } else {
+        console.warn('⚠ GOOGLE_API_KEY environment variable not set');
+    }
+    
+    // Check X.AI API key for Grok
+    if (process.env.XAI_API_KEY) {
+        console.log('✓ X.AI API key found');
+        hasValidKey = true;
+    } else {
+        console.warn('⚠ XAI_API_KEY environment variable not set');
+    }
+    
+    return hasValidKey;
 }
 
 /**
@@ -242,22 +373,82 @@ async function main() {
         }
     });
 
-    // Verify API key is available
-    if (!process.env.OPENAI_API_KEY) {
-        console.error('**Error** OPENAI_API_KEY environment variable not set');
+    // Verify API keys for model providers
+    if (!checkModelProviderApiKeys()) {
+        console.error('**Error** No valid API keys found for any model provider');
 
         // Send error via WebSocket
-        comm.send('error', { error: 'OPENAI_API_KEY environment variable not set' });
+        comm.send('error', { error: 'No valid API keys found for any model provider' });
         process.exit(1);
     }
 
     // Handle listing models if requested
     if (args['list-models']) {
-        console.log('\nAvailable models:');
-        console.log('  - gpt-4o             (OpenAI - standard model)');
-        console.log('  - gpt-4o-mini        (OpenAI - smaller model)');
-        console.log('  - o3-mini            (OpenAI - reasoning model)');
-        console.log('  - gpt-4o-vision      (OpenAI - vision model)');
+        console.log('\nAvailable Model Classes:');
+        console.log('=== standard ===');
+        for (const model of MODEL_GROUPS.standard) {
+            console.log(`  - ${model}`);
+        }
+        
+        console.log('\n=== mini ===');
+        for (const model of MODEL_GROUPS.mini) {
+            console.log(`  - ${model}`);
+        }
+        
+        console.log('\n=== reasoning ===');
+        for (const model of MODEL_GROUPS.reasoning) {
+            console.log(`  - ${model}`);
+        }
+        
+        console.log('\n=== vision ===');
+        for (const model of MODEL_GROUPS.vision) {
+            console.log(`  - ${model}`);
+        }
+        
+        console.log('\n=== search ===');
+        for (const model of MODEL_GROUPS.search) {
+            console.log(`  - ${model}`);
+        }
+        
+        console.log('\n=== Individual Models by Provider ===');
+        console.log('=== OpenAI Models ===');
+        console.log('  - gpt-4o             (standard model)');
+        console.log('  - gpt-4o-mini        (smaller model)');
+        console.log('  - o3-mini            (reasoning model)');
+        console.log('  - computer-use-preview (vision model)');
+        
+        console.log('\n=== Claude Models ===');
+        console.log('  - claude-3-7-sonnet-latest (advanced model)');
+        console.log('  - claude-3-5-haiku-latest  (faster model)');
+        
+        console.log('\n=== Gemini Models ===');
+        console.log('  - gemini-pro         (standard model)');
+        console.log('  - gemini-pro-vision  (vision model)');
+        console.log('  - gemini-2.0-pro     (latest model)');
+        console.log('  - gemini-2.0-flash   (faster model)');
+        
+        console.log('\n=== Grok Models ===');
+        console.log('  - grok-2             (latest model)');
+        console.log('  - grok-1.5-vision    (vision model)');
+        
+        console.log('\n=== Usage ===');
+        console.log('Specify a model class:');
+        console.log('  ./test/magi-node.sh -p "your prompt" -c standard');
+        console.log('Specify a specific model:');
+        console.log('  ./test/magi-node.sh -p "your prompt" -m gpt-4o');
+        console.log('Specify both (model takes precedence):');
+        console.log('  ./test/magi-node.sh -p "your prompt" -m claude-3-7-sonnet-latest -c reasoning');
+        
+        console.log('\n=== Agent-Specific Default Models ===');
+        console.log('  - MAGI_SUPERVISOR_MODEL  (default: gpt-4o)');
+        console.log('  - MAGI_MANAGER_MODEL     (default: gpt-4o)');
+        console.log('  - MAGI_REASONING_MODEL   (default: gpt-4o)');
+        console.log('  - MAGI_CODE_MODEL        (default: gpt-4o)');
+        console.log('  - MAGI_BROWSER_MODEL     (default: gpt-4o)');
+        console.log('  - MAGI_VISION_MODEL      (default: gpt-4o)');
+        console.log('  - MAGI_SEARCH_MODEL      (default: gpt-4o)');
+        console.log('  - MAGI_SHELL_MODEL       (default: gpt-4o)');
+        
         process.exit(0);
     }
 
@@ -285,7 +476,8 @@ async function main() {
             promptText,
             args.agent as AgentType,
             args.model,
-            args.test === true
+            args.test === true,
+            args["model-class"]
         );
 
         // When running in test mode, exit after completion
