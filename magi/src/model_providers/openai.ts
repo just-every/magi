@@ -38,7 +38,11 @@ export class OpenAIProvider implements ModelProvider {
   }
 
   /**
-   * Create a streaming completion using the OpenAI Responses API
+   * Create a streaming completion using the OpenAI API
+   * 
+   * Note: We're still using the chat.completions API with the standard format
+   * In the future, when Responses API is more stable and documented, we can
+   * switch to using client.responses.create with the appropriate structure
    */
   async *createResponseStream(
     model: string,
@@ -47,34 +51,35 @@ export class OpenAIProvider implements ModelProvider {
     settings?: ModelSettings
   ): AsyncGenerator<StreamingEvent> {
     try {
-      // Prepare the input for responses.create
-      const input = {
-        model,
-        messages: messages.map(msg => ({
-          role: msg.role,
-          content: msg.content,
-          ...(msg.name ? { name: msg.name } : {})
-        }))
-      };
-
-      // Prepare the parameters with optional settings
+      // Convert messages to the format expected by the API
+      const formattedMessages = messages.map(msg => ({
+        role: msg.role,
+        content: msg.content,
+        ...(msg.name ? { name: msg.name } : {})
+      }));
+      
+      // Prepare the parameters for responses.create
+      // For the responses API, we need to use chat completions format
       const requestParams: any = {
-        input,
+        model: model,
         stream: true,
+        // The OpenAI Responses API expects 'input' to be a string
+        // But we'll use the chat.completions API which is more compatible
+        messages: formattedMessages,
         // Add optional parameters
         ...(settings?.temperature ? { temperature: settings.temperature } : {}),
         ...(settings?.top_p ? { top_p: settings.top_p } : {}),
         ...(settings?.seed ? { seed: settings.seed } : {}),
         ...(settings?.tool_choice ? { tool_choice: settings.tool_choice } : {})
       };
-
+      
       // Add tools if provided
       if (tools && tools.length > 0) {
         requestParams.tools = convertToOpenAITools(tools);
       }
 
-      // Create the streaming response using the newer responses API
-      const stream = await this.client.responses.create(requestParams);
+      // Use the chat completions API since our structure is more compatible with it
+      const stream = await this.client.chat.completions.create(requestParams);
 
       // Collect text content for tool calls (which might be streamed in chunks)
       let currentToolCalls: Record<string, any> = {};
@@ -87,12 +92,12 @@ export class OpenAIProvider implements ModelProvider {
           if (chunk.choices && chunk.choices.length > 0) {
             const choice = chunk.choices[0];
             
-            // Handle text content (delta.text in responses API)
-            if (choice.delta?.text) {
+            // Handle text content (delta.content in chat completions API)
+            if (choice.delta?.content) {
               yield {
                 type: 'message',
                 model,
-                content: choice.delta.text
+                content: choice.delta.content
               };
             }
 
