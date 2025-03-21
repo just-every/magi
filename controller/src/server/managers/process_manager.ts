@@ -4,7 +4,7 @@
  * Manages all MAGI system processes, including creation, monitoring, and termination.
  */
 import { ChildProcess } from 'child_process';
-import { Socket, Server } from 'socket.io';
+import { Server } from 'socket.io';
 import {
   ProcessStatus,
   ProcessCreateEvent,
@@ -24,7 +24,6 @@ import {
   monitorContainerLogs,
   getRunningMagiContainers
 } from './container_manager';
-import path from "path";
 
 /**
  * Process data interface
@@ -495,7 +494,7 @@ export class ProcessManager {
         id,
         command,
         status: 'running',
-        logs: [`Connecting to secure MAGI container...`],
+        logs: ['Connecting to secure MAGI container...'],
         containerId,
         colors
       };
@@ -573,7 +572,7 @@ export class ProcessManager {
           }
         }
       } catch (error: unknown) {
-        console.error("Error during parallel process termination:", error);
+        console.error('Error during parallel process termination:', error);
       }
     }
   }

@@ -178,7 +178,7 @@ export class CommunicationManager {
         console.log(`Container ${processId} connected`);
         break;
         
-      case 'progress':
+      case 'progress': {
         const progressMsg = message as ProgressMessage;
         // Send progress to process manager to update logs
         this.processManager.updateProcess(
@@ -186,8 +186,9 @@ export class CommunicationManager {
           `[${progressMsg.data.step}] ${progressMsg.data.message}`
         );
         break;
+      }
         
-      case 'result':
+      case 'result': {
         const resultMsg = message as ResultMessage;
         // Handle final result
         console.log(`Received final result from process ${processId}`);
@@ -200,6 +201,7 @@ export class CommunicationManager {
           );
         }
         break;
+      }
         
       default:
         console.log(`Received unknown message type ${message.type} from process ${processId}`);

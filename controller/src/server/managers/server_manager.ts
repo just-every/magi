@@ -208,7 +208,7 @@ export class ServerManager {
       console.warn(`Process ${processId} does not exist, can't terminate`);
       socket.emit('process:logs', {
         id: processId,
-        logs: `[ERROR] Process does not exist or has already terminated`
+        logs: '[ERROR] Process does not exist or has already terminated'
       });
       return;
     }
@@ -223,7 +223,7 @@ export class ServerManager {
         console.log(`Process ${processId} gracefully terminating via WebSocket`);
         this.processManager.updateProcess(
           processId,
-          `[INFO] Gracefully shutting down...`
+          '[INFO] Gracefully shutting down...'
         );
         
         // Give it a moment to shut down cleanly before forcing
@@ -239,7 +239,7 @@ export class ServerManager {
       console.error(`Failed to terminate process ${processId}`);
       socket.emit('process:logs', {
         id: processId,
-        logs: `[ERROR] Failed to terminate process`
+        logs: '[ERROR] Failed to terminate process'
       });
     }
   }
@@ -259,7 +259,7 @@ export class ServerManager {
       console.warn(`Cannot send command: Process ${processId} does not exist`);
       socket.emit('process:logs', {
         id: processId,
-        logs: `[ERROR] Process does not exist or has terminated`
+        logs: '[ERROR] Process does not exist or has terminated'
       });
       return;
     }
@@ -281,7 +281,7 @@ export class ServerManager {
         console.log(`Command sent to process ${processId} successfully via WebSocket`);
         this.processManager.updateProcess(
           processId,
-          `[INFO] Command sent via WebSocket`
+          '[INFO] Command sent via WebSocket'
         );
         return;
       }
@@ -291,6 +291,7 @@ export class ServerManager {
     console.log(`WebSocket communication failed or not available for ${processId}, falling back to FIFO`);
     
     // Import here to avoid circular dependency
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { sendCommandToContainer } = require('./container_manager');
 
     // Process command in the container using the legacy method
@@ -300,7 +301,7 @@ export class ServerManager {
       console.error(`Failed to send command to container for process ${processId}`);
       this.processManager.updateProcess(
         processId,
-        `[ERROR] Failed to send command: Unable to communicate with container`
+        '[ERROR] Failed to send command: Unable to communicate with container'
       );
     } else {
       console.log(`Command sent to process ${processId} successfully via FIFO`);
@@ -387,6 +388,7 @@ export class ServerManager {
    * @returns Promise resolving to an available port number
    */
   private async findAvailablePort(startPort: number): Promise<number> {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const net = require('net');
     let port = startPort;
     const maxPort = startPort + 100; // Try up to 100 ports
@@ -479,9 +481,9 @@ export class ServerManager {
     updateServerVersion();
 
     // Get port from environment or use 3001
-    const isNodemonRestart = process.env.HAS_RESTARTED === "true";
+    const isNodemonRestart = process.env.HAS_RESTARTED === 'true';
     if (!isNodemonRestart) {
-      saveEnvVar('HAS_RESTARTED', "true");
+      saveEnvVar('HAS_RESTARTED', 'true');
     }
     const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
     console.log(`Starting MAGI System Server (port: ${PORT}, restart: ${isNodemonRestart})`);

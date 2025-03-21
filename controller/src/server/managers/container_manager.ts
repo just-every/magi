@@ -8,8 +8,7 @@ import path from 'path';
 import fs from 'fs';
 import {
   validateContainerName,
-  execPromise,
-  execPromiseFallback
+  execPromise
 } from '../utils/docker_commands';
 
 export interface DockerBuildOptions {
