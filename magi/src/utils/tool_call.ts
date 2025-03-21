@@ -8,12 +8,17 @@
 import {
   ToolCall,
   ToolEvent,
+  ToolImplementationFn,
 } from '../types.js';
 import { Agent } from './agent.js';
 import { Runner } from './runner.js';
 
-// Import all agent creation functions now that Runner is defined
-import {getCommunicationManager} from "../utils/communication.js";
+// Import utility modules with tool implementations
+import { fileToolImplementations } from './file_utils.js';
+import { browserToolImplementations } from './browser_utils.js';
+import { searchToolImplementations } from './search_utils.js';
+import { shellToolImplementations } from './shell_utils.js';
+import { getCommunicationManager } from './communication.js';
 
 /**
  * Process a tool call from an agent
@@ -102,7 +107,7 @@ export async function processToolCall(toolCall: ToolEvent, agent: Agent): Promis
 }
 
 /**
- * Handle a tool call by executing the appropriate tool function
+ * Handle a tool call by executing the appropriate tool function or worker agent
  */
 export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<any> {
   // Validate the tool call structure
@@ -136,9 +141,25 @@ export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<
     throw new Error(`Invalid JSON in tool arguments: ${error?.message || String(error)}`);
   }
 
-  // Find the tool implementation
-  const implementation = allToolImplementations[name];
-  if (!implementation) {
+  // First, check if this is a worker with the same name
+  if (agent.workers) {
+    const matchingWorker = agent.workers.find(worker => worker.name === name);
+    if (matchingWorker) {
+      console.log(`Found matching worker agent for tool call: ${name}`);
+      // If it's a worker, use runAgentTool to run it
+      if (args.prompt) {
+        return await runAgentTool(matchingWorker, args.prompt, name, agent);
+      } else {
+        console.warn(`Worker agent ${name} called without a prompt`);
+        return `Error: Worker agent ${name} requires a prompt parameter`;
+      }
+    }
+  }
+
+  // If not a worker, look for the implementation in various tool sources
+  const toolFunction = findToolImplementation(name);
+  
+  if (!toolFunction) {
     throw new Error(`Tool implementation not found for: ${name}`);
   }
 
@@ -147,7 +168,7 @@ export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<
     let result;
     if (typeof args === 'object' && args !== null) {
       // Extract named parameters based on implementation function definition
-      const functionStr = implementation.toString();
+      const functionStr = toolFunction.toString();
       // Extract parameter names from function definition using regex
       const paramMatch = functionStr.match(/\(([^)]*)\)/);
       const paramNames = paramMatch && paramMatch[1]
@@ -159,18 +180,15 @@ export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<
         const orderedArgs = paramNames.map((param: string) => {
           return args[param as keyof typeof args];
         });
-        result = await implementation(...orderedArgs);
-        console.log(`Implementation 1 ${functionStr}`, orderedArgs, result);
+        result = await toolFunction(...orderedArgs);
       } else {
         // Fallback to using args values directly if parameter extraction fails
         const argValues = Object.values(args);
-        result = await implementation(...argValues);
-        console.log('Implementation 2', result);
+        result = await toolFunction(...argValues);
       }
     } else {
       // If args is not an object, pass it directly (shouldn't occur with OpenAI)
-      result = await implementation(args);
-      console.log('Implementation 3', result);
+      result = await toolFunction(args);
     }
 
     // Trigger onToolResult handler if available
@@ -191,15 +209,38 @@ export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<
 
 
 /**
+ * Find the tool implementation for a given tool name
+ */
+function findToolImplementation(toolName: string): ToolImplementationFn | undefined {
+  // Combined tool implementations from different modules
+  const allToolImplementations = {
+    ...fileToolImplementations,
+    ...browserToolImplementations,
+    ...searchToolImplementations,
+    ...shellToolImplementations
+  };
+
+  // First try to find the function in the known implementations
+  if (allToolImplementations[toolName]) {
+    return allToolImplementations[toolName];
+  }
+
+  // If not found, search through the agent's tools if they have custom implementations
+  // This would require extending the Agent or tool definitions to include implementations
+  
+  // For now, just return undefined if not found in standard implementations
+  return undefined;
+}
+
+/**
  * Run an agent and capture its streamed response
  */
 async function runAgentTool(
-    createAgentFn: () => Agent,
+    agentToRun: Agent,
     prompt: string,
     agentName: string,
     parentAgent?: Agent
 ): Promise<string> {
-  const agent = createAgentFn();
   const messages = [{ role: 'user', content: prompt }];
   let response = '';
   let toolResultsToInclude = '';
@@ -231,14 +272,18 @@ async function runAgentTool(
     };
 
     // Set up interception
-    agent.onToolCall = onToolCall;
-    agent.onToolResult = onToolResult;
+    agentToRun.onToolCall = onToolCall;
+    agentToRun.onToolResult = onToolResult;
 
     const comm = getCommunicationManager();
 
-    console.log(`runAgentTool Runner.runStreamed`, agent, prompt, messages);
-    const stream = Runner.runStreamed(agent, prompt, messages);
+    console.log(`runAgentTool Runner.runStreamed for ${agentName}`, prompt);
+    const stream = Runner.runStreamed(agentToRun, prompt, messages);
     for await (const event of stream) {
+      // Add parent agent to event if present
+      if (parentAgent && !event.parentAgent) {
+        event.parentAgent = parentAgent.export();
+      }
       comm.send(event);
 
       if (event.type === 'message_delta' || event.type === 'message_done') {

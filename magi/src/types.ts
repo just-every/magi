@@ -32,6 +32,11 @@ export interface ToolDefinition {
 }
 
 /**
+ * Type definition for tool implementation functions
+ */
+export type ToolImplementationFn = (...args: any[]) => any | Promise<any>;
+
+/**
  * Definition of an agent with model and tool settings
  */
 export interface AgentDefinition {
@@ -107,6 +112,7 @@ export type StreamEventType = 'connected' | 'command_start' | 'command_done' | '
 export interface StreamEvent {
   type: StreamEventType;
   agent?: AgentExportDefinition;
+  parentAgent?: AgentExportDefinition;
   model?: string;
 }
 
