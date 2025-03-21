@@ -11,11 +11,11 @@
 import 'dotenv/config';
 import {
   ModelProvider,
-  ToolDefinition,
+  ToolFunction,
   ModelSettings,
   StreamingEvent,
   ToolCall,
-  LLMMessage
+  ResponseInput
 } from '../types.js';
 
 /**
@@ -37,17 +37,40 @@ export class GrokProvider implements ModelProvider {
    */
   async *createResponseStream(
     model: string,
-    messages: Array<LLMMessage>,
-    tools?: ToolDefinition[],
+    messages: ResponseInput,
+    tools?: ToolFunction[],
     settings?: ModelSettings
   ): AsyncGenerator<StreamingEvent> {
     try {
       // Format the messages for Grok API (follows OpenAI format)
-      const grokMessages = messages.map(msg => ({
-        role: msg.role,
-        content: msg.content,
-        ...(msg.name ? { name: msg.name } : {})
-      }));
+      const grokMessages = messages.map(msg => {
+        // Check if this message has a role property
+        let role = 'system';
+        if ('role' in msg) {
+          role = msg.role;
+        }
+
+        let content = '';
+        if ('content' in msg) {
+          if(typeof msg.content === 'string') {
+            content = msg.content;
+          }
+          else if('text' in msg.content && typeof msg.content.text === 'string') {
+            content = msg.content.text;
+          }
+        }
+        // Check if this message has a role property
+        let name = {};
+        if ('name' in msg) {
+          name = { name: msg.name };
+        }
+
+        return {
+          role,
+          content,
+          name,
+        };
+      });
 
       // Build the request body
       const requestBody: any = {
@@ -61,7 +84,7 @@ export class GrokProvider implements ModelProvider {
 
       // Add tools if provided (Grok follows OpenAI format for tools)
       if (tools && tools.length > 0) {
-        requestBody.tools = tools;
+        requestBody.tools = tools.map(tool => (tool.definition));
       }
 
       // Prepare the request options
@@ -130,7 +153,6 @@ export class GrokProvider implements ModelProvider {
               if (contentBuffer && !sentComplete) {
                 yield {
                   type: 'message_done',
-                  model,
                   content: contentBuffer
                 };
                 sentComplete = true;
@@ -150,7 +172,6 @@ export class GrokProvider implements ModelProvider {
                   // Emit delta for streaming UI
                   yield {
                     type: 'message_delta',
-                    model,
                     content: choice.delta.content
                   };
 
@@ -164,7 +185,6 @@ export class GrokProvider implements ModelProvider {
                   if (!choice.delta) {
                     yield {
                       type: 'message_delta',
-                      model,
                       content: choice.message.content
                     };
                   }
@@ -172,7 +192,6 @@ export class GrokProvider implements ModelProvider {
                   // Always emit a message_done
                   yield {
                     type: 'message_done',
-                    model,
                     content: choice.message.content
                   };
                   sentComplete = true;
@@ -214,7 +233,6 @@ export class GrokProvider implements ModelProvider {
                       if (currentToolCall) {
                         yield {
                           type: 'tool_start',
-                          model,
                           tool_calls: [currentToolCall as ToolCall]
                         };
                       }
@@ -224,7 +242,6 @@ export class GrokProvider implements ModelProvider {
                       const toolCall = toolCalls[0];
                       yield {
                         type: 'tool_start',
-                        model,
                         tool_calls: [{
                           id: toolCall.id || `call_${Date.now()}`,
                           type: 'function',
@@ -243,7 +260,6 @@ export class GrokProvider implements ModelProvider {
                 if (choice.finish_reason === 'tool_calls' && currentToolCall) {
                   yield {
                     type: 'tool_start',
-                    model,
                     tool_calls: [currentToolCall as ToolCall]
                   };
                   currentToolCall = null;
@@ -253,7 +269,6 @@ export class GrokProvider implements ModelProvider {
                 if (choice.finish_reason && contentBuffer && !sentComplete) {
                   yield {
                     type: 'message_done',
-                    model,
                     content: contentBuffer
                   };
                   sentComplete = true;
@@ -269,7 +284,6 @@ export class GrokProvider implements ModelProvider {
         if (currentToolCall) {
           yield {
             type: 'tool_start',
-            model,
             tool_calls: [currentToolCall as ToolCall]
           };
         }
@@ -278,7 +292,6 @@ export class GrokProvider implements ModelProvider {
         if (contentBuffer && !sentComplete) {
           yield {
             type: 'message_done',
-            model,
             content: contentBuffer
           };
         }
@@ -287,7 +300,6 @@ export class GrokProvider implements ModelProvider {
         console.error('Error processing Grok stream:', streamError);
         yield {
           type: 'error',
-          model,
           error: String(streamError)
         };
 
@@ -296,7 +308,6 @@ export class GrokProvider implements ModelProvider {
         if (contentBuffer && !sentComplete) {
           yield {
             type: 'message_done',
-            model,
             content: contentBuffer
           };
         }
@@ -306,7 +317,6 @@ export class GrokProvider implements ModelProvider {
       console.error('Error in Grok streaming completion:', error);
       yield {
         type: 'error',
-        model,
         error: String(error)
       };
 
@@ -314,7 +324,6 @@ export class GrokProvider implements ModelProvider {
       // to ensure the UI doesn't get stuck waiting
       yield {
         type: 'message_done',
-        model,
         content: 'Error occurred while generating response. Please try again.'
       };
     }

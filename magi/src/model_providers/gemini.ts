@@ -9,11 +9,11 @@ import 'dotenv/config';
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 import {
   ModelProvider,
-  ToolDefinition,
+  ToolFunction,
   ModelSettings,
   StreamingEvent,
   ToolCall,
-  LLMMessage
+  ResponseInput
 } from '../types.js';
 
 // Define a type that includes functionCall property since it's missing in the current TypeScript definitions
@@ -23,10 +23,10 @@ interface FunctionCall {
 }
 
 // Convert our tool definition to Gemini's format
-function convertToGeminiTools(tools: ToolDefinition[]): any[] {
+function convertToGeminiTools(tools: ToolFunction[]): any[] {
   return tools.map(tool => {
     // Deep copy of parameters to avoid modifying the original
-    const parameters = JSON.parse(JSON.stringify(tool.function.parameters));
+    const parameters = JSON.parse(JSON.stringify(tool.definition.function.parameters));
 
     // Convert type values to uppercase for Gemini
     if (parameters.type) {
@@ -44,8 +44,8 @@ function convertToGeminiTools(tools: ToolDefinition[]): any[] {
 
     return {
       functionDeclarations: [{
-        name: tool.function.name,
-        description: tool.function.description,
+        name: tool.definition.function.name,
+        description: tool.definition.function.description,
         parameters: parameters
       }]
     };
@@ -73,8 +73,8 @@ export class GeminiProvider implements ModelProvider {
    */
   async *createResponseStream(
     model: string,
-    messages: Array<LLMMessage>,
-    tools?: ToolDefinition[],
+    messages: ResponseInput,
+    tools?: ToolFunction[],
     settings?: ModelSettings
   ): AsyncGenerator<StreamingEvent> {
     try {
@@ -165,7 +165,6 @@ export class GeminiProvider implements ModelProvider {
                 // Emit the tool call immediately
                 yield {
                   type: 'tool_start',
-                  model,
                   tool_calls: [currentToolCall as ToolCall]
                 };
 
@@ -176,7 +175,6 @@ export class GeminiProvider implements ModelProvider {
                 // Emit delta event for streaming UI updates
                 yield {
                   type: 'message_delta',
-                  model,
                   content: part.text
                 };
 
@@ -191,7 +189,6 @@ export class GeminiProvider implements ModelProvider {
         if (contentBuffer && !sentComplete) {
           yield {
             type: 'message_done',
-            model,
             content: contentBuffer
           };
           sentComplete = true;
@@ -201,7 +198,6 @@ export class GeminiProvider implements ModelProvider {
         console.error('Error processing Gemini stream:', streamError);
         yield {
           type: 'error',
-          model,
           error: String(streamError)
         };
 
@@ -210,7 +206,6 @@ export class GeminiProvider implements ModelProvider {
         if (contentBuffer && !sentComplete) {
           yield {
             type: 'message_done',
-            model,
             content: contentBuffer
           };
         }
@@ -219,7 +214,6 @@ export class GeminiProvider implements ModelProvider {
       console.error('Error in Gemini streaming completion:', error);
       yield {
         type: 'error',
-        model,
         error: String(error)
       };
     }
@@ -229,15 +223,26 @@ export class GeminiProvider implements ModelProvider {
 /**
  * Convert OpenAI-style messages to Gemini format
  */
-function convertMessagesToGeminiFormat(messages: Array<LLMMessage>): string {
+function convertMessagesToGeminiFormat(messages: ResponseInput): string {
   // Gemini doesn't have a direct equivalent to OpenAI's message structure
   // Instead, we'll combine the messages into a single text string
   let systemMessage = '';
   let conversation = '';
 
   for (const message of messages) {
-    const role = message.role;
-    const content = message.content || '';
+    let role = 'system';
+    if ('role' in message) {
+      role = message.role;
+    }
+    let content = '';
+    if ('content' in message) {
+      if(typeof message.content === 'string') {
+        content = message.content;
+      }
+      else if('text' in message.content && typeof message.content.text === 'string') {
+        content = message.content.text;
+      }
+    }
 
     if (role === 'system') {
       systemMessage = content;

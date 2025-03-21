@@ -6,40 +6,43 @@
  */
 
 import 'dotenv/config';
-import {ModelProvider, ToolDefinition, ModelSettings, StreamingEvent, ToolCall, ToolParameter} from '../types.js';
+import {ModelProvider, ToolFunction, ModelSettings, StreamingEvent, ToolCall, ResponseInput} from '../types.js';
 import OpenAI from 'openai';
 
 // Convert our tool definition to OpenAI's format
-function convertToOpenAITools(tools: ToolDefinition[]): any[] {
-  return tools.map(tool => {
-        if (tool.function.name === 'web_search') {
+function convertToOpenAITools(requestParams: any): any {
+  requestParams.tools = requestParams.tools.map((tool: ToolFunction) => {
+        if (tool.definition.function.name === 'web_search') {
+          requestParams.model = 'gpt-4o'; // Force model for web_search
           return {
             type: 'web_search_preview',
-            search_context_size: "medium",
+            search_context_size: 'medium',
           };
         }
-        if (tool.function.name === 'computer_use') {
+        else if (tool.definition.function.name === 'computer_use') {
+          requestParams.model = 'computer-use-preview'; // Force model for computer_use
           return {
             type: 'computer_use_preview',
             display_width: 1024,
             display_height: 768,
-            environment: "browser"
+            environment: 'browser'
           };
         }
 
         return {
           type: 'function',
-          name: tool.function.name,
-          description: tool.function.description,
+          name: tool.definition.function.name,
+          description: tool.definition.function.description,
           parameters: {
-            ...tool.function.parameters,
+            ...tool.definition.function.parameters,
             additionalProperties: false,
-            required: Object.keys(tool.function.parameters.properties), // openai requires all properties to be required
+            required: Object.keys(tool.definition.function.parameters.properties), // openai requires all properties to be required
           },
           strict: true,
-        }
+        };
       }
   );
+  return requestParams;
 }
 
 /**
@@ -66,13 +69,13 @@ export class OpenAIProvider implements ModelProvider {
    */
   async *createResponseStream(
     model: string,
-    messages: Array<{ role: string; content: string; name?: string }>,
-    tools?: ToolDefinition[],
+    messages: ResponseInput,
+    tools?: ToolFunction[],
     settings?: ModelSettings
   ): AsyncGenerator<StreamingEvent> {
     try {
       // Format the request according to the Responses API specification
-      const requestParams: any = {
+      let requestParams: any = {
         model: model,
         stream: true,
         // OpenAI Responses API expects the messages array as input
@@ -98,8 +101,9 @@ export class OpenAIProvider implements ModelProvider {
 
       // Add tools if provided
       if (tools && tools.length > 0) {
-        // Convert our tools to OpenAI format=
-        requestParams.tools = convertToOpenAITools(tools);
+        // Convert our tools to OpenAI format
+        requestParams.tools = tools;
+        requestParams = convertToOpenAITools(requestParams);
       }
 
       const stream = await this.client.responses.create(requestParams);
@@ -131,7 +135,6 @@ export class OpenAIProvider implements ModelProvider {
             if (textDelta) {
               yield {
                 type: 'message_delta',
-                model,
                 content: textDelta
               };
             }
@@ -141,7 +144,6 @@ export class OpenAIProvider implements ModelProvider {
           else if (event.type === 'text.delta' && event.delta && event.delta.value) {
             yield {
               type: 'message_delta',
-              model,
               content: event.delta.value
             };
           }
@@ -150,7 +152,6 @@ export class OpenAIProvider implements ModelProvider {
           else if (event.type === 'response.content.delta') {
             yield {
               type: 'message_delta',
-              model,
               content: event.delta
             };
           }
@@ -163,7 +164,6 @@ export class OpenAIProvider implements ModelProvider {
             if (event.part.text && event.part.text.length > 0) {
               yield {
                 type: 'message_done',
-                model,
                 content: event.part.text
               };
             }
@@ -173,7 +173,6 @@ export class OpenAIProvider implements ModelProvider {
           else if (event.type === 'response.output_text.done' && event.text) {
             yield {
               type: 'message_done',
-              model,
               content: event.text
             };
           }
@@ -211,7 +210,6 @@ export class OpenAIProvider implements ModelProvider {
             if (currentToolCall.function.arguments) {
               yield {
                 type: 'tool_start',
-                model,
                 tool_calls: [currentToolCall as ToolCall]
               };
             }
@@ -251,7 +249,6 @@ export class OpenAIProvider implements ModelProvider {
             // Emit the tool call
             yield {
               type: 'tool_start',
-              model,
               tool_calls: [currentToolCall as ToolCall]
             };
 
@@ -272,7 +269,6 @@ export class OpenAIProvider implements ModelProvider {
             // Emit the tool call
             yield {
               type: 'tool_start',
-              model,
               tool_calls: [currentToolCall as ToolCall]
             };
 
@@ -284,7 +280,6 @@ export class OpenAIProvider implements ModelProvider {
         console.error('Error processing response stream:', streamError);
         yield {
           type: 'error',
-          model,
           error: String(streamError)
         };
       }
@@ -295,7 +290,6 @@ export class OpenAIProvider implements ModelProvider {
           currentToolCall.function.name) {
         yield {
           type: 'tool_start',
-          model,
           tool_calls: [currentToolCall as ToolCall]
         };
       }
@@ -304,7 +298,6 @@ export class OpenAIProvider implements ModelProvider {
       console.error('Error in OpenAI streaming response:', error);
       yield {
         type: 'error',
-        model,
         error: String(error)
       };
     }

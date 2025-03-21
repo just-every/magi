@@ -78,6 +78,7 @@ SPECIAL INSTRUCTION: For any visual analysis request, first navigate to the URL,
     tools: [
       ...getFileTools(),
       ...getBrowserTools()
+        // @todo switch to computer_use
     ],
     modelClass: 'vision'
   });

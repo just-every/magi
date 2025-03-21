@@ -5,7 +5,7 @@
  * with tools.
  */
 
-import { StreamingEvent, LLMMessage, ToolEvent, MessageEvent } from '../types.js';
+import {StreamingEvent, ToolEvent, MessageEvent, ToolCall, ResponseInput} from '../types.js';
 import { Agent } from './agent.js';
 import { getModelProvider } from '../model_providers/model_provider.js';
 import { MODEL_GROUPS } from '../magi_agents/constants.js';
@@ -22,7 +22,7 @@ export class Runner {
   static async *runStreamed(
       agent: Agent,
       input: string,
-      conversationHistory: Array<LLMMessage> = []
+      conversationHistory: ResponseInput = []
   ): AsyncGenerator<StreamingEvent> {
     // Get our selected model for this run
     const selectedModel = agent.model || getModelFromClass(agent.modelClass || 'standard');
@@ -31,7 +31,7 @@ export class Runner {
     const provider = getModelProvider(selectedModel);
 
     // Prepare messages with conversation history and the current input
-    const messages = [
+    const messages: ResponseInput = [
       // Add a system message with instructions
       { role: 'system', content: agent.instructions },
       // Add conversation history
@@ -143,7 +143,7 @@ export class Runner {
   static async runStreamedWithTools(
     agent: Agent,
     input: string,
-    conversationHistory: Array<LLMMessage> = [],
+    conversationHistory: ResponseInput = [],
     handlers: {
       onEvent?: (event: StreamingEvent) => void,
       onResponse?: (content: string) => void,
@@ -151,16 +151,18 @@ export class Runner {
     } = {}
   ): Promise<string> {
     let fullResponse = '';
-    
+    let collectedToolCalls: ToolCall[] = [];
+    const collectedToolResults: {call_id: string, output: string}[] = [];
+
     try {
       const stream = this.runStreamed(agent, input, conversationHistory);
-      
+
       for await (const event of stream) {
         // Call the event handler if provided
         if (handlers.onEvent) {
           handlers.onEvent(event);
         }
-        
+
         // Handle different event types
         switch (event.type) {
           case 'message_delta':
@@ -171,24 +173,27 @@ export class Runner {
               if (handlers.onResponse) {
                 handlers.onResponse(message.content);
               }
-              
+
               if (event.type === 'message_done') {
                 fullResponse = message.content;
               }
             }
             break;
           }
-            
+
           case 'tool_start': {
             // Process tool calls
             const toolEvent = event as ToolEvent;
-            
+
             if (!toolEvent.tool_calls || toolEvent.tool_calls.length === 0) {
               continue;
             }
-            
-            // Format detailed tool calls for logging
-            const detailedToolCalls = toolEvent.tool_calls.map(call => {
+
+            // Collect tool calls for later use
+            collectedToolCalls = [...collectedToolCalls, ...toolEvent.tool_calls];
+
+            // Log tool calls for debugging
+            toolEvent.tool_calls.forEach(call => {
               let parsedArgs = {};
               try {
                 if (call.function.arguments && call.function.arguments.trim()) {
@@ -198,17 +203,13 @@ export class Runner {
                 console.error('Error parsing tool arguments:', parseError);
                 parsedArgs = { _raw: call.function.arguments };
               }
-              
-              return {
-                id: call.id,
-                name: call.function.name,
-                arguments: parsedArgs
-              };
+
+              console.log(`[Tool Call] ${call.function.name}:`, parsedArgs);
             });
-            
+
             // Process all tool calls in parallel
             const toolResult = await processToolCall(toolEvent, agent);
-            
+
             // Parse tool results for better logging
             let parsedResults;
             try {
@@ -216,10 +217,33 @@ export class Runner {
             } catch (e) {
               parsedResults = toolResult;
             }
-            
-            // Tool results are handled by the event system now
-            // No need to store separately in toolResultsToInclude
-            
+
+            // Store tool results for subsequent model call
+            if (Array.isArray(parsedResults)) {
+              for (let i = 0; i < parsedResults.length; i++) {
+                const result = parsedResults[i];
+                // Associate result with the tool call ID
+                if (i < toolEvent.tool_calls.length) {
+                  collectedToolResults.push({
+                    call_id: toolEvent.tool_calls[i].id,
+                    output: typeof result === 'string' ? result : JSON.stringify(result)
+                  });
+                }
+              }
+            } else {
+              // If there's just one result for potentially multiple calls
+              const resultStr = typeof parsedResults === 'string' ?
+                parsedResults : JSON.stringify(parsedResults);
+
+              // Associate with the first tool call
+              if (toolEvent.tool_calls.length > 0) {
+                collectedToolResults.push({
+                  call_id: toolEvent.tool_calls[0].id,
+                  output: resultStr
+                });
+              }
+            }
+
             // Send detailed tool result via event handler
             if (handlers.onEvent) {
               handlers.onEvent({
@@ -231,19 +255,84 @@ export class Runner {
             }
             break;
           }
-            
+
           case 'error': {
             console.error(`[Error] ${event.error}`);
             break;
           }
         }
       }
-      
+
+      // Process tool call results if there were any tool calls
+      if (collectedToolCalls.length > 0 && collectedToolResults.length > 0) {
+        console.log(`[Runner] Collected ${collectedToolCalls.length} tool calls, running follow-up with results`);
+
+        // Create tool call messages for the next model request
+        let toolCallMessages: ResponseInput = [];
+
+        // Add previous history and input
+        toolCallMessages.push(...conversationHistory);
+        toolCallMessages.push({ role: 'user', content: input });
+
+        // We need to create messages with the proper format for the responses API
+        // We need to convert our regular messages to the correct format
+
+        // Start with initial messages - convert standard message format to responses format
+        const messageItems: ResponseInput = [...conversationHistory];
+
+        // Add the user input message
+        messageItems.push({
+          type: 'message',
+          role: 'user',
+          content: input
+        });
+
+        // Add the function calls
+        for (const toolCall of collectedToolCalls) {
+          messageItems.push({
+            type: 'function_call',
+            call_id: toolCall.id,
+            name: toolCall.function.name,
+            arguments: toolCall.function.arguments
+          });
+
+
+
+          // Add the corresponding tool result
+          const result = collectedToolResults.find(r => r.call_id === toolCall.id);
+          if (result) {
+            messageItems.push({
+              type: 'function_call_output',
+              call_id: toolCall.id,
+              output: result.output
+            });
+          }
+        }
+
+        // Use the input array as our messages
+        toolCallMessages = messageItems;
+
+        // Run the agent again with the tool results
+        console.log('[Runner] Running agent with tool call results');
+
+        const followUpResponse = await this.runStreamedWithTools(
+          agent,
+          '', // No new user input is needed
+          toolCallMessages,
+          handlers
+        );
+
+        // Use the follow-up response as the final response
+        if (followUpResponse) {
+          fullResponse = followUpResponse;
+        }
+      }
+
       // If there's a response handler, call it with the final complete response
       if (handlers.onComplete) {
         handlers.onComplete();
       }
-      
+
       return fullResponse;
     } catch (error) {
       console.error(`Error in runStreamedWithTools: ${error}`);

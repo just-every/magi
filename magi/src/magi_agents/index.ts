@@ -10,7 +10,7 @@ import { createSupervisorAgent } from './supervisor_agent.js';
 import { createManagerAgent } from './workers/manager_agent.js';
 import { createReasoningAgent } from './workers/reasoning_agent.js';
 import { createCodeAgent } from './workers/code_agent.js';
-import { createBrowserAgent, runBrowserDirectly } from './workers/browser_agent.js';
+import { createBrowserAgent } from './workers/browser_agent.js';
 import { createBrowserVisionAgent } from './workers/browser_vision_agent.js';
 import { createSearchAgent } from './workers/search_agent.js';
 import { createShellAgent } from './workers/shell_agent.js';
@@ -88,6 +88,5 @@ export {
   createBrowserAgent,
   createBrowserVisionAgent,
   createSearchAgent,
-  createShellAgent,
-  runBrowserDirectly
+  createShellAgent
 };

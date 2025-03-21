@@ -5,18 +5,18 @@
     "moduleResolution": "node",
     "esModuleInterop": true,
     "strict": true,
-    "outDir": "./dist",
+    "outDir": "./controller/dist",
     "rootDir": "./",
     "sourceMap": true,
     "declaration": true,
     "removeComments": true,
-    "typeRoots": ["./node_modules/@types", "./controller/src/types/shared-types"],
+    "typeRoots": ["./controller/node_modules/@types", "./controller/src/types/shared-types"],
     "baseUrl": "./",
     "paths": {
-      "*": ["node_modules/*"],
+      "*": ["controller/node_modules/*"],
       "@types": ["controller/src/types/shared-types"]
     }
   },
   "include": ["controller/src/**/*"],
-  "exclude": ["node_modules", "controller/dist"]
+  "exclude": ["controller/node_modules", "controller/dist"]
 }

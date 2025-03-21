@@ -1,15 +1,16 @@
 /**
  * Browser utility functions for the MAGI system.
- * 
+ *
  * This module provides browser automation tools using Playwright.
  */
 
 import { chromium, Browser, Page, BrowserType, BrowserContext } from 'playwright';
 import fs from 'fs';
 import path from 'path';
-import { ToolDefinition } from '../types.js';
+import {ToolDefinition, ToolFunction} from '../types.js';
 import os from 'os';
 import { processImage } from './image_utils.js';
+import {createToolFunction} from './tool_call.js';
 
 // Constants
 const NAVIGATE_TIMEOUT = 30000;
@@ -32,7 +33,7 @@ const LAUNCH_ARGS = [
 
 /**
  * Initialize the browser if not already initialized
- * 
+ *
  * @returns The active page
  */
 export async function getPage(): Promise<Page> {
@@ -41,7 +42,7 @@ export async function getPage(): Promise<Page> {
     if (!browser) {
       console.log('Initializing browser...');
       try {
-        browser = await browserType.launch({ 
+        browser = await browserType.launch({
           headless: true,
           args: LAUNCH_ARGS
         });
@@ -52,7 +53,7 @@ export async function getPage(): Promise<Page> {
         throw new Error(`Browser launch failed: ${launchError instanceof Error ? launchError.message : String(launchError)}`);
       }
     }
-    
+
     // Initialize context if it doesn't exist
     if (!context) {
       console.log('Creating browser context...');
@@ -68,13 +69,13 @@ export async function getPage(): Promise<Page> {
         throw new Error(`Browser context creation failed: ${contextError instanceof Error ? contextError.message : String(contextError)}`);
       }
     }
-    
+
     // Initialize page if it doesn't exist
     if (!page) {
       console.log('Creating new page...');
       try {
         page = await context.newPage();
-        
+
         // Set up default timeouts
         page.setDefaultTimeout(ACTION_TIMEOUT);
         page.setDefaultNavigationTimeout(NAVIGATE_TIMEOUT);
@@ -85,7 +86,7 @@ export async function getPage(): Promise<Page> {
         throw new Error(`Browser page creation failed: ${pageError instanceof Error ? pageError.message : String(pageError)}`);
       }
     }
-    
+
     return page;
   } catch (error) {
     console.error('Error initializing browser:', error);
@@ -96,7 +97,7 @@ export async function getPage(): Promise<Page> {
 
 /**
  * Ensure the output directory exists
- * 
+ *
  * @param directory Directory to ensure exists
  * @returns The full path to the directory
  */
@@ -107,40 +108,34 @@ function ensureDirectoryExists(directory: string): string {
 }
 
 /**
- * Reset the browser session with a new context and page
+ * Reset the browser session with a clean context and cookies
  */
-async function resetSession(): Promise<{ success: boolean; message: string }> {
+async function reset_session(): Promise<string> {
   try {
     if (page) {
       await page.close();
       page = null;
     }
-    
+
     if (context) {
       await context.close();
       context = null;
     }
-    
+
     // Create a new context and page
     context = await browser!.newContext({
       viewport: { width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT },
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     });
-    
+
     page = await context.newPage();
     page.setDefaultTimeout(ACTION_TIMEOUT);
     page.setDefaultNavigationTimeout(NAVIGATE_TIMEOUT);
-    
-    return {
-      success: true,
-      message: 'Browser session reset successfully'
-    };
+
+    return 'Browser session reset successfully';
   } catch (error: any) {
     console.error('Error resetting session:', error);
-    return {
-      success: false,
-      message: `Error resetting session: ${error?.message || String(error)}`
-    };
+    return `Error resetting session: ${error?.message || String(error)}`;
   }
 }
 
@@ -150,22 +145,22 @@ async function resetSession(): Promise<{ success: boolean; message: string }> {
 async function cleanup() {
   try {
     console.log('Cleaning up browser resources...');
-    
+
     if (page) {
       await page.close().catch(e => console.error('Error closing page:', e));
       page = null;
     }
-    
+
     if (context) {
       await context.close().catch(e => console.error('Error closing context:', e));
       context = null;
     }
-    
+
     if (browser) {
       await browser.close().catch(e => console.error('Error closing browser:', e));
       browser = null;
     }
-    
+
     console.log('Browser resources cleaned up successfully');
   } catch (error) {
     console.error('Error during browser cleanup:', error);
@@ -174,76 +169,60 @@ async function cleanup() {
 
 /**
  * Navigate to a URL
- * 
+ *
  * @param url - URL to navigate to
  * @param waitUntil - Navigation wait condition ('commit', 'domcontentloaded', 'load', 'networkidle')
  * @returns Result message with page title
  */
 export async function navigate(
-  url: string, 
+  url: string,
   waitUntil: 'commit' | 'domcontentloaded' | 'load' | 'networkidle' = 'commit'
-): Promise<{ success: boolean; message: string; title: string }> {
+): Promise<string> {
   console.log(`Navigating to URL: ${url} (waitUntil: ${waitUntil})`);
-  
+
   try {
     // Make sure we have an active page
     console.log('Getting browser page...');
     const activePage = await getPage();
     console.log('Browser page acquired, proceeding with navigation');
-    
+
     // Try to navigate to the URL
     console.log(`Starting navigation to ${url} with waitUntil: ${waitUntil}`);
-    const response = await activePage.goto(url, { 
-      waitUntil, 
+    const response = await activePage.goto(url, {
+      waitUntil,
       timeout: NAVIGATE_TIMEOUT
     });
-    
+
     // Check if navigation succeeded
     if (!response) {
       console.error(`Navigation to ${url} failed with no response`);
-      return {
-        success: false,
-        message: `Failed to navigate to ${url}: No response`,
-        title: ''
-      };
+      return `Failed to navigate to ${url}: No response`;
     }
-    
+
     // Get status code and content type
     const status = response.status();
     const contentType = response.headers()['content-type'] || 'unknown';
     console.log(`Navigation successful - Status: ${status}, Content-Type: ${contentType}`);
-    
+
     // Get page title
     try {
       const title = await activePage.title();
       console.log(`Page title: "${title}"`);
-      return {
-        success: true,
-        message: `Successfully navigated to ${url} (status: ${status})`,
-        title
-      };
+      return `Successfully navigated to ${url} (status: ${status}, title: "${title}")`;
     } catch (titleError) {
       console.error('Error getting page title:', titleError);
-      return {
-        success: true,
-        message: `Successfully navigated to ${url} (status: ${status}) but could not get title`,
-        title: 'Unknown Title'
-      };
+      return `Successfully navigated to ${url} (status: ${status}) but could not get title`;
     }
   } catch (error: any) {
     console.error(`Error navigating to ${url}:`, error);
     console.error(error instanceof Error ? error.stack : String(error));
-    return {
-      success: false,
-      message: `Error navigating to ${url}: ${error?.message || String(error)}`,
-      title: ''
-    };
+    return `Error navigating to ${url}: ${error?.message || String(error)}`;
   }
 }
 
 /**
  * Take a screenshot of the page or element
- * 
+ *
  * @param selector - Optional CSS selector to screenshot a specific element
  * @param fullPage - Whether to take a full page screenshot
  * @param filePath - Optional file path to save the screenshot
@@ -253,160 +232,133 @@ export async function screenshot(
   selector?: string,
   fullPage: boolean = false,
   filePath?: string
-): Promise<{ success: boolean; data?: string; file_path?: string; message: string }> {
+): Promise<string> {
   console.log(`Taking screenshot with selector: ${selector || 'none'}, fullPage: ${fullPage}`);
-  
+
   try {
     const activePage = await getPage();
     const timestamp = Date.now();
     const urlPart = (await activePage.url()).replace(/:\/\//g, '_').replace(/[/.]/g, '_').substring(0, 50);
     const filename = `${timestamp}_${urlPart}${fullPage ? '_full' : ''}${selector ? '_' + selector.replace(/[^a-z0-9]/gi, '_').substring(0, 30) : ''}.jpg`;
-    
+
     // Create screenshots directory if it doesn't exist
     const screenshotsDir = ensureDirectoryExists('screenshots');
     const fileSavePath = filePath || path.join(screenshotsDir, filename);
-    
+
     let screenshotBuffer: Buffer;
-    
+
     if (selector) {
       // Take screenshot of a specific element
       const element = await activePage.$(selector);
       if (!element) {
-        return {
-          success: false,
-          message: `Element not found: ${selector}`,
-        };
+        return `Element not found: ${selector}`;
       }
       screenshotBuffer = await element.screenshot();
     } else {
       // Take screenshot of the page
       screenshotBuffer = await activePage.screenshot({ fullPage });
     }
-    
+
     try {
       // Process the image (compress and resize if needed)
       const processedImage = await processImage(screenshotBuffer);
-      
+
       // Save the image to a file
       fs.writeFileSync(fileSavePath, processedImage);
-      
-      return {
-        success: true,
-        file_path: fileSavePath,
-        data: processedImage.toString('base64'),
-        message: `Screenshot saved to ${fileSavePath}`
-      };
+
+      return `Screenshot saved to ${fileSavePath}`;
     } catch (processingError) {
       console.error('Error processing screenshot image:', processingError);
-      
+
       // Save the original unprocessed screenshot as a fallback
       fs.writeFileSync(fileSavePath, screenshotBuffer);
-      
-      return {
-        success: true,
-        file_path: fileSavePath,
-        data: screenshotBuffer.toString('base64'),
-        message: `Screenshot saved to ${fileSavePath} (unprocessed due to processing error)`
-      };
+
+      return `Screenshot saved to ${fileSavePath} (unprocessed due to processing error)`;
     }
   } catch (error: any) {
     console.error('Error taking screenshot:', error);
-    return {
-      success: false,
-      message: `Error taking screenshot: ${error?.message || String(error)}`
-    };
+    return `Error taking screenshot: ${error?.message || String(error)}`;
   }
 }
 
 /**
  * Get text content from the page or element
- * 
+ *
  * @param selector - Optional CSS selector to get text from a specific element
  * @param hasText - Optional text content that the element must contain
  * @returns Text content
  */
-export async function getText(
+export async function get_page_text(
   selector?: string,
   hasText?: string
-): Promise<{ success: boolean; text: string; message: string }> {
+): Promise<string> {
   console.log(`Getting text with selector: ${selector || 'none (entire page)'}${hasText ? `, matching text: "${hasText}"` : ''}`);
-  
+
   try {
     console.log('Getting browser page for text extraction...');
     const activePage = await getPage();
     console.log('Browser page acquired, proceeding with text extraction');
-    
+
     let extractedText: string;
-    
+
     if (selector) {
       // Get text from a specific element with optional hasText filter
       try {
         console.log(`Locating element with selector: ${selector}`);
-        
+
         if (hasText) {
           console.log(`Looking for text that contains: "${hasText}"`);
           const element = await activePage.locator(selector, { hasText });
           const count = await element.count();
           console.log(`Found ${count} matching elements with text "${hasText}"`);
-          
+
           if (count === 0) {
-            return {
-              success: false,
-              text: '',
-              message: `No elements found matching selector "${selector}" with text "${hasText}"`
-            };
+            return `No elements found matching selector "${selector}" with text "${hasText}"`;
           }
-          
+
           extractedText = await element.innerText();
         } else {
           const element = await activePage.locator(selector);
           const count = await element.count();
           console.log(`Found ${count} matching elements for selector "${selector}"`);
-          
+
           if (count === 0) {
-            return {
-              success: false,
-              text: '',
-              message: `No elements found matching selector "${selector}"`
-            };
+            return `No elements found matching selector "${selector}"`;
           }
-          
+
           extractedText = await element.innerText();
         }
-        
+
         console.log(`Successfully extracted text from element (${extractedText.length} characters)`);
       } catch (selectorError) {
         console.error(`Error getting text from selector "${selector}":`, selectorError);
         console.error(selectorError instanceof Error ? selectorError.stack : String(selectorError));
-        return {
-          success: false,
-          text: '',
-          message: `Error getting text from selector "${selector}": ${selectorError instanceof Error ? selectorError.message : String(selectorError)}`
-        };
+        return `Error getting text from selector "${selector}": ${selectorError instanceof Error ? selectorError.message : String(selectorError)}`;
+
       }
     } else {
       // Get text from the whole page
       try {
         console.log('Extracting text from entire page body');
-        
+
         // Use evaluate for more reliable text extraction
         extractedText = await activePage.evaluate(() => {
           // Get all visible text nodes - better than just innerText which can miss some content
           const bodyText = document.body.textContent || '';
           return bodyText;
         });
-        
+
         // Clean up the text - remove excess whitespace and normalize line breaks
         extractedText = extractedText
           .replace(/\s+/g, ' ')
           .replace(/\n+/g, '\n')
           .trim();
-          
+
         console.log(`Successfully extracted text from entire page (${extractedText.length} characters)`);
       } catch (bodyError) {
         console.error('Error getting text from page body:', bodyError);
         console.error(bodyError instanceof Error ? bodyError.stack : String(bodyError));
-        
+
         // Fallback to innerText if evaluate fails
         try {
           console.log('Trying fallback text extraction with innerText');
@@ -414,49 +366,37 @@ export async function getText(
           console.log(`Successfully extracted text with fallback method (${extractedText.length} characters)`);
         } catch (fallbackError) {
           console.error('Fallback text extraction failed:', fallbackError);
-          return {
-            success: false,
-            text: '',
-            message: `Error getting text from page body: ${bodyError instanceof Error ? bodyError.message : String(bodyError)}`
-          };
+          return `Error getting text from page body: ${bodyError instanceof Error ? bodyError.message : String(bodyError)}`;
+
         }
       }
     }
-    
-    return {
-      success: true,
-      text: extractedText,
-      message: selector
-        ? `Text extracted from element: ${selector} (${extractedText.length} characters)`
-        : `Text extracted from page (${extractedText.length} characters)`
-    };
+
+    return extractedText;
   } catch (error: any) {
     console.error('Error getting text:', error);
     console.error(error instanceof Error ? error.stack : String(error));
-    return {
-      success: false,
-      text: '',
-      message: `Error getting text: ${error?.message || String(error)}`
-    };
+    return `Error getting text: ${error?.message || String(error)}`;
+
   }
 }
 
 /**
  * Get HTML content from the page or element
- * 
+ *
  * @param selector - Optional CSS selector to get HTML from a specific element
  * @param hasText - Optional text content that the element must contain
  * @returns HTML content
  */
-export async function getHTML(
+export async function get_page_HTML(
   selector?: string,
   hasText?: string
-): Promise<{ success: boolean; html: string; message: string }> {
+): Promise<string> {
   console.log(`Getting HTML with selector: ${selector || 'none (entire page)'}`);
-  
+
   try {
     const activePage = await getPage();
-    
+
     let extractedHTML: string;
     if (selector) {
       // Get HTML from a specific element with optional hasText filter
@@ -469,27 +409,17 @@ export async function getHTML(
       // Get HTML from the whole page
       extractedHTML = await activePage.innerHTML('body');
     }
-    
-    return {
-      success: true,
-      html: extractedHTML,
-      message: selector
-        ? `HTML extracted from element: ${selector}`
-        : 'HTML extracted from page'
-    };
+
+    return extractedHTML;
   } catch (error: any) {
     console.error('Error getting HTML:', error);
-    return {
-      success: false,
-      html: '',
-      message: `Error getting HTML: ${error?.message || String(error)}`
-    };
+    return `Error getting HTML: ${error?.message || String(error)}`;
   }
 }
 
 /**
  * Click on an element
- * 
+ *
  * @param selector - CSS selector for the element to click
  * @param hasText - Optional text content that the element must contain
  * @returns Result message
@@ -497,34 +427,28 @@ export async function getHTML(
 export async function click(
   selector: string,
   hasText?: string
-): Promise<{ success: boolean; message: string }> {
+): Promise<string> {
   console.log(`Clicking on selector: ${selector}${hasText ? ` with text: ${hasText}` : ''}`);
-  
+
   try {
     const activePage = await getPage();
-    
+
     if (hasText) {
       await activePage.locator(selector, { hasText }).click({ timeout: ACTION_TIMEOUT });
     } else {
       await activePage.locator(selector).click({ timeout: ACTION_TIMEOUT });
     }
-    
-    return {
-      success: true,
-      message: `Clicked element: ${selector}${hasText ? ` with text: ${hasText}` : ''}`
-    };
+
+    return `Clicked element: ${selector}${hasText ? ` with text: ${hasText}` : ''}`;
   } catch (error: any) {
     console.error(`Error clicking on ${selector}:`, error);
-    return {
-      success: false,
-      message: `Error clicking on ${selector}: ${error?.message || String(error)}`
-    };
+    return `Error clicking on ${selector}: ${error?.message || String(error)}`;
   }
 }
 
 /**
  * Hover over an element
- * 
+ *
  * @param selector - CSS selector for the element to hover over
  * @param hasText - Optional text content that the element must contain
  * @returns Result message
@@ -532,34 +456,28 @@ export async function click(
 export async function hover(
   selector: string,
   hasText?: string
-): Promise<{ success: boolean; message: string }> {
+): Promise<string> {
   console.log(`Hovering over selector: ${selector}${hasText ? ` with text: ${hasText}` : ''}`);
-  
+
   try {
     const activePage = await getPage();
-    
+
     if (hasText) {
       await activePage.locator(selector, { hasText }).hover({ timeout: ACTION_TIMEOUT });
     } else {
       await activePage.locator(selector).hover({ timeout: ACTION_TIMEOUT });
     }
-    
-    return {
-      success: true,
-      message: `Hovered over element: ${selector}${hasText ? ` with text: ${hasText}` : ''}`
-    };
+
+    return `Hovered over element: ${selector}${hasText ? ` with text: ${hasText}` : ''}`;
   } catch (error: any) {
     console.error(`Error hovering over ${selector}:`, error);
-    return {
-      success: false,
-      message: `Error hovering over ${selector}: ${error?.message || String(error)}`
-    };
+    return `Error hovering over ${selector}: ${error?.message || String(error)}`;
   }
 }
 
 /**
  * Fill a form field
- * 
+ *
  * @param selector - CSS selector for the input field
  * @param value - Value to fill in
  * @param hasText - Optional text content that the element must contain
@@ -569,34 +487,28 @@ export async function fill(
   selector: string,
   value: string,
   hasText?: string
-): Promise<{ success: boolean; message: string }> {
+): Promise<string> {
   console.log(`Filling selector: ${selector} with value: ${value}`);
-  
+
   try {
     const activePage = await getPage();
-    
+
     if (hasText) {
       await activePage.locator(selector, { hasText }).fill(value, { timeout: ACTION_TIMEOUT });
     } else {
       await activePage.locator(selector).fill(value, { timeout: ACTION_TIMEOUT });
     }
-    
-    return {
-      success: true,
-      message: `Filled input ${selector} with value`
-    };
+
+    return `Filled input ${selector} with value`;
   } catch (error: any) {
     console.error(`Error filling ${selector}:`, error);
-    return {
-      success: false,
-      message: `Error filling ${selector}: ${error?.message || String(error)}`
-    };
+    return `Error filling ${selector}: ${error?.message || String(error)}`;
   }
 }
 
 /**
  * Check a checkbox or radio button
- * 
+ *
  * @param selector - CSS selector for the checkbox or radio button
  * @param hasText - Optional text content that the element must contain
  * @returns Result message
@@ -604,62 +516,48 @@ export async function fill(
 export async function check(
   selector: string,
   hasText?: string
-): Promise<{ success: boolean; message: string }> {
+): Promise<string> {
   console.log(`Checking selector: ${selector}`);
-  
+
   try {
     const activePage = await getPage();
-    
+
     if (hasText) {
       await activePage.locator(selector, { hasText }).check({ timeout: ACTION_TIMEOUT });
     } else {
       await activePage.locator(selector).check({ timeout: ACTION_TIMEOUT });
     }
-    
-    return {
-      success: true,
-      message: `Checked element: ${selector}`
-    };
+
+    return `Checked element: ${selector}`;
   } catch (error: any) {
     console.error(`Error checking ${selector}:`, error);
-    return {
-      success: false,
-      message: `Error checking ${selector}: ${error?.message || String(error)}`
-    };
+    return `Error checking ${selector}: ${error?.message || String(error)}`;
   }
 }
 
 /**
  * Execute JavaScript in the browser context
- * 
+ *
  * @param code - JavaScript code to execute
  * @returns Result of the executed code
  */
-export async function evaluate(code: string): Promise<{ success: boolean; result: any; message: string }> {
+export async function evaluate(code: string): Promise<string> {
   console.log(`Evaluating JavaScript: ${code.substring(0, 100)}${code.length > 100 ? '...' : ''}`);
-  
+
   try {
     const activePage = await getPage();
     const result = await activePage.evaluate(code);
-    
-    return {
-      success: true,
-      result,
-      message: 'Code executed successfully'
-    };
+
+    return JSON.stringify(result);
   } catch (error: any) {
     console.error('Error evaluating JavaScript:', error);
-    return {
-      success: false,
-      result: null,
-      message: `Error evaluating JavaScript: ${error?.message || String(error)}`
-    };
+    return `Error evaluating JavaScript: ${error?.message || String(error)}`;
   }
 }
 
 /**
  * Check if an element exists on the page
- * 
+ *
  * @param selector - CSS selector to check
  * @param hasText - Optional text content that the element must contain
  * @returns Whether the element exists and the count of matching elements
@@ -667,162 +565,124 @@ export async function evaluate(code: string): Promise<{ success: boolean; result
 export async function elementExists(
   selector: string,
   hasText?: string
-): Promise<{ exists: boolean; count: number }> {
+): Promise<string> {
   console.log(`Checking if element exists: ${selector}${hasText ? ` with text: ${hasText}` : ''}`);
-  
+
   try {
     const activePage = await getPage();
-    
+
     let count: number;
     if (hasText) {
       count = await activePage.locator(selector, { hasText }).count();
     } else {
       count = await activePage.locator(selector).count();
     }
-    
-    return {
-      exists: count > 0,
-      count
-    };
+
+    return JSON.stringify({ exists: count > 0, count });
   } catch (error) {
     console.error(`Error checking if element exists: ${selector}`, error);
-    return {
-      exists: false,
-      count: 0
-    };
+    return `Error checking if element exists: ${error}`;
   }
 }
 
 /**
  * Type text using the keyboard
- * 
+ *
  * @param text - Text to type
  * @returns Result message
  */
-export async function type(text: string): Promise<{ success: boolean; message: string }> {
+export async function type(text: string): Promise<string> {
   console.log(`Typing text: ${text}`);
-  
+
   try {
     const activePage = await getPage();
     await activePage.keyboard.type(text);
-    
-    return {
-      success: true,
-      message: `Typed text: ${text}`
-    };
+
+    return `Typed text: ${text}`;
   } catch (error: any) {
     console.error('Error typing text:', error);
-    return {
-      success: false,
-      message: `Error typing text: ${error?.message || String(error)}`
-    };
+    return `Error typing text: ${error?.message || String(error)}`;
   }
 }
 
 /**
  * Press specific keys on the keyboard
- * 
+ *
  * @param keys - Keys to press (e.g., "Enter", "ArrowDown", etc.)
  * @returns Result message
  */
-export async function press(keys: string): Promise<{ success: boolean; message: string }> {
+export async function press(keys: string): Promise<string> {
   console.log(`Pressing keys: ${keys}`);
-  
+
   try {
     const activePage = await getPage();
     await activePage.keyboard.press(keys);
-    
-    return {
-      success: true,
-      message: `Pressed keys: ${keys}`
-    };
+
+    return `Pressed keys: ${keys}`;
   } catch (error: any) {
     console.error(`Error pressing keys: ${keys}`, error);
-    return {
-      success: false,
-      message: `Error pressing keys: ${keys}: ${error?.message || String(error)}`
-    };
+    return `Error pressing keys: ${keys}: ${error?.message || String(error)}`;
   }
 }
 
 /**
  * Wait for a specified amount of time
- * 
+ *
  * @param milliseconds - Time to wait in milliseconds
  * @returns Result message
  */
-export async function wait(milliseconds: number): Promise<{ success: boolean; message: string }> {
+export async function wait(milliseconds: number): Promise<string> {
   console.log(`Waiting for ${milliseconds}ms`);
-  
+
   try {
     const activePage = await getPage();
     await activePage.waitForTimeout(milliseconds);
-    
-    return {
-      success: true,
-      message: `Waited for ${milliseconds}ms`
-    };
+
+    return `Waited for ${milliseconds}ms`;
   } catch (error: any) {
     console.error(`Error waiting for ${milliseconds}ms:`, error);
-    return {
-      success: false,
-      message: `Error waiting: ${error?.message || String(error)}`
-    };
+    return `Error waiting: ${error?.message || String(error)}`;
   }
 }
 
 /**
  * Wait for a selector to be visible
- * 
+ *
  * @param selector - CSS selector to wait for
  * @param timeout - Maximum time to wait in milliseconds
  * @returns Result message
  */
-export async function waitForSelector(
+export async function wait_for_selector(
   selector: string,
   timeout: number = ACTION_TIMEOUT
-): Promise<{ success: boolean; message: string }> {
+): Promise<string> {
   console.log(`Waiting for selector: ${selector} (timeout: ${timeout}ms)`);
-  
+
   try {
     const activePage = await getPage();
     await activePage.waitForSelector(selector, { timeout });
-    
-    return {
-      success: true,
-      message: `Element ${selector} is now visible`
-    };
+
+    return `Element ${selector} is now visible`;
   } catch (error: any) {
     console.error(`Error waiting for selector ${selector}:`, error);
-    return {
-      success: false,
-      message: `Error waiting for selector ${selector}: ${error?.message || String(error)}`
-    };
+    return `Error waiting for selector ${selector}: ${error?.message || String(error)}`;
   }
 }
 
 /**
  * Get the current URL of the page
- * 
+ *
  * @returns The current URL
  */
-export async function getCurrentUrl(): Promise<{ success: boolean; url: string; message: string }> {
+export async function get_page_url(): Promise<string> {
   try {
     const activePage = await getPage();
     const url = activePage.url();
-    
-    return {
-      success: true,
-      url,
-      message: `Current URL is ${url}`
-    };
+
+    return url;
   } catch (error: any) {
     console.error('Error getting current URL:', error);
-    return {
-      success: false,
-      url: '',
-      message: `Error getting current URL: ${error?.message || String(error)}`
-    };
+    return `Error getting current URL: ${error?.message || String(error)}`;
   }
 }
 
@@ -1160,65 +1020,88 @@ export const getCurrentUrlTool: ToolDefinition = {
   }
 };
 
-/**
- * Reset session tool definition
- */
-export const resetSessionTool: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'reset_session',
-    description: 'Reset the browser session with a clean context and cookies',
-    parameters: {
-      type: 'object',
-      properties: {},
-      required: []
-    }
-  }
-};
 
 /**
  * Get all browser tools as an array of tool definitions
  */
-export function getBrowserTools(): ToolDefinition[] {
+export function getBrowserTools(): ToolFunction[] {
   return [
-    navigateTool,
-    screenshotTool,
-    getTextTool,
-    getHTMLTool,
-    clickTool,
-    hoverTool,
-    fillTool,
-    checkTool,
-    evaluateTool,
-    typeTool,
-    pressTool,
-    waitTool,
-    waitForSelectorTool,
-    getCurrentUrlTool,
-    resetSessionTool
+    createToolFunction(
+      navigate,
+      'Navigate to a URL',
+      {'url': 'URL to navigate to', 'waitUntil': 'can be one of:\n' +
+            "    - \"commit\" (recommended): when network response is received and the document started loading (very fast - recommended when you don't need all content to load)\n" +
+            '    - "domcontentloaded": when the `DOMContentLoaded` event is fired\n' +
+            '    - "load": when the `load` event is fired (slow, best avoided unless you need all content to load completely)\n' +
+            '    - "networkidle": Wait for no network connections for at least 500 ms (not recommended)'},
+      'the page title'
+    ),
+    createToolFunction(
+      screenshot,
+      'Take a screenshot of the page or element',
+      {'selector': 'Optional CSS selector to screenshot a specific element', 'fullPage': 'Whether to take a full page screenshot', 'filePath': 'Optional file path to save the screenshot'},
+      'a Base64 encoded screenshot data or file path'
+    ),
+    createToolFunction(
+      get_page_text,
+      'Get text content from the page or element',
+      {'selector': 'Optional CSS selector to get text from a specific element', 'hasText': 'Optional text content that the element must contain'}
+    ),
+    createToolFunction(
+      get_page_HTML,
+      'Get HTML content from the page or element',
+      {'selector': 'Optional CSS selector to get HTML from a specific element', 'hasText': 'Optional text content that the element must contain'}
+    ),
+    createToolFunction(
+      get_page_url,
+      'Get the current URL of the page'
+    ),
+    createToolFunction(
+      click,
+      'Click on an element',
+      {'selector': 'CSS selector for the element to click', 'hasText': 'Optional text content that the element must contain'}
+    ),
+    createToolFunction(
+      hover,
+      'Hover over an element',
+      {'selector': 'CSS selector for the element to hover over', 'hasText': 'Optional text content that the element must contain'}
+    ),
+    createToolFunction(
+      fill,
+      'Fill a form field',
+      {'selector': 'CSS selector for the input field', 'value': 'Value to fill in', 'hasText': 'Optional text content that the element must contain'}
+    ),
+    createToolFunction(
+      check,
+      'Check a checkbox or radio button',
+      {'selector': 'CSS selector for the checkbox or radio button', 'hasText': 'Optional text content that the element must contain'},
+    ),
+    createToolFunction(
+      type,
+      'Type text using the keyboard',
+      {'text': 'Text to type'}
+    ),
+    createToolFunction(
+      press,
+      'Press specific keys on the keyboard',
+      {'keys': 'Keys to press (e.g., "Enter", "ArrowDown", etc.)'}
+    ),
+    createToolFunction(
+      wait,
+      'Wait for a specified amount of time',
+      {'milliseconds': 'Time to wait in milliseconds'}
+    ),
+    createToolFunction(
+      wait_for_selector,
+      'Wait for a selector to be visible',
+      {'selector': 'CSS selector to wait for', 'timeout': 'Maximum time to wait in milliseconds'}
+    ),
+    createToolFunction(
+      reset_session,
+      'Reset the browser session with a clean context and cookies'
+    ),
   ];
 }
-
-/**
- * Browser tool implementations mapped by name for easy lookup
- */
-export const browserToolImplementations: Record<string, (...args: any[]) => any | Promise<any>> = {
-  'navigate': navigate,
-  'screenshot': screenshot,
-  'get_text': getText,
-  'get_html': getHTML,
-  'click': click,
-  'hover': hover,
-  'fill': fill,
-  'check': check,
-  'evaluate': evaluate,
-  'type': type,
-  'press': press,
-  'wait': wait,
-  'wait_for_selector': waitForSelector,
-  'get_current_url': getCurrentUrl,
-  'reset_session': resetSession
-};
 
 // Handle cleanup on process exit
 process.on('exit', () => {

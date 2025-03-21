@@ -8,8 +8,8 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { Agent } from '../../utils/agent.js';
 import { getFileTools } from '../../utils/file_utils.js';
-import { ToolDefinition } from '../../types.js';
 import { COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT } from '../constants.js';
+import {createToolFunction} from '../../utils/tool_call.js';
 
 // Promisify exec for async/await usage
 const execAsync = promisify(exec);
@@ -43,17 +43,13 @@ async function isClaudeCLIAvailable(): Promise<boolean> {
  * @param working_directory - Optional working directory for file operations
  * @returns The response from Claude CLI
  */
-async function runClaudeCLI(prompt: string, working_directory?: string): Promise<{ success: boolean; output: string; error?: string }> {
+async function runClaudeCLI(prompt: string, working_directory?: string): Promise<string> {
   try {
     // First check if Claude CLI is available
     const cliAvailable = await isClaudeCLIAvailable();
     if (!cliAvailable) {
       console.log('[CodeAgent] Claude CLI not available, using default agent behavior instead');
-      return {
-        success: false,
-        output: '',
-        error: 'Claude CLI not available. Using default agent behavior instead.'
-      };
+      return 'Claude CLI not available. Using default agent behavior instead.';
     }
 
     // Set cwd to working directory if provided, otherwise use current directory
@@ -86,28 +82,21 @@ async function runClaudeCLI(prompt: string, working_directory?: string): Promise
       // Log a sample of the output for debugging
       console.log(`[CodeAgent] Claude CLI output first 100 chars: ${stdout.substring(0, 100)}...`);
 
-      return {
-        success: true,
-        output: stdout
-      };
+      return stdout;
     } catch (execError: any) {
       console.error('[CodeAgent] Claude CLI execution error:', execError.message);
       throw execError;
     }
   } catch (error: any) {
     console.error('[CodeAgent] Error running Claude CLI:', error);
-    return {
-      success: false,
-      output: '',
-      error: `Error running Claude CLI: ${error?.message || String(error)}`
-    };
+    return `Error running Claude CLI: ${error?.message || String(error)}`;
   }
 }
 
 /**
- * AICoder main function that gets called by the agent
+ * Runs AICoder with the provided prompt to execute any coding tasks, no matter how complicated.
  *
- * @param prompt - The prompt to send to Claude
+ * @param prompt - The coding task or question to process
  * @param working_directory - Optional working directory for file operations
  * @returns The response
  */
@@ -118,52 +107,27 @@ async function AICoder(prompt: string, working_directory?: string): Promise<stri
 
     const result = await runClaudeCLI(prompt, working_directory);
 
-    if (result.success) {
-      console.log(`[CodeAgent] AICoder succeeded, returning ${result.output.length} characters of output`);
-      return result.output;
-    } else {
-      // If Claude CLI fails, provide a helpful error message
-      const errorMessage = result.error || 'Unknown error';
-      console.log(`[CodeAgent] AICoder failed: ${errorMessage}`);
+    // Check if the result seems to be an error message
+    if (result.startsWith('Error running Claude CLI') || result.startsWith('Claude CLI not available')) {
+      console.log(`[CodeAgent] AICoder failed: ${result}`);
 
       // If the error is that the CLI is not available, make it clear we're returning a fallback
-      if (errorMessage.includes('Claude CLI not available')) {
+      if (result.includes('Claude CLI not available')) {
         console.log('[CodeAgent] Falling back to regular agent functionality');
         return `I attempted to use the specialized Claude CLI tool, but it's not available in this environment. I'll solve your request directly.\n\nHere's my solution to create "${prompt}":\n`;
       }
 
-      return `I encountered an issue with the coding task: ${errorMessage}\n\nHere's my attempt to solve your request without the specialized coding tool:\n\n${prompt}`;
+      return `I encountered an issue with the coding task: ${result}\n\nHere's my attempt to solve your request without the specialized coding tool:\n\n${prompt}`;
     }
+    
+    // If we get here, the Claude CLI was successful
+    console.log(`[CodeAgent] AICoder succeeded, returning ${result.length} characters of output`);
+    return result;
   } catch (error: any) {
     console.error('[CodeAgent] Unexpected error in AICoder:', error);
     return `There was an unexpected error while processing your coding task: ${error?.message || String(error)}\n\nI'll try to help with your request directly:\n\n${prompt}`;
   }
 }
-
-/**
- * AICoder tool definition
- */
-export const AICoderTool: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'AICoder',
-    description: 'Runs AICoder with the provided prompt to execute any coding tasks, no matter how complicated.',
-    parameters: {
-      type: 'object',
-      properties: {
-        prompt: {
-          type: 'string',
-          description: 'The coding task or question to process'
-        },
-        working_directory: {
-          type: 'string',
-          description: 'Optional working directory for file operations'
-        }
-      },
-      required: ['prompt']
-    }
-  }
-};
 
 /**
  * Create the code agent
@@ -189,7 +153,12 @@ ${SELF_SUFFICIENCY_TEXT}
 ${COMMON_WARNINGS}`,
     tools: [
       ...getFileTools(),
-      AICoderTool
+      createToolFunction(
+        AICoder,
+        'Runs AICoder with the provided prompt to execute any coding tasks, no matter how complicated.',
+        {'prompt': 'The coding task or question to process', 'working_directory': 'Optional working directory for file operations'},
+        'The response'
+      )
     ],
     modelClass: 'standard'
   });

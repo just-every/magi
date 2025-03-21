@@ -5,8 +5,9 @@
  */
 
 import axios from 'axios';
-import { ToolDefinition } from '../types.js';
+import {ToolFunction} from '../types.js';
 import 'dotenv/config';
+import {createToolFunction} from './tool_call.js';
 
 const DEFAULT_RESULTS_COUNT = 5;
 
@@ -24,7 +25,7 @@ const BRAVE_SEARCH_ENDPOINT = 'https://api.search.brave.com/res/v1/web/search';
 async function braveSearch(
   query: string,
   numResults: number = DEFAULT_RESULTS_COUNT
-): Promise<{ success: boolean; results: any[]; message: string }> {
+): Promise<string> {
   console.log(`Performing Brave API search for: ${query}`);
 
   if (!BRAVE_API_KEY) {
@@ -49,66 +50,34 @@ async function braveSearch(
       snippet: result.description
     }));
 
-    return {
-      success: true,
-      results,
-      message: `Found ${results.length} results for "${query}" using Brave Search API`
-    };
+    return JSON.stringify(results);
   }
   throw new Error(`Invalid response from Brave ${response}`);
 }
 
 /**
- * Perform a web search
+ * Perform a web search and get results
  *
- * @param query - Search query
+ * @param query - The search query
  * @param numResults - Number of results to return (default: 5)
  * @returns Search results
  */
-export async function webSearch(
+export async function web_search(
   query: string,
   numResults: number = DEFAULT_RESULTS_COUNT
-): Promise<{ success: boolean; results: any[]; message: string }> {
+): Promise<string> {
   return await braveSearch(query, numResults);
 }
 
 /**
- * Web search tool definition
- */
-export const webSearchTool: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'web_search',
-    description: 'Perform a web search and get results',
-    parameters: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'The search query'
-        },
-        num_results: {
-          type: 'number',
-          description: 'Number of results to return (default: 5)'
-        },
-      },
-      required: ['query']
-    }
-  }
-};
-
-/**
  * Get all search tools as an array of tool definitions
  */
-export function getSearchTools(): ToolDefinition[] {
+export function getSearchTools(): ToolFunction[] {
   return [
-    webSearchTool,
+      createToolFunction(
+          web_search,
+          'Perform a web search and get results',
+          {'query': 'The search query', 'numResults': 'Number of results to return (default: 5)'}
+      )
   ];
 }
-
-/**
- * Search tool implementations mapped by name for easy lookup
- */
-export const searchToolImplementations: Record<string, (...args: any[]) => any | Promise<any>> = {
-  'web_search': webSearch,
-};

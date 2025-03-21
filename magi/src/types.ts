@@ -2,6 +2,8 @@
  * Common type definitions for the MAGI system.
  */
 
+import {Agent} from './utils/agent.js';
+
 /**
  * Tool parameter type definitions using strict schema format for OpenAI function calling
  */
@@ -13,6 +15,17 @@ export interface ToolParameter {
   properties?: Record<string, ToolParameter>;
   required?: string[];
   [key: string]: any;
+}
+
+export type ExecutableFunction = (...args: any[]) => Promise<string>|string;
+export type WorkerFunction = (...args: any[]) => Agent;
+
+/**
+ * Definition for a tool that can be used by an agent
+ */
+export interface ToolFunction {
+  function: ExecutableFunction;
+  definition: ToolDefinition;
 }
 
 /**
@@ -44,8 +57,8 @@ export interface AgentDefinition {
   name: string;
   description: string;
   instructions: string;
-  workers?: Function[];
-  tools?: ToolDefinition[];
+  workers?: WorkerFunction[];
+  tools?: ToolFunction[];
   model?: string;
   modelClass?: string;
 }
@@ -84,6 +97,80 @@ export interface ToolCall {
   };
 }
 
+
+export interface ResponseContentText {
+  type: 'input_text',
+  text: string,
+}
+export interface ResponseContentImage {
+  type: 'input_image',
+  detail: 'high' | 'low' | 'auto',
+  file_id?: string,
+  image_url?: string,
+}
+export interface ResponseContentFileInput {
+  type: 'input_file',
+  file_data?: string,
+  file_id?: string,
+  filename?: string,
+}
+
+/**
+ * ResponseContent
+ */
+export type ResponseContent = string | Array<ResponseContentText | ResponseContentImage | ResponseContentFileInput>;
+
+
+/**
+ * ResponseInput
+ */
+export type ResponseInput  = Array<ResponseInputMessage | ResponseOutputMessage | ResponseInputFunctionCall | ResponseInputFunctionCallOutput>;
+
+
+/**
+ * ResponseInputMessage
+ */
+export interface ResponseInputMessage {
+  type?: 'message',
+  name?: string, // deprecated
+  content: ResponseContent,
+  role: 'user' | 'system' | 'developer',
+  status?: 'in_progress' | 'completed' | 'incomplete',
+}
+
+/**
+ * ResponseInputMessage
+ */
+export interface ResponseOutputMessage {
+  type: 'message',
+  content: ResponseContent,
+  role: 'assistant',
+  status: 'in_progress' | 'completed' | 'incomplete',
+}
+
+/**
+ * Tool call data structure
+ */
+export interface ResponseInputFunctionCall {
+  type: 'function_call',
+  call_id: string,
+  name: string,
+  arguments: string,
+  id?: string,
+  status?: 'in_progress' | 'completed' | 'incomplete',
+}
+
+/**
+ * Tool call data structure
+ */
+export interface ResponseInputFunctionCallOutput {
+  type: 'function_call_output',
+  call_id: string,
+  output: string,
+  id?: string,
+  status?: 'in_progress' | 'completed' | 'incomplete',
+}
+
 /**
  * Response data from the LLM
  */
@@ -91,6 +178,8 @@ export interface LLMMessage {
   name?: string | undefined;
   role: string;
   content: string | null;
+  tool_calls?: ToolCall[];
+  call_id?: string; // For tool response messages
 }
 
 /**
@@ -112,8 +201,6 @@ export type StreamEventType = 'connected' | 'command_start' | 'command_done' | '
 export interface StreamEvent {
   type: StreamEventType;
   agent?: AgentExportDefinition;
-  parentAgent?: AgentExportDefinition;
-  model?: string;
 }
 
 /**
@@ -177,8 +264,8 @@ export type StreamingEvent = ConnectedEvent | CommandEvent | AgentEvent | Messag
 export interface ModelProvider {
   createResponseStream(
     model: string,
-    messages: Array<LLMMessage>,
-    tools?: ToolDefinition[],
+    messages: ResponseInput,
+    tools?: ToolFunction[],
     settings?: ModelSettings
   ): AsyncGenerator<StreamingEvent>;
 }

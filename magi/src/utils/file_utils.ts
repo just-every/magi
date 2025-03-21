@@ -4,15 +4,16 @@
 
 import fs from 'fs';
 import path from 'path';
-import { ToolDefinition } from '../types.js';
+import { ToolFunction } from '../types.js';
+import { createToolFunction } from './tool_call.js';
 
 /**
  * Read a file from the file system
- * 
+ *
  * @param filePath - Path to the file to read
  * @returns File contents as a string
  */
-export function readFile(filePath: string): string {
+export function read_file(filePath: string): string {
   try {
     return fs.readFileSync(filePath, 'utf-8');
   } catch (error) {
@@ -22,19 +23,19 @@ export function readFile(filePath: string): string {
 
 /**
  * Write content to a file
- * 
+ *
  * @param filePath - Path to write the file to
  * @param content - Content to write to the file
  * @returns Success message with the path
  */
-export function writeFile(filePath: string, content: string): string {
+export function write_file(filePath: string, content: string): string {
   try {
     // Ensure the directory exists
     const directory = path.dirname(filePath);
     if (!fs.existsSync(directory)) {
       fs.mkdirSync(directory, { recursive: true });
     }
-    
+
     // Write the file
     fs.writeFileSync(filePath, content, 'utf-8');
     return `File written successfully to ${filePath}`;
@@ -43,66 +44,23 @@ export function writeFile(filePath: string, content: string): string {
   }
 }
 
-/**
- * Read file tool definition
- */
-export const readFileTool: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'read_file',
-    description: 'Read the contents of a file from the file system',
-    parameters: {
-      type: 'object',
-      properties: {
-        file_path: {
-          type: 'string',
-          description: 'Path to the file to read'
-        }
-      },
-      required: ['file_path']
-    }
-  }
-};
-
-/**
- * Write file tool definition
- */
-export const writeFileTool: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'write_file',
-    description: 'Write content to a file in the file system',
-    parameters: {
-      type: 'object',
-      properties: {
-        file_path: {
-          type: 'string',
-          description: 'Path to write the file to'
-        },
-        content: {
-          type: 'string',
-          description: 'Content to write to the file'
-        }
-      },
-      required: ['file_path', 'content']
-    }
-  }
-};
 
 /**
  * Get all file tools as an array of tool definitions
  */
-export function getFileTools(): ToolDefinition[] {
+export function getFileTools(): ToolFunction[] {
   return [
-    readFileTool,
-    writeFileTool
+    createToolFunction(
+      read_file,
+      'Read a file from the file system',
+      {'filePath': 'Path to the file to read'},
+      'File contents as a string'
+    ),
+    createToolFunction(
+      write_file,
+      'Write content to a file',
+      {'filePath': 'Path to write the file to', 'content': 'Content to write to the file'},
+      'Success message with the path'
+    )
   ];
 }
-
-/**
- * File tool implementations mapped by name for easy lookup
- */
-export const fileToolImplementations: Record<string, (...args: any[]) => any | Promise<any>> = {
-  'read_file': readFile,
-  'write_file': writeFile
-};

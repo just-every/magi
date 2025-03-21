@@ -9,21 +9,21 @@ import 'dotenv/config';
 import Anthropic from '@anthropic-ai/sdk';
 import {
   ModelProvider,
-  ToolDefinition,
+  ToolFunction,
   ModelSettings,
   StreamingEvent,
   ToolCall,
-  LLMMessage
+  ResponseInput
 } from '../types.js';
 
 // Convert our tool definition to Claude's format
-function convertToClaudeTools(tools: ToolDefinition[]): any[] {
+function convertToClaudeTools(tools: ToolFunction[]): any[] {
   return tools.map(tool => ({
     type: 'custom',
     custom: {
-      name: tool.function.name,
-      description: tool.function.description,
-      parameters: tool.function.parameters
+      name: tool.definition.function.name,
+      description: tool.definition.function.description,
+      parameters: tool.definition.function.parameters
     }
   }));
 }
@@ -49,25 +49,42 @@ export class ClaudeProvider implements ModelProvider {
    */
   async *createResponseStream(
     model: string,
-    messages: Array<LLMMessage>,
-    tools?: ToolDefinition[],
+    messages: ResponseInput,
+    tools?: ToolFunction[],
     settings?: ModelSettings
   ): AsyncGenerator<StreamingEvent> {
     try {
-      // Convert messages format for Claude
-      const claudeMessages = messages.map(msg => ({
-        role: msg.role === 'system' ? 'user' : msg.role,
-        content: msg.content || ''
-      }));
+// Convert messages format for Claude
+      const claudeMessages = messages.map(msg => {
+        // Check if this message has a role property
+        let role = 'system';
+        if ('role' in msg && msg.role === 'user') {
+          role = 'user';
+        }
 
-      // Extract system message if present (Claude handles it differently)
-      const systemMessage = messages.find(m => m.role === 'system')?.content || '';
+        let content = '';
+        if ('content' in msg) {
+          if(typeof msg.content === 'string') {
+            content = msg.content;
+          }
+          else if('text' in msg.content && typeof msg.content.text === 'string') {
+            content = msg.content.text;
+          }
+        }
+
+        return {
+          ...msg,
+          role,
+          content,
+        };
+      });
 
       // Format the request according to Claude API specifications
       const requestParams: any = {
         model: model,
-        messages: claudeMessages.filter(m => m.role !== 'system'), // Remove system message from array
-        system: systemMessage,
+        // Only include messages that have a role property and aren't system messages
+        messages: claudeMessages.filter(m =>  m.role !== 'system'),
+        system: claudeMessages.filter(m => m.role === 'system'),
         stream: true,
         // Add optional parameters
         ...(settings?.temperature ? { temperature: settings.temperature } : {}),
@@ -93,7 +110,6 @@ export class ClaudeProvider implements ModelProvider {
             // Emit delta event for streaming UI updates
             yield {
               type: 'message_delta',
-              model,
               content: event.delta.text
             };
 
@@ -107,7 +123,6 @@ export class ClaudeProvider implements ModelProvider {
               // Emit delta event
               yield {
                 type: 'message_delta',
-                model,
                 content: event.content_block.text
               };
 
@@ -122,7 +137,6 @@ export class ClaudeProvider implements ModelProvider {
               // For non-streaming responses, add as delta too
               yield {
                 type: 'message_delta',
-                model,
                 content: event.content_block.text
               };
 
@@ -163,7 +177,6 @@ export class ClaudeProvider implements ModelProvider {
             // Emit the tool_start event with current partial state for streaming UI
             yield {
               type: 'tool_start',
-              model,
               tool_calls: [currentToolCall as ToolCall]
             };
           }
@@ -181,7 +194,6 @@ export class ClaudeProvider implements ModelProvider {
 
             yield {
               type: 'tool_start',
-              model,
               tool_calls: [currentToolCall as ToolCall]
             };
 
@@ -193,7 +205,6 @@ export class ClaudeProvider implements ModelProvider {
             if (currentToolCall) {
               yield {
                 type: 'tool_start',
-                model,
                 tool_calls: [currentToolCall as ToolCall]
               };
               currentToolCall = null;
@@ -203,7 +214,6 @@ export class ClaudeProvider implements ModelProvider {
             if (accumulatedContent) {
               yield {
                 type: 'message_done',
-                model,
                 content: accumulatedContent
               };
             }
@@ -212,7 +222,6 @@ export class ClaudeProvider implements ModelProvider {
           else if (event.type === 'error') {
             yield {
               type: 'error',
-              model,
               error: event.error ? event.error.message : 'Unknown Claude API error'
             };
           }
@@ -222,7 +231,6 @@ export class ClaudeProvider implements ModelProvider {
         if (accumulatedContent && !currentToolCall) {
           yield {
             type: 'message_done',
-            model,
             content: accumulatedContent
           };
         }
@@ -231,7 +239,6 @@ export class ClaudeProvider implements ModelProvider {
         console.error('Error processing Claude stream:', streamError);
         yield {
           type: 'error',
-          model,
           error: String(streamError)
         };
 
@@ -240,7 +247,6 @@ export class ClaudeProvider implements ModelProvider {
         if (accumulatedContent) {
           yield {
             type: 'message_done',
-            model,
             content: accumulatedContent
           };
         }
@@ -250,7 +256,6 @@ export class ClaudeProvider implements ModelProvider {
       console.error('Error in Claude streaming completion:', error);
       yield {
         type: 'error',
-        model,
         error: String(error)
       };
     }

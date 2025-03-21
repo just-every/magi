@@ -6,7 +6,7 @@
 
 import { Agent } from '../../utils/agent.js';
 import { COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT } from '../constants.js';
-import {getSearchTools} from "../../utils/search_utils.js";
+import {getSearchTools} from '../../utils/search_utils.js';
 
 /**
  * Create the reasoning agent
