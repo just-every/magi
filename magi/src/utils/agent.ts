@@ -12,7 +12,7 @@ import {
   ToolEvent,
   ToolFunction,
   WorkerFunction,
-  StreamingEvent
+  StreamingEvent, ResponseInput
 } from '../types.js';
 
 import {v4 as uuid} from 'uuid';
@@ -120,7 +120,7 @@ async function runAgentTool(
     agent: Agent,
     prompt: string,
 ): Promise<string> {
-  const messages = [{ role: 'user', content: prompt }];
+  const messages: ResponseInput = [{ role: 'user', content: prompt }];
   let toolResultsToInclude = '';
   const toolCalls: any[] = [];
 
@@ -160,7 +160,7 @@ async function runAgentTool(
     const handlers = {
       onEvent: (event: StreamingEvent) => {
         comm.send(event);
-        
+
         // Capture tool results from tool_done events
         if (event.type === 'tool_done') {
           try {
@@ -170,7 +170,7 @@ async function runAgentTool(
               const resultString = typeof results === 'string'
                   ? results
                   : JSON.stringify(results, null, 2);
-              
+
               // Only add to results if it's not already included
               if (!toolResultsToInclude.includes(resultString.substring(0, Math.min(50, resultString.length)))) {
                 toolResultsToInclude += resultString + '\n';
@@ -183,10 +183,10 @@ async function runAgentTool(
         }
       }
     };
-    
+
     // Run the agent with the unified function
     let response = await Runner.runStreamedWithTools(agent, prompt, messages, handlers);
-    
+
     // If we have a response but it doesn't seem to include tool results, append them
     if (response && toolResultsToInclude &&
         !response.includes(toolResultsToInclude.substring(0, Math.min(50, toolResultsToInclude.length)))) {

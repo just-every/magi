@@ -4,11 +4,17 @@
  * This module provides functions to store and retrieve conversation history
  * across sessions.
  */
-import {LLMMessage} from '../types.js';
+import {
+  LLMMessage,
+  ResponseInput,
+  ResponseInputFunctionCall, ResponseInputFunctionCallOutput,
+  ResponseInputMessage,
+  ResponseOutputMessage
+} from '../types.js';
 
 // History structure
 interface History {
-  messages: LLMMessage[];
+  messages: ResponseInput;
 }
 
 // Global history cache
@@ -19,13 +25,13 @@ const history: History = {
 /**
  * Add a message to history
  */
-export function addHistory(message: LLMMessage): void {
+export function addHistory(message: ResponseInputMessage | ResponseOutputMessage | ResponseInputFunctionCall | ResponseInputFunctionCallOutput): void {
   history.messages.push(message);
 }
 
 /**
  * Get message history
  */
-export function getHistory(): LLMMessage[] {
+export function getHistory():ResponseInput {
   return history.messages;
 }

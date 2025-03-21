@@ -74,33 +74,35 @@ export async function runMagiCommand(
 
         // Get conversation history
         const history = getHistory();
-        
+
         // Set up event handlers
         const handlers = {
             // Forward all events to the communication channel
             onEvent: (event: StreamingEvent) => {
                 comm.send(event);
             },
-            
+
             // Handle message content updates
             onResponse: () => {
                 // Nothing specific to do here as events are already being forwarded
             },
-            
+
             // Handle completion of the entire command
             onComplete: () => {
                 comm.send({ type: 'command_done', command });
             }
         };
-        
+
         // Run the command with unified tool handling
         const response = await Runner.runStreamedWithTools(agent, command, history, handlers);
-        
+
         // Add the final response to history
         if (response && response.trim()) {
             addHistory({
+                type: 'message',
                 role: 'assistant',
                 content: response,
+                status: 'completed'
             });
         }
     } catch (error: any) {
