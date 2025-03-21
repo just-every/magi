@@ -7,8 +7,7 @@
 import 'dotenv/config';
 import {parseArgs} from 'node:util';
 import {Runner} from './utils/runner.js';
-import {processToolCall} from './utils/tool_call.js';
-import {ToolEvent, MessageEvent, AgentEvent, ToolCall} from './types.js';
+import {StreamingEvent} from './types.js';
 import {createAgent, AgentType} from './magi_agents/index.js';
 import {addHistory, getHistory} from './utils/history.js';
 import {initCommunication, CommandMessage} from './utils/communication.js';
@@ -73,100 +72,37 @@ export async function runMagiCommand(
         // Create the agent with model and modelClass parameters
         const agent = createAgent(agentType, model, modelClass);
 
-        // Run the command with streaming
+        // Get conversation history
         const history = getHistory();
-        const stream = Runner.runStreamed(agent, command, history);
-
-        // Process streaming events
-        for await (const event of stream) {
-            comm.send(event);
-
-            // Predefine variables used in multiple cases
-            let message: MessageEvent;
-            let ToolEvent: ToolEvent;
-            let agentEvent: AgentEvent;
-            let toolNames: string;
-            let detailedToolCalls: any[];
-            let toolResult: string;
-            let parsedResults: any;
-
-            // Handle different event types
-            switch (event.type) {
-                case 'message_delta':
-                case 'message_done':
-                    // Add the message content to output
-                    message = event as MessageEvent;
-                    if (message.content && message.content.trim()) {
-
-                        if( event.type === 'message_done') {
-                            addHistory({
-                                role: 'assistant',
-                                content: message.content,
-                            });
-                        }
-                    }
-                    break;
-
-                case 'tool_start':
-                    // Process tool calls
-                    ToolEvent = event as ToolEvent;
-
-                    // Log tool call
-                    toolNames = ToolEvent.tool_calls
-                        .map((call: ToolCall) => call.function.name)
-                        .join(', ');
-
-                    // Format detailed tool calls for logging
-                    detailedToolCalls = ToolEvent.tool_calls.map(call => {
-                        let parsedArgs = {};
-                        try {
-                            if (call.function.arguments && call.function.arguments.trim()) {
-                                parsedArgs = JSON.parse(call.function.arguments);
-                            }
-                        } catch (parseError) {
-                            console.error('Error parsing tool arguments:', parseError);
-                            parsedArgs = { _raw: call.function.arguments };
-                        }
-
-                        return {
-                            id: call.id,
-                            name: call.function.name,
-                            arguments: parsedArgs
-                        };
-                    });
-
-                    // Process the tool calls (pass the agent for event handlers)
-                    toolResult = await processToolCall(ToolEvent, agent);
-
-                    // Parse tool results for better logging
-                    try {
-                        parsedResults = JSON.parse(toolResult);
-                    } catch (e) {
-                        parsedResults = toolResult;
-                    }
-
-                    // Send detailed tool result via WebSocket
-                    comm.send({
-                        agent: event.agent,
-                        type: 'tool_done',
-                        model: agent.model,
-                        tool_calls: detailedToolCalls,
-                        results: parsedResults,
-                    });
-
-                    // Re-inject the tool result as part of the conversation
-                    // (Done internally by the agent framework for streaming scenarios)
-                    break;
-
-                case 'error':
-                    // Handle error
-                    console.error(`[Error] ${event.error}`);
-                    break;
+        
+        // Set up event handlers
+        const handlers = {
+            // Forward all events to the communication channel
+            onEvent: (event: StreamingEvent) => {
+                comm.send(event);
+            },
+            
+            // Handle message content updates
+            onResponse: () => {
+                // Nothing specific to do here as events are already being forwarded
+            },
+            
+            // Handle completion of the entire command
+            onComplete: () => {
+                comm.send({ type: 'command_done', command });
             }
+        };
+        
+        // Run the command with unified tool handling
+        const response = await Runner.runStreamedWithTools(agent, command, history, handlers);
+        
+        // Add the final response to history
+        if (response && response.trim()) {
+            addHistory({
+                role: 'assistant',
+                content: response,
+            });
         }
-
-        // Send a final result through WebSocket
-        comm.send({ type: 'command_done', command });
     } catch (error: any) {
         // Handle any error that occurred during agent execution
         console.error(`Error running agent command: ${error?.message || String(error)}`);

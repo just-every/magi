@@ -7,18 +7,9 @@
 
 import {
   ToolCall,
-  ToolEvent,
-  ToolImplementationFn,
+  ToolEvent, ToolFunction, ToolParameter,
 } from '../types.js';
 import { Agent } from './agent.js';
-import { Runner } from './runner.js';
-
-// Import utility modules with tool implementations
-import { fileToolImplementations } from './file_utils.js';
-import { browserToolImplementations } from './browser_utils.js';
-import { searchToolImplementations } from './search_utils.js';
-import { shellToolImplementations } from './shell_utils.js';
-import { getCommunicationManager } from './communication.js';
 
 /**
  * Process a tool call from an agent
@@ -32,20 +23,17 @@ export async function processToolCall(toolCall: ToolEvent, agent: Agent): Promis
       return 'No tool calls found in event';
     }
 
-    // Process each tool call
-    const results: any[] = [];
-
-    for (const call of tool_calls) {
+    // Create an array of promises to process all tool calls in parallel
+    const toolCallPromises = tool_calls.map(async (call) => {
       try {
         // Validate tool call
         if (!call || !call.function || !call.function.name) {
           console.error('Invalid tool call structure:', call);
-          results.push({
+          return {
             tool: null,
             error: 'Invalid tool call structure',
             input: call
-          });
-          continue;
+          };
         }
 
         // Parse arguments for better logging
@@ -63,15 +51,17 @@ export async function processToolCall(toolCall: ToolEvent, agent: Agent): Promis
         const result = await handleToolCall(call, agent);
 
         // Add structured response with tool name, input and output
-        results.push({
+        const toolResult = {
           tool: call.function.name,
           input: parsedArgs,
           output: result
-        });
+        };
 
         // Log tool call
         const {function: {name}} = call;
         console.log(`[Tool] ${name} executed successfully`, result);
+        
+        return toolResult;
       } catch (error) {
         console.error('Error executing tool:', error);
 
@@ -90,13 +80,16 @@ export async function processToolCall(toolCall: ToolEvent, agent: Agent): Promis
           }
         }
 
-        results.push({
+        return {
           tool: toolName,
           input: toolInput,
           error: String(error)
-        });
+        };
       }
-    }
+    });
+
+    // Wait for all tool calls to complete in parallel
+    const results = await Promise.all(toolCallPromises);
 
     // Return results as a JSON string
     return JSON.stringify(results, null, 2);
@@ -109,7 +102,7 @@ export async function processToolCall(toolCall: ToolEvent, agent: Agent): Promis
 /**
  * Handle a tool call by executing the appropriate tool function or worker agent
  */
-export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<any> {
+export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<string> {
   // Validate the tool call structure
   if (!toolCall.function || !toolCall.function.name) {
     throw new Error('Invalid tool call structure: missing function name');
@@ -141,26 +134,13 @@ export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<
     throw new Error(`Invalid JSON in tool arguments: ${error?.message || String(error)}`);
   }
 
-  // First, check if this is a worker with the same name
-  if (agent.workers) {
-    const matchingWorker = agent.workers.find(worker => worker.name === name);
-    if (matchingWorker) {
-      console.log(`Found matching worker agent for tool call: ${name}`);
-      // If it's a worker, use runAgentTool to run it
-      if (args.prompt) {
-        return await runAgentTool(matchingWorker, args.prompt, name, agent);
-      } else {
-        console.warn(`Worker agent ${name} called without a prompt`);
-        return `Error: Worker agent ${name} requires a prompt parameter`;
-      }
-    }
+  if(!agent.tools) {
+    throw new Error(`Agent ${agent.name} has no tools defined`);
   }
 
-  // If not a worker, look for the implementation in various tool sources
-  const toolFunction = findToolImplementation(name);
-  
-  if (!toolFunction) {
-    throw new Error(`Tool implementation not found for: ${name}`);
+  const tool = agent.tools.find(tool => tool.definition.function.name === name);
+  if(!tool) {
+    throw new Error(`Tool ${name} not found in agent ${agent.name}`);
   }
 
   // Call the implementation with the parsed arguments
@@ -168,27 +148,22 @@ export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<
     let result;
     if (typeof args === 'object' && args !== null) {
       // Extract named parameters based on implementation function definition
-      const functionStr = toolFunction.toString();
-      // Extract parameter names from function definition using regex
-      const paramMatch = functionStr.match(/\(([^)]*)\)/);
-      const paramNames = paramMatch && paramMatch[1]
-          ? paramMatch[1].split(',').map((p: string) => p.trim().split('=')[0].trim())
-          : [];
+      const paramNames = Object.keys(tool.definition.function.parameters.properties);
 
       // Map args to parameters in correct order
       if (paramNames.length > 0) {
         const orderedArgs = paramNames.map((param: string) => {
           return args[param as keyof typeof args];
         });
-        result = await toolFunction(...orderedArgs);
+        result = await tool.function(...orderedArgs);
       } else {
         // Fallback to using args values directly if parameter extraction fails
         const argValues = Object.values(args);
-        result = await toolFunction(...argValues);
+        result = await tool.function(...argValues);
       }
     } else {
       // If args is not an object, pass it directly (shouldn't occur with OpenAI)
-      result = await toolFunction(args);
+      result = await tool.function(args);
     }
 
     // Trigger onToolResult handler if available
@@ -208,124 +183,99 @@ export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<
 }
 
 
+
 /**
- * Find the tool implementation for a given tool name
+ * Create a tool definition from a function
+ *
+ * @param func - Function to create definition for
+ * @param name - Tool name (defaults to snake_case function name)
+ * @param description - Tool description
+ * @param paramMap - Optional mapping of function params to API params
+ * @returns Tool definition object
  */
-function findToolImplementation(toolName: string): ToolImplementationFn | undefined {
-  // Combined tool implementations from different modules
-  const allToolImplementations = {
-    ...fileToolImplementations,
-    ...browserToolImplementations,
-    ...searchToolImplementations,
-    ...shellToolImplementations
+export function createToolFunction(
+    // Use a more specific type than Function
+    func: (...args: any[]) => any,
+    description?: string,
+    paramMap?: Record<string, string|{name?: string, description?: string, type?: string}>,
+    returns?: string
+): ToolFunction {
+  // Get function info
+  const funcStr = func.toString();
+  const funcName = func.name;
+
+  // Try to extract description from JSDoc if not provided
+  let toolDescription = description || `Tool for ${funcName}`;
+  if(returns) {
+    toolDescription += ` Returns: ${returns}`;
+  }
+
+  // Extract parameter info from function signature
+  const paramMatch = funcStr.match(/\(([^)]*)\)/);
+
+  const properties: Record<string, ToolParameter> = {};
+  const required: string[] = [];
+
+  if (paramMatch && paramMatch[1]) {
+    const params = paramMatch[1].split(',').map(p => p.trim()).filter(Boolean);
+
+    // Process each parameter
+    for (const param of params) {
+      const nameMatch = param.match(/^(\w+)(?:\s*:\s*([^=]+))?(?:\s*=\s*.+)?$/);
+      if (nameMatch) {
+        const paramName = nameMatch[1];
+        const tsParamType = (nameMatch[2] || '').trim();
+
+        // Check if we have custom mapping for this parameter
+        let paramInfo = paramMap?.[paramName];
+        if(typeof paramInfo === 'string') {
+            paramInfo = { description: paramInfo };
+        }
+
+        // Convert to snake_case for API consistency
+        const apiParamName = paramInfo?.name || paramName;
+
+        // Determine parameter type
+        let paramType = 'string';
+        if (paramInfo?.type) {
+          paramType = paramInfo.type;
+        } else if (tsParamType === 'number') {
+          paramType = 'number';
+        } else if (tsParamType === 'boolean') {
+          paramType = 'boolean';
+        }
+
+        // Try to get description from JSDoc if not in param map
+        const paramDescription = paramInfo?.description;
+
+        // Create parameter definition
+        properties[apiParamName] = {
+          type: paramType,
+          description: paramDescription || `The ${paramName} parameter`
+        };
+
+        // If parameter has no default value, it's required
+        if (!param.includes('=')) {
+          required.push(apiParamName);
+        }
+      }
+    }
+  }
+
+  // Create and return tool definition
+  return {
+    function: func,
+    definition: {
+      type: 'function',
+      function: {
+        name: funcName,
+        description: toolDescription,
+        parameters: {
+          type: 'object',
+          properties,
+          required
+        }
+      }
+    }
   };
-
-  // First try to find the function in the known implementations
-  if (allToolImplementations[toolName]) {
-    return allToolImplementations[toolName];
-  }
-
-  // If not found, search through the agent's tools if they have custom implementations
-  // This would require extending the Agent or tool definitions to include implementations
-  
-  // For now, just return undefined if not found in standard implementations
-  return undefined;
-}
-
-/**
- * Run an agent and capture its streamed response
- */
-async function runAgentTool(
-    agentToRun: Agent,
-    prompt: string,
-    agentName: string,
-    parentAgent?: Agent
-): Promise<string> {
-  const messages = [{ role: 'user', content: prompt }];
-  let response = '';
-  let toolResultsToInclude = '';
-  const toolCalls: any[] = [];
-
-  try {
-    // Create a custom event handler to intercept tool calls and results
-    // for agents running within agents
-    const onToolCall = (toolCall: any) => {
-      console.log(`${agentName} intercepted tool call:`, toolCall);
-      toolCalls.push(toolCall);
-    };
-
-    const onToolResult = (result: any) => {
-      try {
-        console.log(`${agentName} intercepted tool result:`, result);
-        if (result) {
-          const resultString = typeof result === 'string'
-              ? result
-              : JSON.stringify(result, null, 2);
-
-          // Store results so we can include them in the response if needed
-          toolResultsToInclude += resultString + '\n';
-          console.log(`${agentName} captured tool result: ${resultString.substring(0, 100)}...`);
-        }
-      } catch (err) {
-        console.error(`Error processing intercepted tool result in ${agentName}:`, err);
-      }
-    };
-
-    // Set up interception
-    agentToRun.onToolCall = onToolCall;
-    agentToRun.onToolResult = onToolResult;
-
-    const comm = getCommunicationManager();
-
-    console.log(`runAgentTool Runner.runStreamed for ${agentName}`, prompt);
-    const stream = Runner.runStreamed(agentToRun, prompt, messages);
-    for await (const event of stream) {
-      // Add parent agent to event if present
-      if (parentAgent && !event.parentAgent) {
-        event.parentAgent = parentAgent.export();
-      }
-      comm.send(event);
-
-      if (event.type === 'message_delta' || event.type === 'message_done') {
-        if (event.content) {
-          response += event.content;
-        }
-      } else if (event.type === 'tool_start') {
-        // Capture tool calls when they happen
-      } else if (event.type === 'tool_done') {
-        // Capture tool results
-        try {
-          console.log(`${agentName} captured tool result event through stream`);
-          // Extract results from the event
-          const ToolEvent = event as ToolEvent;
-          const results = ToolEvent.results;
-          if (results) {
-            const resultString = typeof results === 'string'
-                ? results
-                : JSON.stringify(results, null, 2);
-
-            // Store results so we can include them in the response if needed
-            toolResultsToInclude += resultString + '\n';
-            console.log(`${agentName} captured tool result from stream: ${resultString.substring(0, 100)}...`);
-          }
-        } catch (err) {
-          console.error(`Error processing tool result in ${agentName}:`, err);
-        }
-      }
-    }
-
-    // If we have a response but it doesn't seem to include tool results, append them
-    if (response && toolResultsToInclude &&
-        !response.includes(toolResultsToInclude.substring(0, Math.min(50, toolResultsToInclude.length)))) {
-      // Only append if the tool results aren't already reflected in the response
-      console.log(`${agentName} appending tool results to response`);
-      response += '\n\nTool Results:\n' + toolResultsToInclude;
-    }
-
-    console.log(`${agentName} final response: ${response}`);
-    return response || `No response from ${agentName.toLowerCase()}`;
-  } catch (error) {
-    console.error(`Error in ${agentName}: ${error}`);
-    return `Error in ${agentName}: ${error}`;
-  }
 }
