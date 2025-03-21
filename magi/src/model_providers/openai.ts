@@ -6,39 +6,40 @@
  */
 
 import 'dotenv/config';
-import { ModelProvider, ToolDefinition, ModelSettings, LLMResponse, StreamingEvent, ToolCall } from '../types.js';
+import {ModelProvider, ToolDefinition, ModelSettings, StreamingEvent, ToolCall, ToolParameter} from '../types.js';
 import OpenAI from 'openai';
 
 // Convert our tool definition to OpenAI's format
 function convertToOpenAITools(tools: ToolDefinition[]): any[] {
-  return tools.map(tool => ({
-    type: 'function',
-    name: tool.function.name,
-    description: tool.function.description,
-    parameters: tool.function.parameters
-  }));
-}
+  return tools.map(tool => {
+        if (tool.function.name === 'web_search') {
+          return {
+            type: 'web_search_preview',
+            search_context_size: "medium",
+          };
+        }
+        if (tool.function.name === 'computer_use') {
+          return {
+            type: 'computer_use_preview',
+            display_width: 1024,
+            display_height: 768,
+            environment: "browser"
+          };
+        }
 
-// Add web_search_preview for GPT-4o models
-function addWebSearchPreviewIfNeeded(model: string, toolsArray: any[]): any[] {
-  // Only add web_search_preview to models that support it (gpt-4o)
-  if (model.startsWith('gpt-4o')) {
-    // Check if we already have a search tool defined to avoid duplicates
-    const hasSearchTool = toolsArray.some(tool => 
-      tool.name === 'web_search' || 
-      tool.name === 'search_news' || 
-      tool.name === 'search_with_location'
-    );
-    
-    // If we have search tools, inject web_search_preview
-    if (hasSearchTool) {
-      console.log(`Adding web_search_preview for model: ${model}`);
-      return [...toolsArray, { type: 'web_search_preview' }];
-    }
-  }
-  
-  // Return original array if conditions not met
-  return toolsArray;
+        return {
+          type: 'function',
+          name: tool.function.name,
+          description: tool.function.description,
+          parameters: {
+            ...tool.function.parameters,
+            additionalProperties: false,
+            required: Object.keys(tool.function.parameters.properties), // openai requires all properties to be required
+          },
+          strict: true,
+        }
+      }
+  );
 }
 
 /**
@@ -77,21 +78,19 @@ export class OpenAIProvider implements ModelProvider {
         // OpenAI Responses API expects the messages array as input
         input: messages,
       };
-      
+
       // Add model-specific parameters
       // o3 models don't support temperature and top_p
       if (!model.startsWith('o3-')) {
         if (settings?.temperature !== undefined) {
           requestParams.temperature = settings.temperature;
         }
-        
+
         if (settings?.top_p !== undefined) {
           requestParams.top_p = settings.top_p;
         }
-      } else {
-        console.log(`[OpenAI] Skipping temperature/top_p settings for ${model} which doesn't support them`);
       }
-      
+
       // Add other settings that work across models
       if (settings?.tool_choice) {
         requestParams.tool_choice = settings.tool_choice;
@@ -99,10 +98,8 @@ export class OpenAIProvider implements ModelProvider {
 
       // Add tools if provided
       if (tools && tools.length > 0) {
-        // Convert our tools to OpenAI format
-        const openaiTools = convertToOpenAITools(tools);
-        // Add web_search_preview for GPT-4o models if there are search tools
-        requestParams.tools = addWebSearchPreviewIfNeeded(model, openaiTools);
+        // Convert our tools to OpenAI format=
+        requestParams.tools = convertToOpenAITools(tools);
       }
 
       const stream = await this.client.responses.create(requestParams);
@@ -112,7 +109,7 @@ export class OpenAIProvider implements ModelProvider {
 
       // Process the response stream
       try {
-        // @ts-ignore - OpenAI's stream is AsyncIterable but TypeScript doesn't recognize it properly
+        // @ts-expect-error - OpenAI's stream is AsyncIterable but TypeScript doesn't recognize it properly
         for await (const event of stream) {
           // For verbose debugging - uncomment this
           // console.log(`Stream event type: ${event.type}`);
@@ -121,13 +118,13 @@ export class OpenAIProvider implements ModelProvider {
           // Handle web_search events from web_search_preview
           if (event.type === 'web_search.results') {
             // Log that we received web search results, but we don't emit them directly
-            console.log(`Received web_search.results from OpenAI`, 
+            console.log('Received web_search.results from OpenAI',
               event.results ? `Count: ${event.results.length}` : 'No results');
-            
+
             // We don't need to yield an event here, as the model will use these results internally
             // and generate appropriate content that will come through as text deltas
           }
-          
+
           // Handle response.output_text.delta - new format for text chunks
           else if (event.type === 'response.output_text.delta') {
             const textDelta = event.delta;
@@ -165,7 +162,7 @@ export class OpenAIProvider implements ModelProvider {
                   event.part.text) {
             if (event.part.text && event.part.text.length > 0) {
               yield {
-                type: 'message_complete',
+                type: 'message_done',
                 model,
                 content: event.part.text
               };
@@ -175,7 +172,7 @@ export class OpenAIProvider implements ModelProvider {
           // Handle output_text.done - complete text message
           else if (event.type === 'response.output_text.done' && event.text) {
             yield {
-              type: 'message_complete',
+              type: 'message_done',
               model,
               content: event.text
             };
@@ -213,7 +210,7 @@ export class OpenAIProvider implements ModelProvider {
             // Only emit if we have valid arguments
             if (currentToolCall.function.arguments) {
               yield {
-                type: 'tool_calls',
+                type: 'tool_start',
                 model,
                 tool_calls: [currentToolCall as ToolCall]
               };
@@ -253,7 +250,7 @@ export class OpenAIProvider implements ModelProvider {
 
             // Emit the tool call
             yield {
-              type: 'tool_calls',
+              type: 'tool_start',
               model,
               tool_calls: [currentToolCall as ToolCall]
             };
@@ -274,7 +271,7 @@ export class OpenAIProvider implements ModelProvider {
 
             // Emit the tool call
             yield {
-              type: 'tool_calls',
+              type: 'tool_start',
               model,
               tool_calls: [currentToolCall as ToolCall]
             };
@@ -297,14 +294,14 @@ export class OpenAIProvider implements ModelProvider {
           currentToolCall.function &&
           currentToolCall.function.name) {
         yield {
-          type: 'tool_calls',
+          type: 'tool_start',
           model,
           tool_calls: [currentToolCall as ToolCall]
         };
       }
 
     } catch (error) {
-      console.error(`Error in OpenAI streaming completion:`, error);
+      console.error('Error in OpenAI streaming response:', error);
       yield {
         type: 'error',
         model,

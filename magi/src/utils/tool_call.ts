@@ -6,37 +6,105 @@
  */
 
 import {
-  AgentDefinition,
-  ToolDefinition,
-  ModelSettings,
-  StreamingEvent,
   ToolCall,
-  LLMMessage,
   ToolEvent,
-  AgentExportDefinition
 } from '../types.js';
-import { getModelProvider } from '../model_providers/model_provider.js';
-import { fileToolImplementations } from '../utils/file_utils.js';
-import { browserToolImplementations } from '../utils/browser_utils.js';
-import { searchToolImplementations } from '../utils/search_utils.js';
-import { shellToolImplementations } from '../utils/shell_utils.js';
-import { MODEL_GROUPS } from '../magi_agents/constants.js';
+import { Agent } from './agent.js';
+import { Runner } from './runner.js';
 
-// Combined tool implementations for regular tools
-const baseToolImplementations = {
-  ...fileToolImplementations,
-  ...browserToolImplementations,
-  ...searchToolImplementations,
-  ...shellToolImplementations
-};
+// Import all agent creation functions now that Runner is defined
+import {getCommunicationManager} from "../utils/communication.js";
 
-// Define type for tool implementation functions - accepts both Promise and non-Promise returns
-export type ToolImplementationFn = (...args: any[]) => any | Promise<any>;
+/**
+ * Process a tool call from an agent
+ */
+export async function processToolCall(toolCall: ToolEvent, agent: Agent): Promise<string> {
+  try {
+    // Extract tool call data
+    const {tool_calls} = toolCall;
+
+    if (!tool_calls || tool_calls.length === 0) {
+      return 'No tool calls found in event';
+    }
+
+    // Process each tool call
+    const results: any[] = [];
+
+    for (const call of tool_calls) {
+      try {
+        // Validate tool call
+        if (!call || !call.function || !call.function.name) {
+          console.error('Invalid tool call structure:', call);
+          results.push({
+            tool: null,
+            error: 'Invalid tool call structure',
+            input: call
+          });
+          continue;
+        }
+
+        // Parse arguments for better logging
+        let parsedArgs = {};
+        try {
+          if (call.function.arguments && call.function.arguments.trim()) {
+            parsedArgs = JSON.parse(call.function.arguments);
+          }
+        } catch (parseError) {
+          console.error('Error parsing arguments:', parseError);
+          parsedArgs = { _raw: call.function.arguments };
+        }
+
+        // Handle the tool call (pass the agent for event handlers)
+        const result = await handleToolCall(call, agent);
+
+        // Add structured response with tool name, input and output
+        results.push({
+          tool: call.function.name,
+          input: parsedArgs,
+          output: result
+        });
+
+        // Log tool call
+        const {function: {name}} = call;
+        console.log(`[Tool] ${name} executed successfully`, result);
+      } catch (error) {
+        console.error('Error executing tool:', error);
+
+        // Include tool name and input in error response
+        let toolName = 'unknown';
+        let toolInput = {};
+
+        if (call && call.function) {
+          toolName = call.function.name || 'unknown';
+          try {
+            if (call.function.arguments && call.function.arguments.trim()) {
+              toolInput = JSON.parse(call.function.arguments);
+            }
+          } catch (e) {
+            toolInput = { _raw: call.function.arguments };
+          }
+        }
+
+        results.push({
+          tool: toolName,
+          input: toolInput,
+          error: String(error)
+        });
+      }
+    }
+
+    // Return results as a JSON string
+    return JSON.stringify(results, null, 2);
+  } catch (error) {
+    console.error('Error processing tool call:', error);
+    return `{"error": "${String(error).replace(/"/g, '\\"')}"}`;
+  }
+}
 
 /**
  * Handle a tool call by executing the appropriate tool function
  */
-export async function handleToolCall(toolCall: ToolCall, agent?: Agent): Promise<any> {
+export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<any> {
   // Validate the tool call structure
   if (!toolCall.function || !toolCall.function.name) {
     throw new Error('Invalid tool call structure: missing function name');
@@ -121,150 +189,6 @@ export async function handleToolCall(toolCall: ToolCall, agent?: Agent): Promise
   }
 }
 
-import { getModelFromClass } from './model_providers/model_provider.js';
-
-/**
- * Agent runner class for executing agents with tools
- */
-export class Runner {
-  /**
-   * Run an agent with streaming responses
-   */
-  static async *runStreamed(
-      agent: Agent,
-      input: string,
-      conversationHistory: Array<LLMMessage> = []
-  ): AsyncGenerator<StreamingEvent> {
-    // Get our selected model for this run
-    const selectedModel = agent.model || getModelFromClass(agent.modelClass || 'standard');
-
-    // Get the model provider based on the selected model
-    const provider = getModelProvider(selectedModel);
-
-    // Prepare messages with conversation history and the current input
-    const messages = [
-      // Add a system message with instructions
-      { role: 'system', content: agent.instructions },
-      // Add conversation history
-      ...conversationHistory,
-      // Add the current user input
-      { role: 'user', content: input }
-    ];
-
-    try {
-      agent.model = selectedModel;
-      yield {
-        type: 'agent_start',
-        agent: agent.export(),
-        input,
-      };
-
-      // Create a streaming generator
-      const stream = provider.createResponseStream(
-          selectedModel,
-          messages,
-          agent.tools,
-          agent.modelSettings
-      );
-
-      // Forward all events from the stream
-      for await (const event of stream) {
-        // Update the model in events to show the actually used model
-        event.agent = event.agent ? event.agent : agent.export();
-        if(!event.agent.model) event.agent.model = selectedModel;
-        yield event;
-      }
-    } catch (error) {
-      // If the model fails, try to find an alternative in the same class
-      console.error(`[Runner] Error with model ${selectedModel}: ${error}`);
-
-      // Try fallback strategies:
-      // 1. If a model was explicitly specified but failed, try standard models
-      // 2. If a model class was used, try other models in the class
-      // 3. If all else fails, try the standard class
-
-      console.log('[Runner] Attempting fallback to another model');
-
-      // Get a list of models to try (combine explicitly requested model's class and standard)
-      let modelsToTry: string[];
-
-      // Always include standard models for fallback
-      modelsToTry = [...MODEL_GROUPS['standard']];
-
-      // If using a non-standard model class, add models from that class too
-      if (agent.modelClass && agent.modelClass !== 'standard') {
-        const classModels = MODEL_GROUPS[agent.modelClass as keyof typeof MODEL_GROUPS] || [];
-        modelsToTry = [...classModels, ...modelsToTry];
-      }
-
-      // Make sure we don't try the same model that just failed
-      modelsToTry = modelsToTry.filter(model => model !== selectedModel);
-
-      // Try each potential fallback model
-      for (const alternativeModel of modelsToTry) {
-        try {
-          console.log(`[Runner] Trying alternative model: ${alternativeModel}`);
-          const alternativeProvider = getModelProvider(alternativeModel);
-
-          // Update the agent's model
-          agent.model = alternativeModel;
-          yield {
-            type: 'agent_updated',
-            agent: agent.export()
-          };
-
-          // Try with the alternative model
-          const alternativeStream = alternativeProvider.createResponseStream(
-              alternativeModel,
-              messages,
-              agent.tools,
-              agent.modelSettings
-          );
-
-          // Forward all events from the alternative stream
-          for await (const event of alternativeStream) {
-            // Update the model in events to show the actually used model
-
-            yield {
-              ...event,
-              model: alternativeModel,
-            };
-          }
-
-          // If we got here, the alternative model worked, so exit the loop
-          console.log(`[Runner] Successfully switched to model: ${alternativeModel}`);
-          return;
-        } catch (alternativeError) {
-          console.error(`[Runner] Alternative model ${alternativeModel} also failed: ${alternativeError}`);
-          // Continue to the next model
-        }
-      }
-
-      // If we got here, all fallback models failed
-      console.error('[Runner] All fallback models failed');
-
-      // Re-throw the original error if we couldn't recover
-      yield {
-        type: 'error',
-        agent: agent.export(),
-        error: `Error using model ${selectedModel} and all fallbacks failed: ${error}`
-      };
-    }
-  }
-}
-
-// Import all agent creation functions now that Runner is defined
-import {
-  createManagerAgent,
-  createReasoningAgent,
-  createCodeAgent,
-  createBrowserAgent,
-  createBrowserVisionAgent,
-  createSearchAgent,
-  createShellAgent
-} from './magi_agents/index.js';
-import { AICoder } from './magi_agents/workers/code_agent.js';
-import {getCommunicationManager} from "./utils/communication.js";
 
 /**
  * Run an agent and capture its streamed response
@@ -315,9 +239,6 @@ async function runAgentTool(
     console.log(`runAgentTool Runner.runStreamed`, agent, prompt, messages);
     const stream = Runner.runStreamed(agent, prompt, messages);
     for await (const event of stream) {
-      if(parentAgent && !event.parentAgent) {
-        event.parentAgent = parentAgent.export();
-      }
       comm.send(event);
 
       if (event.type === 'message_delta' || event.type === 'message_done') {
@@ -363,50 +284,3 @@ async function runAgentTool(
     return `Error in ${agentName}: ${error}`;
   }
 }
-
-// Agent tool implementations with shared implementation pattern
-const agentToolImplementations: Record<string, ToolImplementationFn> = {
-  'ManagerAgent': async (prompt: string) => {
-    return await runAgentTool(createManagerAgent, prompt, 'ManagerAgent');
-  },
-
-  'ReasoningAgent': async (prompt: string) => {
-    return await runAgentTool(createReasoningAgent, prompt, 'ReasoningAgent');
-  },
-
-  'CodeAgent': async (prompt: string) => {
-    return await runAgentTool(createCodeAgent, prompt, 'CodeAgent');
-  },
-
-  'BrowserAgent': async (prompt: string) => {
-    return await runAgentTool(createBrowserAgent, prompt, 'BrowserAgent');
-  },
-
-  'BrowserVisionAgent': async (prompt: string) => {
-    return await runAgentTool(createBrowserVisionAgent, prompt, 'BrowserVisionAgent');
-  },
-
-  'SearchAgent': async (prompt: string) => {
-    // Enhanced error logging for SearchAgent
-    try {
-      console.log(`SearchAgent processing prompt: ${prompt}`);
-      const result = await runAgentTool(createSearchAgent, prompt, 'SearchAgent');
-      console.log(`SearchAgent completed with result length: ${result?.length || 0} chars`);
-      return result;
-    } catch (error) {
-      console.error(`SearchAgent error: ${error instanceof Error ? error.stack : String(error)}`);
-      return `Error in SearchAgent: ${error instanceof Error ? error.message : String(error)}`;
-    }
-  },
-
-  'ShellAgent': async (prompt: string) => {
-    return await runAgentTool(createShellAgent, prompt, 'ShellAgent');
-  }
-};
-
-// Complete tool implementations
-const allToolImplementations: Record<string, ToolImplementationFn> = {
-  ...baseToolImplementations,
-  ...agentToolImplementations,
-  'AICoder': AICoder
-};

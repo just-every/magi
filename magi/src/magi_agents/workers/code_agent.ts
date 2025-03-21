@@ -1,14 +1,12 @@
 /**
  * Code agent for the MAGI system.
- * 
+ *
  * This agent specializes in writing, explaining, and modifying code using the Claude CLI.
  */
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import path from 'path';
-import { Agent } from '../../agent.js';
-import { getCommonTools } from '../../utils/tools.js';
+import { Agent } from '../../utils/agent.js';
 import { getFileTools } from '../../utils/file_utils.js';
 import { ToolDefinition } from '../../types.js';
 import { COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT } from '../constants.js';
@@ -24,7 +22,7 @@ async function isClaudeCLIAvailable(): Promise<boolean> {
   // For now, return false to avoid using Claude CLI until we can debug the issues
   console.log('[CodeAgent] Skipping Claude CLI due to timeout issues');
   return false;
-  
+
   // Original implementation - commented out for now
   /*
   try {
@@ -40,7 +38,7 @@ async function isClaudeCLIAvailable(): Promise<boolean> {
 /**
  * Run Claude CLI with a prompt
  * Uses --print and --dangerously-skip-permissions flags for non-interactive execution.
- * 
+ *
  * @param prompt - The prompt to send to Claude
  * @param working_directory - Optional working directory for file operations
  * @returns The response from Claude CLI
@@ -63,41 +61,41 @@ async function runClaudeCLI(prompt: string, working_directory?: string): Promise
       maxBuffer: 1024 * 1024 * 10, // 10MB buffer
       timeout: 30000, // 30 second timeout
     };
-    
+
     if (working_directory) {
       options.cwd = working_directory;
     }
 
     // Escape quotes in the prompt for shell safety
     const safePrompt = prompt.replace(/"/g, '\\"');
-    
+
     // Claude CLI command with appropriate flags
     const command = `claude --print --dangerously-skip-permissions -p "${safePrompt}"`;
-    
+
     console.log(`[CodeAgent] Running Claude CLI: ${command.substring(0, 100)}...`);
     let stdout = '';
-    
+
     try {
       const result = await execAsync(command, options);
       stdout = result.stdout.toString();
-      
+
       if (result.stderr) {
         console.warn(`[CodeAgent] Claude CLI warning: ${result.stderr}`);
       }
-      
+
       // Log a sample of the output for debugging
       console.log(`[CodeAgent] Claude CLI output first 100 chars: ${stdout.substring(0, 100)}...`);
-      
+
       return {
         success: true,
         output: stdout
       };
     } catch (execError: any) {
-      console.error(`[CodeAgent] Claude CLI execution error:`, execError.message);
+      console.error('[CodeAgent] Claude CLI execution error:', execError.message);
       throw execError;
     }
   } catch (error: any) {
-    console.error(`[CodeAgent] Error running Claude CLI:`, error);
+    console.error('[CodeAgent] Error running Claude CLI:', error);
     return {
       success: false,
       output: '',
@@ -108,36 +106,36 @@ async function runClaudeCLI(prompt: string, working_directory?: string): Promise
 
 /**
  * AICoder main function that gets called by the agent
- * 
+ *
  * @param prompt - The prompt to send to Claude
  * @param working_directory - Optional working directory for file operations
- * @returns The response 
+ * @returns The response
  */
 async function AICoder(prompt: string, working_directory?: string): Promise<string> {
   try {
     console.log(`[CodeAgent] AICoder called with prompt: ${prompt.substring(0, 100)}...`);
     console.log(`[CodeAgent] Working directory: ${working_directory || 'not specified'}`);
-    
+
     const result = await runClaudeCLI(prompt, working_directory);
-    
+
     if (result.success) {
       console.log(`[CodeAgent] AICoder succeeded, returning ${result.output.length} characters of output`);
       return result.output;
     } else {
       // If Claude CLI fails, provide a helpful error message
-      let errorMessage = result.error || 'Unknown error';
+      const errorMessage = result.error || 'Unknown error';
       console.log(`[CodeAgent] AICoder failed: ${errorMessage}`);
-      
+
       // If the error is that the CLI is not available, make it clear we're returning a fallback
       if (errorMessage.includes('Claude CLI not available')) {
-        console.log(`[CodeAgent] Falling back to regular agent functionality`);
+        console.log('[CodeAgent] Falling back to regular agent functionality');
         return `I attempted to use the specialized Claude CLI tool, but it's not available in this environment. I'll solve your request directly.\n\nHere's my solution to create "${prompt}":\n`;
       }
-      
+
       return `I encountered an issue with the coding task: ${errorMessage}\n\nHere's my attempt to solve your request without the specialized coding tool:\n\n${prompt}`;
     }
   } catch (error: any) {
-    console.error(`[CodeAgent] Unexpected error in AICoder:`, error);
+    console.error('[CodeAgent] Unexpected error in AICoder:', error);
     return `There was an unexpected error while processing your coding task: ${error?.message || String(error)}\n\nI'll try to help with your request directly:\n\n${prompt}`;
   }
 }
@@ -171,21 +169,9 @@ export const AICoderTool: ToolDefinition = {
  * Create the code agent
  */
 export function createCodeAgent(): Agent {
-  // Default model class for code agent
-  const defaultModelClass = "reasoning";
-  
-  // Allow override from environment
-  const modelClass = process.env.MAGI_CODE_MODEL_CLASS || defaultModelClass;
-  console.log(`[CodeAgent] Using model class: ${modelClass}`);
-  
-  // The actual model will be selected when the agent runs, based on modelClass
-  // We'll set a default model as a backup
-  const defaultModel = "gpt-4o";
-  const model = process.env.MAGI_CODE_MODEL || defaultModel;
-  console.log(`[CodeAgent] Default model if class selection fails: ${model}`);
-
   return new Agent({
-    name: "CodeAgent",
+    name: 'CodeAgent',
+    description: 'Specialized in writing, explaining, and modifying code in any language',
     instructions: `You manage the tool \`AICoder\`.
 
 Your \`AICoder\` tool is the most advanced AI coding tool on the planet. Think of it as a senior developer at a FANG company who is an expert in all programming languages and frameworks. It can write, modify, and explain code in any language. It can also run code and test it.
@@ -202,16 +188,10 @@ ${SELF_SUFFICIENCY_TEXT}
 
 ${COMMON_WARNINGS}`,
     tools: [
-      ...getCommonTools(),
       ...getFileTools(),
       AICoderTool
     ],
-    model: model,
-    modelClass: modelClass,
-    handoff_description: "Specialized in writing, explaining, and modifying code in any language"
-  }, {
-    temperature: 0.3, // Lower temperature for more deterministic behavior
-    tool_choice: 'auto'
+    modelClass: 'standard'
   });
 }
 

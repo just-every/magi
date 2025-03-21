@@ -35,12 +35,24 @@ export interface ToolDefinition {
  * Definition of an agent with model and tool settings
  */
 export interface AgentDefinition {
+  agent_id?: string;
   name: string;
+  description: string;
   instructions: string;
-  tools: ToolDefinition[];
-  model: string;
+  workers?: Function[];
+  tools?: ToolDefinition[];
+  model?: string;
   modelClass?: string;
-  handoff_description?: string;
+}
+
+/**
+ * Definition-exportable version of the agent
+ */
+export interface AgentExportDefinition {
+  agent_id: string;
+  name: string;
+  parent?: AgentExportDefinition;
+  model?: string;
 }
 
 /**
@@ -87,41 +99,57 @@ export interface LLMResponse extends LLMMessage {
 /**
  * Streaming event types
  */
-export type StreamEventType = 'message_delta' | 'message_complete' | 'tool_calls' | 'agent_updated' | 'error';
+export type StreamEventType = 'connected' | 'command_start' | 'command_done' | 'agent_start' | 'agent_updated' | 'agent_done' | 'message_start' | 'message_delta' | 'message_done' | 'tool_start' | 'tool_delta' | 'tool_done' | 'error';
 
 /**
  * Base streaming event interface
  */
 export interface StreamEvent {
   type: StreamEventType;
-  model: string;
+  agent?: AgentExportDefinition;
+  model?: string;
+}
+
+/**
+ * Agent updated streaming event
+ */
+export interface ConnectedEvent extends StreamEvent {
+  type: 'connected';
+  timestamp: string;
+}
+
+/**
+ * Agent updated streaming event
+ */
+export interface CommandEvent extends StreamEvent {
+  type: 'command_start' | 'command_done';
+  command: string;
+}
+
+/**
+ * Agent updated streaming event
+ */
+export interface AgentEvent extends StreamEvent {
+  type: 'agent_start' | 'agent_updated' | 'agent_done';
+  agent: AgentExportDefinition;
+  input?: string;
 }
 
 /**
  * Message streaming event
  */
 export interface MessageEvent extends StreamEvent {
-  type: 'message_delta' | 'message_complete';
+  type: 'message_start' | 'message_delta' | 'message_done';
   content: string;
 }
 
 /**
  * Tool call streaming event
  */
-export interface ToolCallEvent extends StreamEvent {
-  type: 'tool_calls';
+export interface ToolEvent extends StreamEvent {
+  type: 'tool_start' | 'tool_delta' | 'tool_done';
   tool_calls: ToolCall[];
-}
-
-/**
- * Agent updated streaming event
- */
-export interface AgentUpdatedEvent extends StreamEvent {
-  type: 'agent_updated';
-  agent: {
-    name: string;
-    model: string;
-  };
+  results?: any;
 }
 
 /**
@@ -135,7 +163,7 @@ export interface ErrorEvent extends StreamEvent {
 /**
  * Union type for all streaming events
  */
-export type StreamingEvent = MessageEvent | ToolCallEvent | AgentUpdatedEvent | ErrorEvent;
+export type StreamingEvent = ConnectedEvent | CommandEvent | AgentEvent | MessageEvent | ToolEvent | ErrorEvent;
 
 /**
  * Model provider interface

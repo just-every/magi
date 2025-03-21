@@ -27,3 +27,7 @@ npm run build
 
 echo -e "\nTesting... "
 node dist/magi.js -t "$@"
+
+# Add a delay to ensure all processes complete
+echo -e "\nWaiting for processes to complete..."
+sleep 10

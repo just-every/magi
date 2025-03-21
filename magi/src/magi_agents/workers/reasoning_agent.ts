@@ -1,19 +1,20 @@
 /**
  * Reasoning agent for the MAGI system.
- * 
+ *
  * This agent specializes in complex reasoning and problem-solving.
  */
 
-import { Agent } from '../../agent.js';
-import { getCommonTools } from '../../utils/tools.js';
+import { Agent } from '../../utils/agent.js';
 import { COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT } from '../constants.js';
+import {getSearchTools} from "../../utils/search_utils.js";
 
 /**
  * Create the reasoning agent
  */
 export function createReasoningAgent(): Agent {
   return new Agent({
-    name: "ReasoningAgent",
+    name: 'ReasoningAgent',
+    description: 'Expert at complex reasoning and multi-step problem-solving',
     instructions: `You are an advanced reasoning engine specialized in complex problem-solving.
 
 Your cognitive capabilities include:
@@ -45,12 +46,8 @@ IMPORTANT:
 - If certain information is missing, state your assumptions clearly
 - Consider the question from multiple perspectives before concluding`,
     tools: [
-      ...getCommonTools()
+        ...getSearchTools()
     ],
-    model: process.env.MAGI_REASONING_MODEL || "gpt-4o",
-    handoff_description: "An expert at thinking through complicated problems"
-  }, {
-    temperature: 0.5, // Lower temperature for more deterministic reasoning
-    top_p: 0.9
+    modelClass: 'reasoning'
   });
 }

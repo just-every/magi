@@ -4,7 +4,7 @@
  * This module provides functions to store and retrieve conversation history
  * across sessions.
  */
-import {LLMMessage} from "../types.js";
+import {LLMMessage} from '../types.js';
 
 // History structure
 interface History {
@@ -12,7 +12,7 @@ interface History {
 }
 
 // Global history cache
-let history: History = {
+const history: History = {
   messages: [],
 };
 

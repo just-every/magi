@@ -6,27 +6,12 @@
 import WebSocket from 'ws';
 import fs from 'fs';
 import path from 'path';
+import {StreamingEvent} from '../types.js';
 
 // Event types
 export interface MagiMessage {
-  type: string;
   processId: string;
-  data: any;
-}
-
-export interface ProgressMessage extends MagiMessage {
-  type: 'progress';
-  data: {
-    step: string;
-    status: 'running' | 'completed' | 'failed';
-    message: string;
-    progress?: number;
-  };
-}
-
-export interface ResultMessage extends MagiMessage {
-  type: 'result';
-  data: any;
+  event: StreamingEvent;
 }
 
 export interface CommandMessage {
@@ -87,10 +72,9 @@ export class CommunicationManager {
 
       // Send initial connection message
       this.sendMessage({
-        type: 'connection',
         processId: this.processId,
-        data: {
-          status: 'connected',
+        event: {
+          type: 'connected',
           timestamp: new Date().toISOString()
         }
       });
@@ -176,17 +160,17 @@ export class CommunicationManager {
    */
   private testModeMessage(message: MagiMessage): void {
     const timestamp = new Date().toISOString().substring(11, 19); // HH:MM:SS
-    console.log(`[${timestamp}]`, message);
+    console.log(`[${timestamp}]`);
+    console.dir(message, { depth: 4, colors: true });
   }
 
   /**
    * Send message to the controller
    */
-  send(type: string, data: any): void {
+  send(event: StreamingEvent): void {
     this.sendMessage({
       processId: this.processId,
-      type,
-      data
+      event
     });
   }
 

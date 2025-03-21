@@ -1,16 +1,16 @@
 /**
  * Agent registry for the MAGI system.
- * 
+ *
  * This module exports all available agents and provides functions to create them.
  */
 
 import 'dotenv/config';
-import { Agent } from '../agent.js';
+import { Agent } from '../utils/agent.js';
 import { createSupervisorAgent } from './supervisor_agent.js';
 import { createManagerAgent } from './workers/manager_agent.js';
 import { createReasoningAgent } from './workers/reasoning_agent.js';
 import { createCodeAgent } from './workers/code_agent.js';
-import { createBrowserAgent, getHackerNewsTopArticle } from './workers/browser_agent.js';
+import { createBrowserAgent, runBrowserDirectly } from './workers/browser_agent.js';
 import { createBrowserVisionAgent } from './workers/browser_vision_agent.js';
 import { createSearchAgent } from './workers/search_agent.js';
 import { createShellAgent } from './workers/shell_agent.js';
@@ -21,10 +21,10 @@ export * from './constants.js';
 /**
  * Available agent types
  */
-export type AgentType = 
-  | 'supervisor' 
-  | 'manager' 
-  | 'reasoning' 
+export type AgentType =
+  | 'supervisor'
+  | 'manager'
+  | 'reasoning'
   | 'code'
   | 'browser'
   | 'browser_vision'
@@ -36,7 +36,7 @@ export type AgentType =
  */
 export function createAgent(type: AgentType, model?: string, modelClass?: string): Agent {
   let agent: Agent;
-  
+
   switch (type) {
     case 'supervisor':
       agent = createSupervisorAgent();
@@ -65,19 +65,17 @@ export function createAgent(type: AgentType, model?: string, modelClass?: string
     default:
       throw new Error(`Unknown agent type: ${type}`);
   }
-  
+
   // Apply model override if specified
   if (model) {
-    console.log(`[createAgent] Using specified model: ${model}`);
     agent.model = model;
   }
-  
+
   // Apply model class if specified
   if (modelClass) {
-    console.log(`[createAgent] Using model class: ${modelClass}`);
     agent.modelClass = modelClass;
   }
-  
+
   return agent;
 }
 
@@ -91,5 +89,5 @@ export {
   createBrowserVisionAgent,
   createSearchAgent,
   createShellAgent,
-  getHackerNewsTopArticle
+  runBrowserDirectly
 };

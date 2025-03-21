@@ -11,12 +11,20 @@
     "lint": "tsc --noEmit && eslint \"src/**/*.ts\"",
     "lint:fix": "tsc --noEmit && eslint \"src/**/*.ts\" --fix",
     "test": "node dist/index.js",
-    "test:prompt": "node dist/index.js"
+    "test:prompt": "node dist/index.js",
+    "browser": "npm run build && node dist/test-browser.js",
+    "browse": "npm run build && node dist/test-browser.js -u"
   },
   "license": "ISC",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.17.1",
+    "@google/generative-ai": "^0.2.1",
+    "axios": "^1.6.8",
     "dotenv": "^16.4.7",
     "openai": "^4.88.0",
+    "playwright": "^1.51.1",
+    "sharp": "^0.33.5",
+    "uuid": "^11.1.0",
     "ws": "^8.18.1"
   },
   "devDependencies": {

@@ -102,7 +102,7 @@ export function getFileTools(): ToolDefinition[] {
 /**
  * File tool implementations mapped by name for easy lookup
  */
-export const fileToolImplementations: Record<string, Function> = {
+export const fileToolImplementations: Record<string, (...args: any[]) => any | Promise<any>> = {
   'read_file': readFile,
   'write_file': writeFile
 };
