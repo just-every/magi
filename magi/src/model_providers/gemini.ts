@@ -7,6 +7,7 @@
 
 import 'dotenv/config';
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
+import { v4 as uuidv4 } from 'uuid';
 import {
   ModelProvider,
   ToolFunction,
@@ -138,7 +139,11 @@ export class GeminiProvider implements ModelProvider {
       // Track current tool call
       let currentToolCall: any = null;
       let contentBuffer = ''; // Buffer to collect text content
-      let sentComplete = false; // To track if we've sent a message_done
+      let sentComplete = false; // To track if we've sent a message_complete
+      // Generate a unique message ID for this response
+      const messageId = uuidv4();
+      // Track delta positions
+      let deltaPosition = 0;
 
       try {
         for await (const chunk of streamingResult.stream) {
@@ -173,9 +178,12 @@ export class GeminiProvider implements ModelProvider {
               // Handle text content
               else if (part.text) {
                 // Emit delta event for streaming UI updates
+                // Include incrementing order parameter for organizing deltas
                 yield {
                   type: 'message_delta',
-                  content: part.text
+                  content: part.text,
+                  message_id: messageId,
+                  order: deltaPosition++
                 };
 
                 // Accumulate content for final message
@@ -185,11 +193,12 @@ export class GeminiProvider implements ModelProvider {
           }
         }
 
-        // Always emit a message_done at the end with the accumulated content
+        // Always emit a message_complete at the end with the accumulated content
         if (contentBuffer && !sentComplete) {
           yield {
-            type: 'message_done',
-            content: contentBuffer
+            type: 'message_complete',
+            content: contentBuffer,
+            message_id: messageId
           };
           sentComplete = true;
         }
@@ -201,12 +210,13 @@ export class GeminiProvider implements ModelProvider {
           error: String(streamError)
         };
 
-        // If we have accumulated content but no message_done was sent due to an error,
+        // If we have accumulated content but no message_complete was sent due to an error,
         // still try to send it
         if (contentBuffer && !sentComplete) {
           yield {
-            type: 'message_done',
-            content: contentBuffer
+            type: 'message_complete',
+            content: contentBuffer,
+            message_id: messageId
           };
         }
       }

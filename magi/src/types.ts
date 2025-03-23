@@ -193,7 +193,7 @@ export interface LLMResponse extends LLMMessage {
 /**
  * Streaming event types
  */
-export type StreamEventType = 'connected' | 'command_start' | 'command_done' | 'agent_start' | 'agent_updated' | 'agent_done' | 'message_start' | 'message_delta' | 'message_done' | 'tool_start' | 'tool_delta' | 'tool_done' | 'error';
+export type StreamEventType = 'connected' | 'command_start' | 'command_done' | 'agent_start' | 'agent_updated' | 'agent_done' | 'message_start' | 'message_delta' | 'message_complete' | 'message_done' | 'tool_start' | 'tool_delta' | 'tool_done' | 'error';
 
 /**
  * Base streaming event interface
@@ -232,8 +232,10 @@ export interface AgentEvent extends StreamEvent {
  * Message streaming event
  */
 export interface MessageEvent extends StreamEvent {
-  type: 'message_start' | 'message_delta' | 'message_done';
+  type: 'message_start' | 'message_delta' | 'message_complete'; // Changed 'message_done' to 'message_complete'
   content: string;
+  message_id: string; // Added message_id for tracking deltas and completes
+  order?: number; // Optional order property for message sorting
 }
 
 /**

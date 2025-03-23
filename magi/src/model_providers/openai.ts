@@ -8,6 +8,7 @@
 import 'dotenv/config';
 import {ModelProvider, ToolFunction, ModelSettings, StreamingEvent, ToolCall, ResponseInput} from '../types.js';
 import OpenAI from 'openai';
+import { v4 as uuidv4 } from 'uuid';
 
 // Convert our tool definition to OpenAI's format
 function convertToOpenAITools(requestParams: any): any {
@@ -110,6 +111,10 @@ export class OpenAIProvider implements ModelProvider {
 
       // Collect tool call data as it streams in
       let currentToolCall: any = null;
+      // Generate a message ID for this streaming response
+      const messageId = uuidv4();
+      // Track delta positions for each message_id
+      const messagePositions = new Map<string, number>();
 
       // Process the response stream
       try {
@@ -133,27 +138,63 @@ export class OpenAIProvider implements ModelProvider {
           else if (event.type === 'response.output_text.delta') {
             const textDelta = event.delta;
             if (textDelta) {
+              // Position will be tracked in messagePositions map
+              // For each message_id, track the position separately
+              if (!messagePositions.has(messageId)) {
+                messagePositions.set(messageId, 0);
+              } 
+              const position = messagePositions.get(messageId)!;
+              
+              // Add order for delta position tracking
               yield {
                 type: 'message_delta',
-                content: textDelta
+                content: textDelta,
+                message_id: messageId,
+                order: position
               };
+              
+              // Increment the position for the next chunk with the same message_id
+              messagePositions.set(messageId, position + 1);
             }
           }
 
           // Handle text.delta - newer format
           else if (event.type === 'text.delta' && event.delta && event.delta.value) {
+            // For each message_id, track the position separately
+            if (!messagePositions.has(messageId)) {
+              messagePositions.set(messageId, 0);
+            } 
+            const position = messagePositions.get(messageId)!;
+            
+            // Include order for message delta
             yield {
               type: 'message_delta',
-              content: event.delta.value
+              content: event.delta.value,
+              message_id: messageId,
+              order: position
             };
+            
+            // Increment the position for the next chunk
+            messagePositions.set(messageId, position + 1);
           }
 
           // Handle response.content.delta - older format
           else if (event.type === 'response.content.delta') {
+            // For each message_id, track the position separately
+            if (!messagePositions.has(messageId)) {
+              messagePositions.set(messageId, 0);
+            } 
+            const position = messagePositions.get(messageId)!;
+            
             yield {
               type: 'message_delta',
-              content: event.delta
+              content: event.delta,
+              message_id: messageId,
+              order: position
             };
+            
+            // Increment the position for the next chunk
+            messagePositions.set(messageId, position + 1);
           }
 
           // Handle response.content_part.added - might contain text
@@ -163,8 +204,9 @@ export class OpenAIProvider implements ModelProvider {
                   event.part.text) {
             if (event.part.text && event.part.text.length > 0) {
               yield {
-                type: 'message_done',
-                content: event.part.text
+                type: 'message_complete',
+                content: event.part.text,
+                message_id: messageId
               };
             }
           }
@@ -172,8 +214,9 @@ export class OpenAIProvider implements ModelProvider {
           // Handle output_text.done - complete text message
           else if (event.type === 'response.output_text.done' && event.text) {
             yield {
-              type: 'message_done',
-              content: event.text
+              type: 'message_complete',
+              content: event.text,
+              message_id: messageId
             };
           }
 

@@ -9,6 +9,7 @@
  */
 
 import 'dotenv/config';
+import { v4 as uuidv4 } from 'uuid';
 import {
   ModelProvider,
   ToolFunction,
@@ -118,6 +119,10 @@ export class GrokProvider implements ModelProvider {
       let currentToolCall: any = null;
       let contentBuffer = ''; // Buffer for accumulating content
       let sentComplete = false; // Track if we've sent a message_complete
+      // Generate a unique message ID for this response
+      const messageId = uuidv4();
+      // Track position of delta chunks
+      let deltaPosition = 0;
 
       try {
         while (true) {
@@ -149,11 +154,12 @@ export class GrokProvider implements ModelProvider {
 
             // Skip "[DONE]" marker
             if (jsonStr === '[DONE]') {
-              // When we get [DONE], always send a message_done if we have content
+              // When we get [DONE], always send a message_complete if we have content
               if (contentBuffer && !sentComplete) {
                 yield {
-                  type: 'message_done',
-                  content: contentBuffer
+                  type: 'message_complete',
+                  content: contentBuffer,
+                  message_id: messageId
                 };
                 sentComplete = true;
               }
@@ -170,9 +176,12 @@ export class GrokProvider implements ModelProvider {
                 // Handle delta content - streaming text
                 if (choice.delta && choice.delta.content) {
                   // Emit delta for streaming UI
+                  // Use a delta order counter that increments for each chunk
                   yield {
                     type: 'message_delta',
-                    content: choice.delta.content
+                    content: choice.delta.content,
+                    message_id: messageId,
+                    order: deltaPosition++
                   };
 
                   // Accumulate content for message_done
@@ -183,16 +192,21 @@ export class GrokProvider implements ModelProvider {
                 if (choice.message && choice.message.content) {
                   // In non-streaming mode, also emit message_delta
                   if (!choice.delta) {
+                    // For non-streaming mode, this is the complete message
+                    // but still provide sequential order for consistency
                     yield {
                       type: 'message_delta',
-                      content: choice.message.content
+                      content: choice.message.content,
+                      message_id: messageId,
+                      order: 0 
                     };
                   }
 
                   // Always emit a message_done
                   yield {
-                    type: 'message_done',
-                    content: choice.message.content
+                    type: 'message_complete',
+                    content: choice.message.content,
+                    message_id: messageId
                   };
                   sentComplete = true;
                   contentBuffer = choice.message.content; // Store complete content
@@ -268,8 +282,9 @@ export class GrokProvider implements ModelProvider {
                 // If the choice is finished, emit a message_done if needed
                 if (choice.finish_reason && contentBuffer && !sentComplete) {
                   yield {
-                    type: 'message_done',
-                    content: contentBuffer
+                    type: 'message_complete',
+                    content: contentBuffer,
+                    message_id: messageId
                   };
                   sentComplete = true;
                 }
@@ -291,8 +306,9 @@ export class GrokProvider implements ModelProvider {
         // Ensure a message_complete is sent if we have accumulated content
         if (contentBuffer && !sentComplete) {
           yield {
-            type: 'message_done',
-            content: contentBuffer
+            type: 'message_complete',
+            content: contentBuffer,
+            message_id: messageId
           };
         }
 
@@ -303,12 +319,13 @@ export class GrokProvider implements ModelProvider {
           error: String(streamError)
         };
 
-        // If we have accumulated content but no message_done was sent due to an error,
+        // If we have accumulated content but no message_complete was sent due to an error,
         // still try to send it
         if (contentBuffer && !sentComplete) {
           yield {
-            type: 'message_done',
-            content: contentBuffer
+            type: 'message_complete',
+            content: contentBuffer,
+            message_id: messageId
           };
         }
       }
@@ -320,11 +337,12 @@ export class GrokProvider implements ModelProvider {
         error: String(error)
       };
 
-      // If there's a fatal error without any content generated, send an empty message_done
+      // If there's a fatal error without any content generated, send an empty message_complete
       // to ensure the UI doesn't get stuck waiting
       yield {
-        type: 'message_done',
-        content: 'Error occurred while generating response. Please try again.'
+        type: 'message_complete',
+        content: 'Error occurred while generating response. Please try again.',
+        message_id: uuidv4() // Generate a new messageId since this is a fallback message
       };
     }
   }

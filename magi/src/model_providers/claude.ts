@@ -7,6 +7,7 @@
 
 import 'dotenv/config';
 import Anthropic from '@anthropic-ai/sdk';
+import { v4 as uuidv4 } from 'uuid';
 import {
   ModelProvider,
   ToolFunction,
@@ -100,17 +101,22 @@ export class ClaudeProvider implements ModelProvider {
 
       // Track current tool call info
       let currentToolCall: any = null;
-      let accumulatedContent = ''; // To collect all content for final message_done
+      let accumulatedContent = ''; // To collect all content for final message_complete
+      const messageId = uuidv4(); // Generate a unique ID for this message
+      // Track delta positions for ordered message chunks
+      let deltaPosition = 0;
 
       try {
         // @ts-expect-error - Claude's stream is AsyncIterable but TypeScript might not recognize it properly
         for await (const event of stream) {
           // Handle content block delta
           if (event.type === 'content_block_delta' && event.delta.text) {
-            // Emit delta event for streaming UI updates
+            // Emit delta event for streaming UI updates with incrementing order
             yield {
               type: 'message_delta',
-              content: event.delta.text
+              content: event.delta.text,
+              message_id: messageId,
+              order: deltaPosition++
             };
 
             // Accumulate content for complete message
@@ -120,10 +126,12 @@ export class ClaudeProvider implements ModelProvider {
           else if (event.type === 'content_block_start' &&
                   event.content_block.type === 'text') {
             if (event.content_block.text) {
-              // Emit delta event
+              // Emit delta event with incrementing order
               yield {
                 type: 'message_delta',
-                content: event.content_block.text
+                content: event.content_block.text,
+                message_id: messageId,
+                order: deltaPosition++
               };
 
               // Accumulate content for complete message
@@ -134,10 +142,12 @@ export class ClaudeProvider implements ModelProvider {
           else if (event.type === 'content_block_stop' &&
                   event.content_block.type === 'text') {
             if (event.content_block.text) {
-              // For non-streaming responses, add as delta too
+              // For non-streaming responses, add as delta too with incrementing order
               yield {
                 type: 'message_delta',
-                content: event.content_block.text
+                content: event.content_block.text,
+                message_id: messageId,
+                order: deltaPosition++
               };
 
               // Accumulate content for complete message
@@ -210,11 +220,12 @@ export class ClaudeProvider implements ModelProvider {
               currentToolCall = null;
             }
 
-            // Always emit a message_done at the end with the accumulated content
+            // Always emit a message_complete at the end with the accumulated content
             if (accumulatedContent) {
               yield {
-                type: 'message_done',
-                content: accumulatedContent
+                type: 'message_complete',
+                content: accumulatedContent,
+                message_id: messageId
               };
             }
           }
@@ -227,11 +238,12 @@ export class ClaudeProvider implements ModelProvider {
           }
         }
 
-        // Ensure a message_done is emitted if somehow message_stop didn't fire
+        // Ensure a message_complete is emitted if somehow message_stop didn't fire
         if (accumulatedContent && !currentToolCall) {
           yield {
-            type: 'message_done',
-            content: accumulatedContent
+            type: 'message_complete',
+            content: accumulatedContent,
+            message_id: messageId
           };
         }
 
@@ -242,12 +254,13 @@ export class ClaudeProvider implements ModelProvider {
           error: String(streamError)
         };
 
-        // If we have accumulated content but no message_done was sent
+        // If we have accumulated content but no message_complete was sent
         // due to an error, still try to send it
         if (accumulatedContent) {
           yield {
-            type: 'message_done',
-            content: accumulatedContent
+            type: 'message_complete',
+            content: accumulatedContent,
+            message_id: messageId
           };
         }
       }
