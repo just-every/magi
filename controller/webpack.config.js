@@ -2,7 +2,7 @@ const path = require('path');
 
 module.exports = {
   mode: 'development',
-  entry: './src/client/client.ts',
+  entry: './src/client/client.tsx',
   devtool: 'source-map',
   module: {
     rules: [
@@ -11,12 +11,19 @@ module.exports = {
         use: 'ts-loader',
         exclude: /node_modules/,
       },
+      {
+        test: /\.css$/,
+        use: ['style-loader', 'css-loader'],
+      },
     ],
   },
   resolve: {
-    extensions: ['.tsx', '.ts', '.js'],
+    extensions: ['.tsx', '.ts', '.js', '.jsx'],
     alias: {
-      '@types': path.resolve(__dirname, 'src/types/shared-types')
+      '@types': path.resolve(__dirname, 'src/types/shared-types'),
+      '@components': path.resolve(__dirname, 'src/client/js/components'),
+      '@hooks': path.resolve(__dirname, 'src/client/js/hooks'),
+      '@context': path.resolve(__dirname, 'src/client/js/context'),
     }
   },
   output: {
@@ -30,6 +37,6 @@ module.exports = {
   },
   devServer: {
     hot: true,
-    watchFiles: ['src/client/**/*.ts', 'src/client/**/*.html', 'src/client/**/*.css'],
+    watchFiles: ['src/client/**/*.ts', 'src/client/**/*.tsx', 'src/client/**/*.html', 'src/client/**/*.css'],
   },
 };

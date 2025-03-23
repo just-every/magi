@@ -1,6 +1,6 @@
 /**
  * Docker interface module for interacting with MAGI System containers.
- * 
+ *
  * @deprecated This file is kept for backwards compatibility.
  * Use the new modules in utils/docker_commands.ts and managers/container_manager.ts instead.
  */

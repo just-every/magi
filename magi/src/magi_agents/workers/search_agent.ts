@@ -4,19 +4,19 @@
  * This agent specializes in performing web searches and gathering information.
  */
 
-import { Agent } from '../../utils/agent.js';
-import { getFileTools } from '../../utils/file_utils.js';
-import { getSearchTools } from '../../utils/search_utils.js';
-import { COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT } from '../constants.js';
+import {Agent} from '../../utils/agent.js';
+import {getFileTools} from '../../utils/file_utils.js';
+import {getSearchTools} from '../../utils/search_utils.js';
+import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
 
 /**
  * Create the search agent
  */
 export function createSearchAgent(): Agent {
-  return new Agent({
-    name: 'SearchAgent',
-    description: 'Performs web searches for current information from various sources',
-    instructions: `You are a specialized search agent with the ability to find information on the web.
+	return new Agent({
+		name: 'SearchAgent',
+		description: 'Performs web searches for current information from various sources',
+		instructions: `You are a specialized search agent with the ability to find information on the web.
 
 Your search capabilities include:
 - Performing web searches with various search engines
@@ -55,10 +55,10 @@ IMPORTANT:
 - Avoid speculative information and clearly mark uncertain findings
 - Use multiple search queries to verify information when necessary
 - When handling real-time or current information queries, be sure to use up-to-date sources`,
-    tools: [
-      ...getFileTools(),
-      ...getSearchTools()
-    ],
-    modelClass: 'standard'
-  });
+		tools: [
+			...getFileTools(),
+			...getSearchTools()
+		],
+		modelClass: 'standard'
+	});
 }

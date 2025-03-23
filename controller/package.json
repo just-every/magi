@@ -5,8 +5,11 @@
   "main": "index.js",
   "scripts": {
     "cleanup": "rm -rf dist/",
-    "build": "tsc && webpack && rsync -a --exclude=\"*.ts\" --exclude=\"*.js\" src/client/ dist/client/",
-    "start": "node dist/server/server.js"
+    "build": "tsc && webpack && rsync -a src/client/html dist/client/ && mkdir -p dist/css && rsync -a src/client/css/styles.css dist/css/",
+    "start": "node dist/server/server.js",
+    "dev": "nodemon --config nodemon.json",
+    "lint": "eslint --ext .ts,.tsx src/",
+    "lint:fix": "eslint --ext .ts,.tsx src/ --fix"
   },
   "repository": {
     "type": "git",
@@ -27,7 +30,10 @@
     "ef-infinite-canvas": "^0.6.7",
     "express": "^4.21.2",
     "marked": "^15.0.7",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
     "ws": "^8.18.1"
   },
   "devDependencies": {
@@ -35,13 +41,18 @@
     "@types/express": "^5.0.0",
     "@types/marked": "^5.0.2",
     "@types/node": "^22.13.10",
+    "@types/react": "^18.3.19",
+    "@types/react-dom": "^18.3.5",
     "@types/socket.io": "^3.0.1",
+    "@types/socket.io-client": "^1.4.36",
     "@types/ws": "^8.18.0",
     "@typescript-eslint/eslint-plugin": "^8.26.1",
     "@typescript-eslint/parser": "^8.26.1",
     "concurrently": "^9.1.2",
+    "css-loader": "^6.10.0",
     "eslint": "^9.22.0",
     "nodemon": "^3.1.9",
+    "style-loader": "^3.3.4",
     "ts-loader": "^9.5.2",
     "typescript": "^5.8.2",
     "webpack": "^5.98.0",

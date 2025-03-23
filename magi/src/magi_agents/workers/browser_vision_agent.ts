@@ -5,19 +5,19 @@
  * with computer vision capabilities.
  */
 
-import { Agent } from '../../utils/agent.js';
-import { getFileTools } from '../../utils/file_utils.js';
-import { getBrowserTools } from '../../utils/browser_utils.js';
-import { COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT } from '../constants.js';
+import {Agent} from '../../utils/agent.js';
+import {getFileTools} from '../../utils/file_utils.js';
+import {getBrowserTools} from '../../utils/browser_utils.js';
+import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
 
 /**
  * Create the browser vision agent
  */
 export function createBrowserVisionAgent(): Agent {
-  return new Agent({
-    name: 'BrowserVisionAgent',
-    description: 'Uses computer vision to interact with websites and extract data',
-    instructions: `You are a specialized browser vision agent with the ability to analyze visual content on websites.
+	return new Agent({
+		name: 'BrowserVisionAgent',
+		description: 'Uses computer vision to interact with websites and extract data',
+		instructions: `You are a specialized browser vision agent with the ability to analyze visual content on websites.
 
 Your vision capabilities include:
 - Analyzing screenshots to understand webpage layouts
@@ -75,11 +75,11 @@ IMPORTANT:
 - Report clearly what you can and cannot determine from visual content
 
 SPECIAL INSTRUCTION: For any visual analysis request, first navigate to the URL, then take screenshots of relevant sections, and provide a detailed visual analysis of the webpage.`,
-    tools: [
-      ...getFileTools(),
-      ...getBrowserTools()
-        // @todo switch to computer_use
-    ],
-    modelClass: 'vision'
-  });
+		tools: [
+			...getFileTools(),
+			...getBrowserTools()
+			// @todo switch to computer_use
+		],
+		modelClass: 'vision'
+	});
 }

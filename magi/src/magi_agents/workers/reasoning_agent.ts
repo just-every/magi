@@ -4,18 +4,18 @@
  * This agent specializes in complex reasoning and problem-solving.
  */
 
-import { Agent } from '../../utils/agent.js';
-import { COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT } from '../constants.js';
+import {Agent} from '../../utils/agent.js';
+import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT} from '../constants.js';
 import {getSearchTools} from '../../utils/search_utils.js';
 
 /**
  * Create the reasoning agent
  */
 export function createReasoningAgent(): Agent {
-  return new Agent({
-    name: 'ReasoningAgent',
-    description: 'Expert at complex reasoning and multi-step problem-solving',
-    instructions: `You are an advanced reasoning engine specialized in complex problem-solving.
+	return new Agent({
+		name: 'ReasoningAgent',
+		description: 'Expert at complex reasoning and multi-step problem-solving',
+		instructions: `You are an advanced reasoning engine specialized in complex problem-solving.
 
 Your cognitive capabilities include:
 - Breaking down complex problems into simpler parts
@@ -45,9 +45,9 @@ IMPORTANT:
 - Use mathematical notation, logic, or pseudocode when helpful
 - If certain information is missing, state your assumptions clearly
 - Consider the question from multiple perspectives before concluding`,
-    tools: [
-        ...getSearchTools()
-    ],
-    modelClass: 'reasoning'
-  });
+		tools: [
+			...getSearchTools()
+		],
+		modelClass: 'reasoning'
+	});
 }

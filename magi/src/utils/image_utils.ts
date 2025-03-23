@@ -5,7 +5,7 @@
  */
 
 // fs module is only used for type definition
-import { Buffer } from 'buffer';
+import {Buffer} from 'buffer';
 import sharp from 'sharp';
 
 /**
@@ -25,11 +25,11 @@ const DEFAULT_QUALITY = 70;
  * @returns Buffer containing the image data
  */
 export async function createImageFromBase64(base64Data: string): Promise<Buffer> {
-  // Remove data URL prefix if present
-  const base64Image = base64Data.replace(/^data:image\/\w+;base64,/, '');
+	// Remove data URL prefix if present
+	const base64Image = base64Data.replace(/^data:image\/\w+;base64,/, '');
 
-  // Convert base64 to buffer
-  return Buffer.from(base64Image, 'base64');
+	// Convert base64 to buffer
+	return Buffer.from(base64Image, 'base64');
 }
 
 /**
@@ -41,41 +41,41 @@ export async function createImageFromBase64(base64Data: string): Promise<Buffer>
  * @returns Buffer containing the processed image
  */
 export async function processImage(
-  imageBuffer: Buffer,
-  maxHeight: number = MAX_IMAGE_HEIGHT,
-  quality: number = DEFAULT_QUALITY
+	imageBuffer: Buffer,
+	maxHeight: number = MAX_IMAGE_HEIGHT,
+	quality: number = DEFAULT_QUALITY
 ): Promise<Buffer> {
 
-  try {
-    // Create a sharp instance
-    const image = sharp(imageBuffer);
+	try {
+		// Create a sharp instance
+		const image = sharp(imageBuffer);
 
-    // Get image metadata
-    const metadata = await image.metadata();
+		// Get image metadata
+		const metadata = await image.metadata();
 
-    // Skip processing if we can't get metadata
-    if (!metadata.width || !metadata.height) {
-      console.log('Unable to get image metadata, returning original image buffer');
-      return imageBuffer;
-    }
+		// Skip processing if we can't get metadata
+		if (!metadata.width || !metadata.height) {
+			console.log('Unable to get image metadata, returning original image buffer');
+			return imageBuffer;
+		}
 
-    // Check if image needs resizing
-    if (metadata.height > maxHeight) {
-      // Calculate new width to maintain aspect ratio
-      const aspectRatio = metadata.width / metadata.height;
-      const newWidth = Math.round(maxHeight * aspectRatio);
+		// Check if image needs resizing
+		if (metadata.height > maxHeight) {
+			// Calculate new width to maintain aspect ratio
+			const aspectRatio = metadata.width / metadata.height;
+			const newWidth = Math.round(maxHeight * aspectRatio);
 
-      console.log(`Resizing image from ${metadata.width}x${metadata.height} to ${newWidth}x${maxHeight}`);
+			console.log(`Resizing image from ${metadata.width}x${metadata.height} to ${newWidth}x${maxHeight}`);
 
-      // Resize the image
-      image.resize(newWidth, maxHeight);
-    }
+			// Resize the image
+			image.resize(newWidth, maxHeight);
+		}
 
-    // Convert to JPEG with specified quality
-    return await image.jpeg({ quality }).toBuffer();
-  } catch (error) {
-    console.error('Error processing image:', error);
-    // Return original buffer if processing fails
-    return imageBuffer;
-  }
+		// Convert to JPEG with specified quality
+		return await image.jpeg({quality}).toBuffer();
+	} catch (error) {
+		console.error('Error processing image:', error);
+		// Return original buffer if processing fails
+		return imageBuffer;
+	}
 }

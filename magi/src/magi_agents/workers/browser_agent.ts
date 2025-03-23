@@ -4,19 +4,19 @@
  * This agent specializes in web browsing, data extraction, and website interaction.
  */
 
-import { Agent } from '../../utils/agent.js';
-import { getFileTools } from '../../utils/file_utils.js';
-import { getBrowserTools } from '../../utils/browser_utils.js';
-import { COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT } from '../constants.js';
+import {Agent} from '../../utils/agent.js';
+import {getFileTools} from '../../utils/file_utils.js';
+import {getBrowserTools} from '../../utils/browser_utils.js';
+import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
 
 /**
  * Create the browser agent
  */
 export function createBrowserAgent(): Agent {
-  return new Agent({
-    name: 'BrowserAgent',
-    description: 'Controls a browser to interact with websites, fill forms, and extract data',
-    instructions: `You are a specialized browser agent with the ability to interact with websites.
+	return new Agent({
+		name: 'BrowserAgent',
+		description: 'Controls a browser to interact with websites, fill forms, and extract data',
+		instructions: `You are a specialized browser agent with the ability to interact with websites.
 
 Your browsing capabilities include:
 - Navigating to URLs
@@ -66,10 +66,10 @@ IMPORTANT:
 - Report errors clearly if you cannot access a website or element
 
 SPECIAL INSTRUCTION: For any web request, first navigate to the URL and then use get_text to read the page content. Then respond with a summary of what you found.`,
-    tools: [
-      ...getFileTools(),
-      ...getBrowserTools()
-    ],
-    modelClass: 'standard'
-  });
+		tools: [
+			...getFileTools(),
+			...getBrowserTools()
+		],
+		modelClass: 'standard'
+	});
 }

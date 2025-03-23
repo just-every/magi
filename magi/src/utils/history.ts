@@ -5,33 +5,32 @@
  * across sessions.
  */
 import {
-  LLMMessage,
-  ResponseInput,
-  ResponseInputFunctionCall, ResponseInputFunctionCallOutput,
-  ResponseInputMessage,
-  ResponseOutputMessage
+	ResponseInput,
+	ResponseInputFunctionCall, ResponseInputFunctionCallOutput,
+	ResponseInputMessage,
+	ResponseOutputMessage
 } from '../types.js';
 
 // History structure
 interface History {
-  messages: ResponseInput;
+	messages: ResponseInput;
 }
 
 // Global history cache
 const history: History = {
-  messages: [],
+	messages: [],
 };
 
 /**
  * Add a message to history
  */
 export function addHistory(message: ResponseInputMessage | ResponseOutputMessage | ResponseInputFunctionCall | ResponseInputFunctionCallOutput): void {
-  history.messages.push(message);
+	history.messages.push(message);
 }
 
 /**
  * Get message history
  */
-export function getHistory():ResponseInput {
-  return history.messages;
+export function getHistory(): ResponseInput {
+	return history.messages;
 }

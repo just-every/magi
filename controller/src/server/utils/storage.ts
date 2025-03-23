@@ -1,21 +1,21 @@
 /**
  * Storage Utility Module
- * 
+ *
  * Provides file-based storage functionality for persisting data across restarts.
  */
 import fs from 'fs';
 import path from 'path';
 
 // Directory to store persistent data
-const STORAGE_DIR = path.join(process.cwd(), 'dist/.server');
+const STORAGE_DIR = path.join(process.cwd(), 'dist/.server/magi_storage');
 
 /**
  * Initializes the storage directory
  */
 export function initStorage(): void {
-  if (!fs.existsSync(STORAGE_DIR)) {
-    fs.mkdirSync(STORAGE_DIR, { recursive: true });
-  }
+	if (!fs.existsSync(STORAGE_DIR)) {
+		fs.mkdirSync(STORAGE_DIR, {recursive: true});
+	}
 }
 
 /**
@@ -25,9 +25,9 @@ export function initStorage(): void {
  * @param value - The string value to store
  */
 export function saveData(key: string, value: string): void {
-  initStorage();
-  const filePath = path.join(STORAGE_DIR, key);
-  fs.writeFileSync(filePath, value, 'utf8');
+	initStorage();
+	const filePath = path.join(STORAGE_DIR, key);
+	fs.writeFileSync(filePath, value, 'utf8');
 }
 
 /**
@@ -37,35 +37,35 @@ export function saveData(key: string, value: string): void {
  * @returns The stored value, or undefined if not found
  */
 export function loadData(key: string): string | undefined {
-  initStorage();
-  const filePath = path.join(STORAGE_DIR, key);
+	initStorage();
+	const filePath = path.join(STORAGE_DIR, key);
 
-  if (fs.existsSync(filePath)) {
-    return fs.readFileSync(filePath, 'utf8');
-  }
+	if (fs.existsSync(filePath)) {
+		return fs.readFileSync(filePath, 'utf8');
+	}
 
-  return undefined;
+	return undefined;
 }
 
 /**
  * Loads all stored files in the storage directory
- * 
+ *
  * @returns An object mapping filenames to their contents
  */
 export function loadAllData(): Record<string, string> {
-  initStorage();
-  
-  if (!fs.existsSync(STORAGE_DIR)) {
-    return {};
-  }
+	initStorage();
 
-  const files = fs.readdirSync(STORAGE_DIR);
-  const result: Record<string, string> = {};
+	if (!fs.existsSync(STORAGE_DIR)) {
+		return {};
+	}
 
-  for (const file of files) {
-    const filePath = path.join(STORAGE_DIR, file);
-    result[file] = fs.readFileSync(filePath, 'utf8');
-  }
+	const files = fs.readdirSync(STORAGE_DIR);
+	const result: Record<string, string> = {};
 
-  return result;
+	for (const file of files) {
+		const filePath = path.join(STORAGE_DIR, file);
+		result[file] = fs.readFileSync(filePath, 'utf8');
+	}
+
+	return result;
 }

@@ -4,19 +4,19 @@
  * This agent specializes in executing shell commands and managing system operations.
  */
 
-import { Agent } from '../../utils/agent.js';
-import { getFileTools } from '../../utils/file_utils.js';
-import { getShellTools } from '../../utils/shell_utils.js';
-import { COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT } from '../constants.js';
+import {Agent} from '../../utils/agent.js';
+import {getFileTools} from '../../utils/file_utils.js';
+import {getShellTools} from '../../utils/shell_utils.js';
+import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
 
 /**
  * Create the shell agent
  */
 export function createShellAgent(): Agent {
-  return new Agent({
-    name: 'ShellAgent',
-    description: 'Executes shell commands for system operations and scripts',
-    instructions: `You are a specialized shell agent with the ability to execute system commands.
+	return new Agent({
+		name: 'ShellAgent',
+		description: 'Executes shell commands for system operations and scripts',
+		instructions: `You are a specialized shell agent with the ability to execute system commands.
 
 Your shell capabilities include:
 - Running command-line utilities and tools
@@ -53,10 +53,10 @@ IMPORTANT:
 - Provide clear explanations of commands and their effects
 - Use appropriate flags and options for commands
 - Sanitize any inputs used in commands to prevent injection`,
-    tools: [
-      ...getFileTools(),
-      ...getShellTools()
-    ],
-    modelClass: 'mini'
-  });
+		tools: [
+			...getFileTools(),
+			...getShellTools()
+		],
+		modelClass: 'mini'
+	});
 }
