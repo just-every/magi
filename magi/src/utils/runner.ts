@@ -480,7 +480,6 @@ export class Runner {
 					// We'll retry this same stage
 					continue;
 				}
-				``
 
 				// Move to the next stage if there is one
 				if (result.next) {

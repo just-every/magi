@@ -11,6 +11,7 @@ export const AGENT_DESCRIPTIONS: Record<string, string> = {
 	'ShellAgent': 'Executes shell commands for system operations and scripts',
 	'SearchAgent': 'Performs web searches for current information from various sources',
 	'BrowserVisionAgent': 'Uses a computer vision to browse websites',
+	'GodelMachine': 'Advanced structured pipeline for code authoring, testing, and PR management',
 };
 
 // Model groups organized by capability

@@ -32,39 +32,36 @@ export enum GodelStage {
 
 /**
  * Create a complete Gödel Machine with all agents in the sequence
- * @param issue_description The issue or feature request description
- * @param issue_number Optional issue number for PR reference
+ * @param input The issue or feature request description
  * @returns An object with factory functions for each agent in the sequence
  */
-export function createGodelMachine(issue_description: string, issue_number?: string) {
+export function createGodelMachine(input: string) {
 	return {
 		// Each stage returns a factory function that optionally takes metadata from previous stages
-		[GodelStage.PLANNING]: () => createPlanningAgent(issue_description),
+		[GodelStage.PLANNING]: () => createPlanningAgent(input),
 		[GodelStage.WRITING]: (metadata?: any) => {
 			// Writing agent needs the plan document from the planning stage
 			const plan_document = metadata?.plan_document || '';
 			return createWritingAgent(plan_document);
 		},
 		[GodelStage.TESTING]: () => createTestingAgent(),
-		[GodelStage.PR_SUBMISSION]: () => createPRSubmissionAgent(issue_description, issue_number),
+		[GodelStage.PR_SUBMISSION]: () => createPRSubmissionAgent(input),
 		[GodelStage.PR_REVIEW]: (metadata?: any) => {
 			// PR Review agent can use PR details from the submission stage
 			const pr_details = metadata?.pr_details || '';
-			return createPRReviewAgent(issue_description, pr_details);
+			return createPRReviewAgent(input, pr_details);
 		}
 	};
 }
 
 /**
  * Run the Gödel Machine sequence with the given input
- * @param issue_description The issue or feature request description
- * @param issue_number Optional issue number for PR reference
+ * @param input The issue or feature request description
  * @param handlers Event handlers for streaming events
  * @returns Results from all stages of the sequence
  */
 export async function runGodelMachine(
-	issue_description: string,
-	issue_number?: string,
+	input: string,
 	handlers: {
 		onEvent?: (event: any, stage: string) => void,
 		onResponse?: (content: string, stage: string) => void,
@@ -73,12 +70,12 @@ export async function runGodelMachine(
 	} = {}
 ): Promise<Record<string, RunResult>> {
 	// Create the Gödel Machine agents
-	const godelMachine = createGodelMachine(issue_description, issue_number);
+	const godelMachine = createGodelMachine(input);
 
 	// Run the sequence starting with the planning stage
 	return await Runner.runSequential(
 		godelMachine,
-		issue_description, // Initial input is the issue description
+		input, // Initial input is the issue description
 		GodelStage.PLANNING, // Start with the planning stage
 		3, // Max retries per stage
 		10, // Max total retries

@@ -12,7 +12,9 @@ import {createBrowserAgent} from './workers/browser_agent.js';
 import {createBrowserVisionAgent} from './workers/browser_vision_agent.js';
 import {createSearchAgent} from './workers/search_agent.js';
 import {createShellAgent} from './workers/shell_agent.js';
+import {runGodelMachine} from './godel_machine/index.js';
 import {AGENT_DESCRIPTIONS, COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT} from './constants.js';
+import {createToolFunction} from '../utils/tool_call.js';
 
 /**
  * Create the supervisor agent
@@ -23,6 +25,14 @@ export function createSupervisorAgent(): Agent {
 	return new Agent({
 		name: 'Supervisor',
 		description: 'Orchestrator of specialized agents for complex tasks',
+		tools: [
+			createToolFunction(
+				runGodelMachine,
+				'A structured process for coding tasks which ensures code is of a high quality and correctness',
+				{'input': 'The issue or feature request description'},
+				'A description of what work has been completed'
+			)
+		],
 		instructions: `You are an AI orchestration engine called MAGI (M)ostly (A)utonomous (G)enerative (I)ntelligence.
 
 You work autonomously on long lasting tasks, not just short conversations. You manage a large pool of highly advanced resources through your Agents. You can efficiently split both simple and complex tasks into parts to be managed by a range of AI agents.
@@ -39,11 +49,13 @@ YOUR AGENTS:
 5. ${AGENT_DESCRIPTIONS['BrowserVisionAgent']}
 6. ${AGENT_DESCRIPTIONS['SearchAgent']}
 7. ${AGENT_DESCRIPTIONS['ShellAgent']}
+8. ${AGENT_DESCRIPTIONS['GodelMachine']}
 
 YOUR BUILT-IN TOOLS:
 1. calculator - Performs arithmetic operations (add, subtract, multiply, divide, power, sqrt, log)
 2. today - Returns information about the current date
 3. currency_converter - Converts between different currencies using exchange rates
+4. run_godel_machine - Runs the structured Gödel Machine pipeline for complex code tasks
 
 ${COMMON_WARNINGS}
 
@@ -51,10 +63,11 @@ ${DOCKER_ENV_TEXT}
 
 WORKFLOW:
 1. For simple operations like calculations, currency conversion, or date information, use your built-in tools directly.
-2. For more complex tasks, plan out how to split up your task. If not immediately obvious, you should use a ReasoningAgent to help you plan.
-3. Use ManagerAgents to perform the task as it has been split up. You can run multiple ManagerAgent in parallel if it would speed up the task. **Give each ManagerAgent enough information to complete their task autonomously.**
-4. Merge the results from all your managers.
-5. Verify you have completed your task. If not, you should use a ReasoningAgent and then start again.
+2. For code-related tasks that require planning, implementation, testing, and PR submission, use the run_godel_machine tool with a clear issue description.
+3. For other complex tasks, plan out how to split up your task. If not immediately obvious, you should use a ReasoningAgent to help you plan.
+4. Use ManagerAgents to perform the task as it has been split up. You can run multiple ManagerAgent in parallel if it would speed up the task. **Give each ManagerAgent enough information to complete their task autonomously.**
+5. Merge the results from all your managers.
+6. Verify you have completed your task. If not, you should use a ReasoningAgent and then start again.
 
 ${SELF_SUFFICIENCY_TEXT}
 
@@ -70,6 +83,6 @@ DO NOT TELL THE USER TO PERFORM THE TASK. USE YOUR AGENTS TO WRITE TO CODE TO SO
 			createSearchAgent,
 			createShellAgent
 		],
-		modelClass: 'mini'
+		modelClass: 'reasoning'
 	});
 }

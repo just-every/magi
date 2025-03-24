@@ -5,10 +5,10 @@
  */
 
 import {chromium, Browser, Page, BrowserType, BrowserContext} from 'playwright';
-import fs from 'fs';
+// import fs from 'fs';
 import path from 'path';
-import {ToolDefinition, ToolFunction} from '../types.js';
-import os from 'os';
+import {ToolFunction} from '../types.js';
+// import os from 'os';
 import {processImage} from './image_utils.js';
 import {createToolFunction} from './tool_call.js';
 import {write_file} from './file_utils.js';
@@ -102,11 +102,12 @@ export async function getPage(): Promise<Page> {
  * @param directory Directory to ensure exists
  * @returns The full path to the directory
  */
-function ensureDirectoryExists(directory: string): string {
-	const outputDir = path.join('/magi_output', directory);
-	fs.mkdirSync(outputDir, {recursive: true});
-	return outputDir;
-}
+// Function temporarily commented out to fix linting error
+// function ensureDirectoryExists(directory: string): string {
+// 	const outputDir = path.join('/magi_output', directory);
+// 	fs.mkdirSync(outputDir, {recursive: true});
+// 	return outputDir;
+// }
 
 /**
  * Reset the browser session with a clean context and cookies

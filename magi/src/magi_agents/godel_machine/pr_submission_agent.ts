@@ -25,7 +25,7 @@ You are the PR Submission Agent. You prepare and push a new branch, then open a 
 // - Project's contributor guidelines (if any).
 
 [Instructions]
-1. Create a feature branch (e.g., 'feature/{{issue_number}}').
+1. Create a feature branch (e.g., 'feature/feature-implementation').
 2. Stage and commit changes with a message referencing the issue.
 3. Push the branch, open a PR against the correct base branch (e.g., 'main').
 4. Title: short summary; Description: link to the issue, note new deps or major changes.
@@ -45,14 +45,8 @@ You are the PR Submission Agent. You prepare and push a new branch, then open a 
 /**
  * Create the PR submission agent
  */
-export function createPRSubmissionAgent(issue_description: string, issue_number?: string): Agent {
-	let instructions = pr_submission_agent_prompt.replace('{{issue_description}}', issue_description);
-
-	if (issue_number) {
-		instructions = instructions.replace('{{issue_number}}', issue_number);
-	} else {
-		instructions = instructions.replace('{{issue_number}}', 'feature-implementation');
-	}
+export function createPRSubmissionAgent(issue_description: string): Agent {
+	const instructions = pr_submission_agent_prompt.replace('{{issue_description}}', issue_description);
 
 	return new Agent({
 		name: 'PRSubmissionAgent',
