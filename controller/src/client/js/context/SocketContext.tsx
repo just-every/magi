@@ -164,7 +164,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 
 				if (!process) return newProcesses;
 
-				console.log(`${event.id} Received logs for process:`, event.logs);
+				console.log(`${event.id} Received process:logs`, event);
 
 				// Add the raw logs
 				const updatedLogs = process.logs + event.logs;
@@ -180,6 +180,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 						for (const jsonStr of jsonMatches) {
 							try {
 								const data = JSON.parse(jsonStr);
+								console.log('parsed JSON:', data);
 
 								// Check if this is a message from a container
 								if (data.processId === event.id && data.event) {
@@ -424,6 +425,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 			setProcesses(prevProcesses => {
 				const newProcesses = new Map(prevProcesses);
 				const process = newProcesses.get(event.id);
+
+
+				console.log(`${event.id} Received process:update`, event);
 
 				if (process) {
 					// Update the status

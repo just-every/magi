@@ -15,10 +15,18 @@ module.exports = {
         test: /\.css$/,
         use: ['style-loader', 'css-loader'],
       },
+      {
+        test: /\.scss$/,
+        use: [
+          'style-loader',
+          'css-loader',
+          'sass-loader'
+        ],
+      },
     ],
   },
   resolve: {
-    extensions: ['.tsx', '.ts', '.js', '.jsx'],
+    extensions: ['.tsx', '.ts', '.js', '.jsx', '.scss', '.css'],
     alias: {
       '@types': path.resolve(__dirname, 'src/types/shared-types'),
       '@components': path.resolve(__dirname, 'src/client/js/components'),
@@ -37,6 +45,6 @@ module.exports = {
   },
   devServer: {
     hot: true,
-    watchFiles: ['src/client/**/*.ts', 'src/client/**/*.tsx', 'src/client/**/*.html', 'src/client/**/*.css'],
+    watchFiles: ['src/client/**/*.ts', 'src/client/**/*.tsx', 'src/client/**/*.html', 'src/client/**/*.css', 'src/client/**/*.scss'],
   },
 };

@@ -5,7 +5,7 @@
 import * as React from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './js/components/App';
-import './css/styles.css';
+import './css/styles.scss';
 
 // Wait for DOM to be fully loaded
 document.addEventListener('DOMContentLoaded', () => {

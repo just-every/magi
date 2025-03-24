@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "cleanup": "rm -rf dist/",
-    "build": "tsc && webpack && rsync -a src/client/html dist/client/ && mkdir -p dist/css && rsync -a src/client/css/styles.css dist/css/",
+    "build": "tsc && webpack && rsync -a src/client/html dist/client/",
     "start": "node dist/server/server.js",
     "dev": "nodemon --config nodemon.json",
     "lint": "eslint --ext .ts,.tsx src/",
@@ -52,6 +52,8 @@
     "css-loader": "^6.10.0",
     "eslint": "^9.22.0",
     "nodemon": "^3.1.9",
+    "sass": "^1.86.0",
+    "sass-loader": "^16.0.5",
     "style-loader": "^3.3.4",
     "ts-loader": "^9.5.2",
     "typescript": "^5.8.2",

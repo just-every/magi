@@ -8,7 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import {StreamingEvent} from '../types.js';
 import {v4 as uuidv4} from 'uuid';
-import {get_output_dir} from "./file_utils.js";
+import {get_output_dir} from './file_utils.js';
 
 // Event types
 export interface MagiMessage {
@@ -37,7 +37,7 @@ export class CommunicationManager {
 	constructor(processId: string, testMode: boolean = false) {
 		this.processId = processId;
 		this.testMode = testMode;
-		this.historyFile = path.join(get_output_dir('communication'), `messages.json`);
+		this.historyFile = path.join(get_output_dir('communication'), 'messages.json');
 
 		if (this.testMode) {
 			console.log('[Communication] Test mode: WebSocket disabled, will print to console');

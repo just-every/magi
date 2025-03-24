@@ -4,12 +4,8 @@
 
 import fs from 'fs';
 import path from 'path';
-import {exec} from 'child_process';
-import {promisify} from 'util';
 import {ToolFunction} from '../types.js';
 import {createToolFunction} from './tool_call.js';
-
-const execPromise = promisify(exec);
 
 // Global directory path for this process
 let processDirectory: string | null = null;
