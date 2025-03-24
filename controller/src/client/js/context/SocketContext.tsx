@@ -191,7 +191,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 
 				if (!process) return newProcesses;
 
-				// Use the imported MagiMessage structure 
+				// Use the imported MagiMessage structure
 				const data = event.message;
 				const messages = [...process.messages];
 				const streamingEvent = data.event;
@@ -226,25 +226,16 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 							} catch (e) {
 								console.error('Error parsing tool arguments:', e);
 							}
-							
+
 							// Generate command representation for certain tool types
-							let command = '';
-							if (toolName === 'shell' || toolName === 'bash' || toolName === 'terminal') {
-								// For shell commands, use the command parameter directly
-								command = toolParams.command?.toString() || '';
-							} else if (toolName === 'file_read' || toolName === 'read_file') {
-								// For file reading tools
-								command = `cat ${toolParams.path || toolParams.file_path || ''}`;
-							} else if (toolName === 'file_write' || toolName === 'write_file') {
-								// For file writing tools
-								command = `echo '...' > ${toolParams.path || toolParams.file_path || ''}`;
-							} else if (toolName === 'search' || toolName === 'web_search') {
-								// For search tools
-								command = `search: ${toolParams.query || ''}`;
-							} else if (toolName === 'python') {
-								// For Python code execution
-								command = `python -c "${toolParams.code || ''}"`;
-							}
+							let command: string = '';
+							['prompt', 'input', 'command'].forEach(
+								(param: string) => {
+									if (!command && param in toolParams && typeof toolParams[param] === 'string') {
+										command = toolParams[param];
+									}
+								}
+							);
 
 							messages.push({
 								id: generateId(),
@@ -264,11 +255,11 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 					if ('tool_calls' in streamingEvent && 'results' in streamingEvent) {
 						const toolCalls = streamingEvent.tool_calls || [];
 						const results = streamingEvent.results || {};
-						
+
 						for (const toolCall of toolCalls) {
 							const toolName = toolCall.function.name;
 							const result = results[toolCall.id] || {};
-							
+
 							messages.push({
 								id: generateId(),
 								processId: event.id,

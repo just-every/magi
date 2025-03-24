@@ -562,10 +562,6 @@ header {
 
 /* Tool call styling */
 .tool-bubble {
-    background-color: #f0f7ff;
-    color: #0a53be;
-    border: 1px solid #cfe2ff;
-    border-radius: 12px;
 }
 
 .tool-call-header {
@@ -575,7 +571,6 @@ header {
     font-size: 14px;
     margin-bottom: 6px;
     padding-bottom: 5px;
-    border-bottom: 1px solid rgba(10, 83, 190, 0.2);
 }
 
 .tool-icon {
@@ -587,6 +582,7 @@ header {
     background-color: rgba(0, 0, 0, 0.05);
     border-radius: 4px;
     overflow: auto;
+    background: #fff;
 }
 
 .command-line {
@@ -610,10 +606,6 @@ header {
 
 /* Tool result styling */
 .tool-result-bubble {
-    background-color: #f9f7fe;
-    color: #5a076d;
-    border: 1px solid #e9daf8;
-    border-radius: 12px;
 }
 
 .tool-result-header {
@@ -623,7 +615,6 @@ header {
     font-size: 14px;
     margin-bottom: 6px;
     padding-bottom: 5px;
-    border-bottom: 1px solid rgba(90, 7, 109, 0.2);
 }
 
 .tool-result-icon {

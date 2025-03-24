@@ -292,18 +292,20 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
 							<div className="message-group tool-message" key={message.id}>
 								<div className="message-bubble tool-bubble">
 									<div className="tool-call-header">
-										<span className="tool-icon">🔧</span>
+										<span className="tool-icon">Using</span>
 										<span className="tool-name">{toolCallMsg.toolName}</span>
 									</div>
 									{toolCallMsg.command && (
-										<div className="tool-call-command">
-                                            <pre className="command-line"><span
-												className="prompt">$</span> {toolCallMsg.command}</pre>
+										<div className="tool-call-command message-bubble assistant-bubble" style={{color: `rgba(${colors.rgb} / 1)`}}>
+											<div dangerouslySetInnerHTML={createMarkup(toolCallMsg.command)}/>
 										</div>
 									)}
-									<div className="tool-call-params">
-										<pre>{JSON.stringify(toolCallMsg.toolParams, null, 2)}</pre>
-									</div>
+									{!toolCallMsg.command && (
+										<div className="tool-call-params">
+											<pre>{JSON.stringify(toolCallMsg.toolParams, null, 2)}</pre>
+										</div>
+									)}
+
 								</div>
 							</div>
 						);
