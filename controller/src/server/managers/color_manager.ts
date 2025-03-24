@@ -77,7 +77,7 @@ function minColorDistance(color: RGBColor): number {
  *
  * @returns Object with background and text colors in rgba format
  */
-export function generateProcessColors(): { bgColor: string, textColor: string } {
+export function generateProcessColors(): { rgb: string; bgColor: string; textColor: string } {
 	// If we have too many colors stored, we'll start forgetting the oldest ones
 	// to avoid over-constraining our color generation
 	const maxColorMemory = 10;
@@ -131,10 +131,11 @@ export function generateProcessColors(): { bgColor: string, textColor: string } 
 
 	// Create background with very low alpha
 	const [r, g, b] = bestCandidate;
-	const bgColor = `rgba(${r}, ${g}, ${b}, 0.2)`;
+	const bgColor = `rgba(${r}, ${g}, ${b}, 0.1)`;
 
 	// Create darker text version for contrast
-	const textColor = `rgba(${Math.floor(r * 0.6)}, ${Math.floor(g * 0.6)}, ${Math.floor(b * 0.6)}, 0.9)`;
+	const rgb = `${Math.floor(r * 0.6)} ${Math.floor(g * 0.6)} ${Math.floor(b * 0.6)}`;
+	const textColor = `rgba(${rgb} / 0.9)`;
 
-	return {bgColor, textColor};
+	return {rgb, bgColor, textColor};
 }

@@ -38,8 +38,9 @@ export interface ProcessData {
 	monitorProcess?: ChildProcess;  // Process monitoring container logs
 	checkInterval?: NodeJS.Timeout; // Interval for checking container status
 	colors?: {
-		bgColor: string;              // Background color (rgba)
-		textColor: string;            // Text color (rgba)
+		rgb: string;				// Primary color (rgb)
+		bgColor: string;            // Background color (rgba)
+		textColor: string;          // Text color (rgba)
 	};
 }
 
@@ -53,7 +54,7 @@ interface Processes {
 
 export class ProcessManager {
 	private processes: Processes = {};
-	private io: Server;
+	public io: Server; // Made public so communication_manager can access it
 
 	constructor(io: Server) {
 		this.io = io;
@@ -156,6 +157,28 @@ export class ProcessManager {
 		if (!this.processes[processId]) {
 			console.warn(`Cannot update non-existent process ${processId}`);
 			return;
+		}
+
+		// Ignore any JSON messages that come through the old channel
+		// These should be using the WebSocket communication now
+		if (message.trim().startsWith('{') && message.trim().endsWith('}')) {
+			if (message.includes('[JSON_MESSAGE]')) {
+				// This is a debug message from the container, not meant for client display
+				return;
+			}
+
+			// Try to detect if this is a structured message that should be ignored
+			try {
+				const data = JSON.parse(message);
+				if (data.processId && (data.event || data.type)) {
+					// This is a structured message that should be coming through WebSocket
+					// Log it for debugging but don't send to clients as regular log
+					console.log(`Detected structured message in logs for process ${processId} (should be using WebSocket)`);
+					return;
+				}
+			} catch (e) {
+				// Not valid JSON, continue as normal
+			}
 		}
 
 		// Log message to server console

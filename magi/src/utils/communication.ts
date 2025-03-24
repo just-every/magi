@@ -159,8 +159,10 @@ export class CommunicationManager {
 			return this.testModeMessage(message);
 		}
 
-		// Also log to console for Docker logs as fallback
-		console.log(JSON.stringify(message));
+		// Log to console for Docker logs for debugging purposes only
+		// but ensure it's clearly marked as a JSON message so we don't try to parse it
+		// from the Docker logs in the controller
+		console.log(`[JSON_MESSAGE] ${JSON.stringify(message)}`);
 
 		if (this.connected && this.ws) {
 			try {

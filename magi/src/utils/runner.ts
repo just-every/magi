@@ -249,11 +249,29 @@ export class Runner {
 
 						// Send detailed tool result via event handler
 						if (handlers.onEvent) {
+							// Create a resultsById object that maps tool call IDs to their results
+							const resultsById: Record<string, unknown> = {};
+							
+							// If parsedResults is an array, iterate through it and map each result to the corresponding tool call ID
+							if (Array.isArray(parsedResults)) {
+								for (let i = 0; i < parsedResults.length; i++) {
+									// Associate result with the tool call ID if it exists
+									if (i < toolEvent.tool_calls.length) {
+										resultsById[toolEvent.tool_calls[i].id] = parsedResults[i];
+									}
+								}
+							} else {
+								// If parsedResults is not an array, map it to the first tool call ID
+								if (toolEvent.tool_calls.length > 0) {
+									resultsById[toolEvent.tool_calls[0].id] = parsedResults;
+								}
+							}
+							
 							handlers.onEvent({
 								agent: event.agent,
 								type: 'tool_done',
 								tool_calls: toolEvent.tool_calls,
-								results: parsedResults,
+								results: resultsById,
 							});
 						}
 						break;

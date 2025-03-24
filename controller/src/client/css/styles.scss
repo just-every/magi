@@ -54,7 +54,6 @@ body {
 header {
     /* No background or shadow as requested */
     h1 {
-        font-family: 'Roboto', sans-serif;
         font-weight: 700;
         letter-spacing: 0.05rem;
         white-space: nowrap;
@@ -138,6 +137,17 @@ header {
     min-height: 100vh;
 }
 
+.process-terminate {
+    --btn-color-opacity: 0.2;
+    --btn-border-opacity: 0.1;
+    transition: color 0.3s ease-in-out, border-color 0.3s ease-in-out;
+
+    &:hover {
+        --btn-color-opacity: 1;
+        --btn-border-opacity: 1;
+    }
+}
+
 /* Dot background styling */
 .dot-background {
     position: absolute;
@@ -161,11 +171,11 @@ header {
     background-color: white !important;
     padding: 0.3rem 0.7rem !important;
     font-size: 0.8rem !important;
-    
+
     &:hover {
         background-color: #f8f9fa !important;
     }
-    
+
     position: fixed;
     top: 30px;
     right: 30px;
@@ -181,7 +191,7 @@ header {
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
     user-select: none;
     line-height: 1.4;
-    
+
     position: absolute;
     bottom: 10px;
     right: 10px;
@@ -228,12 +238,12 @@ header {
     max-height: 1000px;
     width: 100%;
     height: 100%;
-    
+
     /* Sub-agent styling */
     &.sub-agent {
         border-left: 3px solid #2ca1e5;
     }
-    
+
     /* Make process box card header sticky */
     .card-header {
         position: sticky;
@@ -242,14 +252,14 @@ header {
         border-radius: 8px 8px 0 0 !important;
         background-color: transparent;
     }
-    
+
     /* Log area takes most space and scrolls properly */
     .process-logs {
         flex: 1;
         overflow: auto;
         padding: 10px 15px;
     }
-    
+
     /* Process input container styling */
     .process-input-container {
         position: sticky;
@@ -263,7 +273,7 @@ header {
         padding-bottom: 0;
         z-index: 10;
     }
-    
+
     /* Show process input container on hover */
     &:hover, &:focus-within {
         .process-input-container {
@@ -309,16 +319,16 @@ header {
 .process-logs {
     min-height: 0;
     white-space: normal;
-    
+
     h1, h2, h3, h4, h5, h6 {
         margin-top: 1rem;
         margin-bottom: 0.5rem;
     }
-    
+
     p {
         margin-bottom: 0.5rem;
     }
-    
+
     /* Style blockquotes (user input) with accent color and '>' prefix */
     blockquote {
         margin: 0.5rem 0;
@@ -326,7 +336,7 @@ header {
         border-left: none;
         color: var(--accent-primary);
         position: relative;
-        
+
         &::before {
             content: ">";
             position: absolute;
@@ -334,13 +344,13 @@ header {
             color: var(--prompt-color);
             font-weight: bold;
         }
-        
+
         p {
             color: var(--accent-primary);
             margin: 0;
         }
     }
-    
+
     pre {
         background-color: var(--code-bg);
         padding: 0.5rem;
@@ -349,14 +359,14 @@ header {
         margin: 0.5rem 0;
         white-space: pre;
     }
-    
+
     code {
         background-color: var(--code-bg);
         padding: 0.2rem 0.4rem;
         border: 1px solid var(--border-color);
         font-size: 0.8rem;
     }
-    
+
     pre code {
         padding: 0;
         border: none;
@@ -397,7 +407,7 @@ header {
 .status-ending {
     background-color: var(--status-ending-bg);
     color: var(--status-ending-color);
-    
+
     & + .process-terminate,
     .status-terminated + .process-terminate {
         display: none;
@@ -415,7 +425,7 @@ header {
     flex-direction: column;
     gap: 12px;
     padding: 5px 0;
-    
+
     p:last-of-type {
         margin-bottom: 0 !important;
     }
@@ -448,7 +458,7 @@ header {
     position: relative;
     display: inline-block;
     word-break: break-word;
-    
+
     pre {
         max-width: 100%;
         overflow-x: auto;
@@ -460,7 +470,7 @@ header {
         margin: 5px 0;
         font-size: 13px;
     }
-    
+
     code {
         background-color: rgba(0, 0, 0, 0.05);
         padding: 2px 4px;
@@ -479,14 +489,14 @@ header {
 
 /* Assistant message styling */
 .assistant-bubble {
-    background-color: #f1f9ff;
+    background-color: #fff;
     color: #000;
     border-bottom-left-radius: 2px;
-    
+
     &.streaming {
         position: relative;
         overflow: hidden;
-        
+
         &::after {
             content: "";
             position: absolute;
@@ -513,9 +523,9 @@ header {
 .typing-indicator {
     display: flex;
     align-items: center;
-    gap: 3px;
-    padding: 0 6px;
-    
+    gap: 10px;
+    padding: 20px 0px 10px;
+
     .dot {
         display: inline-block;
         width: 6px;
@@ -524,15 +534,15 @@ header {
         background-color: currentColor;
         opacity: 0.6;
         animation: typingAnimation 1s infinite ease-in-out;
-        
+
         &:nth-child(1) {
             animation-delay: 0s;
         }
-        
+
         &:nth-child(2) {
             animation-delay: 0.2s;
         }
-        
+
         &:nth-child(3) {
             animation-delay: 0.4s;
         }
@@ -586,7 +596,7 @@ header {
     font-size: 13px;
     white-space: pre-wrap;
     word-break: break-all;
-    
+
     .prompt {
         color: #0a53be;
         margin-right: 6px;
@@ -688,10 +698,9 @@ header {
 /* Fixed MAGI title styling */
 #fixed-magi-title {
     font-family: 'Borel', sans-serif;
-    color: #fff;
-    opacity: 0.2;
+    color: #00a4ff;
     top: 30px;
     left: 20px;
-    font-size: 1.5rem;
+    font-size: 1.4rem;
     z-index: 1;
 }

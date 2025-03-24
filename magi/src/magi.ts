@@ -13,7 +13,7 @@ import {StreamingEvent} from './types.js';
 import {createAgent, AgentType} from './magi_agents/index.js';
 import {addHistory, getHistory} from './utils/history.js';
 import {initCommunication, CommandMessage, getCommunicationManager} from './utils/communication.js';
-import {mount_magi_code, move_to_working_dir} from './utils/file_utils.js';
+import {move_to_working_dir} from './utils/file_utils.js';
 
 // Parse command line arguments
 function parseCommandLineArgs() {
@@ -156,7 +156,7 @@ async function main() {
 	move_to_working_dir();
 
 	// Make our own code accessible for Gödel Machine
-	mount_magi_code();
+	//mount_magi_code();
 
 	// Set up WebSocket communication (pass test flag from args)
 	const comm = initCommunication(args.test);

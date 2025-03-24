@@ -6,6 +6,7 @@ import {
 	ProcessLogsEvent,
 	ProcessUpdateEvent,
 	ProcessCommandEvent,
+	ProcessMessageEvent,
 	ProcessStatus
 } from '@types';
 
@@ -18,7 +19,7 @@ interface Socket {
 }
 
 // Define message interfaces for the chat UI
-export interface MagiMessage {
+export interface ClientMessage {
 	id: string; // Generated UUID for the message
 	processId: string; // Process ID this message belongs to
 	type: 'user' | 'assistant' | 'system' | 'tool_call' | 'tool_result';
@@ -31,14 +32,14 @@ export interface MagiMessage {
 	deltaChunks?: { [order: number]: string }; // Storage for message delta chunks
 }
 
-export interface ToolCallMessage extends MagiMessage {
+export interface ToolCallMessage extends ClientMessage {
 	type: 'tool_call';
 	toolName: string;
 	toolParams: Record<string, unknown>;
 	command?: string; // The equivalent shell command if applicable
 }
 
-export interface ToolResultMessage extends MagiMessage {
+export interface ToolResultMessage extends ClientMessage {
 	type: 'tool_result';
 	toolName: string;
 	result: unknown;
@@ -61,11 +62,12 @@ export interface ProcessData {
 	command: string;
 	status: ProcessStatus;
 	colors: {
+		rgb: string;
 		bgColor: string;
 		textColor: string;
 	};
 	logs: string;
-	messages: MagiMessage[]; // Store structured messages
+	messages: ClientMessage[]; // Store structured messages
 	agentName?: string; // Store the agent name when available
 	isTyping: boolean; // Indicates if the agent is in "thinking" state (waiting for first response)
 	parentId?: string; // ID of the parent process if this is a sub-agent
@@ -123,7 +125,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 				const newProcesses = new Map(prevProcesses);
 
 				// Create initial user message from the command
-				const initialMessage: MagiMessage = {
+				const initialMessage: ClientMessage = {
 					id: generateId(),
 					processId: event.id,
 					type: 'user',
@@ -157,6 +159,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 				Math.random().toString(36).substring(2, 15);
 		};
 
+		// Still keep the logs event for basic log information (non-JSON)
 		socketInstance.on('process:logs', (event: ProcessLogsEvent) => {
 			setProcesses(prevProcesses => {
 				const newProcesses = new Map(prevProcesses);
@@ -164,256 +167,270 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 
 				if (!process) return newProcesses;
 
-				console.log(`${event.id} Received process:logs`, event);
+				// Only handle plain text logs - JSON messages come through the process:message event
+				// This avoids double processing and corrupted logging
 
 				// Add the raw logs
 				const updatedLogs = process.logs + event.logs;
 
-				// Try to parse the log line as a JSON object that might contain a message
+				// Update the process with new logs only
+				newProcesses.set(event.id, {
+					...process,
+					logs: updatedLogs
+				});
+
+				return newProcesses;
+			});
+		});
+
+		// Handle structured messages from containers via the dedicated channel
+		socketInstance.on('process:message', (event: ProcessMessageEvent) => {
+			setProcesses(prevProcesses => {
+				const newProcesses = new Map(prevProcesses);
+				const process = newProcesses.get(event.id);
+
+				if (!process) return newProcesses;
+
+				// Use the imported MagiMessage structure 
+				const data = event.message;
 				const messages = [...process.messages];
-				try {
-					// Try to find and parse JSON in the incoming log
-					const jsonRegex = /\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\}))*\}))*\}/g;
-					const jsonMatches = event.logs.match(jsonRegex);
+				const streamingEvent = data.event;
+				const timestamp = streamingEvent.timestamp || new Date().toISOString();
+				const eventType = streamingEvent.type;
 
-					if (jsonMatches) {
-						for (const jsonStr of jsonMatches) {
+				// Handle different event types
+				if (eventType === 'command_start' || eventType === 'connected') {
+					// User message - already handled in process:create but good as a fallback
+					if ('command' in streamingEvent) {
+						const content = streamingEvent.command || '';
+						if (content && !messages.some(m => m.type === 'user' && m.content === content)) {
+							messages.push({
+								id: generateId(),
+								processId: event.id,
+								type: 'user',
+								content: content,
+								timestamp: timestamp,
+								rawEvent: data
+							});
+						}
+					}
+				} else if (eventType === 'tool_start') {
+					// Tool call message
+					if ('tool_calls' in streamingEvent) {
+						const toolCalls = streamingEvent.tool_calls || [];
+						for (const toolCall of toolCalls) {
+							const toolName = toolCall.function.name;
+							let toolParams: Record<string, unknown> = {};
 							try {
-								const data = JSON.parse(jsonStr);
-								console.log('parsed JSON:', data);
-
-								// Check if this is a message from a container
-								if (data.processId === event.id && data.event) {
-									// Create a structured message based on the event type
-									const eventType = data.event.type;
-									const timestamp = data.event.timestamp || new Date().toISOString();
-
-									// Handle different event types
-									if (eventType === 'command_start' || eventType === 'user_message') {
-										// User message - already handled in process:create but good as a fallback
-										const content = data.event.command || data.event.message || data.event.data?.message || '';
-										if (content && !messages.some(m => m.type === 'user' && m.content === content)) {
-											messages.push({
-												id: generateId(),
-												processId: event.id,
-												type: 'user',
-												content: content,
-												timestamp: timestamp,
-												rawEvent: data
-											});
-										}
-									} else if (eventType === 'tool_call' || eventType === 'tool_start') {
-										// Tool call message
-										const toolName = data.event.tool || data.event.data?.tool || 'unknown';
-										const toolParams = data.event.params || data.event.data?.params || {};
-
-										// Generate command representation for certain tool types
-										let command = '';
-										if (toolName === 'shell' || toolName === 'bash' || toolName === 'terminal') {
-											// For shell commands, use the command parameter directly
-											command = typeof toolParams.command === 'string' ? toolParams.command : '';
-										} else if (toolName === 'file_read' || toolName === 'read_file') {
-											// For file reading tools
-											command = `cat ${toolParams.path || toolParams.file_path || ''}`;
-										} else if (toolName === 'file_write' || toolName === 'write_file') {
-											// For file writing tools
-											command = `echo '...' > ${toolParams.path || toolParams.file_path || ''}`;
-										} else if (toolName === 'search' || toolName === 'web_search') {
-											// For search tools
-											command = `search: ${toolParams.query || ''}`;
-										} else if (toolName === 'python') {
-											// For Python code execution
-											command = `python -c "${toolParams.code || ''}"`;
-										}
-
-										messages.push({
-											id: generateId(),
-											processId: event.id,
-											type: 'tool_call',
-											content: data.event.data?.message || `Using ${toolName}`,
-											timestamp: timestamp,
-											toolName: toolName,
-											toolParams: toolParams,
-											command: command,
-											rawEvent: data
-										} as ToolCallMessage);
-									} else if (eventType === 'tool_result' || eventType === 'tool_end') {
-										// Tool result message
-										const toolName = data.event.tool || data.event.data?.tool || 'unknown';
-										const result = data.event.result || data.event.data?.result || {};
-										messages.push({
-											id: generateId(),
-											processId: event.id,
-											type: 'tool_result',
-											content: data.event.data?.message || `Result from ${toolName}`,
-											timestamp: timestamp,
-											toolName: toolName,
-											result: result,
-											rawEvent: data
-										} as ToolResultMessage);
-									} else if (eventType === 'message_start' || eventType === 'message_delta' ||
-										eventType === 'message_complete' || eventType === 'agent_message' ||
-										eventType === 'assistant_message') {
-										// Assistant message
-										const content = data.event.content || data.event.message ||
-											data.event.data?.message || data.event.thinking || '';
-										const messageId = data.event.message_id || '';
-
-										if (content) {
-											// Handle streaming messages (delta/complete pairs)
-											if (eventType === 'message_delta' && messageId) {
-												// For delta messages, handle ordered deltas to build complete message
-												const existingDeltaIndex = messages.findIndex(m =>
-													m.message_id === messageId);
-
-												// Get order if available, otherwise default to 0
-												const order = data.event.order !== undefined ? Number(data.event.order) : 0;
-
-												if (existingDeltaIndex >= 0) {
-													// Get the existing message
-													const existingMessage = messages[existingDeltaIndex];
-
-													// Initialize deltaChunks if not existing
-													if (!existingMessage.deltaChunks) {
-														existingMessage.deltaChunks = {};
-													}
-
-													// Store this chunk at the correct order position
-													existingMessage.deltaChunks[order] = content;
-
-													// Rebuild complete content from ordered chunks
-													const orderedKeys = Object.keys(existingMessage.deltaChunks)
-														.map(Number)
-														.sort((a, b) => a - b);
-
-													// Concatenate all chunks in correct order
-													const combinedContent = orderedKeys
-														.map(key => existingMessage.deltaChunks![key])
-														.join('');
-
-													// Update the displayed content
-													messages[existingDeltaIndex].content = combinedContent;
-												} else {
-													// Create new delta message with deltaChunks
-													const deltaChunks: { [order: number]: string } = {};
-													deltaChunks[order] = content;
-
-													messages.push({
-														id: generateId(),
-														processId: event.id,
-														type: 'assistant',
-														content: content, // Initial content is just this chunk
-														timestamp: timestamp,
-														message_id: messageId,
-														isDelta: true,
-														order: order,
-														deltaChunks: deltaChunks,
-														rawEvent: data
-													});
-												}
-											} else if (eventType === 'message_complete' && messageId) {
-												// For complete messages, update or replace any existing delta with same message_id
-												const existingIndex = messages.findIndex(m =>
-													m.message_id === messageId);
-
-												if (existingIndex >= 0) {
-													// Update the existing message in place
-													messages[existingIndex].content = content;
-													messages[existingIndex].isDelta = false;
-													messages[existingIndex].rawEvent = data;
-												} else {
-													// Add the complete message if no matching delta was found
-													messages.push({
-														id: generateId(),
-														processId: event.id,
-														type: 'assistant',
-														content: content,
-														timestamp: timestamp,
-														message_id: messageId,
-														rawEvent: data
-													});
-												}
-											} else {
-												// For other message types, just add normally but still include message_id if available
-												messages.push({
-													id: generateId(),
-													processId: event.id,
-													type: 'assistant',
-													content: content,
-													timestamp: timestamp,
-													message_id: messageId || undefined, // Include message_id if available
-													rawEvent: data
-												});
-											}
-										}
-									} else if (eventType === 'error') {
-										// Error message
-										const errorMessage = data.event.error || 'An error occurred';
-										messages.push({
-											id: generateId(),
-											processId: event.id,
-											type: 'system',
-											content: errorMessage,
-											timestamp: timestamp,
-											rawEvent: data
-										});
-									}
-									// Handle agent_start event to update agent name and parent-child relationships
-									else if (eventType === 'agent_start' || eventType === 'agent_updated') {
-										// Extract agent information
-										if (data.event.agent && data.event.agent.name) {
-											// Update the process with agent name
-											process.agentName = data.event.agent.name;
-										}
-
-										// Check for parent-child relationship
-										if (data.event.parent_id) {
-											const parentId = data.event.parent_id;
-											// Set this process as a sub-agent
-											process.parentId = parentId;
-											process.isSubAgent = true;
-
-											// Update the parent process to track this as a child
-											const parentProcess = newProcesses.get(parentId);
-											if (parentProcess) {
-												// Add this process ID to parent's childProcessIds if not already there
-												if (!parentProcess.childProcessIds.includes(event.id)) {
-													parentProcess.childProcessIds.push(event.id);
-													newProcesses.set(parentId, parentProcess);
-
-													// Add a system message to the parent process logs indicating sub-agent creation
-													parentProcess.messages.push({
-														id: generateId(),
-														processId: parentId,
-														type: 'system',
-														content: `Started sub-agent: ${process.agentName || event.id}`,
-														timestamp: new Date().toISOString()
-													});
-												}
-											}
-										}
-									}
-
-									// Turn off typing indicator for any response
-									if (eventType === 'message_delta' || eventType === 'message_complete' ||
-										eventType === 'tool_call' || eventType === 'tool_result') {
-										process.isTyping = false;
-									}
-									// Other event types like progress, etc. can be added as needed
-								}
+								toolParams = JSON.parse(toolCall.function.arguments);
 							} catch (e) {
-								// Not valid JSON or not our format, that's okay
+								console.error('Error parsing tool arguments:', e);
+							}
+							
+							// Generate command representation for certain tool types
+							let command = '';
+							if (toolName === 'shell' || toolName === 'bash' || toolName === 'terminal') {
+								// For shell commands, use the command parameter directly
+								command = toolParams.command?.toString() || '';
+							} else if (toolName === 'file_read' || toolName === 'read_file') {
+								// For file reading tools
+								command = `cat ${toolParams.path || toolParams.file_path || ''}`;
+							} else if (toolName === 'file_write' || toolName === 'write_file') {
+								// For file writing tools
+								command = `echo '...' > ${toolParams.path || toolParams.file_path || ''}`;
+							} else if (toolName === 'search' || toolName === 'web_search') {
+								// For search tools
+								command = `search: ${toolParams.query || ''}`;
+							} else if (toolName === 'python') {
+								// For Python code execution
+								command = `python -c "${toolParams.code || ''}"`;
+							}
+
+							messages.push({
+								id: generateId(),
+								processId: event.id,
+								type: 'tool_call',
+								content: `Using ${toolName}`,
+								timestamp: timestamp,
+								toolName: toolName,
+								toolParams: toolParams,
+								command: command,
+								rawEvent: data
+							} as ToolCallMessage);
+						}
+					}
+				} else if (eventType === 'tool_done') {
+					// Tool result message
+					if ('tool_calls' in streamingEvent && 'results' in streamingEvent) {
+						const toolCalls = streamingEvent.tool_calls || [];
+						const results = streamingEvent.results || {};
+						
+						for (const toolCall of toolCalls) {
+							const toolName = toolCall.function.name;
+							const result = results[toolCall.id] || {};
+							
+							messages.push({
+								id: generateId(),
+								processId: event.id,
+								type: 'tool_result',
+								content: `Result from ${toolName}`,
+								timestamp: timestamp,
+								toolName: toolName,
+								result: result,
+								rawEvent: data
+							} as ToolResultMessage);
+						}
+					}
+				} else if (eventType === 'message_start' || eventType === 'message_delta' ||
+					eventType === 'message_complete') {
+					// Assistant message
+					if ('content' in streamingEvent) {
+						const content = streamingEvent.content || '';
+						const messageId = 'message_id' in streamingEvent ? streamingEvent.message_id : '';
+
+						if (content) {
+							// Handle streaming messages (delta/complete pairs)
+							if (eventType === 'message_delta' && messageId) {
+								// For delta messages, handle ordered deltas to build complete message
+								const existingDeltaIndex = messages.findIndex(m =>
+									m.message_id === messageId);
+
+								// Get order if available, otherwise default to 0
+								const order = 'order' in streamingEvent ? Number(streamingEvent.order) : 0;
+
+								if (existingDeltaIndex >= 0) {
+									// Get the existing message
+									const existingMessage = messages[existingDeltaIndex];
+
+									// Initialize deltaChunks if not existing
+									if (!existingMessage.deltaChunks) {
+										existingMessage.deltaChunks = {};
+									}
+
+									// Store this chunk at the correct order position
+									existingMessage.deltaChunks[order] = content;
+
+									// Rebuild complete content from ordered chunks
+									const orderedKeys = Object.keys(existingMessage.deltaChunks)
+										.map(Number)
+										.sort((a, b) => a - b);
+
+									// Concatenate all chunks in correct order
+									const combinedContent = orderedKeys
+										.map(key => existingMessage.deltaChunks![key])
+										.join('');
+
+									// Update the displayed content
+									messages[existingDeltaIndex].content = combinedContent;
+								} else {
+									// Create new delta message with deltaChunks
+									const deltaChunks: { [order: number]: string } = {};
+									deltaChunks[order] = content;
+
+									messages.push({
+										id: generateId(),
+										processId: event.id,
+										type: 'assistant',
+										content: content, // Initial content is just this chunk
+										timestamp: timestamp,
+										message_id: messageId,
+										isDelta: true,
+										order: order,
+										deltaChunks: deltaChunks,
+										rawEvent: data
+									});
+								}
+							} else if (eventType === 'message_complete' && messageId) {
+								// For complete messages, update or replace any existing delta with same message_id
+								const existingIndex = messages.findIndex(m =>
+									m.message_id === messageId);
+
+								if (existingIndex >= 0) {
+									// Update the existing message in place
+									messages[existingIndex].content = content;
+									messages[existingIndex].isDelta = false;
+									messages[existingIndex].rawEvent = data;
+								} else {
+									// Add the complete message if no matching delta was found
+									messages.push({
+										id: generateId(),
+										processId: event.id,
+										type: 'assistant',
+										content: content,
+										timestamp: timestamp,
+										message_id: messageId,
+										rawEvent: data
+									});
+								}
+							} else {
+								// For other message types, just add normally but still include message_id if available
+								messages.push({
+									id: generateId(),
+									processId: event.id,
+									type: 'assistant',
+									content: content,
+									timestamp: timestamp,
+									message_id: messageId || undefined, // Include message_id if available
+									rawEvent: data
+								});
 							}
 						}
 					}
-				} catch (e) {
-					// Error parsing JSON, continue with normal log handling
+				} else if (eventType === 'error') {
+					// Error message
+					const errorMessage = 'error' in streamingEvent ? streamingEvent.error : 'An error occurred';
+					messages.push({
+						id: generateId(),
+						processId: event.id,
+						type: 'system',
+						content: errorMessage,
+						timestamp: timestamp,
+						rawEvent: data
+					});
+				} else if (eventType === 'agent_start' || eventType === 'agent_updated') {
+					// Extract agent information
+					if (streamingEvent.agent && streamingEvent.agent.name) {
+						// Update the process with agent name
+						process.agentName = streamingEvent.agent.name;
+					}
+
+					// Check for parent-child relationship
+					if ('parent_id' in streamingEvent && streamingEvent.parent_id) {
+						const parentId = streamingEvent.parent_id;
+						// Set this process as a sub-agent
+						process.parentId = parentId;
+						process.isSubAgent = true;
+
+						// Update the parent process to track this as a child
+						const parentProcess = newProcesses.get(parentId);
+						if (parentProcess) {
+							// Add this process ID to parent's childProcessIds if not already there
+							if (!parentProcess.childProcessIds.includes(event.id)) {
+								parentProcess.childProcessIds.push(event.id);
+								newProcesses.set(parentId, parentProcess);
+
+								// Add a system message to the parent process logs indicating sub-agent creation
+								parentProcess.messages.push({
+									id: generateId(),
+									processId: parentId,
+									type: 'system',
+									content: `Started sub-agent: ${process.agentName || event.id}`,
+									timestamp: new Date().toISOString()
+								});
+							}
+						}
+					}
 				}
 
-				// Update the process with new logs and messages
+				// Turn off typing indicator for any response
+				if (eventType === 'message_delta' || eventType === 'message_complete' ||
+					eventType === 'tool_start' || eventType === 'tool_done') {
+					process.isTyping = false;
+				}
+
+				// Update the process with the new messages
 				newProcesses.set(event.id, {
 					...process,
-					logs: updatedLogs,
 					messages: messages
 				});
 
@@ -565,7 +582,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 				const process = newProcesses.get(processId);
 
 				if (process) {
-					const userMessage: MagiMessage = {
+					const userMessage: ClientMessage = {
 						id: generateId(),
 						processId: processId,
 						type: 'user',

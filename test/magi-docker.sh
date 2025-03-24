@@ -17,7 +17,7 @@ docker run --rm --name $CONTAINER_NAME \
 	-e HOST_HOSTNAME=host.docker.internal \
 	-e CONTROLLER_PORT=3010 \
     --env-file .env \
-    -v "$(pwd):/magi-system:r" \
+    -v "$(pwd):/magi-system:ro" \
     -v claude_credentials:/claude_shared:rw \
     -v magi_output:/magi_output:rw \
 	--add-host=host.docker.internal:host-gateway \

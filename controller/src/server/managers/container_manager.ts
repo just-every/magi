@@ -112,7 +112,7 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
       -e HOST_HOSTNAME=host.docker.internal \
       -e CONTROLLER_PORT=${serverPort} \
       --env-file ${path.resolve(projectRoot, '.env')} \
-      -v ${projectRoot}:/magi-system:r \
+      -v ${projectRoot}:/magi-system:ro \
       -v claude_credentials:/claude_shared:rw \
       -v magi_output:/magi_output:rw \
       --add-host=host.docker.internal:host-gateway \

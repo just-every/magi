@@ -211,20 +211,29 @@ export class CommunicationManager {
 			if (message.event) {
 				const eventType = message.event.type;
 
-				// Forward the entire message to the process manager as a raw JSON string
-				// This ensures the client-side can parse the structured data
-				this.processManager.updateProcess(
-					processId,
-					JSON.stringify(message)
-				);
+				// Emit a dedicated event for structured messages directly to Socket.io clients
+				this.processManager.io.emit('process:message', {
+					id: processId,
+					message: message
+				});
 
-				// Also log the event type for debugging
-				console.log(`Processed event type: ${eventType} from process ${processId}`);
+				// Also log to Docker logs for debugging purposes only
+				if(eventType !== 'message_delta') {
+					console.log(`[${processId}] ${eventType}`);
+					console.dir(message, {depth: 4, colors: true});
+				}
 				return;
 			}
 
 			// Fallback to older message format with direct 'type' property
 			if (message.type) {
+				// For backwards compatibility, also emit these as structured messages
+				this.processManager.io.emit('process:message', {
+					id: processId,
+					message: message
+				});
+
+				// Log specific types for debugging
 				switch (message.type) {
 					case 'connection':
 						console.log(`Container ${processId} connected`);
@@ -232,32 +241,14 @@ export class CommunicationManager {
 
 					case 'progress': {
 						const progressMsg = message as ProgressMessage;
-						// Send progress to process manager to update logs
-						this.processManager.updateProcess(
-							processId,
-							`[${progressMsg.data.step}] ${progressMsg.data.message}`
-						);
+						console.log(`[${processId}] Progress: ${progressMsg.data.step} - ${progressMsg.data.message}`);
 						break;
 					}
 
 					case 'result': {
-						const resultMsg = message as ResultMessage;
-						// Handle final result
 						console.log(`Received final result from process ${processId}`);
-						// No need to store the full result again, as it was already streamed
-						// Just update the process status if needed
-						if (resultMsg.data) {
-							this.processManager.updateProcess(
-								processId,
-								'[RESULT] Command execution completed'
-							);
-						}
 						break;
 					}
-
-					default:
-						// Don't log unknown types since we're handling the new format separately
-						break;
 				}
 				return;
 			}

@@ -212,24 +212,22 @@ export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<
  * @returns Tool definition object
  */
 export function createToolFunction(
-	// Use a more specific type than Function
 	func: (...args: any[]) => any,
 	description?: string,
 	paramMap?: Record<string, string | { name?: string, description?: string, type?: string }>,
 	returns?: string
 ): ToolFunction {
-	// Get function info
 	const funcStr = func.toString();
 	const funcName = func.name;
 
-	// Try to extract description from JSDoc if not provided
 	let toolDescription = description || `Tool for ${funcName}`;
 	if (returns) {
 		toolDescription += ` Returns: ${returns}`;
 	}
 
-	// Extract parameter info from function signature
-	const paramMatch = funcStr.match(/\(([^)]*)\)/);
+	// Clean up multiline parameter definitions
+	const cleanFuncStr = funcStr.replace(/\n\s*/g, ' ');
+	const paramMatch = cleanFuncStr.match(/\(([^)]*)\)/);
 
 	const properties: Record<string, ToolParameter> = {};
 	const required: string[] = [];
@@ -237,45 +235,58 @@ export function createToolFunction(
 	if (paramMatch && paramMatch[1]) {
 		const params = paramMatch[1].split(',').map(p => p.trim()).filter(Boolean);
 
-		// Process each parameter
 		for (const param of params) {
-			const nameMatch = param.match(/^(\w+)(?:\s*:\s*([^=]+))?(?:\s*=\s*.+)?$/);
-			if (nameMatch) {
-				const paramName = nameMatch[1];
-				const tsParamType = (nameMatch[2] || '').trim();
+			// Extract parameter name and default value
+			const paramParts = param.split('=').map(p => p.trim());
+			const paramName = paramParts[0].trim();
+			const defaultValue = paramParts.length > 1 ? paramParts[1].trim() : undefined;
 
-				// Check if we have custom mapping for this parameter
-				let paramInfo = paramMap?.[paramName];
-				if (typeof paramInfo === 'string') {
-					paramInfo = {description: paramInfo};
-				}
+			// Handle rest parameters
+			const isRestParam = paramName.startsWith('...');
+			const cleanParamName = isRestParam ? paramName.substring(3) : paramName;
 
-				// Convert to snake_case for API consistency
-				const apiParamName = paramInfo?.name || paramName;
+			// Check if we have custom mapping for this parameter
+			let paramInfo = paramMap?.[cleanParamName];
+			if (typeof paramInfo === 'string') {
+				paramInfo = {description: paramInfo};
+			}
 
-				// Determine parameter type
-				let paramType = 'string';
-				if (paramInfo?.type) {
-					paramType = paramInfo.type;
-				} else if (tsParamType === 'number') {
-					paramType = 'number';
-				} else if (tsParamType === 'boolean') {
+			// Convert to snake_case for API consistency if needed
+			const apiParamName = paramInfo?.name || cleanParamName;
+
+			// Determine parameter type based on default value or param map
+			let paramType = 'string'; // Default type
+
+			if (paramInfo?.type) {
+				// Use explicit type from paramMap if provided
+				paramType = paramInfo.type;
+			} else if (isRestParam) {
+				// Rest parameters are arrays
+				paramType = 'array';
+			} else if (defaultValue !== undefined) {
+				// Infer type from default value
+				if (defaultValue === 'false' || defaultValue === 'true') {
 					paramType = 'boolean';
+				} else if (!isNaN(Number(defaultValue)) &&
+					!defaultValue.startsWith('"') &&
+					!defaultValue.startsWith("'")) {
+					paramType = 'number';
+				} else if (defaultValue === '[]' || defaultValue.startsWith('[')) {
+					paramType = 'array';
+				} else if (defaultValue === '{}' || defaultValue.startsWith('{')) {
+					paramType = 'object';
 				}
+			}
 
-				// Try to get description from JSDoc if not in param map
-				const paramDescription = paramInfo?.description;
+			// Create parameter definition
+			properties[apiParamName] = {
+				type: paramType,
+				description: paramInfo?.description || `The ${cleanParamName} parameter`
+			};
 
-				// Create parameter definition
-				properties[apiParamName] = {
-					type: paramType,
-					description: paramDescription || `The ${paramName} parameter`
-				};
-
-				// If parameter has no default value, it's required
-				if (!param.includes('=')) {
-					required.push(apiParamName);
-				}
+			// If parameter has no default value, it's required
+			if (defaultValue === undefined) {
+				required.push(apiParamName);
 			}
 		}
 	}

@@ -2,7 +2,23 @@
  * Common type definitions for the MAGI system.
  */
 
-import {Agent} from './utils/agent.js';
+// Define the Agent interface to avoid circular dependency
+export interface AgentInterface {
+    agent_id: string;
+    name: string;
+    description: string;
+    instructions: string;
+    parent?: AgentInterface;
+    workers?: AgentInterface[];
+    tools?: ToolFunction[];
+    model?: string;
+    modelClass?: string;
+    modelSettings?: ModelSettings;
+    onToolCall?: (toolCall: any) => void;
+    onToolResult?: (result: any) => void;
+    export(): AgentExportDefinition;
+    asTool(): ToolFunction;
+}
 
 declare global {
 	namespace NodeJS {
@@ -35,7 +51,7 @@ export interface ToolParameter {
 }
 
 export type ExecutableFunction = (...args: any[]) => Promise<string> | string;
-export type WorkerFunction = (...args: any[]) => Agent;
+export type WorkerFunction = (...args: any[]) => AgentInterface;
 
 /**
  * Definition for a tool that can be used by an agent

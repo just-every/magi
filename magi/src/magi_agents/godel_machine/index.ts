@@ -61,13 +61,7 @@ export function createGodelMachine(input: string) {
  * @returns Results from all stages of the sequence
  */
 export async function runGodelMachine(
-	input: string,
-	handlers: {
-		onEvent?: (event: any, stage: string) => void,
-		onResponse?: (content: string, stage: string) => void,
-		onStageComplete?: (stage: string, result: RunResult) => void,
-		onComplete?: (allResults: Record<string, RunResult>) => void
-	} = {}
+	input: string
 ): Promise<Record<string, RunResult>> {
 	// Create the Gödel Machine agents
 	const godelMachine = createGodelMachine(input);
@@ -78,7 +72,6 @@ export async function runGodelMachine(
 		input, // Initial input is the issue description
 		GodelStage.PLANNING, // Start with the planning stage
 		3, // Max retries per stage
-		10, // Max total retries
-		handlers
+		10 // Max total retries
 	);
 }

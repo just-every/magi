@@ -13,7 +13,8 @@ import {
 	ToolFunction,
 	WorkerFunction,
 	StreamingEvent, 
-	ResponseInput
+	ResponseInput,
+	AgentInterface
 } from '../types.js';
 
 import {v4 as uuid} from 'uuid';
@@ -24,7 +25,7 @@ import {Runner} from './runner.js';
 /**
  * Agent class representing an LLM agent with tools
  */
-export class Agent {
+export class Agent implements AgentInterface {
 	agent_id: string;
 	name: string;
 	description: string;

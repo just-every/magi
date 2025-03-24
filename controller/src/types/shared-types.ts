@@ -3,6 +3,105 @@
  * Used by both client and server
  */
 
+// Define types for communication with magi containers
+export type StreamEventType =
+    'connected'
+    | 'command_start'
+    | 'command_done'
+    | 'agent_start'
+    | 'agent_updated'
+    | 'agent_done'
+    | 'message_start'
+    | 'message_delta'
+    | 'message_complete'
+    | 'message_done'
+    | 'tool_start'
+    | 'tool_delta'
+    | 'tool_done'
+    | 'error';
+
+// Basic agent definition for messages
+export interface AgentExportDefinition {
+    agent_id: string;
+    name: string;
+    parent?: AgentExportDefinition;
+    model?: string;
+}
+
+// Basic tool call interface
+export interface ToolCall {
+    id: string;
+    type: 'function';
+    function: {
+        name: string;
+        arguments: string;
+    };
+}
+
+// Base streaming event interface
+export interface StreamEvent {
+    type: StreamEventType;
+    agent?: AgentExportDefinition;
+    timestamp?: string;
+}
+
+// Connected event
+export interface ConnectedEvent extends StreamEvent {
+    type: 'connected';
+    timestamp: string;
+}
+
+// Command event
+export interface CommandEvent extends StreamEvent {
+    type: 'command_start' | 'command_done';
+    command: string;
+}
+
+// Agent event
+export interface AgentEvent extends StreamEvent {
+    type: 'agent_start' | 'agent_updated' | 'agent_done';
+    agent: AgentExportDefinition;
+    input?: string;
+    parent_id?: string;
+}
+
+// Message event
+export interface MessageEvent extends StreamEvent {
+    type: 'message_start' | 'message_delta' | 'message_complete';
+    content: string;
+    message_id: string;
+    order?: number;
+    thinking?: string;
+}
+
+// Tool event
+export interface ToolEvent extends StreamEvent {
+    type: 'tool_start' | 'tool_delta' | 'tool_done';
+    tool_calls: ToolCall[];
+    results?: any;
+    tool?: string;
+    params?: any;
+    data?: any;
+    result?: any;
+}
+
+// Error event
+export interface ErrorEvent extends StreamEvent {
+    type: 'error';
+    error: string;
+}
+
+// Union type for all streaming events
+export type StreamingEvent = ConnectedEvent | CommandEvent | AgentEvent | MessageEvent | ToolEvent | ErrorEvent;
+
+/**
+ * MagiMessage format for communication between containers and controller
+ */
+export interface MagiMessage {
+	processId: string;
+	event: StreamingEvent;
+}
+
 // Process status type
 export type ProcessStatus = 'running' | 'completed' | 'failed' | 'terminated' | 'ending';
 
@@ -14,8 +113,9 @@ export interface ProcessCreateEvent {
 	command: string;      // Command that created the process
 	status: ProcessStatus;       // Initial status (usually 'running')
 	colors: {
-		bgColor: string;     // Background color (rgba)
-		textColor: string;   // Text color (rgba)
+		rgb: string;		// Primary color (rgb)
+		bgColor: string;	// Background color (rgba)
+		textColor: string;	// Text color (rgba)
 	};
 }
 
@@ -23,6 +123,12 @@ export interface ProcessCreateEvent {
 export interface ProcessLogsEvent {
 	id: string;           // Process ID
 	logs: string;         // Log content (may include markdown)
+}
+
+// Event sent when a structured message from a MAGI container is available
+export interface ProcessMessageEvent {
+	id: string;           // Process ID
+	message: MagiMessage; // Structured message from the container
 }
 
 // Event sent when a process status changes

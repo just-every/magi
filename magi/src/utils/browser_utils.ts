@@ -822,7 +822,7 @@ export function getBrowserTools(): ToolFunction[] {
 			'Take a screenshot of the page or element',
 			{
 				'selector': 'Optional CSS selector to screenshot a specific element',
-				'fullPage': 'Whether to take a full page screenshot',
+				'fullPage': { type: 'boolean', description: 'Whether to take a full page screenshot' },
 				'fileName': 'Optional file path to save the screenshot'
 			},
 			'a Base64 encoded screenshot data or file path'
@@ -905,12 +905,13 @@ export function getBrowserTools(): ToolFunction[] {
 		createToolFunction(
 			wait,
 			'Wait for a specified amount of time',
-			{'milliseconds': 'Time to wait in milliseconds'}
+			{'milliseconds': { type: 'number', description: 'Time to wait in milliseconds'}}
+
 		),
 		createToolFunction(
 			wait_for_selector,
 			'Wait for a selector to be visible',
-			{'selector': 'CSS selector to wait for', 'timeout': 'Maximum time to wait in milliseconds'}
+			{'selector': 'CSS selector to wait for', 'timeout': { type: 'number', description: 'Maximum time to wait in milliseconds'}}
 		),
 		createToolFunction(
 			reset_session,
