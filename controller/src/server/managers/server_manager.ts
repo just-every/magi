@@ -56,6 +56,22 @@ export class ServerManager {
 		// Serve static files from the dist folder
 		this.app.use(express.static(path.join(__dirname, '../..')));
 
+		// Serve files from the magi_output Docker volume
+		this.app.use('/magi_output', express.static('/magi_output', {
+			setHeaders: (res, filePath) => {
+				// Set appropriate content type for images
+				if (filePath.endsWith('.png')) {
+					res.setHeader('Content-Type', 'image/png');
+				} else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+					res.setHeader('Content-Type', 'image/jpeg');
+				} else if (filePath.endsWith('.gif')) {
+					res.setHeader('Content-Type', 'image/gif');
+				} else if (filePath.endsWith('.svg')) {
+					res.setHeader('Content-Type', 'image/svg+xml');
+				}
+			}
+		}));
+
 		// Ensure the root route returns the index.html
 		this.app.get('/', (req, res) => {
 			res.sendFile(path.join(__dirname, '../../client/html/index.html'));

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import {useState, useRef, useEffect} from 'react';
-import {marked} from 'marked';
+import * as marked from 'marked';
 import {ProcessStatus} from '@types';
 import {useSocket, ClientMessage, ToolCallMessage, ToolResultMessage} from '../context/SocketContext';
 
@@ -44,8 +44,7 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
 	const messages = process ? process.messages : [];
 	const agentName = process?.agentName;
 	const isTyping = process?.isTyping || false;
-	const isSubAgent = process?.isSubAgent || false;
-	const hasChildProcesses = process?.childProcessIds?.length > 0 || false;
+	const hasSubAgents = process?.subAgents?.size > 0 || false;
 
 	// Extract tools information from logs
 	useEffect(() => {
@@ -67,12 +66,46 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
 		}
 	}, [logs]);
 
-	// Parse markdown for logs
+	// Parse markdown for logs and enhance links
 	const createMarkup = (content: string) => {
 		try {
 			// Ensure that newlines are preserved before markdown parsing
 			const formattedContent = content.replace(/\n/g, '\n\n');
-			return {__html: marked.parse(formattedContent)};
+			
+			// Custom renderer for links and images
+			class CustomRenderer extends marked.Renderer {
+				link(href: string, title: string | null, text: string): string {
+					const titleAttr = title ? ` title="${title}"` : '';
+					return `<a href="${href}" target="_blank" rel="noopener noreferrer"${titleAttr}>${text}</a>`;
+				}
+				
+				image(href: string, title: string | null, text: string): string {
+					const titleAttr = title ? ` title="${title}"` : '';
+					const altAttr = text ? ` alt="${text}"` : '';
+					
+					// Check if this is a /magi_output/ path
+					if (href && href.startsWith('/magi_output/')) {
+						// For images, render both the link and the image
+						return `
+							<div class="magi-output-image">
+								<a href="${href}" target="_blank" rel="noopener noreferrer"${titleAttr}>
+									<img src="${href}"${altAttr}${titleAttr} class="img-fluid">
+								</a>
+							</div>
+						`;
+					}
+					
+					// Regular image handling
+					return `<img src="${href}"${altAttr}${titleAttr} class="img-fluid">`;
+				}
+			}
+			
+			const renderer = new CustomRenderer();
+			
+			// Apply custom renderer
+			const parsedOutput = marked.parse(formattedContent, { renderer });
+			
+			return {__html: parsedOutput};
 		} catch (e) {
 			return {__html: content};
 		}
@@ -311,6 +344,42 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
 						);
 					} else if (message.type === 'tool_result') {
 						const toolResultMsg = message as ToolResultMessage;
+						
+						// Helper function to check for and extract image paths
+						const findImagePath = (text: string): string => {
+							if (text.includes('/magi_output/') && 
+								(text.includes('.png') || text.includes('.jpg') || text.includes('.jpeg') || text.includes('.gif'))) {
+								const match = text.match(/\/magi_output\/[^\s)"']+\.(png|jpg|jpeg|gif)/i);
+								if (match) {
+									return match[0];
+								}
+							}
+							return '';
+						};
+						
+						// Get the display content based on the result type
+						let resultContent = '';
+						let imagePath = '';
+						
+						if (typeof toolResultMsg.result === 'string') {
+							resultContent = toolResultMsg.result;
+							imagePath = findImagePath(resultContent);
+						} else if (typeof toolResultMsg.result === 'object' && toolResultMsg.result !== null) {
+							// Type assertion for TypeScript
+							const resultObj = toolResultMsg.result as Record<string, any>;
+							
+							// Try to extract image path from the object
+							if ('output' in resultObj && typeof resultObj.output === 'string') {
+								resultContent = resultObj.output;
+								imagePath = findImagePath(resultContent);
+							} else {
+								// Just stringify the object
+								resultContent = JSON.stringify(toolResultMsg.result, null, 2);
+							}
+						} else {
+							resultContent = String(toolResultMsg.result);
+						}
+						
 						return (
 							<div className="message-group tool-result-message" key={message.id}>
 								<div className="message-bubble tool-result-bubble">
@@ -319,9 +388,16 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
 										<span className="tool-result-name">{toolResultMsg.toolName} result</span>
 									</div>
 									<div className="tool-result-content">
-                    <pre>{typeof toolResultMsg.result === 'string'
-						? toolResultMsg.result as string
-						: JSON.stringify(toolResultMsg.result, null, 2)}</pre>
+                    <pre>{resultContent}</pre>
+										
+										{/* Display image if an image path was found */}
+										{imagePath && (
+											<div className="magi-output-image">
+												<a href={imagePath} target="_blank" rel="noopener noreferrer">
+													<img src={imagePath} alt={`Result from ${toolResultMsg.toolName}`} className="img-fluid" />
+												</a>
+											</div>
+										)}
 									</div>
 								</div>
 							</div>
@@ -341,21 +417,17 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
 	};
 
 	return (
-		<div className={`process-box card border-0 shadow ${focused ? 'focused' : ''} ${isSubAgent ? 'sub-agent' : ''}`}
+		<div className={`process-box card border-0 shadow ${focused ? 'focused' : ''}`}
 			onClick={handleBoxClick}>
 			<div className={"process-box-bg"} style={{backgroundColor: colors.bgColor}}>
 				<div className="card-header d-flex justify-content-between align-items-center border-0 py-3"
 					data-theme-color={colors.textColor}>
 					<div className="d-flex align-items-center">
-						{isSubAgent && (
-							<span className="sub-agent-indicator me-2"
-								title="Sub-agent"
-								style={{color: colors.textColor}}> ↳ </span>
-						)}
+						{/* This is a main process box, sub-agents are handled by AgentBox */}
 						<span className="process-id fw-bold" style={{color: colors.textColor}}>
 							{agentName ? agentName : ''}
 						</span>
-						{hasChildProcesses && (
+						{hasSubAgents && (
 							<span className="parent-agent-indicator ms-2"
 								title="Has sub-agents"
 								style={{color: colors.textColor}}> ⚙️ </span>
