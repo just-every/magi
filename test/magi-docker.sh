@@ -14,10 +14,12 @@ docker build --quiet -t magi-system:latest -f magi/docker/Dockerfile .
 # Run the docker container with all env variables from .env (removed -d to see output)
 docker run --rm --name $CONTAINER_NAME \
     -e PROCESS_ID=AI-test \
-    -e TEST_SCRIPT=true \
+	-e HOST_HOSTNAME=host.docker.internal \
+	-e CONTROLLER_PORT=3010 \
     --env-file .env \
-    -v "$(pwd)/magi:/app/magi:rw" \
+    -v "$(pwd):/magi-system:r" \
     -v claude_credentials:/claude_shared:rw \
     -v magi_output:/magi_output:rw \
+	--add-host=host.docker.internal:host-gateway \
     magi-system:latest \
-    node /app/magi/dist/magi.js -t "$@"
+    node /magi-system/magi/dist/magi.js -t "$@"

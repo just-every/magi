@@ -99,12 +99,6 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
 		// Generate container name and validate
 		const containerName = validateContainerName(`magi-${processId}`);
 
-		// Verify the magi directory exists
-		const magiPath = path.join(projectRoot, 'magi');
-		if (!fs.existsSync(magiPath)) {
-			throw new Error(`Magi directory not found at ${magiPath}`);
-		}
-
 		// Use base64 encoding to avoid escaping issues entirely
 		const base64Command = Buffer.from(command).toString('base64');
 
@@ -118,12 +112,12 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
       -e HOST_HOSTNAME=host.docker.internal \
       -e CONTROLLER_PORT=${serverPort} \
       --env-file ${path.resolve(projectRoot, '.env')} \
-      -v ${magiPath}:/app/magi:rw \
+      -v ${projectRoot}:/magi-system:r \
       -v claude_credentials:/claude_shared:rw \
       -v magi_output:/magi_output:rw \
       --add-host=host.docker.internal:host-gateway \
       magi-system:latest \
-      node /app/magi/dist/magi.js --base64 "${base64Command}"`;
+      node /magi-system/magi/dist/magi.js --base64 "${base64Command}"`;
 
 		// Execute the command and get the container ID
 		const result = await execPromise(dockerRunCommand);

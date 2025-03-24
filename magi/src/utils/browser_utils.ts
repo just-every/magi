@@ -11,7 +11,7 @@ import {ToolFunction} from '../types.js';
 // import os from 'os';
 import {processImage} from './image_utils.js';
 import {createToolFunction} from './tool_call.js';
-import {write_file} from './file_utils.js';
+import {get_output_dir, write_file} from './file_utils.js';
 
 // Constants
 const NAVIGATE_TIMEOUT = 15000;
@@ -230,7 +230,7 @@ export async function screenshot(
 		const urlPart = (await activePage.url()).replace(/:\/\//g, '_').replace(/[/.]/g, '_').substring(0, 50);
 		const filename = `${timestamp}_${urlPart}${fullPage ? '_full' : ''}${selector ? '_' + selector.replace(/[^a-z0-9]/gi, '_').substring(0, 30) : ''}.jpg`;
 
-		const fileSavePath = path.join('/magi_output/screenshots', fileName || filename);
+		const fileSavePath = path.join(get_output_dir('screenshots'), fileName || filename);
 
 		let screenshotBuffer: Buffer;
 

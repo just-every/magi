@@ -4,6 +4,22 @@
 
 import {Agent} from './utils/agent.js';
 
+declare global {
+	namespace NodeJS {
+		interface ProcessEnv {
+			NODE_ENV: 'development' | 'production';
+			PROCESS_ID: string;
+			CONTROLLER_PORT: string;
+			HOST_HOSTNAME: string;
+			OPENAI_API_KEY?: string;
+			ANTHROPIC_API_KEY?: string;
+			GOOGLE_API_KEY?: string;
+			XAI_API_KEY?: string;
+			BRAVE_API_KEY?: string;
+		}
+	}
+}
+
 /**
  * Tool parameter type definitions using strict schema format for OpenAI function calling
  */

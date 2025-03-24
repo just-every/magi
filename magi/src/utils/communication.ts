@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import {StreamingEvent} from '../types.js';
 import {v4 as uuidv4} from 'uuid';
+import {get_output_dir} from "./file_utils.js";
 
 // Event types
 export interface MagiMessage {
@@ -36,7 +37,7 @@ export class CommunicationManager {
 	constructor(processId: string, testMode: boolean = false) {
 		this.processId = processId;
 		this.testMode = testMode;
-		this.historyFile = path.join('/magi_output', `${processId}_messages.json`);
+		this.historyFile = path.join(get_output_dir('communication'), `messages.json`);
 
 		if (this.testMode) {
 			console.log('[Communication] Test mode: WebSocket disabled, will print to console');
@@ -46,7 +47,7 @@ export class CommunicationManager {
 	}
 
 	// Store the current controller port for reconnection logic
-	private controllerPort = process.env.CONTROLLER_PORT || '3010';
+	private controllerPort = process.env.CONTROLLER_PORT;
 
 	/**
 	 * Connect to the controller WebSocket server
@@ -294,9 +295,9 @@ export class CommunicationManager {
 // Create a singleton instance for easy import
 let communicationManager: CommunicationManager | null = null;
 
-export function initCommunication(processId: string, testMode: boolean = false): CommunicationManager {
+export function initCommunication(testMode: boolean = false): CommunicationManager {
 	if (!communicationManager) {
-		communicationManager = new CommunicationManager(processId, testMode);
+		communicationManager = new CommunicationManager(process.env.PROCESS_ID, testMode);
 		communicationManager.connect();
 	}
 	return communicationManager;

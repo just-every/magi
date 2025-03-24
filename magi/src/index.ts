@@ -3,7 +3,7 @@
  */
 
 import 'dotenv/config';
-import {processCommand} from './magi.js';
+import {runCommand} from './magi.js';
 
 // Default prompt to test with
 const DEFAULT_PROMPT = 'Tell me a short story about a robot named MAGI who helps humans solve problems.';
@@ -26,7 +26,7 @@ async function main() {
 		}
 
 		// Process the command
-		const result = await processCommand(prompt);
+		const result = await runCommand(prompt);
 		console.log('\nResult:');
 		console.log(result);
 	} catch (error) {

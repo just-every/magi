@@ -4,13 +4,16 @@
  * This module handles command processing, agent initialization, and system setup.
  */
 
+// Note: The 'path' import was removed as it was unused
+
 import 'dotenv/config';
 import {parseArgs} from 'node:util';
 import {Runner} from './utils/runner.js';
 import {StreamingEvent} from './types.js';
 import {createAgent, AgentType} from './magi_agents/index.js';
 import {addHistory, getHistory} from './utils/history.js';
-import {initCommunication, CommandMessage} from './utils/communication.js';
+import {initCommunication, CommandMessage, getCommunicationManager} from './utils/communication.js';
+import {mount_magi_code, move_to_working_dir} from './utils/file_utils.js';
 
 // Parse command line arguments
 function parseCommandLineArgs() {
@@ -32,11 +35,10 @@ function parseCommandLineArgs() {
 /**
  * Execute a command using an agent and capture the results
  */
-export async function runMagiCommand(
+export async function runCommand(
 	command: string,
 	agentType: AgentType = 'supervisor',
 	model?: string,
-	isTestMode: boolean = false,
 	modelClass?: string
 ): Promise<void> {
 	// Record command in system memory for context
@@ -45,10 +47,8 @@ export async function runMagiCommand(
 		content: command,
 	});
 
+	const comm = getCommunicationManager();
 	try {
-		// Initialize communication system with process ID from env
-		const processId = process.env.PROCESS_ID || `magi-${Date.now()}`;
-		const comm = initCommunication(processId, isTestMode);
 		comm.send({
 			type: 'command_start',
 			command
@@ -103,27 +103,11 @@ export async function runMagiCommand(
 
 		// Send error through WebSocket
 		try {
-			const processId = process.env.PROCESS_ID || `magi-${Date.now()}`;
-			const comm = initCommunication(processId);
 			comm.send({type: 'error', error});
 		} catch (commError) {
 			console.error('Failed to send error via WebSocket:', commError);
 		}
 	}
-}
-
-/**
- * Process a command synchronously
- */
-export function processCommand(
-	command: string,
-	agentType: AgentType = 'supervisor',
-	model?: string,
-	isTestMode: boolean = false,
-	modelClass?: string
-): Promise<void> {
-	// Run the command
-	return runMagiCommand(command, agentType, model, isTestMode, modelClass);
 }
 
 /**
@@ -165,11 +149,17 @@ async function main() {
 	const args = parseCommandLineArgs();
 
 	// Set up process ID from env var
-	const processId = process.env.PROCESS_ID || `magi-${Date.now()}`;
-	console.log(`Initializing with process ID: ${processId}`);
+	process.env.PROCESS_ID = process.env.PROCESS_ID || `magi-${Date.now()}`;
+	console.log(`Initializing with process ID: ${process.env.PROCESS_ID}`);
+
+	// Move to working directory in /magi_output
+	move_to_working_dir();
+
+	// Make our own code accessible for Gödel Machine
+	mount_magi_code();
 
 	// Set up WebSocket communication (pass test flag from args)
-	const comm = initCommunication(processId, args.test);
+	const comm = initCommunication(args.test);
 
 	// Set up command listener
 	comm.onCommand((cmd: CommandMessage) => {
@@ -180,11 +170,10 @@ async function main() {
 		} else if (cmd.type === 'command') {
 			// Process user-provided follow-up commands
 			console.log(`Processing user command: ${cmd.command}`);
-			processCommand(
+			runCommand(
 				cmd.command || '',
 				args.agent as AgentType,
 				args.model,
-				args.test === true,
 				args['model-class']
 			).catch(error => {
 				console.error(`Error processing user command: ${error}`);
@@ -225,11 +214,10 @@ async function main() {
 
 	// Run the command
 	try {
-		await processCommand(
+		await runCommand(
 			promptText,
 			args.agent as AgentType,
 			args.model,
-			args.test === true,
 			args['model-class']
 		);
 
