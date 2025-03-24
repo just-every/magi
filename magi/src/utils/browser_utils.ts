@@ -97,19 +97,6 @@ export async function getPage(): Promise<Page> {
 }
 
 /**
- * Ensure the output directory exists
- *
- * @param directory Directory to ensure exists
- * @returns The full path to the directory
- */
-// Function temporarily commented out to fix linting error
-// function ensureDirectoryExists(directory: string): string {
-// 	const outputDir = path.join('/magi_output', directory);
-// 	fs.mkdirSync(outputDir, {recursive: true});
-// 	return outputDir;
-// }
-
-/**
  * Reset the browser session with a clean context and cookies
  */
 async function reset_session(): Promise<string> {

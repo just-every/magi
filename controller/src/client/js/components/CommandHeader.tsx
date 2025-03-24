@@ -41,8 +41,11 @@ const CommandHeader: React.FC = () => {
 		>
 			<div className="container-fluid px-3">
 				<div className="d-flex align-items-center">
-					<form id="command-form" className="mx-auto" style={{maxWidth: '1000px', width: '100%'}}
-						  onSubmit={handleSubmit}>
+					<form 
+						id="command-form" 
+						className="mx-auto" 
+						style={{maxWidth: '1000px', width: '100%'}}
+						onSubmit={handleSubmit}>
 						<div className="input-group shadow-sm">
 							<span className="input-group-text bg-white">&gt;</span>
 							<input

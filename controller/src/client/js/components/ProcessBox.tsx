@@ -24,13 +24,13 @@ interface Tool {
 }
 
 const ProcessBox: React.FC<ProcessBoxProps> = ({
-												   id,
-												   status,
-												   colors,
-												   logs,
-												   focused,
-												   onFocus
-											   }) => {
+	id,
+	status,
+	colors,
+	logs,
+	focused,
+	onFocus
+}) => {
 	const {sendProcessCommand, terminateProcess, processes} = useSocket();
 	const [inputValue, setInputValue] = useState('');
 	const [tools, setTools] = useState<Tool[]>([]);

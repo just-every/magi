@@ -327,8 +327,8 @@ const ProcessGrid: React.FC = () => {
 		const subAgentProcesses: Map<string, [string, ProcessData][]> = new Map();
 
 		// Sort processes into main processes and sub-agents grouped by parent
-		Array.from(processes.entries()).forEach(entry => {
-			const [id, process] = entry;
+			Array.from(processes.entries()).forEach(entry => {
+				const [processId, process] = entry;
 
 			if (process.isSubAgent && process.parentId) {
 				// Group sub-agents by parent ID
@@ -495,8 +495,8 @@ const ProcessGrid: React.FC = () => {
 		const subAgentProcesses: Map<string, [string, ProcessData][]> = new Map();
 
 		// Sort processes into main processes and sub-agents grouped by parent
-		Array.from(processes.entries()).forEach(entry => {
-			const [id, process] = entry;
+			Array.from(processes.entries()).forEach(entry => {
+				const [processId, process] = entry;
 
 			if (process.isSubAgent && process.parentId) {
 				// Group sub-agents by parent ID

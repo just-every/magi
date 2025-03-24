@@ -12,8 +12,8 @@ import {
 // Define the type for the Socket.io socket
 // Using a basic interface for Socket.io instance
 interface Socket {
-	emit: (event: string, ...args: any[]) => void;
-	on: (event: string, callback: (...args: any[]) => void) => void;
+	emit: (event: string, ...args: unknown[]) => void;
+	on: (event: string, callback: (...args: unknown[]) => void) => void;
 	disconnect: () => void;
 }
 
