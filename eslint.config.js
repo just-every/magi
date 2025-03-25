@@ -27,7 +27,7 @@ export default [
       'semi': ['error', 'always'],
       'quotes': ['error', 'single', { 'avoidEscape': true }],
     },
-    ignores: ['**/dist/**', '**/node_modules/**', 'setup/**'],
+    ignores: ['**/dist/**', '**/node_modules/**', 'setup/**', '**/*.js', '**/*.js.map'],
     files: ['controller/src/**/*.ts', 'magi/src/**/*.ts'],
   }
 ];
