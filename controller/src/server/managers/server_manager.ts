@@ -74,6 +74,142 @@ export class ServerManager {
 		const HELPER_CONTAINER_NAME = 'magi-file-server';
 		const fileCache = new Map<string, boolean>();
 
+		// Define helper functions at the root level of setupDockerVolumeAccess
+		const serveFileFromDocker = async (req: express.Request, res: express.Response): Promise<void> => {
+			try {
+				const filePath = req.path || '';
+				const cleanPath = filePath.replace(/^\/+/, '');
+
+				if (cleanPath.includes('..')) {
+					res.status(403).send('Access denied');
+					return;
+				}
+
+				// Check cache first
+				if (!fileCache.has(cleanPath)) {
+					// File not in cache, attempt to serve it
+					const container = docker.getContainer(HELPER_CONTAINER_NAME);
+					const fileServed = await getAndServeFile(container, cleanPath, res);
+
+					if (fileServed) {
+						fileCache.set(cleanPath, true);
+					}
+					return; // Response has already been sent
+				}
+
+				// File is in cache, serve it directly
+				const container = docker.getContainer(HELPER_CONTAINER_NAME);
+				await getAndServeFile(container, cleanPath, res);
+
+			} catch (error) {
+				console.error('Error serving file from Docker volume:', error);
+				if (!res.headersSent) {
+					res.status(500).send('Error accessing file');
+				}
+			}
+		};
+
+		// Set appropriate content type header based on file extension
+		const setContentTypeHeader = (res: express.Response, filePath: string): void => {
+			const extensionToContentType: Record<string, string> = {
+				'.png': 'image/png',
+				'.jpg': 'image/jpeg',
+				'.jpeg': 'image/jpeg',
+				'.gif': 'image/gif',
+				'.svg': 'image/svg+xml',
+				'.pdf': 'application/pdf',
+				'.json': 'application/json',
+				'.txt': 'text/plain'
+			};
+
+			const extension = Object.keys(extensionToContentType)
+				.find(ext => filePath.endsWith(ext));
+
+			if (extension) {
+				res.setHeader('Content-Type', extensionToContentType[extension]);
+			}
+		};
+
+		// Get and serve file content in one operation
+		const getAndServeFile = async (container: Docker.Container, cleanPath: string, res: express.Response): Promise<boolean> => {
+			const exec = await container.exec({
+				Cmd: ['cat', `/magi_output/${cleanPath}`],
+				AttachStdout: true,
+				AttachStderr: true
+			});
+
+			const stream = await exec.start({});
+
+			return new Promise<boolean>((resolve) => {
+				const chunks: Buffer[] = [];
+
+				stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+
+				stream.on('error', (err: Error) => {
+					console.error('Stream error:', err);
+					if (!res.headersSent) {
+						res.status(500).send('Error reading file');
+					}
+					resolve(false);
+				});
+
+				stream.on('end', async () => {
+					try {
+						const buffer = Buffer.concat(chunks);
+						if (buffer.length <= 8) {
+							if (!res.headersSent) {
+								res.status(404).send('File not found or empty');
+							}
+							resolve(false);
+							return;
+						}
+
+						// Check if there was an error (indicating file not found)
+						const inspect = await exec.inspect();
+						if (inspect.ExitCode !== 0) {
+							if (!res.headersSent) {
+								res.status(404).send('File not found');
+							}
+							resolve(false);
+							return;
+						}
+
+						const fileContent = extractDockerStreamContent(buffer);
+
+						// Only set content type header when we know we're serving the file
+						setContentTypeHeader(res, cleanPath);
+
+						res.send(fileContent);
+						resolve(true);
+					} catch (err) {
+						console.error('Error processing file content:', err);
+						if (!res.headersSent) {
+							res.status(500).send('Error processing file');
+						}
+						resolve(false);
+					}
+				});
+			});
+		};
+
+		// Extract actual content from Docker stream (skipping frame headers)
+		const extractDockerStreamContent = (buffer: Buffer): Buffer => {
+			let fileContent = Buffer.alloc(0);
+			let offset = 0;
+
+			while (offset < buffer.length) {
+				// Skip the 8-byte header
+				const payloadSize = buffer.readUInt32BE(offset + 4);
+				if (offset + 8 + payloadSize <= buffer.length) {
+					const payload = buffer.slice(offset + 8, offset + 8 + payloadSize);
+					fileContent = Buffer.concat([fileContent, payload]);
+				}
+				offset += 8 + payloadSize;
+			}
+
+			return fileContent;
+		};
+
 		try {
 			// Check if container already exists
 			const containers = await docker.listContainers({
@@ -108,150 +244,6 @@ export class ServerManager {
 			this.app.use('/magi_output', (req, res, next) => {
 				serveFileFromDocker(req, res).catch(next);
 			});
-
-			/**
-			 * Serve a file from the Docker volume
-			 */
-			async function serveFileFromDocker(req: express.Request, res: express.Response): Promise<void> {
-				try {
-					const filePath = req.path || '';
-					const cleanPath = filePath.replace(/^\/+/, '');
-
-					if (cleanPath.includes('..')) {
-						res.status(403).send('Access denied');
-						return;
-					}
-
-					// Check cache first
-					if (!fileCache.has(cleanPath)) {
-						// File not in cache, attempt to serve it
-						const container = docker.getContainer(HELPER_CONTAINER_NAME);
-						const fileServed = await getAndServeFile(container, cleanPath, res);
-
-						if (fileServed) {
-							fileCache.set(cleanPath, true);
-						}
-						return; // Response has already been sent
-					}
-
-					// File is in cache, serve it directly
-					const container = docker.getContainer(HELPER_CONTAINER_NAME);
-					await getAndServeFile(container, cleanPath, res);
-
-				} catch (error) {
-					console.error('Error serving file from Docker volume:', error);
-					if (!res.headersSent) {
-						res.status(500).send('Error accessing file');
-					}
-				}
-			}
-
-			/**
-			 * Set appropriate content type header based on file extension
-			 */
-			function setContentTypeHeader(res: express.Response, filePath: string): void {
-				const extensionToContentType: Record<string, string> = {
-					'.png': 'image/png',
-					'.jpg': 'image/jpeg',
-					'.jpeg': 'image/jpeg',
-					'.gif': 'image/gif',
-					'.svg': 'image/svg+xml',
-					'.pdf': 'application/pdf',
-					'.json': 'application/json',
-					'.txt': 'text/plain'
-				};
-
-				const extension = Object.keys(extensionToContentType)
-					.find(ext => filePath.endsWith(ext));
-
-				if (extension) {
-					res.setHeader('Content-Type', extensionToContentType[extension]);
-				}
-			}
-
-			/**
-			 * Get and serve file content in one operation
-			 */
-			async function getAndServeFile(container: Docker.Container, cleanPath: string, res: express.Response): Promise<boolean> {
-				const exec = await container.exec({
-					Cmd: ['cat', `/magi_output/${cleanPath}`],
-					AttachStdout: true,
-					AttachStderr: true
-				});
-
-				const stream = await exec.start({});
-
-				return new Promise<boolean>((resolve, reject) => {
-					const chunks: Buffer[] = [];
-
-					stream.on('data', (chunk: Buffer) => chunks.push(chunk));
-
-					stream.on('error', (err: Error) => {
-						console.error('Stream error:', err);
-						if (!res.headersSent) {
-							res.status(500).send('Error reading file');
-						}
-						resolve(false);
-					});
-
-					stream.on('end', async () => {
-						try {
-							const buffer = Buffer.concat(chunks);
-							if (buffer.length <= 8) {
-								if (!res.headersSent) {
-									res.status(404).send('File not found or empty');
-								}
-								resolve(false);
-								return;
-							}
-
-							// Check if there was an error (indicating file not found)
-							const inspect = await exec.inspect();
-							if (inspect.ExitCode !== 0) {
-								if (!res.headersSent) {
-									res.status(404).send('File not found');
-								}
-								resolve(false);
-								return;
-							}
-
-							const fileContent = extractDockerStreamContent(buffer);
-
-							// Only set content type header when we know we're serving the file
-							setContentTypeHeader(res, cleanPath);
-
-							res.send(fileContent);
-							resolve(true);
-						} catch (err) {
-							console.error('Error processing file content:', err);
-							if (!res.headersSent) {
-								res.status(500).send('Error processing file');
-							}
-							resolve(false);
-						}
-					});
-				});
-			}
-
-			/**
-			 * Extract actual content from Docker stream (skipping frame headers)
-			 */
-			function extractDockerStreamContent(buffer: Buffer): Buffer {
-				let fileContent = Buffer.alloc(0);
-				let offset = 0;
-
-				while (offset < buffer.length) {
-					// Skip the 8-byte header
-					const payloadSize = buffer.readUInt32BE(offset + 4);
-					if (offset + 8 + payloadSize <= buffer.length) {
-						const payload = buffer.slice(offset + 8, offset + 8 + payloadSize);
-						fileContent = Buffer.concat([fileContent, payload]);
-					}
-					offset += 8 + payloadSize;
-				}
-
-				return fileContent;
-			}
 
 		} catch (error) {
 			console.error('Failed to set up Docker volume access:', error);
