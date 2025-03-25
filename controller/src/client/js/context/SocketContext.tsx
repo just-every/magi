@@ -217,14 +217,11 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 				const timestamp = streamingEvent.timestamp || new Date().toISOString();
 				const eventType = streamingEvent.type;
 
-				function updateAgent(values: any, agent_id?: string, agent?: AgentData): AgentData {
+				function updateAgent(values: Record<string, unknown>, agent_id?: string, agent?: AgentData): AgentData {
 					agent_id = agent_id || streamingEvent.agent.agent_id;
-					let updatedAgent = agent || process.agent;
+					const updatedAgent = agent || process.agent;
 					if (updatedAgent.agent_id === agent_id) {
-						updatedAgent = {
-							...updatedAgent,
-							...values
-						};
+						Object.assign(updatedAgent, values);
 					} else if (updatedAgent.workers) {
 						const updatedWorkers = new Map();
 						updatedAgent.workers.forEach((worker, workerId) => {
@@ -240,7 +237,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 
 				function addMessage(message: ClientMessage, agent_id?: string, agent?: AgentData): AgentData {
 					agent_id = agent_id || streamingEvent.agent.agent_id;
-					let updatedAgent = agent || process.agent;
+					const updatedAgent = agent || process.agent;
 					if (updatedAgent.agent_id === agent_id) {
 						updatedAgent.messages.push(message);
 					} else if (updatedAgent.workers) {
@@ -365,7 +362,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 									});
 								});
 							}
-							let updatedMessage: PartialClientMessage = {
+							const updatedMessage: PartialClientMessage = {
 								type: 'assistant',
 								content: content,
 								message_id: message_id,
@@ -409,7 +406,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 								// Update in workers' messages
 								if(process.agent.workers) {
 									// Correctly iterate over a Map
-									process.agent.workers.forEach((worker, workerId) => {
+									process.agent.workers.forEach((worker) => {
 										worker.messages.forEach((message, messageIndex) => {
 											if (message.message_id === message_id) {
 												worker.messages[messageIndex] = completeMessage(updatedMessage);
