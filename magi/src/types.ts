@@ -104,6 +104,7 @@ export interface AgentExportDefinition {
 	name: string;
 	parent?: AgentExportDefinition;
 	model?: string;
+	modelClass?: string;
 }
 
 /**

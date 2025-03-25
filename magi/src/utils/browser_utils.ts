@@ -215,7 +215,7 @@ export async function navigate(
  * @param selector - Optional CSS selector to screenshot a specific element
  * @param fullPage - Whether to take a full page screenshot
  * @param fileName - The filename to save the screenshot as (optional)
- * @returns Base64 encoded screenshot data or file path
+ * @returns A file path to the saved screenshot
  */
 export async function screenshot(
 	selector?: string,
@@ -825,7 +825,7 @@ export function getBrowserTools(): ToolFunction[] {
 				'fullPage': { type: 'boolean', description: 'Whether to take a full page screenshot' },
 				'fileName': 'Optional file path to save the screenshot'
 			},
-			'a Base64 encoded screenshot data or file path'
+			'a file path to the screenshot which as taken'
 		),
 		createToolFunction(
 			get_page_text,

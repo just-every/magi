@@ -354,18 +354,18 @@ header {
     /* Enhanced image styling for magi_output images */
     .magi-output-image {
         margin: 1rem 0;
-        
+
         a {
             display: inline-block;
             max-width: 100%;
-            
+
             img {
                 max-width: 100%;
                 height: auto;
                 border-radius: 8px;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
                 transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-                
+
                 &:hover {
                     transform: scale(1.02);
                     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
@@ -379,7 +379,7 @@ header {
         color: #2ca1e5;
         text-decoration: none;
         transition: color 0.2s;
-        
+
         &:hover {
             color: #1a82c4;
             text-decoration: underline;
@@ -513,15 +513,15 @@ header {
         font-size: 13px;
         border: none;
     }
-    
+
     /* Add specific styling for magi-output within chat bubbles */
     .magi-output-image {
         margin: 8px 0;
-        
+
         a {
             display: inline-block;
             max-width: 100%;
-            
+
             img {
                 max-width: 100%;
                 height: auto;
@@ -530,7 +530,7 @@ header {
                 transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
                 display: block;
                 margin: 0 auto;
-                
+
                 &:hover {
                     transform: scale(1.02);
                     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
@@ -763,160 +763,9 @@ header {
     pointer-events: auto;
 }
 
-/* Agent box styling with enhanced visual distinction */
-.agent-box {
-    width: 100%;
-    height: 100%;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-    transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
-    background-color: white;
-    border-radius: 8px;
-    pointer-events: auto;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    border-left: 3px solid #2ca1e5;
-    border-top: 1px solid #2ca1e5;
-    max-height: 100%;
-    font-size: 0.85rem;
-    position: relative;
-    
-    /* Glow effect on hover */
-    &::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        border-radius: 8px;
-        box-shadow: 0 0 0 0 rgba(44, 161, 229, 0);
-        transition: box-shadow 0.3s ease-in-out;
-        pointer-events: none;
-        z-index: -1;
-    }
-    
-    &:hover {
-        transform: scale(1.03);
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
-        
-        &::before {
-            box-shadow: 0 0 20px 2px rgba(44, 161, 229, 0.3);
-        }
-    }
-    
-    /* Additional styling for the card header */
-    .card-header {
-        background-color: rgba(44, 161, 229, 0.1);
-        backdrop-filter: blur(5px);
-        -webkit-backdrop-filter: blur(5px);
-        border-bottom: 1px solid rgba(44, 161, 229, 0.2);
-    }
-    
-    /* Status indicator styling */
-    .sub-agent-indicator {
-        font-weight: bold;
-        font-size: 1.2rem;
-        line-height: 1;
-        transition: transform 0.3s ease;
-    }
-    
-    /* Enhanced active/running state */
-    &.active-agent {
-        border-color: #31b2ff;
-        animation: agentPulse 3s infinite;
-    }
-}
-
-.agent-box-bg {
-    border-radius: 8px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    height: 100%;
-    pointer-events: auto;
-    padding: 0;
-    margin: 0 auto;
-}
-
 .agent-logs {
     flex: 1;
     overflow: auto;
     padding: 10px 15px;
     font-size: 0.85rem;
-}
-
-/* Connection lines for agents with better visibility */
-.agent-connection {
-    position: absolute;
-    background-color: rgba(44, 161, 229, 0.7);
-    pointer-events: none;
-    z-index: 5;
-    transition: all 0.5s ease-in-out;
-    height: 3px !important; /* Make lines thicker */
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-    
-    /* Add animated dash effect */
-    background-image: linear-gradient(to right, 
-        rgba(44, 161, 229, 0.9) 70%, 
-        rgba(255, 255, 255, 0.7) 70%);
-    background-size: 20px 100%;
-    animation: moveGradient 1.5s linear infinite;
-    
-    /* Enhanced connection line appearance */
-    &::before, &::after {
-        content: "";
-        position: absolute;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background-color: rgba(44, 161, 229, 0.9);
-        z-index: 6;
-    }
-    
-    &::before {
-        left: -4px;
-        top: -2.5px;
-        box-shadow: 0 0 5px rgba(44, 161, 229, 0.5);
-    }
-    
-    &::after {
-        right: -4px;
-        top: -2.5px;
-        animation: pulsePoint 2s infinite ease-in-out;
-        box-shadow: 0 0 8px rgba(44, 161, 229, 0.7);
-    }
-}
-
-/* Animation for connection lines */
-@keyframes moveGradient {
-    0% {
-        background-position: 0 0;
-    }
-    100% {
-        background-position: 20px 0;
-    }
-}
-
-/* Animation for connection endpoints */
-@keyframes pulsePoint {
-    0%, 100% {
-        transform: scale(1);
-        opacity: 0.7;
-    }
-    50% {
-        transform: scale(1.5);
-        opacity: 1;
-    }
-}
-
-/* Animation for active agent boxes */
-@keyframes agentPulse {
-    0%, 100% {
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-    }
-    50% {
-        box-shadow: 0 0 15px 3px rgba(44, 161, 229, 0.5);
-    }
 }

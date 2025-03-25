@@ -12,7 +12,7 @@ import {
 	ToolEvent,
 	ToolFunction,
 	WorkerFunction,
-	StreamingEvent, 
+	StreamingEvent,
 	ResponseInput,
 	AgentInterface
 } from '../types.js';
@@ -106,6 +106,9 @@ export class Agent implements AgentInterface {
 		};
 		if (this.model) {
 			agentExport.model = this.model;
+		}
+		if (this.modelClass) {
+			agentExport.modelClass = this.modelClass;
 		}
 		if (this.parent) {
 			agentExport.parent = this.parent.export();

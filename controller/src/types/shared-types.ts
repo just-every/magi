@@ -25,7 +25,8 @@ export interface AgentExportDefinition {
     agent_id: string;
     name: string;
     parent?: AgentExportDefinition;
-    model?: string;
+	model?: string;
+	modelClass?: string;
 }
 
 // Basic tool call interface
@@ -62,7 +63,6 @@ export interface AgentEvent extends StreamEvent {
     type: 'agent_start' | 'agent_updated' | 'agent_done';
     agent: AgentExportDefinition;
     input?: string;
-    parent_id?: string;
 }
 
 // Message event
@@ -148,10 +148,18 @@ export interface ServerInfoEvent {
 	version: string;      // Server version
 }
 
+// Position for absolute positioning of boxes
+export interface BoxPosition {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+
 // Client-side DOM element references for processes
 export interface ProcessElement {
-	box: HTMLElement;      // Container element
-	logs: HTMLElement;     // Log output container
-	status: HTMLElement;   // Status indicator
-	input?: HTMLInputElement; // Optional process-specific input field
+    box: HTMLElement;      // Container element
+    logs: HTMLElement;     // Log output container
+    status: HTMLElement;   // Status indicator
+    input?: HTMLInputElement; // Optional process-specific input field
 }

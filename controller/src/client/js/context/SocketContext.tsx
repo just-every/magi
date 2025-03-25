@@ -18,11 +18,26 @@ interface Socket {
 	disconnect: () => void;
 }
 
+
+// Define message interfaces for the chat UI
+export interface PartialClientMessage {
+	id?: string; // Generated UUID for the message
+	processId?: string; // Process ID this message belongs to
+	type?: 'user' | 'assistant' | 'system' | 'tool_call' | 'tool_result' | 'error';
+	content?: string;
+	timestamp?: string;
+	rawEvent?: unknown; // Store the raw event data for debugging
+	message_id?: string; // Original message_id from the LLM for delta/complete pairs
+	isDelta?: boolean; // Flag to indicate if this is a delta message that will be replaced by a complete
+	order?: number; // Order position for delta messages
+	deltaChunks?: { [order: number]: string }; // Storage for message delta chunks
+}
+
 // Define message interfaces for the chat UI
 export interface ClientMessage {
 	id: string; // Generated UUID for the message
 	processId: string; // Process ID this message belongs to
-	type: 'user' | 'assistant' | 'system' | 'tool_call' | 'tool_result';
+	type: 'user' | 'assistant' | 'system' | 'tool_call' | 'tool_result' | 'error';
 	content: string;
 	timestamp: string;
 	rawEvent?: unknown; // Store the raw event data for debugging
@@ -56,6 +71,17 @@ interface SocketContextInterface {
 	serverVersion: string | null;
 }
 
+export interface AgentData {
+	agent_id?: string;
+	name: string;
+	parent?: AgentData;
+	workers?: Map<string, AgentData>; // Map of workers by their agent_id
+	model?: string;
+	modelClass?: string;
+	messages: ClientMessage[]; // Store structured messages
+	isTyping?: boolean; // Indicates if the agent is in "thinking" state
+}
+
 // Define the process data structure
 export interface ProcessData {
 	id: string;
@@ -67,12 +93,7 @@ export interface ProcessData {
 		textColor: string;
 	};
 	logs: string;
-	messages: ClientMessage[]; // Store structured messages
-	agentName?: string; // Store the agent name when available
-	isTyping: boolean; // Indicates if the agent is in "thinking" state (waiting for first response)
-	parentId?: string; // ID of the parent process if this is a sub-agent
-	childProcessIds: string[]; // IDs of child processes (sub-agents)
-	isSubAgent: boolean; // Flag to indicate this is a sub-agent process
+	agent?: AgentData;
 }
 
 // Create the context with a default value
@@ -139,10 +160,13 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 					status: event.status,
 					colors: event.colors,
 					logs: '',
-					messages: [initialMessage],
-					isTyping: true, // Start in typing state
-					childProcessIds: [], // Initialize empty array for child processes
-					isSubAgent: false // Default to not being a sub-agent
+					agent: {
+						name: event.id,
+						messages: [initialMessage],
+						isTyping: true,
+						workers: new Map<string, AgentData>(),
+					},
+
 				});
 				return newProcesses;
 			});
@@ -164,11 +188,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 			setProcesses(prevProcesses => {
 				const newProcesses = new Map(prevProcesses);
 				const process = newProcesses.get(event.id);
-
 				if (!process) return newProcesses;
-
-				// Only handle plain text logs - JSON messages come through the process:message event
-				// This avoids double processing and corrupted logging
 
 				// Add the raw logs
 				const updatedLogs = process.logs + event.logs;
@@ -193,24 +213,74 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 
 				// Use the imported MagiMessage structure
 				const data = event.message;
-				const messages = [...process.messages];
 				const streamingEvent = data.event;
 				const timestamp = streamingEvent.timestamp || new Date().toISOString();
 				const eventType = streamingEvent.type;
+
+				function updateAgent(values: any, agent_id?: string, agent?: AgentData): AgentData {
+					agent_id = agent_id || streamingEvent.agent.agent_id;
+					let updatedAgent = agent || process.agent;
+					if (updatedAgent.agent_id === agent_id) {
+						updatedAgent = {
+							...updatedAgent,
+							...values
+						};
+					} else if (updatedAgent.workers) {
+						const updatedWorkers = new Map();
+						updatedAgent.workers.forEach((worker, workerId) => {
+							updatedWorkers.set(workerId, updateAgent(values, agent_id, worker));
+						});
+						updatedAgent.workers = updatedWorkers;
+					}
+					if(!agent) {
+						process.agent = updatedAgent;
+					}
+					return updatedAgent;
+				}
+
+				function addMessage(message: ClientMessage, agent_id?: string, agent?: AgentData): AgentData {
+					agent_id = agent_id || streamingEvent.agent.agent_id;
+					let updatedAgent = agent || process.agent;
+					if (updatedAgent.agent_id === agent_id) {
+						updatedAgent.messages.push(message);
+					} else if (updatedAgent.workers) {
+						const updatedWorkers = new Map();
+						updatedAgent.workers.forEach((worker, workerId) => {
+							updatedWorkers.set(workerId, addMessage(message, agent_id, worker));
+						});
+						updatedAgent.workers = updatedWorkers;
+					}
+					if(!agent) {
+						process.agent = updatedAgent;
+					}
+					return updatedAgent;
+				}
+
+				function completeMessage(message: PartialClientMessage): ClientMessage {
+					return {
+						id: generateId(),
+						processId: event.id,
+						type: message.type || 'system',
+						content: message.content || '',
+						timestamp: message.timestamp || timestamp,
+						rawEvent: message.rawEvent || data,
+						...message
+					} as ClientMessage;
+				}
+
+				function addPartialMessage(message: PartialClientMessage): AgentData {
+					return addMessage(completeMessage(message));
+				}
 
 				// Handle different event types
 				if (eventType === 'command_start' || eventType === 'connected') {
 					// User message - already handled in process:create but good as a fallback
 					if ('command' in streamingEvent) {
 						const content = streamingEvent.command || '';
-						if (content && !messages.some(m => m.type === 'user' && m.content === content)) {
-							messages.push({
-								id: generateId(),
-								processId: event.id,
+						if (content && !process.agent.messages.some(m => m.type === 'user' && m.content === content)) {
+							addPartialMessage({
 								type: 'user',
-								content: content,
-								timestamp: timestamp,
-								rawEvent: data
+								content: content
 							});
 						}
 					}
@@ -237,7 +307,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 								}
 							);
 
-							messages.push({
+							addMessage({
 								id: generateId(),
 								processId: event.id,
 								type: 'tool_call',
@@ -260,7 +330,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 							const toolName = toolCall.function.name;
 							const result = results[toolCall.id] || {};
 
-							messages.push({
+							addMessage({
 								id: generateId(),
 								processId: event.id,
 								type: 'tool_result',
@@ -275,154 +345,149 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 				} else if (eventType === 'message_start' || eventType === 'message_delta' ||
 					eventType === 'message_complete') {
 					// Assistant message
-					if ('content' in streamingEvent) {
+					if ('content' in streamingEvent && 'message_id' in streamingEvent) {
 						const content = streamingEvent.content || '';
-						const messageId = 'message_id' in streamingEvent ? streamingEvent.message_id : '';
+						const message_id = streamingEvent.message_id || '';
 
-						if (content) {
+						if (content && message_id) {
+							let existingMessage = undefined;
+							process.agent.messages.forEach(message => {
+								if (message.message_id === message_id) {
+									existingMessage = message;
+								}
+							});
+							if(!existingMessage && process.agent.workers) {
+								process.agent.workers.forEach(worker => {
+									worker.messages.forEach(message => {
+										if (message.message_id === message_id) {
+											existingMessage = message;
+										}
+									});
+								});
+							}
+							let updatedMessage: PartialClientMessage = {
+								type: 'assistant',
+								content: content,
+								message_id: message_id,
+								deltaChunks: {},
+								...existingMessage
+							};
+
 							// Handle streaming messages (delta/complete pairs)
-							if (eventType === 'message_delta' && messageId) {
-								// For delta messages, handle ordered deltas to build complete message
-								const existingDeltaIndex = messages.findIndex(m =>
-									m.message_id === messageId);
-
+							if (eventType === 'message_delta') {
 								// Get order if available, otherwise default to 0
 								const order = 'order' in streamingEvent ? Number(streamingEvent.order) : 0;
+								updatedMessage.deltaChunks[order] = content;
+								updatedMessage.isDelta = true;
 
-								if (existingDeltaIndex >= 0) {
-									// Get the existing message
-									const existingMessage = messages[existingDeltaIndex];
-
-									// Initialize deltaChunks if not existing
-									if (!existingMessage.deltaChunks) {
-										existingMessage.deltaChunks = {};
-									}
-
-									// Store this chunk at the correct order position
-									existingMessage.deltaChunks[order] = content;
-
+								if (existingMessage) {
 									// Rebuild complete content from ordered chunks
-									const orderedKeys = Object.keys(existingMessage.deltaChunks)
+									const orderedKeys = Object.keys(updatedMessage.deltaChunks)
 										.map(Number)
 										.sort((a, b) => a - b);
 
-									// Concatenate all chunks in correct order
-									const combinedContent = orderedKeys
-										.map(key => existingMessage.deltaChunks![key])
-										.join('');
-
 									// Update the displayed content
-									messages[existingDeltaIndex].content = combinedContent;
-								} else {
-									// Create new delta message with deltaChunks
-									const deltaChunks: { [order: number]: string } = {};
-									deltaChunks[order] = content;
-
-									messages.push({
-										id: generateId(),
-										processId: event.id,
-										type: 'assistant',
-										content: content, // Initial content is just this chunk
-										timestamp: timestamp,
-										message_id: messageId,
-										isDelta: true,
-										order: order,
-										deltaChunks: deltaChunks,
-										rawEvent: data
-									});
+									updatedMessage.content = orderedKeys
+										.map(key => updatedMessage.deltaChunks![key])
+										.join('');
 								}
-							} else if (eventType === 'message_complete' && messageId) {
-								// For complete messages, update or replace any existing delta with same message_id
-								const existingIndex = messages.findIndex(m =>
-									m.message_id === messageId);
+							} else if (eventType === 'message_complete' && existingMessage) {
+								// Update the existing message in place
+								updatedMessage.content = content;
+								updatedMessage.isDelta = false;
+								updatedMessage.rawEvent = data;
+							}
 
-								if (existingIndex >= 0) {
-									// Update the existing message in place
-									messages[existingIndex].content = content;
-									messages[existingIndex].isDelta = false;
-									messages[existingIndex].rawEvent = data;
-								} else {
-									// Add the complete message if no matching delta was found
-									messages.push({
-										id: generateId(),
-										processId: event.id,
-										type: 'assistant',
-										content: content,
-										timestamp: timestamp,
-										message_id: messageId,
-										rawEvent: data
-									});
-								}
-							} else {
-								// For other message types, just add normally but still include message_id if available
-								messages.push({
-									id: generateId(),
-									processId: event.id,
-									type: 'assistant',
-									content: content,
-									timestamp: timestamp,
-									message_id: messageId || undefined, // Include message_id if available
-									rawEvent: data
+							if(existingMessage) {
+								// Update in agent's messages array
+								process.agent.messages.forEach((message, index) => {
+									if (message.message_id === message_id) {
+										process.agent.messages[index] = completeMessage(updatedMessage);
+									}
 								});
+
+								// Update in workers' messages
+								if(process.agent.workers) {
+									// Correctly iterate over a Map
+									process.agent.workers.forEach((worker, workerId) => {
+										worker.messages.forEach((message, messageIndex) => {
+											if (message.message_id === message_id) {
+												worker.messages[messageIndex] = completeMessage(updatedMessage);
+											}
+										});
+									});
+								}
+							}
+							else {
+								// If this is a new message, add it to the agent's messages
+								addPartialMessage(updatedMessage);
 							}
 						}
 					}
 				} else if (eventType === 'error') {
 					// Error message
 					const errorMessage = 'error' in streamingEvent ? streamingEvent.error : 'An error occurred';
-					messages.push({
-						id: generateId(),
-						processId: event.id,
-						type: 'system',
-						content: errorMessage,
-						timestamp: timestamp,
-						rawEvent: data
+					addPartialMessage({
+						type: 'error',
+						content: errorMessage
 					});
 				} else if (eventType === 'agent_start' || eventType === 'agent_updated') {
-					// Extract agent information
-					if (streamingEvent.agent && streamingEvent.agent.name) {
-						// Update the process with agent name
-						process.agentName = streamingEvent.agent.name;
-					}
+					console.log(`[DEBUG] Processing ${eventType} event for process ${event.id}`);
 
 					// Check for parent-child relationship
-					if ('parent_id' in streamingEvent && streamingEvent.parent_id) {
-						const parentId = streamingEvent.parent_id;
-						// Set this process as a sub-agent
-						process.parentId = parentId;
-						process.isSubAgent = true;
+					if (streamingEvent.agent && streamingEvent.agent.parent && streamingEvent.agent.parent.agent_id) {
+						// Generate a unique ID for the sub-agent
+						const workerId = streamingEvent.agent.agent_id;
+						console.log(`[DEBUG] Creating sub-agent with ID: ${workerId}`);
 
-						// Update the parent process to track this as a child
-						const parentProcess = newProcesses.get(parentId);
-						if (parentProcess) {
-							// Add this process ID to parent's childProcessIds if not already there
-							if (!parentProcess.childProcessIds.includes(event.id)) {
-								parentProcess.childProcessIds.push(event.id);
-								newProcesses.set(parentId, parentProcess);
+						// Add the sub-agent to the parent process's subAgents map
+						if (!process.agent.workers.has(workerId)) {
+							console.log(`[DEBUG] Adding sub-agent ${workerId} to parent process ${event.id}`);
+							// Create a new sub-agent data object
+							const worker: AgentData = {
+								agent_id: workerId,
+								parent: process.agent,
+								name: streamingEvent.agent.name || workerId,
+								messages: [completeMessage({
+									content: streamingEvent.input || `Worker for ${process.agent.name || process.id}`,
+								})],
+								isTyping: true,
+								workers: new Map<string, AgentData>(),
+								model: streamingEvent.agent.model || undefined,
+								modelClass: streamingEvent.agent.modelClass || undefined,
+							};
 
-								// Add a system message to the parent process logs indicating sub-agent creation
-								parentProcess.messages.push({
-									id: generateId(),
-									processId: parentId,
-									type: 'system',
-									content: `Started sub-agent: ${process.agentName || event.id}`,
-									timestamp: new Date().toISOString()
-								});
-							}
+							// Add this sub-agent to the parent's subAgents map
+							process.agent.workers.set(workerId, worker);
 						}
+						else if(streamingEvent.input) {
+							addPartialMessage({
+								content: streamingEvent.input,
+							});
+						}
+					}
+					else if (streamingEvent.agent) {
+						if(!process.agent.agent_id) {
+							process.agent.agent_id = streamingEvent.agent.agent_id;
+						}
+						updateAgent({
+							name: streamingEvent.agent.name,
+							model: streamingEvent.agent.model || undefined,
+							modelClass: streamingEvent.agent.modelClass || undefined,
+						});
+						console.log(`[DEBUG] Agent set: ${process.agent.name} (${process.agent.agent_id}) for process ${event.id}`);
 					}
 				}
 
 				// Turn off typing indicator for any response
 				if (eventType === 'message_delta' || eventType === 'message_complete' ||
 					eventType === 'tool_start' || eventType === 'tool_done') {
-					process.isTyping = false;
+					updateAgent({isTyping: false});
 				}
 
 				// Update the process with the new messages
 				newProcesses.set(event.id, {
 					...process,
-					messages: messages
 				});
 
 				return newProcesses;
@@ -440,82 +505,12 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 				if (process) {
 					// Update the status
 					newProcesses.set(event.id, {
-						id: process.id,
-						command: process.command,
+						...process,
 						status: event.status,
-						colors: process.colors,
-						logs: process.logs,
-						messages: process.messages,
-						agentName: process.agentName,
-						isTyping: process.isTyping,
-						parentId: process.parentId,
-						childProcessIds: process.childProcessIds,
-						isSubAgent: process.isSubAgent
 					});
 
-					// If process is terminated, handle child processes and remove after delay
+					// If process is terminated, handle sub-agents and remove after delay
 					if (event.status === 'terminated') {
-						// Check if this process has child processes
-						if (process.childProcessIds && process.childProcessIds.length > 0) {
-							// Make a copy of the child IDs since the array might be modified during iteration
-							const childIds = [...process.childProcessIds];
-
-							// Add a system message indicating child processes will be terminated
-							newProcesses.set(event.id, {
-								...newProcesses.get(event.id)!,
-								messages: [
-									...process.messages,
-									{
-										id: generateId(),
-										processId: event.id,
-										type: 'system',
-										content: `Terminating ${childIds.length} sub-agent(s)`,
-										timestamp: new Date().toISOString()
-									}
-								]
-							});
-
-							// For each child process, terminate it or update its status
-							childIds.forEach(childId => {
-								const childProcess = newProcesses.get(childId);
-								if (childProcess) {
-									// Update the child process to show it's being terminated with the parent
-									newProcesses.set(childId, {
-										...childProcess,
-										status: 'ending',
-										messages: [
-											...childProcess.messages,
-											{
-												id: generateId(),
-												processId: childId,
-												type: 'system',
-												content: `Parent process ${event.id} terminated, terminating this sub-agent`,
-												timestamp: new Date().toISOString()
-											}
-										]
-									});
-
-									// Notify server to terminate the child process
-									if (socket) {
-										socket.emit('process:terminate', childId);
-									}
-								}
-							});
-						}
-
-						// If this is a sub-agent, update the parent's childProcessIds
-						if (process.isSubAgent && process.parentId) {
-							const parentProcess = newProcesses.get(process.parentId);
-							if (parentProcess) {
-								// Remove this process from parent's childProcessIds
-								const updatedChildIds = parentProcess.childProcessIds.filter(id => id !== event.id);
-								newProcesses.set(process.parentId, {
-									...parentProcess,
-									childProcessIds: updatedChildIds
-								});
-							}
-						}
-
 						// Remove the process after animation delay
 						setTimeout(() => {
 							setProcesses(prevProcesses => {
@@ -580,10 +575,10 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 						content: command,
 						timestamp: new Date().toISOString()
 					};
+					process.agent.messages.push(userMessage);
 
 					newProcesses.set(processId, {
 						...process,
-						messages: [...process.messages, userMessage]
 					});
 				}
 

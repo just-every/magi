@@ -1,8 +1,25 @@
+/**
+ * ProcessGrid Component
+ * Renders the main grid view of all processes with zooming and panning capabilities
+ */
 import * as React from 'react';
 import {useState, useEffect, useRef} from 'react';
 import ProcessBox from './ProcessBox';
-import {useSocket, ProcessData} from '../context/SocketContext';
+import AgentBox from './AgentBox';
+import {useSocket} from '../context/SocketContext';
+import {BoxPosition} from '@types';
+import {
+    calculateBoxPositions,
+    calculateBoundingBox,
+    calculateZoomToFit,
+} from './utils/GridUtils';
 
+/**
+ * ProcessGrid is responsible for:
+ * - Layout of process boxes in a responsive grid
+ * - Zoom and pan navigation
+ * - Displaying connections between main processes and sub-agents
+ */
 const ProcessGrid: React.FC = () => {
     const {processes} = useSocket();
     const [focusedProcess, setFocusedProcess] = useState<string | null>(null);
@@ -12,79 +29,18 @@ const ProcessGrid: React.FC = () => {
     const [isDragging, setIsDragging] = useState<boolean>(false);
     const [startDragX, setStartDragX] = useState<number>(0);
     const [startDragY, setStartDragY] = useState<number>(0);
-    // Used for tracking mouse movement
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [wasDragged, setWasDragged] = useState<boolean>(false);
+    const [, setWasDragged] = useState<boolean>(false);
     const [containerSize, setContainerSize] = useState({width: 0, height: 0});
+    const [boxPositions, setBoxPositions] = useState<Map<string, BoxPosition>>(new Map());
 
+    // Refs for DOM elements
     const containerRef = useRef<HTMLDivElement>(null);
     const wrapperRef = useRef<HTMLDivElement>(null);
     const dotBackgroundRef = useRef<HTMLDivElement>(null);
+
+    // Constants for layout
+    const agentBoxScale = 0.25; // Agent boxes are 1/4 size of process boxes
     const gap = 40; // Gap between process boxes
-
-    // Calculate the best grid layout based on number of processes
-    const getGridLayout = () => {
-        const count = processes.size;
-
-        if (count === 0) return {boxesPerRow: 0, rows: 0};
-
-        // Special case for 2 processes - force side by side layout
-        if (count === 2) {
-            // Check if one is a parent of the other
-            const processArray = Array.from(processes.entries());
-            if (processArray[0][1].childProcessIds.includes(processArray[1][0]) ||
-                processArray[1][1].childProcessIds.includes(processArray[0][0])) {
-                // Parent-child relationship, stack them
-                return {boxesPerRow: 1, rows: 2};
-            } else {
-                // No parent-child relationship, side by side
-                return {boxesPerRow: 2, rows: 1};
-            }
-        }
-
-        // Group parent processes and their children
-        const parentProcesses = new Map();
-        const subAgents = new Map();
-
-        // First identify parent processes and standalone processes
-         
-        for (const [id, process] of processes.entries()) {
-            if (process.isSubAgent) {
-                subAgents.set(id, process);
-            } else {
-                parentProcesses.set(id, process);
-            }
-        }
-
-        // Determine number of "main" processes (parent + standalone)
-        const mainProcessCount = parentProcesses.size;
-
-        // For a small number of parent processes, arrange them in a single row
-        if (mainProcessCount <= 3) {
-            return {boxesPerRow: Math.max(mainProcessCount, 1), rows: 1};
-        }
-
-        // Otherwise arrange in a roughly square grid
-        const boxesPerRow = Math.ceil(Math.sqrt(mainProcessCount));
-        const rows = Math.ceil(mainProcessCount / boxesPerRow);
-
-        return {boxesPerRow, rows};
-    };
-
-    // Calculate max dimensions for process boxes
-    const getBoxDimensions = () => {
-        if (!containerRef.current) return {width: 1000, height: 1000};
-
-        const containerWidth = containerRef.current.clientWidth;
-        const containerHeight = containerRef.current.clientHeight;
-
-        const maxWidth = 1000;
-        const maxHeight = Math.min(1500, Math.max(500, Math.round(maxWidth * (containerHeight / containerWidth))));
-        const boxWidth = Math.min(containerWidth, maxWidth);
-        const boxHeight = Math.min(containerHeight, maxHeight);
-
-        return {width: boxWidth, height: boxHeight};
-    };
 
     // Update container size on window resize
     useEffect(() => {
@@ -105,10 +61,29 @@ const ProcessGrid: React.FC = () => {
         };
     }, []);
 
+    // Update the positions whenever processes change
+    useEffect(() => {
+        if (!containerRef.current || containerSize.width === 0) return;
+
+        const newPositions = calculateBoxPositions(
+            processes,
+            containerSize.width,
+            containerSize.height,
+            boxPositions
+        );
+
+        setBoxPositions(newPositions);
+    }, [processes, containerSize]);
+
     // Auto-zoom to fit all processes when processes change
     useEffect(() => {
-        autoZoomToFit();
-    }, [processes, containerSize]);
+        // Don't auto-zoom immediately to avoid rapid changes
+        const timer = setTimeout(() => {
+            autoZoomToFit();
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [processes.size, containerSize]);
 
     // Update transform when zoom or position changes
     useEffect(() => {
@@ -120,7 +95,7 @@ const ProcessGrid: React.FC = () => {
         const handleMouseMove = (e: MouseEvent) => {
             if (!isDragging) return;
 
-            // Consider it a drag if moved more than 5px in any direction
+            // Consider it a drag if moved more than 5px
             const moveX = Math.abs(e.clientX - (startDragX + translateX));
             const moveY = Math.abs(e.clientY - (startDragY + translateY));
 
@@ -135,7 +110,7 @@ const ProcessGrid: React.FC = () => {
         const handleMouseUp = () => {
             setIsDragging(false);
 
-            // Clear the drag flag after a short delay
+            // Clear drag flag after a short delay
             setTimeout(() => {
                 setWasDragged(false);
             }, 100);
@@ -163,34 +138,40 @@ const ProcessGrid: React.FC = () => {
             }
         }
     };
+    const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (e.button === 0) { // Left mouse button
+            if (containerRef.current) {
+                containerRef.current.style.cursor = 'auto';
+            }
+        }
+    };
 
-    // Handle wheel for zooming
+    // Handle wheel event for zooming
     const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-        // Check if modifier key is pressed (Command on Mac, Ctrl on Windows/Linux)
-        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        // Check if modifier key is pressed (Command/Ctrl)
+        const isMac = navigator.platform?.toUpperCase().indexOf('MAC') >= 0;
         const modifierKeyPressed = isMac ? e.metaKey : e.ctrlKey;
 
         if (modifierKeyPressed) {
             e.preventDefault();
 
-            // Normalize the delta across different browsers/devices
+            // Normalize delta across browsers
             const normalizedDelta = Math.abs(e.deltaY) > 100
-                ? e.deltaY / 100 // For browsers that use pixels
-                : e.deltaY;      // For browsers that use lines
+                ? e.deltaY / 100 // For pixel-based browsers
+                : e.deltaY;      // For line-based browsers
 
             const delta = -Math.sign(normalizedDelta) * 0.1;
 
-            // Apply the delta with a smoother curve based on current zoom level
-            // Logarithmic scaling to make zoom feel consistent at all levels
+            // Apply smoother zoom curve based on current level
             let zoomFactor = delta * (0.1 + 0.05 * Math.log(zoomLevel + 0.5));
 
             // Apply stronger dampening when zoomed out
             zoomFactor *= zoomLevel;
 
             const oldZoom = zoomLevel;
-            const newZoom = Math.min(Math.max(0.6, zoomLevel + zoomFactor), 2.8); // Limit zoom between 0.1x and 3x
+            const newZoom = Math.min(Math.max(0.2, zoomLevel + zoomFactor), 2); // Limit zoom
 
-            // Adjust translateX and translateY to zoom toward mouse position
+            // Adjust position to zoom toward mouse position
             if (containerRef.current) {
                 const rect = containerRef.current.getBoundingClientRect();
                 const mouseX = e.clientX - rect.left;
@@ -213,164 +194,101 @@ const ProcessGrid: React.FC = () => {
         }
     };
 
-    // Automatically zoom to fit all processes
-    const autoZoomToFit = () => {
-        if (processes.size === 0 || !containerRef.current) return;
-
-        // Get grid layout
-        const {boxesPerRow, rows} = getGridLayout();
-        const {width: boxWidth, height: boxHeight} = getBoxDimensions();
-
-        // Calculate total grid size
-        const wrapperWidth = boxesPerRow * (boxWidth + gap) - gap;
-        const wrapperHeight = rows * (boxHeight + gap) - gap;
-
-        // Get viewport dimensions
-        const viewportWidth = containerRef.current.clientWidth;
-        const header = document.getElementById('main-header');
-        const headerHeight = header ? header.offsetHeight : 0;
-        const viewportHeight = containerRef.current.clientHeight - headerHeight;
-
-        // Calculate zoom level needed to fit the content
-        const zoomX = ((viewportWidth - (gap * 2)) / wrapperWidth);
-        const zoomY = ((viewportHeight - (gap * 2)) / wrapperHeight);
-
-        // Use the smaller of the two zoom levels to ensure everything fits
-        let newZoom = Math.min(zoomX, zoomY);
-
-        // Apply final limits to avoid extreme zooming
-        newZoom = Math.min(Math.max(newZoom, 0.1), 1);
-
-        // Set the new zoom level
-        setZoomLevel(newZoom);
-
-        // Calculate position to center the content
-        setTranslateX((viewportWidth - wrapperWidth * newZoom) / 2);
-
-        // Add headerHeight to the Y translation to position content below the header
-        setTranslateY(headerHeight + (viewportHeight - wrapperHeight * newZoom) / 2);
-    };
-
-    // Focus on a specific process
-    const focusOnProcess = (processId: string) => {
-        if (!containerRef.current || !wrapperRef.current) return;
-
-        // Get process element and dimensions
-        const processElements = Array.from(processes.entries());
-        const processIndex = processElements.findIndex(([id]) => id === processId);
-        if (processIndex === -1) return;
-
-        setFocusedProcess(processId);
-
-        // Get grid layout and box dimensions
-        const {boxesPerRow} = getGridLayout();
-        const {width: boxWidth, height: boxHeight} = getBoxDimensions();
-
-        // Calculate position of the process box in the grid
-        const row = Math.floor(processIndex / boxesPerRow);
-        const col = processIndex % boxesPerRow;
-        const boxLeft = col * (boxWidth + gap);
-        const boxTop = row * (boxHeight + gap);
-
-        // Get viewport dimensions
-        const viewportWidth = containerRef.current.clientWidth;
-        const header = document.getElementById('main-header');
-        const headerHeight = header ? header.offsetHeight : 0;
-        const viewportHeight = containerRef.current.clientHeight - headerHeight;
-
-        // Set zoom to 100%
-        setZoomLevel(1);
-
-        // Center the box in the viewport, accounting for header
-        setTranslateX((viewportWidth - boxWidth) / 2 - boxLeft);
-        setTranslateY(headerHeight + (viewportHeight - boxHeight) / 2 - boxTop);
-
-        // Apply smooth transition
+    // Apply smooth transition to transform
+    const applyTransition = (duration: number = 500) => {
         if (wrapperRef.current && dotBackgroundRef.current) {
-            wrapperRef.current.style.transition = 'transform 0.5s ease-out';
-            dotBackgroundRef.current.style.transition = 'transform 0.5s ease-out';
+            wrapperRef.current.style.transition = `transform ${duration}ms ease-out`;
+            dotBackgroundRef.current.style.transition = `transform ${duration}ms ease-out`;
 
-            // Reset the transition after it completes
+            // Reset transition after animation completes
             setTimeout(() => {
                 if (wrapperRef.current && dotBackgroundRef.current) {
                     wrapperRef.current.style.transition = 'transform 0.1s ease-out';
                     dotBackgroundRef.current.style.transition = 'transform 0.1s ease-out';
                 }
-            }, 500);
+            }, duration);
         }
     };
 
-    // Reset zoom and position
+    // Automatically zoom to fit all processes
+    const autoZoomToFit = () => {
+        if (processes.size === 0 || !containerRef.current || boxPositions.size === 0) return;
+
+        // Calculate the bounding box of all processes
+        const boundingBox = calculateBoundingBox(boxPositions);
+
+        // Get header height for viewport adjustment
+        const header = document.getElementById('main-header');
+        const headerHeight = header ? header.offsetHeight : 0;
+
+        // Calculate zoom and translation to fit everything
+        const { zoom, translateX: newX, translateY: newY } = calculateZoomToFit(
+            boundingBox,
+            containerSize.width,
+            containerSize.height,
+            headerHeight,
+            80 // Padding
+        );
+
+        // Apply new zoom and position with smooth transition
+        setZoomLevel(zoom);
+        setTranslateX(newX);
+        setTranslateY(newY);
+        applyTransition();
+    };
+
+    // Focus on a specific process
+    const focusOnProcess = (processId: string) => {
+        if (!containerRef.current || !boxPositions.has(processId)) return;
+
+        const position = boxPositions.get(processId)!;
+        setFocusedProcess(processId);
+
+        // Get viewport dimensions
+        const viewportWidth = containerSize.width;
+        const header = document.getElementById('main-header');
+        const headerHeight = header ? header.offsetHeight : 0;
+        const viewportHeight = containerSize.height - headerHeight;
+
+        // Set zoom to 100% and center the box
+        setZoomLevel(1);
+        setTranslateX((viewportWidth - position.width) / 2 - position.x);
+        setTranslateY(headerHeight + (viewportHeight - position.height) / 2 - position.y);
+
+        // Apply smooth transition
+        applyTransition();
+    };
+
+    // Reset zoom to show all processes
     const resetZoom = () => {
-        if (processes.size === 1) {
-            // If only one process, focus on it
-            const processId = processes.keys().next().value;
-            focusOnProcess(processId);
-        } else {
-            // Otherwise fit all processes
-            autoZoomToFit();
-        }
+        autoZoomToFit();
+        setFocusedProcess(null);
     };
 
-    // Render the process boxes
-    const renderProcessBoxes = () => {
-        if (processes.size === 0) return null;
+    // Render all processes and agent boxes
+    const renderBoxes = () => {
+        if (processes.size === 0 || boxPositions.size === 0) return null;
 
-        // Get grid layout and box dimensions
-        const {boxesPerRow} = getGridLayout();
-        const {width: boxWidth, height: boxHeight} = getBoxDimensions();
         const processElements: React.ReactNode[] = [];
+        const agentElements: React.ReactNode[] = [];
         const connectionElements: React.ReactNode[] = [];
 
-        // Organize processes by relationship: main processes and sub-agents
-        const mainProcesses: [string, ProcessData][] = [];
-        const subAgentProcesses: Map<string, [string, ProcessData][]> = new Map();
+        // Render main processes
+        for (const [id, process] of processes.entries()) {
+            const position = boxPositions.get(id);
+            if (!position) continue;
 
-        // Sort processes into main processes and sub-agents grouped by parent
-            Array.from(processes.entries()).forEach(entry => {
-                    const [, process] = entry;
-
-            if (process.isSubAgent && process.parentId) {
-                // Group sub-agents by parent ID
-                if (!subAgentProcesses.has(process.parentId)) {
-                    subAgentProcesses.set(process.parentId, []);
-                }
-                subAgentProcesses.get(process.parentId)?.push(entry);
-            } else {
-                // This is a main process (not a sub-agent)
-                mainProcesses.push(entry);
-            }
-        });
-
-        // Calculate positions for main processes in a grid
-        mainProcesses.forEach((entry, index) => {
-             
-            const [id, process] = entry;
-
-            // Calculate position in grid for main processes
-            const row = Math.floor(index / boxesPerRow);
-            const col = index % boxesPerRow;
-
-            // Calculate position coordinates for the main process
-            const left = col * (boxWidth + gap);
-            const top = row * (boxHeight + gap);
-
-            // Store the position for this process (for future reference)
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const position = {left, top, width: boxWidth, height: boxHeight};
-
-            // Create style for position and size
+            // Style for main process box
             const style = {
-                position: 'absolute' as const,
-                width: `${boxWidth}px`,
-                height: `${boxHeight}px`,
-                left: `${left}px`,
-                top: `${top}px`,
+                width: `${position.width}px`,
+                height: `${position.height}px`,
+                left: `${position.x}px`,
+                top: `${position.y}px`,
                 opacity: process.status === 'terminated' ? '0.2' : '1',
-                transition: 'opacity 0.3s ease, transform 0.3s ease'
+                transition: 'left 0.3s, top 0.3s',
             };
 
-            // Add the main process box
+            // Add the process box
             processElements.push(
                 <div key={id} style={style} className="process-wrapper">
                     <ProcessBox
@@ -385,191 +303,80 @@ const ProcessGrid: React.FC = () => {
                 </div>
             );
 
-            // Position sub-agents for this parent process
-            const childProcesses = subAgentProcesses.get(id) || [];
+            // Handle sub-agents of this process
+            if (process.agent.workers && process.agent.workers.size > 0) {
+                for (const [subAgentId, agent] of process.agent.workers.entries()) {
+                    // Get position for this sub-agent
+                    const positionId = `subagent_${subAgentId}`;
+                    let agentPosition = boxPositions.get(positionId);
 
-            if (childProcesses.length > 0) {
-                // Position child processes in a cluster around the parent
-                childProcesses.forEach((childEntry, childIndex) => {
-                    const [childId, childProcess] = childEntry;
+                    // If no position exists, create a default one
+                    if (!agentPosition) {
+                        agentPosition = {
+                            x: position.x + position.width * 0.7,
+                            y: position.y + position.height * 0.2,
+                            width: position.width * agentBoxScale,
+                            height: position.height * agentBoxScale
+                        };
+                        boxPositions.set(positionId, agentPosition);
+                    }
 
-                    // Calculate offsets for child processes:
-                    // Place them in a circle or semi-circle around the parent
-                    const childCount = childProcesses.length;
-
-                    // Calculate angle based on index (distribute evenly around the bottom of the parent)
-                    const startAngle = -60; // Start from bottom-left
-                    const endAngle = 240; // End at bottom-right
-                    const angleRange = endAngle - startAngle;
-                    const angle = startAngle + (angleRange / (childCount + 1)) * (childIndex + 1);
-                    const radian = (angle * Math.PI) / 180;
-
-                    // radius for placement (based on parent box dimensions)
-                    const radius = Math.max(boxWidth, boxHeight) * 0.8;
-
-                    // Calculate position based on angle and radius
-                    // Center of the parent box
-                    const centerX = left + (boxWidth / 2);
-                    const centerY = top + (boxHeight / 2);
-
-                    // Calculate position for child
-                    const childLeft = centerX - (boxWidth / 2) + (radius * Math.cos(radian));
-                    const childTop = centerY - (boxHeight / 2) + (radius * Math.sin(radian));
-
-                    // Create style for the child process
-                    const childStyle = {
-                        position: 'absolute' as const,
-                        width: `${boxWidth}px`,
-                        height: `${boxHeight}px`,
-                        left: `${childLeft}px`,
-                        top: `${childTop}px`,
-                        opacity: childProcess.status === 'terminated' ? '0.2' : '1',
-                        transition: 'opacity 0.3s ease, transform 0.3s ease'
+                    // Style for agent box
+                    const agentStyle = {
+                        width: `${agentPosition.width}px`,
+                        height: `${agentPosition.height}px`,
+                        left: `${agentPosition.x}px`,
+                        top: `${agentPosition.y}px`,
+                        opacity: process.status === 'terminated' ? '0.2' : '1',
+                        transition: 'left 0.5s, top 0.5s, transform 0.3s',
+                        boxShadow: '0 4px 8px rgba(0, 0, 0, 0.15)',
+                        transform: 'scale(1)',
+                        zIndex: '10' // Ensure agent boxes appear above process boxes
                     };
 
-                    // Add the child process box
-                    processElements.push(
-                        <div key={childId} style={childStyle} className="process-wrapper">
-                            <ProcessBox
-                                id={childId}
-                                command={childProcess.command}
-                                status={childProcess.status}
-                                colors={childProcess.colors}
-                                logs={childProcess.logs}
-                                focused={focusedProcess === childId}
-                                onFocus={focusOnProcess}
+                    // Add agent box
+                    agentElements.push(
+                        <div key={subAgentId} style={agentStyle} className="agent-wrapper">
+                            <AgentBox
+                                id={subAgentId}
+                                colors={process.colors}
+                                logs={process.logs}
+                                agentName={agent.name || subAgentId}
+                                messages={agent.messages}
+                                isTyping={agent.isTyping}
                             />
                         </div>
                     );
-
-                    // Create connection line between parent and child
-                    // Start from bottom of parent and go to top of child
-                    const connectionStyle = {
-                        position: 'absolute' as const,
-                        left: `${centerX}px`,
-                        top: `${centerY}px`,
-                        width: '2px',
-                        height: `${Math.sqrt(
-                            Math.pow(childLeft - left, 2) +
-                            Math.pow(childTop - top, 2)
-                        )}px`,
-                        transform: `rotate(${angle}deg)`,
-                        transformOrigin: 'top left',
-                        backgroundColor: 'rgba(44, 161, 229, 0.5)'
-                    };
-
-                    connectionElements.push(
-                        <div
-                            key={`connection-${id}-${childId}`}
-                            className="process-connection"
-                            style={connectionStyle}
-                        />
-                    );
-                });
+                }
             }
-        });
+        }
 
-        return [...connectionElements, ...processElements];
+        // Return all elements with connections behind boxes
+        return [...connectionElements, ...processElements, ...agentElements];
     };
 
-    // Calculate total width and height of the grid
+    // Calculate total width and height needed for the wrapper
     const getWrapperStyles = () => {
-        if (processes.size === 0) {
+        if (processes.size === 0 || boxPositions.size === 0) {
             return {
                 minWidth: '100vw',
                 minHeight: '100vh'
             };
         }
 
-        // Find the min/max coordinates of all process boxes including sub-agents
-        let minLeft = Number.MAX_SAFE_INTEGER;
-        let minTop = Number.MAX_SAFE_INTEGER;
-        let maxRight = 0;
-        let maxBottom = 0;
+        // Calculate bounding box
+        const { minX, minY, maxX, maxY } = calculateBoundingBox(boxPositions);
 
-        const {boxesPerRow} = getGridLayout();
-        const {width: boxWidth, height: boxHeight} = getBoxDimensions();
+        // Add padding around the edges
+        const padding = gap;
+        const minXWithPadding = minX - padding;
+        const minYWithPadding = minY - padding;
+        const maxXWithPadding = maxX + padding;
+        const maxYWithPadding = maxY + padding;
 
-        // Organize processes by relationship: main processes and sub-agents
-        const mainProcesses: [string, ProcessData][] = [];
-        const subAgentProcesses: Map<string, [string, ProcessData][]> = new Map();
-
-        // Sort processes into main processes and sub-agents grouped by parent
-            Array.from(processes.entries()).forEach(entry => {
-                    const [, process] = entry;
-
-            if (process.isSubAgent && process.parentId) {
-                // Group sub-agents by parent ID
-                if (!subAgentProcesses.has(process.parentId)) {
-                    subAgentProcesses.set(process.parentId, []);
-                }
-                subAgentProcesses.get(process.parentId)?.push(entry);
-            } else {
-                // This is a main process (not a sub-agent)
-                mainProcesses.push(entry);
-            }
-        });
-
-        // Calculate positions for main processes in a grid
-        mainProcesses.forEach((entry, index) => {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const [id, process] = entry;
-
-            // Calculate position in grid
-            const row = Math.floor(index / boxesPerRow);
-            const col = index % boxesPerRow;
-
-            // Calculate position coordinates
-            const left = col * (boxWidth + gap);
-            const top = row * (boxHeight + gap);
-            const right = left + boxWidth;
-            const bottom = top + boxHeight;
-
-            // Update min/max coordinates
-            minLeft = Math.min(minLeft, left);
-            minTop = Math.min(minTop, top);
-            maxRight = Math.max(maxRight, right);
-            maxBottom = Math.max(maxBottom, bottom);
-
-            // Also check sub-agents for this parent
-            const childProcesses = subAgentProcesses.get(id) || [];
-
-            if (childProcesses.length > 0) {
-                childProcesses.forEach((childEntry, childIndex) => {
-                    const childCount = childProcesses.length;
-
-                    // Calculate angle based on index
-                    const startAngle = -60;
-                    const endAngle = 240;
-                    const angleRange = endAngle - startAngle;
-                    const angle = startAngle + (angleRange / (childCount + 1)) * (childIndex + 1);
-                    const radian = (angle * Math.PI) / 180;
-
-                    // Radius for placement
-                    const radius = Math.max(boxWidth, boxHeight) * 0.8;
-
-                    // Center of the parent box
-                    const centerX = left + (boxWidth / 2);
-                    const centerY = top + (boxHeight / 2);
-
-                    // Calculate position for child
-                    const childLeft = centerX - (boxWidth / 2) + (radius * Math.cos(radian));
-                    const childTop = centerY - (boxHeight / 2) + (radius * Math.sin(radian));
-                    const childRight = childLeft + boxWidth;
-                    const childBottom = childTop + boxHeight;
-
-                    // Update min/max coordinates
-                    minLeft = Math.min(minLeft, childLeft);
-                    minTop = Math.min(minTop, childTop);
-                    maxRight = Math.max(maxRight, childRight);
-                    maxBottom = Math.max(maxBottom, childBottom);
-                });
-            }
-        });
-
-        // Calculate the total width and height needed
-        const totalWidth = maxRight - minLeft + gap;
-        const totalHeight = maxBottom - minTop + gap;
+        // Calculate total width and height needed
+        const totalWidth = maxXWithPadding - minXWithPadding;
+        const totalHeight = maxYWithPadding - minYWithPadding;
 
         return {
             width: `${Math.max(totalWidth, window.innerWidth)}px`,
@@ -579,55 +386,72 @@ const ProcessGrid: React.FC = () => {
         };
     };
 
-    return <>
-        {(zoomLevel !== 1 || translateX !== 0 || translateY !== 0) && (
-            <button
-                className="reset-zoom-button btn btn-sm btn-light"
-                onClick={resetZoom}
-                style={{display: 'block', pointerEvents: 'auto'}} // Make sure it's visible and clickable
-            >
-                Show All
-            </button>
-        )}
-        <div
-            className="infinite-canvas-container"
-            ref={(el) => {
-                containerRef.current = el;
-                if (el) {
-                    // Only prevent default for wheel events with modifier key pressed
-                    el.addEventListener('wheel', (e) => {
-                        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-                        const modifierKeyPressed = isMac ? e.metaKey : e.ctrlKey;
-                        if (modifierKeyPressed) {
-                            e.preventDefault();
-                        }
-                    }, {passive: false});
-                }
-            }}
-            onMouseDown={handleMouseDown}
-            onWheel={handleWheel}
-            style={{cursor: isDragging ? 'grabbing' : 'grab'}}
-        >
-            <div className="dot-background" ref={dotBackgroundRef}></div>
+    return (
+        <>
+            {/* Show All button (visible when processes exist) */}
+            {processes.size > 0 && (
+                <button
+                    className="reset-zoom-button btn btn-sm btn-light"
+                    onClick={resetZoom}
+                    style={{
+                        display: 'block',
+                        position: 'absolute',
+                        top: '10px',
+                        right: '10px',
+                        zIndex: 1000,
+                        pointerEvents: 'auto',
+                        opacity: 0.9
+                    }}
+                >
+                    Show All
+                </button>
+            )}
 
+            {/* Main canvas container with drag and zoom handlers */}
             <div
-                className="process-container-wrapper"
-                ref={wrapperRef}
-                style={getWrapperStyles()}
+                className="infinite-canvas-container"
+                ref={(el) => {
+                    containerRef.current = el;
+                    if (el) {
+                        // Only prevent default for wheel events with modifier key pressed
+                        el.addEventListener('wheel', (e) => {
+                            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+                            const modifierKeyPressed = isMac ? e.metaKey : e.ctrlKey;
+                            if (modifierKeyPressed) {
+                                e.preventDefault();
+                            }
+                        }, {passive: false});
+                    }
+                }}
+                onMouseDown={handleMouseDown}
+                onMouseUp={handleMouseUp}
+                onWheel={handleWheel}
+                style={{cursor: isDragging ? 'grabbing' : 'grab'}}
             >
-                {renderProcessBoxes()}
-            </div>
+                {/* Dot background with parallax effect */}
+                <div className="dot-background" ref={dotBackgroundRef}></div>
 
-            <div className="zoom-hint" style={{opacity: processes.size > 0 ? '1' : '0'}}>
-                <div><span className="zoom-hint-icon">👆</span> Click to focus on a process</div>
-                <div><span className="zoom-hint-icon">👋</span> Drag to pan view</div>
-                <div>
-                    <span className="zoom-hint-icon">🔍</span>
-                    {navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? '⌘ Cmd' : 'Ctrl'} + Scroll to zoom
+                {/* Process container with all boxes */}
+                <div
+                    className="process-container-wrapper"
+                    ref={wrapperRef}
+                    style={getWrapperStyles()}
+                >
+                    {renderBoxes()}
+                </div>
+
+                {/* Instructions for navigation */}
+                <div className="zoom-hint" style={{opacity: processes.size > 0 ? '1' : '0'}}>
+                    <div><span className="zoom-hint-icon">👆</span> Click to focus on a process</div>
+                    <div><span className="zoom-hint-icon">👋</span> Drag to pan view</div>
+                    <div>
+                        <span className="zoom-hint-icon">🔍</span>
+                        {navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? '⌘ Cmd' : 'Ctrl'} + Scroll to zoom
+                    </div>
                 </div>
             </div>
-        </div>
-    </>;
+        </>
+    );
 };
 
 export default ProcessGrid;
