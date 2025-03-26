@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import * as fs from 'fs';
-import * as path from 'path';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import * as readline from 'readline';
 import {execSync} from 'child_process';
 
@@ -15,6 +16,9 @@ console.log('\x1b[36m%s\x1b[0m', '│           MAGI SYSTEM SETUP         │');
 console.log('\x1b[36m%s\x1b[0m', '└─────────────────────────────────────┘');
 console.log('');
 
+// Get the directory name in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 const envPath = path.join(rootDir, '.env');
 
@@ -224,7 +228,7 @@ if (args.includes('--help') || args.includes('-h')) {
 	console.log('  - Claude setup');
 	console.log('');
 	console.log('Usage:');
-	console.log('  ts-node setup/setup.ts [options]');
+	console.log('  node setup/setup.js [options]');
 	console.log('  npm run setup [-- options]');
 	console.log('');
 	console.log('Options:');

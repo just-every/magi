@@ -9,6 +9,8 @@ import 'dotenv/config';
 import {ModelProvider, ToolFunction, ModelSettings, StreamingEvent, ToolCall, ResponseInput} from '../types.js';
 import OpenAI from 'openai';
 import {v4 as uuidv4} from 'uuid';
+import { costTracker } from '../utils/cost_tracker.js';
+import { calculateCost } from './model_costs.js';
 
 // Convert our tool definition to OpenAI's format
 function convertToOpenAITools(requestParams: any): any {
@@ -62,10 +64,7 @@ export class OpenAIProvider implements ModelProvider {
 	}
 
 	/**
-	 * Create a streaming completion using the new OpenAI Responses API
-	 *
-	 * Uses the latest client.responses.create method which provides improved
-	 * features and better server-side state management.
+	 * Create a streaming completion using OpenAI's API
 	 */
 	async* createResponseStream(
 		model: string,
@@ -114,6 +113,8 @@ export class OpenAIProvider implements ModelProvider {
 			const messageId = uuidv4();
 			// Track delta positions for each message_id
 			const messagePositions = new Map<string, number>();
+			// Store usage information when we receive it
+			let tokenUsage: { input_tokens: number, output_tokens: number } | null = null;
 
 			// Process the response stream
 			try {
@@ -131,6 +132,45 @@ export class OpenAIProvider implements ModelProvider {
 
 						// We don't need to yield an event here, as the model will use these results internally
 						// and generate appropriate content that will come through as text deltas
+					}
+
+					// Handle response.completed event which contains token usage information
+					else if (event.type === 'response.completed' && event.response && event.response.usage) {
+						// Extract cached tokens from the usage data
+						const cachedTokens = event.response.usage.cached_tokens || 0;
+						
+						// Store the token usage for later cost calculation
+						tokenUsage = {
+							input_tokens: event.response.usage.input_tokens || 0,
+							output_tokens: event.response.usage.output_tokens || 0
+						};
+
+						// Log the token usage
+						console.log(`[OpenAI] Token usage: ${tokenUsage.input_tokens} input tokens (${cachedTokens} cached), ${tokenUsage.output_tokens} output tokens`);
+
+						// Calculate and track the cost using our model cost mapping
+						if (tokenUsage.input_tokens > 0 || tokenUsage.output_tokens > 0) {
+							const totalCost = calculateCost(
+								'openai',
+								model,
+								tokenUsage.input_tokens,
+								tokenUsage.output_tokens,
+								cachedTokens
+							);
+
+							console.log(`[OpenAI] Usage cost: $${totalCost.toFixed(6)}`);
+
+							// Track the cost in our global cost tracker
+							costTracker.addCost(
+								'openai',
+								model,
+								totalCost,
+								tokenUsage.input_tokens + tokenUsage.output_tokens,
+								tokenUsage.input_tokens,
+								tokenUsage.output_tokens,
+								cachedTokens
+							);
+						}
 					}
 
 					// Handle response.output_text.delta - new format for text chunks

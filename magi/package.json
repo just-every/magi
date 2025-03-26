@@ -17,6 +17,8 @@
   },
   "license": "ISC",
   "dependencies": {
+    "node-pty": "^1.0.0",
+    "undici-types": "^7.5.0",
     "@anthropic-ai/sdk": "^0.17.1",
     "@google/generative-ai": "^0.2.1",
     "axios": "^1.6.8",

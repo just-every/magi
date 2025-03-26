@@ -36,6 +36,7 @@ export class Agent implements AgentInterface {
 	model?: string;
 	modelClass?: string;
 	modelSettings?: ModelSettings;
+	maxToolCalls: number;
 
 	// Event handlers for tool calls and results
 	onToolCall?: (toolCall: any) => void;
@@ -50,6 +51,7 @@ export class Agent implements AgentInterface {
 		this.model = definition.model;
 		this.modelClass = definition.modelClass;
 		this.modelSettings = modelSettings;
+		this.maxToolCalls = definition.maxToolCalls || 10; // Default to 10 if not specified
 		if (definition.workers) {
 			this.workers = definition.workers.map((createAgentFn: WorkerFunction) => {
 				// Call the function with no arguments or adjust based on what ExecutableFunction expects

@@ -18,12 +18,12 @@ const ProcessInput: React.FC<ProcessInputProps> = ({ onSubmit }) => {
      * Handle form submission
      */
     const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
+        if(e.preventDefault) e.preventDefault();
 
         if (inputValue.trim()) {
             onSubmit(inputValue);
             setInputValue('');
-            
+
             // Reset input height after submitting
             if (inputRef.current) {
                 inputRef.current.style.height = '40px';
@@ -37,7 +37,7 @@ const ProcessInput: React.FC<ProcessInputProps> = ({ onSubmit }) => {
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         // Allow shift+enter for newlines
         if (e.key === 'Enter' && e.shiftKey) {
-            e.preventDefault();
+            if(e.preventDefault) e.preventDefault();
 
             // Insert a newline at cursor position
             const pos = e.currentTarget.selectionStart || 0;
@@ -53,7 +53,7 @@ const ProcessInput: React.FC<ProcessInputProps> = ({ onSubmit }) => {
         }
         // Enter without shift submits
         else if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
+            if(e.preventDefault) e.preventDefault();
             inputFormRef.current?.dispatchEvent(new Event('submit', {cancelable: true, bubbles: true}));
         }
     };

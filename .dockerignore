@@ -17,3 +17,10 @@
 **/ENV/
 **/Dockerfile
 **/.server
+**/.git
+**/*.log
+**/npm-debug.log
+**/.dockerignore
+
+# Very important we don't overwrite the node_modules build for the container
+**/node_modules

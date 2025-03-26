@@ -148,7 +148,8 @@ export class Runner {
 			onEvent?: (event: StreamingEvent) => void,
 			onResponse?: (content: string) => void,
 			onComplete?: () => void
-		} = {}
+		} = {},
+		toolCallCount = 0 // Track the number of tool call iterations across recursive calls
 	): Promise<string> {
 		let fullResponse = '';
 		let collectedToolCalls: ToolCall[] = [];
@@ -288,6 +289,29 @@ export class Runner {
 			// Process tool call results if there were any tool calls
 			if (collectedToolCalls.length > 0 && collectedToolResults.length > 0) {
 				console.log(`[Runner] Collected ${collectedToolCalls.length} tool calls, running follow-up with results`);
+				
+				// Increment tool call count
+				toolCallCount++;
+				console.log(`[Runner] Tool call iteration ${toolCallCount} of ${agent.maxToolCalls} maximum`);
+				
+				// Check if we've reached the maximum number of tool calls
+				if (toolCallCount >= agent.maxToolCalls) {
+					console.log('**********************************************');
+					console.log(`[Runner] REACHED MAXIMUM TOOL CALLS (${agent.maxToolCalls})`);
+					console.log('[Runner] Forcing model to return a final answer and not use more tools');
+					console.log('**********************************************');
+					// On the last attempt, don't allow more tool calls
+					if (!agent.modelSettings) {
+						agent.modelSettings = {};
+					}
+					agent.modelSettings.tool_choice = 'none';
+				} else if (toolCallCount === 1) {
+					// After the first tool call, set tool_choice to 'auto' to prevent repetitive tool calling
+					if (!agent.modelSettings) {
+						agent.modelSettings = {};
+					}
+					agent.modelSettings.tool_choice = 'auto';
+				}
 
 				// Create tool call messages for the next model request
 				let toolCallMessages: ResponseInput = [];
@@ -340,7 +364,8 @@ export class Runner {
 					agent,
 					'', // No new user input is needed
 					toolCallMessages,
-					handlers
+					handlers,
+					toolCallCount // Pass the current toolCallCount to track across recursive calls
 				);
 
 				// Use the follow-up response as the final response

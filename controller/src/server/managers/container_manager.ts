@@ -112,12 +112,11 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
       -e HOST_HOSTNAME=host.docker.internal \
       -e CONTROLLER_PORT=${serverPort} \
       --env-file ${path.resolve(projectRoot, '.env')} \
-      -v ${projectRoot}:/magi-system:ro \
       -v claude_credentials:/claude_shared:rw \
       -v magi_output:/magi_output:rw \
       --add-host=host.docker.internal:host-gateway \
       magi-system:latest \
-      node /magi-system/magi/dist/magi.js --base64 "${base64Command}"`;
+      --base64 "${base64Command}"`;
 
 		// Execute the command and get the container ID
 		const result = await execPromise(dockerRunCommand);

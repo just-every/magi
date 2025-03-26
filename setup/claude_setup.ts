@@ -2,6 +2,12 @@
  * Set up Claude authentication in a Docker container using a shared volume.
  */
 import {spawn, exec} from 'child_process';
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+// Get the directory name in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Launch an interactive Docker container to set up Claude authentication.
@@ -118,7 +124,7 @@ export async function setupClaudeAuth(): Promise<boolean> {
 	}
 }
 
-// Allow running directly
-if (require.main === module) {
+// Allow running directly as ES module
+if (import.meta.url === `file://${process.argv[1]}`) {
 	setupClaudeAuth().catch(console.error);
 }

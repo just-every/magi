@@ -8,7 +8,7 @@ const CommandHeader: React.FC = () => {
 	const inputRef = useRef<HTMLInputElement>(null);
 
 	const handleSubmit = (e: React.FormEvent) => {
-		e.preventDefault();
+		if(e.preventDefault) e.preventDefault();
 
 		if (command.trim()) {
 			runCommand(command);
@@ -18,7 +18,7 @@ const CommandHeader: React.FC = () => {
 
 	const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
 		if (e.key === 'Enter') {
-			e.preventDefault();
+			if(e.preventDefault) e.preventDefault();
 
 			if (command.trim()) {
 				runCommand(command);
@@ -41,9 +41,9 @@ const CommandHeader: React.FC = () => {
 		>
 			<div className="container-fluid px-3">
 				<div className="d-flex align-items-center">
-					<form 
-						id="command-form" 
-						className="mx-auto" 
+					<form
+						id="command-form"
+						className="mx-auto"
 						style={{maxWidth: '1000px', width: '100%'}}
 						onSubmit={handleSubmit}>
 						<div className="input-group shadow-sm">

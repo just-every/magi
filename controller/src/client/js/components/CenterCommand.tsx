@@ -15,7 +15,7 @@ const CenterCommand: React.FC = () => {
 	}, [isFirstProcess]);
 
 	const handleSubmit = (e: React.FormEvent) => {
-		e.preventDefault();
+		if(e.preventDefault) e.preventDefault();
 
 		if (command.trim()) {
 			runCommand(command);
@@ -25,7 +25,7 @@ const CenterCommand: React.FC = () => {
 
 	const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
 		if (e.key === 'Enter') {
-			e.preventDefault();
+			if(e.preventDefault) e.preventDefault();
 
 			if (command.trim()) {
 				runCommand(command);

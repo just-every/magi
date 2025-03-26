@@ -14,6 +14,7 @@ import {createAgent, AgentType} from './magi_agents/index.js';
 import {addHistory, getHistory} from './utils/history.js';
 import {initCommunication, CommandMessage, getCommunicationManager} from './utils/communication.js';
 import {move_to_working_dir} from './utils/file_utils.js';
+import {costTracker} from './utils/cost_tracker.js';
 
 // Parse command line arguments
 function parseCommandLineArgs() {
@@ -31,6 +32,9 @@ function parseCommandLineArgs() {
 	return values;
 }
 
+
+// Store agent IDs to reuse them for the same agent type
+const agentIdMap = new Map<AgentType, string>();
 
 /**
  * Execute a command using an agent and capture the results
@@ -69,8 +73,20 @@ export async function runCommand(
 			console.log(`Using model class: ${modelClass}`);
 		}
 
-		// Create the agent with model and modelClass parameters
-		const agent = createAgent(agentType, model, modelClass);
+		// Get existing agent_id for this agent type if available
+		const existingAgentId = agentIdMap.get(agentType);
+		if (existingAgentId) {
+			console.log(`Reusing existing agent_id for ${agentType}: ${existingAgentId}`);
+		}
+		
+		// Create the agent with model, modelClass, and optional agent_id parameters
+		const agent = createAgent(agentType, model, modelClass, existingAgentId);
+		
+		// Store the agent_id for future use if we don't have one yet
+		if (!existingAgentId) {
+			agentIdMap.set(agentType, agent.agent_id);
+			console.log(`Stored new agent_id for ${agentType}: ${agent.agent_id}`);
+		}
 
 		// Get conversation history
 		const history = getHistory();
@@ -141,6 +157,24 @@ function checkModelProviderApiKeys(): boolean {
 	return hasValidKey;
 }
 
+// Add exit handlers to print cost summary
+process.on('exit', () => {
+	console.log('\nExiting MAGI system. Printing final cost summary:');
+	costTracker.printSummary();
+});
+
+process.on('SIGINT', () => {
+	console.log('\nReceived SIGINT. Printing cost summary before exit:');
+	costTracker.printSummary();
+	process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+	console.log('\nReceived SIGTERM. Printing cost summary before exit:');
+	costTracker.printSummary();
+	process.exit(0);
+});
+
 /**
  * Main function - entry point for the application
  */
@@ -166,6 +200,8 @@ async function main() {
 		console.log(`Received command via WebSocket: ${cmd.command}`);
 		if (cmd.command === 'stop') {
 			console.log('Received stop command, terminating...');
+			// Print cost summary before exit
+			costTracker.printSummary();
 			process.exit(0);
 		} else if (cmd.type === 'command') {
 			// Process user-provided follow-up commands
@@ -221,9 +257,10 @@ async function main() {
 			args['model-class']
 		);
 
-		// When running in test mode, exit after completion
+		// When running in test mode, print cost summary and exit
 		if (args.test) {
-			console.log('\nTesting complete. Exiting.');
+			console.log('\nTesting complete. Printing cost summary before exiting.');
+			costTracker.printSummary();
 			process.exit(0);
 		}
 	} catch (error) {

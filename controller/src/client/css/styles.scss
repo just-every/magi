@@ -239,9 +239,8 @@ header {
     width: 100%;
     height: 100%;
 
-    /* Sub-agent styling */
-    &.sub-agent {
-        border-left: 3px solid #2ca1e5;
+    &.agent-box {
+        border-radius: 16px; /* compensate for scale */
     }
 
     /* Make process box card header sticky */
@@ -365,11 +364,6 @@ header {
                 border-radius: 8px;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
                 transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-
-                &:hover {
-                    transform: scale(1.02);
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-                }
             }
         }
     }
@@ -469,7 +463,7 @@ header {
 .message-group {
     display: flex;
     flex-direction: column;
-    max-width: 85%;
+    max-width: 95%;
 }
 
 .assistant-message {
@@ -484,7 +478,6 @@ header {
 .tool-result-message,
 .system-message {
     align-self: flex-start;
-    max-width: 90%;
 }
 
 .message-bubble {
@@ -530,11 +523,6 @@ header {
                 transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
                 display: block;
                 margin: 0 auto;
-
-                &:hover {
-                    transform: scale(1.02);
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-                }
             }
         }
     }
@@ -749,7 +737,7 @@ header {
 /* Fixed MAGI title styling */
 #fixed-magi-title {
     font-family: 'Borel', sans-serif;
-    color: #00a4ff;
+    color: #fff;
     top: 30px;
     left: 20px;
     font-size: 1.4rem;

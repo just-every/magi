@@ -14,6 +14,7 @@ export interface AgentInterface {
     model?: string;
     modelClass?: string;
     modelSettings?: ModelSettings;
+    maxToolCalls?: number;
     onToolCall?: (toolCall: any) => void;
     onToolResult?: (result: any) => void;
     export(): AgentExportDefinition;
@@ -94,6 +95,7 @@ export interface AgentDefinition {
 	tools?: ToolFunction[];
 	model?: string;
 	modelClass?: string;
+	maxToolCalls?: number;
 }
 
 /**
@@ -116,7 +118,7 @@ export interface ModelSettings {
 	max_tokens?: number;
 	seed?: number;
 	response_format?: { type: string };
-	tool_choice?: 'auto' | 'any' | { type: string; function: { name: string } };
+	tool_choice?: 'auto' | 'none' | 'required' | { type: string; function: { name: string } };
 }
 
 /**

@@ -2,7 +2,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var fs = require("fs");
-var path = require("path");
+var path_1 = require("path");
+var url_1 = require("url");
 var readline = require("readline");
 var child_process_1 = require("child_process");
 var rl = readline.createInterface({
@@ -13,8 +14,11 @@ console.log('\x1b[36m%s\x1b[0m', '┌──────────────�
 console.log('\x1b[36m%s\x1b[0m', '│           MAGI SYSTEM SETUP         │');
 console.log('\x1b[36m%s\x1b[0m', '└─────────────────────────────────────┘');
 console.log('');
-var rootDir = path.resolve(__dirname, '..');
-var envPath = path.join(rootDir, '.env');
+// Get the directory name in ES modules
+var __filename = (0, url_1.fileURLToPath)(import.meta.url);
+var __dirname = path_1.default.dirname(__filename);
+var rootDir = path_1.default.resolve(__dirname, '..');
+var envPath = path_1.default.join(rootDir, '.env');
 // Check if .env file exists (used in the initial setup check)
 var openaiApiKey = '';
 function getOpenAIKey() {
@@ -204,7 +208,7 @@ if (args.includes('--help') || args.includes('-h')) {
     console.log('  - Claude setup');
     console.log('');
     console.log('Usage:');
-    console.log('  ts-node setup/setup.ts [options]');
+    console.log('  node setup/setup.js [options]');
     console.log('  npm run setup [-- options]');
     console.log('');
     console.log('Options:');

@@ -464,7 +464,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 						}
 					}
 					else if (streamingEvent.agent) {
-						if(!process.agent.agent_id) {
+						if(!process.agent.agent_id || process.agent.agent_id != process.agent.agent_id) {
 							process.agent.agent_id = streamingEvent.agent.agent_id;
 						}
 						updateAgent({

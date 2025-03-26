@@ -4,10 +4,18 @@
 import { ProcessData } from '../../context/SocketContext';
 import { BoxPosition } from '@types';
 
+const GRID_PADDING = 40; // Padding between grid cells
+const SQUARE_MAX_WIDTH = 1000;
+const SQUARE_MIN_WIDTH = 400;
+const SQUARE_MAX_HEIGHT = 1400;
+const SQUARE_MIN_HEIGHT = 400;
+const WORKER_SCALE = 0.5;
+
 /**
  * Calculate grid positions for processes and their sub-agents
  * @param processes Map of all active processes
- * @param container Reference to the container element
+ * @param containerWidth Width of the container
+ * @param containerHeight Height of the container
  * @param existingPositions Map of existing box positions
  * @returns Map of calculated box positions
  */
@@ -19,386 +27,249 @@ export const calculateBoxPositions = (
 ): Map<string, BoxPosition> => {
     if (processes.size === 0) return new Map<string, BoxPosition>();
 
-    // Copy existing positions to preserve them
-    const newPositions = new Map<string, BoxPosition>(existingPositions);
-
-    // Define basic dimensions
-    const gap = 40; // Gap between process boxes
-    const agentBoxScale = 0.25; // Agent boxes are 1/4 the size of process boxes
-    const safeMargin = 100; // Margin from viewport edges
-
-    // Calculate box dimensions based on container size
-    const maxWidth = 1000;
-    const maxHeight = Math.min(1500, Math.max(500, Math.round(maxWidth * (containerHeight / containerWidth))));
-    const boxWidth = Math.min(containerWidth, maxWidth);
-    const boxHeight = Math.min(containerHeight, maxHeight);
-
-    // Agent box dimensions
-    const agentBoxWidth = boxWidth * agentBoxScale;
-    const agentBoxHeight = boxHeight * agentBoxScale;
-
-    // Identify existing vs new processes
-    const existingProcessIds = new Set(existingPositions.keys());
-    const newProcessIds = new Set<string>();
-    for (const [id] of processes.entries()) {
-        if (!existingProcessIds.has(id)) {
-            newProcessIds.add(id);
-        }
+    // Define grid position interface
+    interface GridPosition {
+        row: number;
+        col: number;
     }
 
-    // Build a map of agent IDs to process IDs
-    const agentIdToProcessId = new Map<string, string>();
-    for (const [id, process] of processes.entries()) {
-        if (process.agent.agent_id) {
-            agentIdToProcessId.set(process.agent.agent_id, id);
-        }
+    // Store grid assignments between renders using a static cache
+    if (!calculateBoxPositions.gridCache) {
+        calculateBoxPositions.gridCache = new Map<string, GridPosition>();
     }
+    const gridCache = calculateBoxPositions.gridCache;
 
-    // Map processes to their children
-    const childrenMap = new Map<string, string[]>();
-    for (const [id] of processes.entries()) {
-        childrenMap.set(id, []);
-    }
+    // Calculate dimensions
+    const squareWidth = Math.min(SQUARE_MAX_WIDTH, Math.max(SQUARE_MIN_WIDTH, Math.round(containerWidth * 0.8)));
+    const squareHeight = Math.min(SQUARE_MAX_HEIGHT, Math.max(SQUARE_MIN_HEIGHT, Math.round(squareWidth * (containerHeight / containerWidth))));
+    const workerWidth = squareWidth - (GRID_PADDING/2);
+    const workerHeight = squareHeight - (GRID_PADDING/2);
 
-    // Collect all sub-agents and map them to their parent processes
-    for (const [id, process] of processes.entries()) {
-        if (process.agent.workers && process.agent.workers.size > 0) {
-            const parentChildren = childrenMap.get(id) || [];
+    // Create a map to store the final positions
+    const positionsMap = new Map<string, BoxPosition>(existingPositions);
 
-            // Add each sub-agent to the parent's children map
-            for (const [subAgentId] of process.agent.workers.entries()) {
-                const positionId = `subagent_${subAgentId}`;
-                if (!parentChildren.includes(positionId)) {
-                    parentChildren.push(positionId);
-                }
-            }
+    // Track occupied grid positions in this render
+    const occupiedGrid = new Map<string, string>();
 
-            childrenMap.set(id, parentChildren);
-        }
-    }
+    // Helper functions
+    const getGridKey = (row: number, col: number): string => `${row},${col}`;
+    const isGridPositionOccupied = (row: number, col: number): boolean =>
+        occupiedGrid.has(getGridKey(row, col));
 
-    // Helper: Check if a position collides with existing boxes
-    const hasCollision = (pos: BoxPosition, ignoreIds: Set<string> = new Set()): boolean => {
-        for (const [id, existingPos] of newPositions.entries()) {
-            if (ignoreIds.has(id)) continue;
+    // Convert grid position to screen coordinates
+    const gridToScreenCoords = (row: number, col: number) => ({
+        x: containerWidth / 2 + col * (squareWidth + GRID_PADDING),
+        y: containerHeight / 2 + row * (squareHeight + GRID_PADDING)
+    });
 
-            const padding = 20; // Minimum space between boxes
-
-            // Check for collision with padding
-            if (pos.x + pos.width + padding > existingPos.x &&
-                pos.x < existingPos.x + existingPos.width + padding &&
-                pos.y + pos.height + padding > existingPos.y &&
-                pos.y < existingPos.y + existingPos.height + padding) {
-                return true;
-            }
-        }
-        return false;
-    };
-
-    // Helper: Find a non-colliding position
-    const findNonCollidingPosition = (basePos: BoxPosition, maxAttempts: number = 20): BoxPosition => {
-        // First check if the base position is already good
-        if (!hasCollision(basePos)) return basePos;
-
-        // Different directions to try
-        const directions = [
-            { x: 1, y: 0 },   // Right
-            { x: 0, y: 1 },   // Down
-            { x: -1, y: 0 },  // Left
-            { x: 0, y: -1 },  // Up
-            { x: 1, y: 1 },   // Down-right
-            { x: -1, y: 1 },  // Down-left
-            { x: -1, y: -1 }, // Up-left
-            { x: 1, y: -1 }   // Up-right
-        ];
-
-        const pos = { ...basePos };
-
-        // Try different positions in increasing distance
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            const stepSize = 50 + (attempt * 25);
-
-            for (const dir of directions) {
-                const testPos = {
-                    ...pos,
-                    x: pos.x + dir.x * stepSize,
-                    y: pos.y + dir.y * stepSize
-                };
-
-                if (!hasCollision(testPos)) {
-                    return testPos;
-                }
-            }
+    // Find the nearest available position using a spiral search
+    const findNearestAvailablePosition = (centerRow: number = 0, centerCol: number = 0): GridPosition => {
+        // First check the center position
+        if (!isGridPositionOccupied(centerRow, centerCol)) {
+            return { row: centerRow, col: centerCol };
         }
 
-        // Last resort: random position
-        return {
-            ...basePos,
-            x: Math.random() * (containerWidth - basePos.width - 2 * safeMargin) + safeMargin,
-            y: Math.random() * (containerHeight - basePos.height - 2 * safeMargin) + safeMargin
-        };
-    };
+        // Spiral outward from the center
+        for (let radius = 1; radius < 20; radius++) {
+            for (let c = centerCol - radius; c <= centerCol + radius; c++) {
+                for (let r = centerRow - radius + 1; r <= centerRow + radius - 1; r++) {
 
-    // Calculate center of the viewport for grid layout
-    const centerX = containerWidth / 2 - boxWidth / 2;
-    const centerY = containerHeight / 2 - boxHeight / 2;
-
-    // Handle new processes - place in a grid layout
-    const newMainProcesses: [string, ProcessData][] = [];
-    for (const id of newProcessIds) {
-        const process = processes.get(id);
-        if (process) {
-            newMainProcesses.push([id, process]);
-        }
-    }
-
-    // Place new processes in a grid pattern
-    if (newMainProcesses.length > 0) {
-        // Count existing main processes
-        const existingMainCount = Array.from(newPositions.entries())
-            .filter(([id]) => processes.has(id))
-            .length;
-
-        // Calculate grid parameters for layout
-        const totalMainCount = existingMainCount + newMainProcesses.length;
-        const sqrtMain = Math.ceil(Math.sqrt(totalMainCount));
-        const mainBoxSpacing = boxWidth + gap;
-
-        // Track which grid positions are already taken
-        const takenSpots = new Set<string>();
-        for (const [id, pos] of newPositions.entries()) {
-            if (processes.has(id)) {
-                const gridX = Math.round((pos.x - centerX) / mainBoxSpacing);
-                const gridY = Math.round((pos.y - centerY) / mainBoxSpacing);
-                takenSpots.add(`${gridX},${gridY}`);
-            }
-        }
-
-        // Place each new process
-        let placedCount = 0;
-
-        // Try to fill open spots in the grid
-        for (let y = -Math.floor(sqrtMain/2); y <= Math.ceil(sqrtMain/2); y++) {
-            for (let x = -Math.floor(sqrtMain/2); x <= Math.ceil(sqrtMain/2); x++) {
-                const spotKey = `${x},${y}`;
-                if (!takenSpots.has(spotKey) && placedCount < newMainProcesses.length) {
-                    const [id] = newMainProcesses[placedCount];
-                    const baseX = centerX + x * mainBoxSpacing;
-                    const baseY = centerY + y * mainBoxSpacing;
-
-                    const basePos = {
-                        x: baseX,
-                        y: baseY,
-                        width: boxWidth,
-                        height: boxHeight
-                    };
-
-                    // Find a non-colliding position near this grid point
-                    const finalPos = findNonCollidingPosition(basePos);
-
-                    // Add the new position
-                    newPositions.set(id, finalPos);
-                    takenSpots.add(spotKey);
-                    placedCount++;
-                }
-            }
-        }
-
-        // If we still have processes to place, add them to extended grid
-        if (placedCount < newMainProcesses.length) {
-            const expandedSqrt = Math.ceil(Math.sqrt(totalMainCount * 1.5));
-
-            for (let y = -Math.floor(expandedSqrt/2); y <= Math.ceil(expandedSqrt/2) && placedCount < newMainProcesses.length; y++) {
-                for (let x = -Math.floor(expandedSqrt/2); x <= Math.ceil(expandedSqrt/2) && placedCount < newMainProcesses.length; x++) {
-                    const spotKey = `${x},${y}`;
-                    if (!takenSpots.has(spotKey)) {
-                        const [id] = newMainProcesses[placedCount];
-                        const baseX = centerX + x * mainBoxSpacing;
-                        const baseY = centerY + y * mainBoxSpacing;
-
-                        const basePos = {
-                            x: baseX,
-                            y: baseY,
-                            width: boxWidth,
-                            height: boxHeight
-                        };
-
-                        // Find a non-colliding position
-                        const finalPos = findNonCollidingPosition(basePos);
-
-                        // Add the new position
-                        newPositions.set(id, finalPos);
-                        takenSpots.add(spotKey);
-                        placedCount++;
+                    // Right column
+                    if (!isGridPositionOccupied(r, centerCol + radius)) {
+                        return { row: r, col: centerCol + radius };
                     }
-                }
-            }
-        }
-    }
 
-    // Position sub-agents for all processes
-    for (const [id, process] of processes.entries()) {
-        if (process.agent.workers && process.agent.workers.size > 0) {
-            const processPos = newPositions.get(id);
-            if (!processPos) continue;
+                    // Bottom row
+                    if (!isGridPositionOccupied(centerRow + radius, c)) {
+                        return { row: centerRow + radius, col: c };
+                    }
 
-            // Process all sub-agents
-            let i = 0;
-            for (const [subAgentId] of process.agent.workers.entries()) {
-                const positionId = `subagent_${subAgentId}`;
+                    // Left column
+                    if (!isGridPositionOccupied(r, centerCol - radius)) {
+                        return { row: r, col: centerCol - radius };
+                    }
 
-                // Set a default position for new sub-agents
-                if (!newPositions.has(positionId)) {
-                    newPositions.set(positionId, {
-                        x: processPos.x + processPos.width * 0.7 + (i * 10),
-                        y: processPos.y + processPos.height * 0.2 + (i * 10),
-                        width: agentBoxWidth,
-                        height: agentBoxHeight
-                    });
-                    i++;
-                }
-            }
-        }
-    }
-
-    // Position all sub-agents more precisely relative to their parents
-    for (const [parentId, childIds] of childrenMap.entries()) {
-        if (childIds.length === 0) continue;
-
-        // Get parent position
-        let parentPos = newPositions.get(parentId);
-        if (!parentPos && childIds.length > 0) {
-            // Try to find by agent ID
-            for (const [processId, process] of processes.entries()) {
-                if (process.agent.agent_id === parentId && newPositions.has(processId)) {
-                    parentPos = newPositions.get(processId);
-                    break;
-                }
-            }
-        }
-
-        if (!parentPos) continue;
-
-        // Define relative positions around the parent (clockwise from top-right)
-        const relativePositions = [
-            { x: 1.1, y: -0.2 },   // Top-right
-            { x: 1.1, y: 0.5 },    // Middle-right
-            { x: 1.1, y: 1.2 },    // Bottom-right
-            { x: 0.5, y: 1.2 },    // Bottom-middle
-            { x: -0.1, y: 1.2 },   // Bottom-left
-            { x: -0.3, y: 0.5 },   // Middle-left
-            { x: -0.3, y: -0.2 },  // Top-left
-            { x: 0.5, y: -0.4 }    // Top-middle
-        ];
-
-        // Additional positions for more than 8 agents
-        const extendedPositions = [
-            { x: 0.9, y: -0.4 },   // More top-right
-            { x: 1.3, y: 0.2 },    // More right-top
-            { x: 1.3, y: 0.8 },    // More right-bottom
-            { x: 0.9, y: 1.4 },    // More bottom-right
-            { x: 0.1, y: 1.4 },    // More bottom-left
-            { x: -0.5, y: 0.8 },   // More left-bottom
-            { x: -0.5, y: 0.2 },   // More left-top
-            { x: 0.1, y: -0.4 }    // More top-left
-        ];
-
-        // Use all positions for positioning
-        const allPositions = [...relativePositions, ...extendedPositions];
-
-        // Track used positions
-        const usedPosIndices = new Set<number>();
-        const processedChildIds = new Set<string>();
-
-        // First pass: preserve existing relative positions
-        for (let i = 0; i < childIds.length; i++) {
-            const childId = childIds[i];
-            if (!newProcessIds.has(childId) && existingProcessIds.has(childId)) {
-                processedChildIds.add(childId);
-
-                // Try to determine what position this agent was using
-                const childPos = newPositions.get(childId);
-                if (childPos) {
-                    // Calculate relative position to parent
-                    const relX = (childPos.x - parentPos.x) / parentPos.width;
-                    const relY = (childPos.y - parentPos.y) / parentPos.height;
-
-                    // Find closest matching position
-                    for (let posIdx = 0; posIdx < allPositions.length; posIdx++) {
-                        const templatePos = allPositions[posIdx];
-                        const dist = Math.sqrt(
-                            Math.pow(relX - templatePos.x, 2) +
-                            Math.pow(relY - templatePos.y, 2)
-                        );
-
-                        // If close to a template position, mark it as used
-                        if (dist < 0.5) {
-                            usedPosIndices.add(posIdx);
-                            break;
-                        }
+                    // Top row
+                    if (!isGridPositionOccupied(centerRow - radius, c)) {
+                        return { row: centerRow - radius, col: c };
                     }
                 }
             }
         }
 
-        // Second pass: position new sub-agents
-        for (let i = 0; i < childIds.length; i++) {
-            const childId = childIds[i];
-            if (processedChildIds.has(childId)) continue;
+        // Fallback for extremely crowded grid
+        return { row: Math.floor(Math.random() * 10), col: Math.floor(Math.random() * 10) };
+    };
 
-            // Find an unused position
-            let posIndex = 0;
-            while (usedPosIndices.has(posIndex) && posIndex < allPositions.length) {
-                posIndex++;
+    // Clean up cached grid positions for processes that no longer exist
+    const currentProcessIds = new Set<string>();
+    for (const [id] of processes.entries()) {
+        currentProcessIds.add(id);
+    }
+
+    for (const [id] of gridCache) {
+        if (id.includes(':workers:')) {
+            const processId = id.split(':workers:')[0];
+            if (!currentProcessIds.has(processId)) {
+                gridCache.delete(id);
             }
-
-            // If all positions are used, reuse them
-            if (posIndex >= allPositions.length) {
-                posIndex = i % allPositions.length;
-            }
-
-            // Mark this position as used
-            usedPosIndices.add(posIndex);
-
-            const position = allPositions[posIndex];
-
-            // Calculate the actual offset based on parent dimensions
-            const offsetX = position.x * parentPos.width;
-            const offsetY = position.y * parentPos.height;
-
-            // Calculate the base position
-            const baseX = parentPos.x;
-            const baseY = parentPos.y;
-
-            // Apply offset
-            const rawX = baseX + offsetX;
-            const rawY = baseY + offsetY;
-
-            // Create position object
-            const basePos = {
-                x: rawX,
-                y: rawY,
-                width: agentBoxWidth,
-                height: agentBoxHeight
-            };
-
-            // Find a non-colliding position
-            const finalPos = findNonCollidingPosition(basePos, 10);
-
-            // Set the final position
-            newPositions.set(childId, finalPos);
+        } else if (!currentProcessIds.has(id)) {
+            gridCache.delete(id);
         }
     }
 
     // Clean up any positions for processes that no longer exist
     for (const [id] of existingPositions) {
-        if (!processes.has(id)) {
-            newPositions.delete(id);
+        // Keep only positions for processes that still exist
+        const isMainProcess = processes.has(id);
+        const isSubagent = !isMainProcess &&
+            Array.from(processes.values()).some(p =>
+                p.agent?.workers &&
+                Array.from(p.agent.workers.keys()).some(workerId => id === workerId)
+            );
+
+        if (!isMainProcess && !isSubagent) {
+            positionsMap.delete(id);
         }
     }
 
-    return newPositions;
+    // First pass: Position main processes
+    for (const [id, process] of processes.entries()) {
+        let gridPos: GridPosition;
+
+        // Try to use existing position if available
+        if (gridCache.has(id)) {
+            const cached = gridCache.get(id);
+            if (!isGridPositionOccupied(cached.row, cached.col)) {
+                gridPos = cached;
+            } else {
+                // Find a new position near the cached one
+                gridPos = findNearestAvailablePosition(cached.row, cached.col);
+            }
+        } else {
+            // Find a new position near the center
+            gridPos = findNearestAvailablePosition();
+        }
+
+        // Mark this position as occupied and update cache
+        occupiedGrid.set(getGridKey(gridPos.row, gridPos.col), id);
+        gridCache.set(id, gridPos);
+
+        // Convert to screen coordinates
+        const { x, y } = gridToScreenCoords(gridPos.row, gridPos.col);
+
+        // Set position in the result map
+        positionsMap.set(id, {
+            x,
+            y,
+            width: squareWidth,
+            height: squareHeight,
+            scale: 1
+        });
+
+        if (!process.agent?.workers || process.agent.workers.size === 0) continue;
+
+        const workers = Array.from(process.agent.workers.entries());
+
+        // Position workers in groups of up to 4 per grid cell
+        const workerGroups = Math.ceil(workers.length / 4);
+
+        for (let groupIndex = 0; groupIndex < workerGroups; groupIndex++) {
+            // Generate a stable key for this worker group
+            const groupKey = `${id}:workers:${groupIndex}`;
+            let groupGridPos: GridPosition;
+
+            // Try to use cached position
+            if (gridCache.has(groupKey)) {
+                const cached = gridCache.get(groupKey);
+                if (!isGridPositionOccupied(cached.row, cached.col)) {
+                    groupGridPos = cached;
+                } else {
+                    // Find a new position near the process
+                    groupGridPos = findNearestAvailablePosition(gridPos.row, gridPos.col);
+                }
+            } else {
+                // Find a new position near the process
+                groupGridPos = findNearestAvailablePosition(gridPos.row, gridPos.col);
+            }
+
+            // Mark this position as occupied and update cache
+            occupiedGrid.set(getGridKey(groupGridPos.row, groupGridPos.col), groupKey);
+            gridCache.set(groupKey, groupGridPos);
+
+            // Get base coordinates for this worker group
+            const { x: baseX, y: baseY } = gridToScreenCoords(groupGridPos.row, groupGridPos.col);
+
+            // Position up to 4 workers in a 2x2 grid within this cell
+            for (let i = 0; i < 4 && (groupIndex * 4 + i) < workers.length; i++) {
+                const workerIndex = groupIndex * 4 + i;
+                if (workerIndex >= workers.length) break;
+
+                const [workerId] = workers[workerIndex];
+
+                // Determine the relative position of the worker group to the parent process
+                const isLeft = groupGridPos.col < gridPos.col;
+                const isRight = groupGridPos.col > gridPos.col;
+                const isAbove = groupGridPos.row < gridPos.row;
+                const isBelow = groupGridPos.row > gridPos.row;
+
+                const TOP_LEFT = 0;
+                const TOP_RIGHT = 1;
+                const BOTTOM_LEFT = 2;
+                const BOTTOM_RIGHT = 3;
+
+                // Re-order the 2x2 grid based on parent position to place workers closest to parent first
+                let gridOrder = [TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT];
+
+                if (isRight) {
+                    gridOrder = [TOP_LEFT, BOTTOM_LEFT, TOP_RIGHT, BOTTOM_RIGHT]; // Start from left side (closer to parent)
+                } else if (isLeft) {
+                    gridOrder = [TOP_RIGHT, BOTTOM_RIGHT, TOP_LEFT, BOTTOM_LEFT]; // Start from right side (closer to parent)
+                } else if (isBelow) {
+                    gridOrder = [TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT,BOTTOM_RIGHT]; // Start from top side (closer to parent)
+                } else if (isAbove) {
+                    gridOrder = [BOTTOM_LEFT, BOTTOM_RIGHT, TOP_LEFT, TOP_RIGHT]; // Start from bottom side (closer to parent)
+                }
+
+                // Get the placement index for this worker
+                const placementIndex = gridOrder[i];
+
+                // Calculate position within the 2x2 grid using the new placement order
+                let xOffset = (placementIndex % 2 === 0 ? 0 : 1) * (Math.round(workerWidth * WORKER_SCALE) + (GRID_PADDING / 2));
+                let yOffset = (Math.floor(placementIndex / 2) === 0 ? 0 : 1) * (Math.round(workerHeight * WORKER_SCALE) + (GRID_PADDING / 2));
+
+                // Move boxes closer to the parent side only
+                if (isRight) {
+                    xOffset -= (GRID_PADDING / 2); // Move left (toward parent)
+                } else if (isLeft) {
+                    xOffset += (GRID_PADDING / 2); // Move right (toward parent)
+                }
+
+                if (isBelow) {
+                    yOffset -= (GRID_PADDING / 2); // Move up (toward parent)
+                } else if (isAbove) {
+                    yOffset += (GRID_PADDING / 2); // Move down (toward parent)
+                }
+
+                xOffset -= Math.round(workerWidth * WORKER_SCALE * WORKER_SCALE);
+                yOffset -= Math.round(workerHeight * WORKER_SCALE * WORKER_SCALE);
+
+                positionsMap.set(workerId, {
+                    x: baseX + xOffset,
+                    y: baseY + yOffset,
+                    width: workerWidth,
+                    height: workerHeight,
+                    scale: WORKER_SCALE
+                });
+            }
+        }
+    }
+
+    return positionsMap;
 };
+
+// Add a static property to maintain grid positions between renders
+calculateBoxPositions.gridCache = new Map();
 
 /**
  * Calculate bounding box for all positions
@@ -420,8 +291,8 @@ export const calculateBoundingBox = (positions: Map<string, BoxPosition>): {
     for (const position of positions.values()) {
         minX = Math.min(minX, position.x);
         minY = Math.min(minY, position.y);
-        maxX = Math.max(maxX, position.x + position.width);
-        maxY = Math.max(maxY, position.y + position.height);
+        maxX = Math.max(maxX, position.x + (position.width * position.scale));
+        maxY = Math.max(maxY, position.y + (position.height * position.scale));
     }
 
     // If no valid positions, return default values

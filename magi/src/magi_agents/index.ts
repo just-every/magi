@@ -47,9 +47,9 @@ export type AgentType =
 	| 'godel_pr_review';
 
 /**
- * Create an agent of the specified type with optional model override
+ * Create an agent of the specified type with optional model override and agent_id
  */
-export function createAgent(type: AgentType, model?: string, modelClass?: string): Agent {
+export function createAgent(type: AgentType, model?: string, modelClass?: string, agent_id?: string): Agent {
 	let agent: Agent;
 
 	switch (type) {
@@ -94,6 +94,11 @@ export function createAgent(type: AgentType, model?: string, modelClass?: string
 			break;
 		default:
 			throw new Error(`Unknown agent type: ${type}`);
+	}
+
+	// Override agent_id if specified
+	if (agent_id) {
+		agent.agent_id = agent_id;
 	}
 
 	// Apply model override if specified

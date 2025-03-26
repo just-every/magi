@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "postinstall": "cd controller && npm install && cd ../magi && npm install",
-    "dev": "cd controller/ && npm run cleanup && npx nodemon",
+    "build": "cd controller && npm run build && cd ../magi && npm run build",
+    "dev": "cd controller && npm run cleanup && npx nodemon",
     "lint": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts'",
     "lint:fix": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts' --fix",
     "lint:ui": "eslint controller/src/client/js/ui/",
-    "setup": "npx tsc setup/setup.ts --esModuleInterop && node dist/setup/setup.js",
-    "setup-claude": "npx tsc setup/claude_setup.ts --esModuleInterop && node dist/setup/claude_setup.js"
+    "setup": "npx tsc -p setup && node dist/setup/setup.js",
+    "setup-claude": "npx tsc -p setup && node dist/setup/claude_setup.js"
   },
   "repository": {
     "type": "git",
@@ -18,6 +19,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^8.56.0",
+    "@types/node": "^22.13.13",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "eslint": "^8.56.0",

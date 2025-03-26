@@ -80,10 +80,10 @@ const ProcessGrid: React.FC = () => {
         // Don't auto-zoom immediately to avoid rapid changes
         const timer = setTimeout(() => {
             autoZoomToFit();
-        }, 500);
+        }, 100);
 
         return () => clearTimeout(timer);
-    }, [processes.size, containerSize]);
+    }, [boxPositions.size, containerSize]);
 
     // Update transform when zoom or position changes
     useEffect(() => {
@@ -153,8 +153,6 @@ const ProcessGrid: React.FC = () => {
         const modifierKeyPressed = isMac ? e.metaKey : e.ctrlKey;
 
         if (modifierKeyPressed) {
-            e.preventDefault();
-
             // Normalize delta across browsers
             const normalizedDelta = Math.abs(e.deltaY) > 100
                 ? e.deltaY / 100 // For pixel-based browsers
@@ -239,6 +237,7 @@ const ProcessGrid: React.FC = () => {
 
     // Focus on a specific process
     const focusOnProcess = (processId: string) => {
+        if (isDragging) return;
         if (!containerRef.current || !boxPositions.has(processId)) return;
 
         const position = boxPositions.get(processId)!;
@@ -285,7 +284,8 @@ const ProcessGrid: React.FC = () => {
                 left: `${position.x}px`,
                 top: `${position.y}px`,
                 opacity: process.status === 'terminated' ? '0.2' : '1',
-                transition: 'left 0.3s, top 0.3s',
+                transition: 'left 0.3s ease-in-out, top 0.3s ease-in-out',
+                transform: `scale(${position.scale})`,
             };
 
             // Add the process box
@@ -305,21 +305,10 @@ const ProcessGrid: React.FC = () => {
 
             // Handle sub-agents of this process
             if (process.agent.workers && process.agent.workers.size > 0) {
-                for (const [subAgentId, agent] of process.agent.workers.entries()) {
+                for (const [workerId, agent] of process.agent.workers.entries()) {
                     // Get position for this sub-agent
-                    const positionId = `subagent_${subAgentId}`;
-                    let agentPosition = boxPositions.get(positionId);
-
-                    // If no position exists, create a default one
-                    if (!agentPosition) {
-                        agentPosition = {
-                            x: position.x + position.width * 0.7,
-                            y: position.y + position.height * 0.2,
-                            width: position.width * agentBoxScale,
-                            height: position.height * agentBoxScale
-                        };
-                        boxPositions.set(positionId, agentPosition);
-                    }
+                    let agentPosition = boxPositions.get(workerId);
+                    if (!agentPosition) continue;
 
                     // Style for agent box
                     const agentStyle = {
@@ -328,20 +317,18 @@ const ProcessGrid: React.FC = () => {
                         left: `${agentPosition.x}px`,
                         top: `${agentPosition.y}px`,
                         opacity: process.status === 'terminated' ? '0.2' : '1',
-                        transition: 'left 0.5s, top 0.5s, transform 0.3s',
-                        boxShadow: '0 4px 8px rgba(0, 0, 0, 0.15)',
-                        transform: 'scale(1)',
-                        zIndex: '10' // Ensure agent boxes appear above process boxes
+                        transition: 'left 0.3s ease-in-out, top 0.3s ease-in-out',
+                        transform: `scale(${agentPosition.scale})`,
                     };
 
                     // Add agent box
                     agentElements.push(
-                        <div key={subAgentId} style={agentStyle} className="agent-wrapper">
+                        <div key={workerId} style={agentStyle} className="agent-wrapper">
                             <AgentBox
-                                id={subAgentId}
+                                id={workerId}
                                 colors={process.colors}
                                 logs={process.logs}
-                                agentName={agent.name || subAgentId}
+                                agentName={agent.name || workerId}
                                 messages={agent.messages}
                                 isTyping={agent.isTyping}
                             />
@@ -418,7 +405,7 @@ const ProcessGrid: React.FC = () => {
                             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
                             const modifierKeyPressed = isMac ? e.metaKey : e.ctrlKey;
                             if (modifierKeyPressed) {
-                                e.preventDefault();
+                                if(e.preventDefault) e.preventDefault();
                             }
                         }, {passive: false});
                     }
