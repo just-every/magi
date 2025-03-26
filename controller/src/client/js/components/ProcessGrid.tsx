@@ -29,7 +29,7 @@ const ProcessGrid: React.FC = () => {
     const [isDragging, setIsDragging] = useState<boolean>(false);
     const [startDragX, setStartDragX] = useState<number>(0);
     const [startDragY, setStartDragY] = useState<number>(0);
-    const [, setWasDragged] = useState<boolean>(false);
+    const [wasDragged, setWasDragged] = useState<boolean>(false);
     const [containerSize, setContainerSize] = useState({width: 0, height: 0});
     const [boxPositions, setBoxPositions] = useState<Map<string, BoxPosition>>(new Map());
 
@@ -236,8 +236,8 @@ const ProcessGrid: React.FC = () => {
     };
 
     // Focus on a specific process
-    const focusOnProcess = (processId: string) => {
-        if (isDragging) return;
+    const focusOnProcess = (processId: string, focusMode: 'parent-and-children' | 'only-box' = 'parent-and-children') => {
+        if (isDragging || wasDragged) return;
         if (!containerRef.current || !boxPositions.has(processId)) return;
 
         const position = boxPositions.get(processId)!;
@@ -249,8 +249,16 @@ const ProcessGrid: React.FC = () => {
         const headerHeight = header ? header.offsetHeight : 0;
         const viewportHeight = containerSize.height - headerHeight;
 
-        // Set zoom to 100% and center the box
-        setZoomLevel(1);
+        // Set zoom based on focus mode
+        if (focusMode === 'only-box') {
+            // Only focus on this box at 100% zoom
+            setZoomLevel(1);
+        } else {
+            // Focus on parent and children (default behavior)
+            // This shows the process and its children at an appropriate zoom level
+            setZoomLevel(1);
+        }
+        
         setTranslateX((viewportWidth - position.width) / 2 - position.x);
         setTranslateY(headerHeight + (viewportHeight - position.height) / 2 - position.y);
 
