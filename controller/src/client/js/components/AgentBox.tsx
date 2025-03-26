@@ -17,13 +17,20 @@ interface AgentBoxProps {
     isTyping: boolean;
 }
 
-const AgentBox: React.FC<AgentBoxProps> = ({
+interface AgentBoxWithParentProcess extends AgentBoxProps {
+    parentProcessId?: string;
+    onFocusAgent?: (agentId: string, parentProcessId: string, focusMode: 'parent-and-children' | 'only-box') => void;
+}
+
+const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
     id,
     colors,
     logs,
     agentName,
     messages,
-    isTyping
+    isTyping,
+    parentProcessId,
+    onFocusAgent
 }) => {
     const logsRef = useRef<HTMLDivElement>(null);
     
@@ -58,16 +65,25 @@ const AgentBox: React.FC<AgentBoxProps> = ({
             }
             
             // Set timeout to differentiate between single and double clicks
-            // For agents, this would either focus on the parent process + this agent
-            // or only on this agent
             clickTimeout.current = window.setTimeout(() => {
+                // If there's a parent process ID and callback handler
+                if (parentProcessId && onFocusAgent) {
+                    if (clickCount.current === 1) {
+                        // Single click - focus on parent and all children
+                        onFocusAgent(id, parentProcessId, 'parent-and-children');
+                    } else if (clickCount.current === 2) {
+                        // Double click - focus only on this agent
+                        onFocusAgent(id, parentProcessId, 'only-box');
+                    }
+                }
+                
                 // Reset click count after handling
                 clickCount.current = 0;
                 clickTimeout.current = null;
-                
-                // Implement event bubbling to parent when needed
-                // Currently as a placeholder since we need to connect to the parent process
             }, 300);
+            
+            // Stop event propagation to prevent bubbling
+            e.stopPropagation();
         }
     };
 

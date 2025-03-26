@@ -235,7 +235,7 @@ const ProcessGrid: React.FC = () => {
         applyTransition();
     };
 
-    // Focus on a specific process
+    // Focus on a specific process or agent
     const focusOnProcess = (processId: string, focusMode: 'parent-and-children' | 'only-box' = 'parent-and-children') => {
         if (isDragging || wasDragged) return;
         if (!containerRef.current || !boxPositions.has(processId)) return;
@@ -249,18 +249,60 @@ const ProcessGrid: React.FC = () => {
         const headerHeight = header ? header.offsetHeight : 0;
         const viewportHeight = containerSize.height - headerHeight;
 
-        // Set zoom based on focus mode
-        if (focusMode === 'only-box') {
-            // Only focus on this box at 100% zoom
+        // Process and its child agents
+        if (focusMode === 'parent-and-children') {
+            // Find the process in our data
+            const process = processes.get(processId);
+            if (process && process.agent && process.agent.workers && process.agent.workers.size > 0) {
+                // This process has worker agents we need to include in the view
+                // Calculate bounding box of process and all its children
+                const childIds = Array.from(process.agent.workers.keys());
+                
+                // Create a temporary bounding box for the group
+                let minX = position.x;
+                let minY = position.y;
+                let maxX = position.x + position.width;
+                let maxY = position.y + position.height;
+                
+                // Expand bounding box to include all children
+                childIds.forEach(workerId => {
+                    const childPosition = boxPositions.get(workerId);
+                    if (childPosition) {
+                        minX = Math.min(minX, childPosition.x);
+                        minY = Math.min(minY, childPosition.y);
+                        maxX = Math.max(maxX, childPosition.x + (childPosition.width * childPosition.scale));
+                        maxY = Math.max(maxY, childPosition.y + (childPosition.height * childPosition.scale));
+                    }
+                });
+                
+                // Calculate appropriate zoom to fit the process and its children
+                const groupWidth = maxX - minX;
+                const groupHeight = maxY - minY;
+                const groupCenterX = minX + (groupWidth / 2);
+                const groupCenterY = minY + (groupHeight / 2);
+                
+                // Allow some padding
+                const padding = 60;
+                const zoomX = (viewportWidth - padding) / groupWidth;
+                const zoomY = (viewportHeight - padding) / groupHeight;
+                let zoom = Math.min(zoomX, zoomY, 1); // Cap at 1.0 (100%)
+                
+                // Set zoom and center the group
+                setZoomLevel(zoom);
+                setTranslateX((viewportWidth / 2) - (groupCenterX * zoom));
+                setTranslateY(headerHeight + (viewportHeight / 2) - (groupCenterY * zoom));
+            } else {
+                // No children, just focus on this process box
+                setZoomLevel(1);
+                setTranslateX((viewportWidth - position.width) / 2 - position.x);
+                setTranslateY(headerHeight + (viewportHeight - position.height) / 2 - position.y);
+            }
+        } else if (focusMode === 'only-box') {
+            // Focus only on this specific box at 100% zoom
             setZoomLevel(1);
-        } else {
-            // Focus on parent and children (default behavior)
-            // This shows the process and its children at an appropriate zoom level
-            setZoomLevel(1);
+            setTranslateX((viewportWidth - position.width) / 2 - position.x);
+            setTranslateY(headerHeight + (viewportHeight - position.height) / 2 - position.y);
         }
-        
-        setTranslateX((viewportWidth - position.width) / 2 - position.x);
-        setTranslateY(headerHeight + (viewportHeight - position.height) / 2 - position.y);
 
         // Apply smooth transition
         applyTransition();
@@ -339,6 +381,11 @@ const ProcessGrid: React.FC = () => {
                                 agentName={agent.name || workerId}
                                 messages={agent.messages}
                                 isTyping={agent.isTyping}
+                                parentProcessId={id}
+                                onFocusAgent={(agentId, parentId, focusMode) => {
+                                    // Focus on the parent process with the desired focus mode
+                                    focusOnProcess(parentId, focusMode);
+                                }}
                             />
                         </div>
                     );
