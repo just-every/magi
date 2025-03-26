@@ -1,167 +1,124 @@
 /**
  * Cost tracking module for the MAGI system.
- * 
+ *
  * Tracks costs across all model providers and provides reporting functions.
  */
-
-interface CostEntry {
-  timestamp: Date;
-  provider: string;
-  model: string;
-  cost_usd: number;
-  tokens?: number;
-  prompt_tokens?: number;
-  cached_tokens?: number;
-  completion_tokens?: number;
-}
-
-interface ProviderSummary {
-  total_cost: number;
-  call_count: number;
-  models: Record<string, {
-    cost: number;
-    calls: number;
-  }>;
-}
+import {findModel, ModelUsage} from '../model_providers/model_data.js';
 
 /**
  * Singleton class to track costs across all model providers
  */
 class CostTracker {
-  private entries: CostEntry[] = [];
-  private started: Date = new Date();
+	private entries: ModelUsage[] = [];
+	private started: Date = new Date();
 
-  /**
-   * Add a cost entry from any model provider
-   * 
-   * @param provider The model provider (e.g., 'openai', 'anthropic', 'google')
-   * @param model The model name (e.g., 'gpt-4o', 'claude-3-opus')
-   * @param cost_usd The cost in USD (required)
-   * @param tokens Total tokens used (optional)
-   * @param prompt_tokens Input tokens used (optional)
-   * @param completion_tokens Output tokens used (optional)
-   * @param cached_tokens Cached input tokens used (optional, for OpenAI)
-   */
-  addCost(provider: string, model: string, cost_usd: number, tokens?: number, prompt_tokens?: number, completion_tokens?: number, cached_tokens?: number): void {
-    // Validate cost input (must be non-negative)
-    if (cost_usd < 0) {
-      console.warn(`[CostTracker] Ignoring negative cost value: ${cost_usd}`);
-      return;
-    }
+	/**
+	 * Calculate cost for a given model and usage
+	 *
+	 * @param model ModelEntry object containing model details
+	 * @param usage ModelUsage object containing usage details
+	 * @returns ModelUsage object with updated cost
+	 */
+	calculateCost(usage: ModelUsage): ModelUsage {
+		if (!usage.cost) {
+            const model = findModel(usage.model);
+            if (!model) {
+              throw new Error(`Model not found when recording usage: ${usage.model}`);
+            }
 
-    // Add the cost entry
-    this.entries.push({
-      timestamp: new Date(),
-      provider,
-      model,
-      cost_usd,
-      tokens,
-      prompt_tokens,
-      cached_tokens,
-      completion_tokens
-    });
+			usage.cost = 0;
 
-    // Log the cost addition
-    console.log(`[CostTracker] Added cost: $${cost_usd.toFixed(6)} for ${provider}/${model}`);
-  }
+			const input_tokens = (usage.input_tokens || 0) - (usage.cached_tokens || 0);
+			const output_tokens = usage.output_tokens || 0;
+			const cached_tokens = usage.cached_tokens || 0;
 
-  /**
-   * Get total cost across all providers
-   */
-  getTotalCost(): number {
-    return this.entries.reduce((sum, entry) => sum + entry.cost_usd, 0);
-  }
+			if (input_tokens > 0 && model?.cost?.input_per_million) {
+				usage.cost += input_tokens / 1000000 * model.cost.input_per_million;
+			}
+			if (output_tokens > 0 && model?.cost?.output_per_million) {
+				usage.cost += input_tokens / 1000000 * model.cost.output_per_million;
+			}
+			if (cached_tokens > 0 && model?.cost?.cached_input_per_million) {
+				usage.cost += input_tokens / 1000000 * model.cost.cached_input_per_million;
+			}
+		}
 
-  /**
-   * Get costs summarized by provider
-   */
-  getCostsByProvider(): Record<string, ProviderSummary> {
-    const summary: Record<string, ProviderSummary> = {};
+		return usage;
+	}
 
-    // Initialize the summary object
-    for (const entry of this.entries) {
-      if (!summary[entry.provider]) {
-        summary[entry.provider] = {
-          total_cost: 0,
-          call_count: 0,
-          models: {}
-        };
-      }
+	/**
+	 * Record usage details from a model provider
+	 *
+	 * @param usage ModelUsage object containing the cost and usage details
+	 */
+	addUsage(usage: ModelUsage): void {
+		usage.timestamp = new Date();
+		usage = this.calculateCost(usage);
+		this.entries.push(usage);
+	}
 
-      const providerSummary = summary[entry.provider];
-      providerSummary.total_cost += entry.cost_usd;
-      providerSummary.call_count += 1;
-      
-      // Track by model
-      if (!providerSummary.models[entry.model]) {
-        providerSummary.models[entry.model] = {
-          cost: 0,
-          calls: 0
-        };
-      }
-      
-      providerSummary.models[entry.model].cost += entry.cost_usd;
-      providerSummary.models[entry.model].calls += 1;
-    }
+	/**
+	 * Get total cost across all providers
+	 */
+	getTotalCost(): number {
+		return this.entries.reduce((sum, entry) => sum + (entry.cost || 0), 0);
+	}
 
-    return summary;
-  }
+	/**
+	 * Get costs summarized by model
+	 */
+	getCostsByModel(): Record<string, { cost: number; calls: number; }> {
+		const models: Record<string, { cost: number; calls: number; }> = {};
 
-  /**
-   * Print a summary of all costs to the console
-   */
-  printSummary(): void {
-    const totalCost = this.getTotalCost();
-    const costsByProvider = this.getCostsByProvider();
-    const runtime = Math.round((new Date().getTime() - this.started.getTime()) / 1000);
-    
-    console.log('\n========== MAGI COST SUMMARY ==========');
-    console.log(`Runtime: ${runtime} seconds`);
-    console.log(`Total API Cost: $${totalCost.toFixed(6)}`);
-    
-    if (Object.keys(costsByProvider).length === 0) {
-      console.log('No API costs recorded.');
-      console.log('=========================================\n');
-      return;
-    }
-    
-    console.log('\nCosts by Provider:');
-    
-    // For each provider
-    for (const [provider, summary] of Object.entries(costsByProvider)) {
-      console.log(`\n${provider.toUpperCase()}: $${summary.total_cost.toFixed(6)} (${summary.call_count} calls)`);
-      
-      // For each model within the provider
-      for (const [model, modelData] of Object.entries(summary.models)) {
-        console.log(`  - ${model}: $${modelData.cost.toFixed(6)} (${modelData.calls} calls)`);
-      }
-    }
-    
-    console.log('\n=========================================\n');
-  }
+		// Initialize the summary object
+		for (const entry of this.entries) {
+			// Track by model
+			if (!models[entry.model]) {
+				models[entry.model] = {
+					cost: 0,
+					calls: 0
+				};
+			}
 
-  /**
-   * Get cost data in a structured format
-   */
-  getCostData(): {
-    total_cost: number;
-    runtime_seconds: number;
-    providers: Record<string, ProviderSummary>;
-  } {
-    return {
-      total_cost: this.getTotalCost(),
-      runtime_seconds: Math.round((new Date().getTime() - this.started.getTime()) / 1000),
-      providers: this.getCostsByProvider()
-    };
-  }
+			models[entry.model].cost += entry.cost || 0;
+			models[entry.model].calls += 1;
+		}
 
-  /**
-   * Reset the cost tracker (mainly for testing)
-   */
-  reset(): void {
-    this.entries = [];
-    this.started = new Date();
-  }
+		return models;
+	}
+
+	/**
+	 * Print a summary of all costs to the console
+	 */
+	printSummary(): void {
+        if(!this.entries.length) {
+            return;
+        }
+
+		const totalCost = this.getTotalCost();
+		const costsByModel = this.getCostsByModel();
+		const runtime = Math.round((new Date().getTime() - this.started.getTime()) / 1000);
+
+		console.log('\n\nCOST SUMMARY');
+		console.log(`Runtime: ${runtime} seconds`);
+		console.log(`Total API Cost: $${totalCost.toFixed(6)}`);
+
+		console.log('\nModels:');
+		// For each model within the provider
+		for (const [model, modelData] of Object.entries(costsByModel)) {
+			console.log(`\t${model}:\t$${modelData.cost.toFixed(6)} (${modelData.calls} calls)`);
+		}
+
+        this.reset();
+	}
+
+	/**
+	 * Reset the cost tracker (mainly for testing)
+	 */
+	reset(): void {
+		this.entries = [];
+		this.started = new Date();
+	}
 }
 
 // Export a singleton instance

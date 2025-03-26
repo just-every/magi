@@ -17,13 +17,13 @@ let processDirectory: string | null = null;
  * @param subdirectory - The subdirectory to create or access
  * @returns The path to the created directory
  */
-export function get_output_dir(subdirectory: string): string {
+export function get_output_dir(subdirectory?: string): string {
 	if (!processDirectory) {
 		// Create the working directory
 		processDirectory = path.join('/magi_output', process.env.PROCESS_ID);
 		console.log(`Output directory created: ${processDirectory}`);
 	}
-	const outputDirectory = path.join(processDirectory, subdirectory);
+	const outputDirectory = subdirectory ? path.join(processDirectory, subdirectory) : processDirectory;
 	fs.mkdirSync(outputDirectory, { recursive: true });
 	return outputDirectory;
 }
@@ -41,14 +41,6 @@ export function get_working_dir(): string { return get_output_dir('working'); }
  */
 export function move_to_working_dir(): void {
 	process.chdir(get_working_dir());
-}
-
-/**
- * Mount the MAGI code directory for editing
- */
-export function mount_magi_code() {
-	// Mount the magi-system directory for editing
-	mount_directory('/magi-system');
 }
 
 

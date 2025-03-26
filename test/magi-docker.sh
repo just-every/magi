@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# No arguments check - now handled by magi.py
+# Ensure the script exists if build fails
+set -e
 
 # Generate a random container name suffix
 RANDOM_SUFFIX=$(openssl rand -hex 4)

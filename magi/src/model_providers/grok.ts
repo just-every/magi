@@ -18,6 +18,7 @@ import {
 	ToolCall,
 	ResponseInput
 } from '../types.js';
+import {costTracker} from '../utils/cost_tracker.js';
 
 /**
  * Grok model provider implementation
@@ -167,6 +168,18 @@ export class GrokProvider implements ModelProvider {
 
 						try {
 							const eventData = JSON.parse(jsonStr);
+
+							// Handle response.completed event which contains token usage information
+							if (eventData.usage && typeof eventData.usage === 'object') {
+								// Track the cost in our global cost tracker
+								costTracker.addUsage({
+									model,
+									input_tokens: eventData.usage.prompt_tokens || 0,
+									output_tokens: eventData.usage.completion_tokens || 0,
+									cached_tokens: eventData.usage.prompt_tokens_details?.cached_tokens || 0,
+									metadata: {reasoning_tokens: eventData.usage.reasoning_tokens || 0},
+								});
+							}
 
 							// Handle choices
 							if (eventData.choices && eventData.choices.length > 0) {

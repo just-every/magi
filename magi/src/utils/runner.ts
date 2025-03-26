@@ -8,7 +8,7 @@
 import {StreamingEvent, ToolEvent, MessageEvent, ToolCall, ResponseInput, RunStatus, RunResult} from '../types.js';
 import {Agent} from './agent.js';
 import {getModelProvider} from '../model_providers/model_provider.js';
-import {MODEL_GROUPS} from '../magi_agents/constants.js';
+import {MODEL_GROUPS} from '../model_providers/model_data.js';
 import {getModelFromClass} from '../model_providers/model_provider.js';
 import {processToolCall} from './tool_call.js';
 
@@ -36,9 +36,11 @@ export class Runner {
 			{role: 'system', content: agent.instructions},
 			// Add conversation history
 			...conversationHistory,
-			// Add the current user input
-			{role: 'user', content: input}
 		];
+		if(input) {
+			// Add the user input message
+			messages.push({role: 'user', content: input});
+		}
 
 		try {
 			agent.model = selectedModel;
@@ -252,7 +254,7 @@ export class Runner {
 						if (handlers.onEvent) {
 							// Create a resultsById object that maps tool call IDs to their results
 							const resultsById: Record<string, unknown> = {};
-							
+
 							// If parsedResults is an array, iterate through it and map each result to the corresponding tool call ID
 							if (Array.isArray(parsedResults)) {
 								for (let i = 0; i < parsedResults.length; i++) {
@@ -267,7 +269,7 @@ export class Runner {
 									resultsById[toolEvent.tool_calls[0].id] = parsedResults;
 								}
 							}
-							
+
 							handlers.onEvent({
 								agent: event.agent,
 								type: 'tool_done',
@@ -289,11 +291,11 @@ export class Runner {
 			// Process tool call results if there were any tool calls
 			if (collectedToolCalls.length > 0 && collectedToolResults.length > 0) {
 				console.log(`[Runner] Collected ${collectedToolCalls.length} tool calls, running follow-up with results`);
-				
+
 				// Increment tool call count
 				toolCallCount++;
 				console.log(`[Runner] Tool call iteration ${toolCallCount} of ${agent.maxToolCalls} maximum`);
-				
+
 				// Check if we've reached the maximum number of tool calls
 				if (toolCallCount >= agent.maxToolCalls) {
 					console.log('**********************************************');

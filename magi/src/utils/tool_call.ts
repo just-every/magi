@@ -37,54 +37,26 @@ export async function processToolCall(toolCall: ToolEvent, agent: Agent): Promis
 				}
 
 				// Parse arguments for better logging
-				let parsedArgs = {};
 				try {
 					if (call.function.arguments && call.function.arguments.trim()) {
-						parsedArgs = JSON.parse(call.function.arguments);
+						JSON.parse(call.function.arguments);
 					}
 				} catch (parseError) {
 					console.error('Error parsing arguments:', parseError);
-					parsedArgs = {_raw: call.function.arguments};
 				}
 
 				// Handle the tool call (pass the agent for event handlers)
 				const result = await handleToolCall(call, agent);
 
-				// Add structured response with tool name, input and output
-				const toolResult = {
-					tool: call.function.name,
-					input: parsedArgs,
-					output: result
-				};
-
 				// Log tool call
 				const {function: {name}} = call;
 				console.log(`[Tool] ${name} executed successfully`, result);
 
-				return toolResult;
+				return result;
 			} catch (error) {
 				console.error('Error executing tool:', error);
 
-				// Include tool name and input in error response
-				let toolName = 'unknown';
-				let toolInput = {};
-
-				if (call && call.function) {
-					toolName = call.function.name || 'unknown';
-					try {
-						if (call.function.arguments && call.function.arguments.trim()) {
-							toolInput = JSON.parse(call.function.arguments);
-						}
-					} catch (e) {
-						toolInput = {_raw: call.function.arguments};
-					}
-				}
-
-				return {
-					tool: toolName,
-					input: toolInput,
-					error: String(error)
-				};
+				return `{"error": "${String(error).replace(/"/g, '\\"')}"}`;
 			}
 		});
 
@@ -149,14 +121,12 @@ export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<
 		if (typeof args === 'object' && args !== null) {
 			// Extract named parameters based on implementation function definition
 			const paramNames = Object.keys(tool.definition.function.parameters.properties);
-			console.log('***paramNames:', paramNames);
 
 			// Map args to parameters in correct order and convert to appropriate types
 			if (paramNames.length > 0) {
 				const orderedArgs = paramNames.map((param: string) => {
 					const value = args[param as keyof typeof args];
 					const paramSpec = tool.definition.function.parameters.properties[param];
-					console.log(`****Tool ${name} param: ${param}, value: ${value}, spec:`, paramSpec);
 
 					// Convert to expected type based on parameter definition
 					if (paramSpec && paramSpec.type) {
@@ -172,7 +142,6 @@ export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<
 
 					return value;
 				});
-				console.log('***orderedArgs:', orderedArgs);
 
 				result = await tool.function(...orderedArgs);
 			} else {

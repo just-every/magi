@@ -10,7 +10,6 @@ import {ModelProvider, ToolFunction, ModelSettings, StreamingEvent, ToolCall, Re
 import OpenAI from 'openai';
 import {v4 as uuidv4} from 'uuid';
 import { costTracker } from '../utils/cost_tracker.js';
-import { getModelCost, calculateCost } from './model_data.js';
 
 // Convert our tool definition to OpenAI's format
 function convertToOpenAITools(requestParams: any): any {
@@ -80,6 +79,8 @@ export class OpenAIProvider implements ModelProvider {
 				// OpenAI Responses API expects the messages array as input
 				input: messages,
 			};
+			console.log('***OpenAI messages***');
+			console.dir(messages, {depth: 5});
 
 			// Add model-specific parameters
 			// o3 models don't support temperature and top_p
@@ -113,16 +114,23 @@ export class OpenAIProvider implements ModelProvider {
 			const messageId = uuidv4();
 			// Track delta positions for each message_id
 			const messagePositions = new Map<string, number>();
-			// Store usage information when we receive it
-			let tokenUsage: { input_tokens: number, output_tokens: number } | null = null;
 
 			// Process the response stream
 			try {
 				// @ts-expect-error - OpenAI's stream is AsyncIterable but TypeScript doesn't recognize it properly
 				for await (const event of stream) {
-					// For verbose debugging - uncomment this
-					// console.log(`Stream event type: ${event.type}`);
-					// console.log('Stream event structure:', JSON.stringify(event, null, 2));
+
+					// Handle response.completed event which contains token usage information
+					if (event.response && event.response.usage && typeof event.response.usage === 'object') {
+						// Track the cost in our global cost tracker
+						costTracker.addUsage({
+							model,
+							input_tokens: event.response.usage.input_tokens || 0,
+							output_tokens: event.response.usage.output_tokens || 0,
+							cached_tokens: event.response.usage.input_tokens_details?.cached_tokens || 0,
+							metadata: {reasoning_tokens: event.response.usage.output_tokens_details?.reasoning_tokens || 0},
+						});
+					}
 
 					// Handle web_search events from web_search_preview
 					if (event.type === 'web_search.results') {
@@ -132,43 +140,6 @@ export class OpenAIProvider implements ModelProvider {
 
 						// We don't need to yield an event here, as the model will use these results internally
 						// and generate appropriate content that will come through as text deltas
-					}
-
-					// Handle response.completed event which contains token usage information
-					else if (event.type === 'response.completed' && event.response && event.response.usage) {
-						// Extract cached tokens from the usage data
-						const cachedTokens = event.response.usage.cached_tokens || 0;
-						
-						// Store the token usage for later cost calculation
-						tokenUsage = {
-							input_tokens: event.response.usage.input_tokens || 0,
-							output_tokens: event.response.usage.output_tokens || 0
-						};
-
-						// Log the token usage
-						console.log(`[OpenAI] Token usage: ${tokenUsage.input_tokens} input tokens (${cachedTokens} cached), ${tokenUsage.output_tokens} output tokens`);
-
-						// Get cost information and calculate the cost
-						const modelCost = getModelCost('openai', model);
-						const totalCost = calculateCost(
-							modelCost,
-							tokenUsage.input_tokens,
-							tokenUsage.output_tokens,
-							cachedTokens
-						);
-
-						console.log(`[OpenAI] Usage cost: $${totalCost.toFixed(6)}`);
-
-						// Track the cost in our global cost tracker
-						costTracker.addCost(
-							'openai',
-							model,
-							totalCost,
-							tokenUsage.input_tokens + tokenUsage.output_tokens,
-							tokenUsage.input_tokens,
-							tokenUsage.output_tokens,
-							cachedTokens
-						);
 					}
 
 					// Handle response.output_text.delta - new format for text chunks

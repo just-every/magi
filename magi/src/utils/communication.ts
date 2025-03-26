@@ -181,6 +181,10 @@ export class CommunicationManager {
 	 * Format a message for console output in test mode
 	 */
 	private testModeMessage(message: MagiMessage): void {
+		if(message.event.type === 'message_delta') {
+			return; // Don't log deltas in test mode
+		}
+
 		const timestamp = new Date().toISOString().substring(11, 19); // HH:MM:SS
 		console.log(`[${timestamp}]`);
 		console.dir(message, {depth: 4, colors: true});

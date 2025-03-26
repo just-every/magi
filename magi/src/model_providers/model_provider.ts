@@ -7,10 +7,11 @@
 
 import {ModelProvider} from '../types.js';
 import {openaiProvider} from './openai.js';
+import {claudeCodeProvider} from './claude_code.js';
 import {claudeProvider} from './claude.js';
 import {geminiProvider} from './gemini.js';
 import {grokProvider} from './grok.js';
-import {MODEL_GROUPS} from '../magi_agents/constants.js';
+import {MODEL_GROUPS} from './model_data.js';
 
 // Provider mapping by model prefix
 const MODEL_PROVIDER_MAP: Record<string, ModelProvider> = {
@@ -20,6 +21,7 @@ const MODEL_PROVIDER_MAP: Record<string, ModelProvider> = {
 	'computer-use-preview': openaiProvider,
 
 	// Claude/Anthropic models
+	'claude-code': claudeCodeProvider,
 	'claude-': claudeProvider,
 
 	// Gemini/Google models

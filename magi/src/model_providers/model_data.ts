@@ -1,6 +1,6 @@
 /**
  * Model data for all supported LLM providers.
- * 
+ *
  * This file consolidates information about all supported models including:
  * - Basic model metadata
  * - Cost information
@@ -23,12 +23,74 @@ export interface ModelEntry {
 	context_length?: number; // Maximum context length in tokens
 }
 
+
+export interface ModelUsage {
+	model: string,
+	cost?: number,
+	input_tokens?: number,
+	output_tokens?: number,
+	cached_tokens?: number,
+	metadata?: Record<string, number>,
+	timestamp?: Date;
+}
+
+// Model groups organized by capability
+export const MODEL_GROUPS: Record<string, string[]> = {
+	// Standard models with good all-around capabilities
+	'standard': [
+		'gpt-4o',              // OpenAI
+		'gemini-2.0-flash',    // Google
+		'gemini-pro',          // Google
+		'claude-3-sonnet'      // Anthropic
+	],
+
+	// Mini/smaller models - faster but less capable
+	'mini': [
+		'gpt-4o-mini',             // OpenAI
+		'claude-3-5-haiku',        // Anthropic
+		'gemini-2.0-flash-lite',   // Google
+	],
+
+	// Advanced reasoning models
+	'reasoning': [
+		'o3-mini',                  // OpenAI
+		'claude-3-7-sonnet',        // Anthropic
+		'gemini-2.0-ultra',         // Google
+		'grok-2',                   // X.AI
+	],
+
+	// Programming models
+	'code': [
+		'claude-code',              // Claude Code
+		'claude-3-7-sonnet',        // Anthropic
+		'o3-mini',                  // OpenAI
+		'gemini-2.0-flash',    		// Google
+	],
+
+	// Models with vision capabilities
+	'vision': [
+		'computer-use-preview',     // OpenAI
+		'gemini-pro-vision',        // Google
+		'gemini-2.0-pro-vision',    // Google
+		'gemini-2.0-ultra-vision',  // Google
+		'grok-1.5-vision',          // X.AI
+		'grok-2-vision',            // X.AI
+	],
+
+	// Models with search capabilities
+	'search': [
+		'gpt-4o-search-preview',       // OpenAI
+		'gpt-4o-mini-search-preview',  // OpenAI
+	],
+};
+
+
 // Main model registry with all supported models
 export const MODEL_REGISTRY: ModelEntry[] = [
 	//
 	// OpenAI models
 	//
-	
+
 	// GPT-4.5 models
 	{
 		id: 'gpt-4.5-preview',
@@ -217,7 +279,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 	//
 	// Anthropic (Claude) models
 	//
-	
+
 	// Claude 3.7 Sonnet
 	{
 		id: 'claude-3-7-sonnet',
@@ -333,7 +395,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 	//
 	// Google (Gemini) models
 	//
-	
+
 	// Gemini 2.0 models
 	{
 		id: 'gemini-2.0-flash',
@@ -443,7 +505,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 	//
 	// X.AI (Grok) models
 	//
-	
+
 	// Grok 2 vision models
 	{
 		id: 'grok-2-vision',
@@ -456,7 +518,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 		class: 'vision',
 		description: 'Grok model with vision capabilities'
 	},
-	
+
 	// Grok 2 text models
 	{
 		id: 'grok-2',
@@ -469,7 +531,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 		class: 'reasoning',
 		description: 'Grok model with strong reasoning abilities'
 	},
-	
+
 	// Grok 1.5 vision
 	{
 		id: 'grok-1.5-vision',
@@ -481,7 +543,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 		class: 'vision',
 		description: 'Original Grok vision model'
 	},
-	
+
 	// Grok beta models
 	{
 		id: 'grok-vision-beta',
@@ -505,71 +567,9 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 	}
 ];
 
-// Default costs by provider if exact model not found
-export const DEFAULT_COSTS: Record<string, ModelCost> = {
-	'openai': {
-		input_per_million: 10.0,
-		output_per_million: 30.0
-	},
-	'anthropic': {
-		input_per_million: 3.0,
-		output_per_million: 15.0
-	},
-	'google': {
-		input_per_million: 1.0,
-		output_per_million: 3.0
-	},
-	'xai': {
-		input_per_million: 5.0,
-		output_per_million: 15.0
-	}
-};
-
-// Model groups organized by capability
-export const MODEL_GROUPS: Record<string, string[]> = {
-	// Standard models with good all-around capabilities
-	'standard': [
-		'gpt-4o',              // OpenAI
-		'gemini-2.0-flash',    // Google
-		'gemini-pro',          // Google
-		'claude-3-sonnet'      // Anthropic
-	],
-
-	// Mini/smaller models - faster but less capable
-	'mini': [
-		'gpt-4o-mini',             // OpenAI
-		'claude-3-5-haiku',        // Anthropic
-		'gemini-2.0-flash-lite',   // Google
-	],
-
-	// Advanced reasoning models
-	'reasoning': [
-		'o3-mini',                  // OpenAI
-		'claude-3-7-sonnet',        // Anthropic
-		'gemini-2.0-ultra',         // Google
-		'grok-2',                   // X.AI
-	],
-
-	// Models with vision capabilities
-	'vision': [
-		'computer-use-preview',     // OpenAI
-		'gemini-pro-vision',        // Google
-		'gemini-2.0-pro-vision',    // Google
-		'gemini-2.0-ultra-vision',  // Google
-		'grok-1.5-vision',          // X.AI
-		'grok-2-vision',            // X.AI
-	],
-
-	// Models with search capabilities
-	'search': [
-		'gpt-4o-search-preview',       // OpenAI
-		'gpt-4o-mini-search-preview',  // OpenAI
-	],
-};
-
 /**
  * Find a model entry by ID or alias
- * 
+ *
  * @param modelId The model ID or alias to search for
  * @returns The model entry or undefined if not found
  */
@@ -579,60 +579,8 @@ export function findModel(modelId: string): ModelEntry | undefined {
 	if (directMatch) return directMatch;
 
 	// Check for alias match
-	return MODEL_REGISTRY.find(model => 
+	return MODEL_REGISTRY.find(model =>
 		model.aliases?.includes(modelId)
 	);
 }
 
-/**
- * Get cost information for a model
- * 
- * @param provider The model provider (openai, anthropic, google, xai)
- * @param modelId The model ID to look up
- * @returns The cost information for the model
- */
-export function getModelCost(provider: string, modelId: string): ModelCost {
-	// Look up the model
-	const model = findModel(modelId);
-	if (model) return model.cost;
-	
-	// Try to find a model with a prefix match (e.g., for dated models)
-	for (const entry of MODEL_REGISTRY) {
-		if (modelId.startsWith(entry.id)) {
-			return entry.cost;
-		}
-	}
-	
-	// Return default cost for the provider
-	return DEFAULT_COSTS[provider.toLowerCase()] || DEFAULT_COSTS.openai;
-}
-
-/**
- * Calculate cost based on token usage
- * 
- * @param cost The model cost information 
- * @param inputTokens Number of input tokens
- * @param outputTokens Number of output tokens
- * @param cachedTokens Number of cached input tokens (optional)
- * @returns The calculated cost in USD
- */
-export function calculateCost(
-	cost: ModelCost,
-	inputTokens: number,
-	outputTokens: number,
-	cachedTokens: number = 0
-): number {
-	// Calculate standard input token cost (excluding cached tokens)
-	const standardInputTokens = inputTokens - cachedTokens;
-	const inputCost = (standardInputTokens > 0 ? standardInputTokens : 0) / 1000000 * cost.input_per_million;
-	
-	// Calculate cached token cost if applicable
-	let cachedCost = 0;
-	if (cachedTokens > 0 && cost.cached_input_per_million !== undefined) {
-		cachedCost = (cachedTokens / 1000000) * cost.cached_input_per_million;
-	}
-	
-	const outputCost = (outputTokens / 1000000) * cost.output_per_million;
-	
-	return inputCost + cachedCost + outputCost;
-}

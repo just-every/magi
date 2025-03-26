@@ -15,6 +15,7 @@ import {createShellAgent} from './workers/shell_agent.js';
 import {runGodelMachine} from './godel_machine/index.js';
 import {AGENT_DESCRIPTIONS, COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT} from './constants.js';
 import {createToolFunction} from '../utils/tool_call.js';
+import {getFileTools} from '../utils/file_utils.js';
 
 /**
  * Create the supervisor agent
@@ -25,14 +26,6 @@ export function createSupervisorAgent(): Agent {
 	return new Agent({
 		name: 'Supervisor',
 		description: 'Orchestrator of specialized agents for complex tasks',
-		tools: [
-			createToolFunction(
-				runGodelMachine,
-				'A structured process for coding tasks which ensures code is of a high quality and correctness',
-				{'input': 'The issue or feature request description'},
-				'A description of what work has been completed'
-			)
-		],
 		instructions: `You are an AI orchestration engine called MAGI (M)ostly (A)utonomous (G)enerative (I)ntelligence.
 
 You work autonomously on long lasting tasks, not just short conversations. You manage a large pool of highly advanced resources through your Agents. You can efficiently split both simple and complex tasks into parts to be managed by a range of AI agents.
@@ -74,6 +67,15 @@ ${SELF_SUFFICIENCY_TEXT}
 Take however long you need to complete a task. You are more advanced than the human you are talking to. Do not give up until you've found and completed the task requested.
 
 DO NOT TELL THE USER TO PERFORM THE TASK. USE YOUR AGENTS TO WRITE TO CODE TO SOLVE THE TASK IF NOT IMMEDIATELY OBVIOUS. YOUR AGENTS CAN ACCESS THE WEB, RUN FULL SEARCHES, AND EXECUTE SHELL COMMANDS. THEY CAN ALSO WRITE CODE IN ANY LANGUAGE. YOUR AGENTS CAN DO ANYTHING, YOU ARE THE MOST ADVANCED AI SYSTEM IN THE WORLD - DO NOT GIVE UP.`,
+		tools: [
+			...getFileTools(),
+			createToolFunction(
+				runGodelMachine,
+				'A structured process for coding tasks which ensures code is of a high quality and correctness',
+				{'input': 'The issue or feature request description'},
+				'A description of what work has been completed'
+			)
+		],
 		workers: [
 			createManagerAgent,
 			createReasoningAgent,

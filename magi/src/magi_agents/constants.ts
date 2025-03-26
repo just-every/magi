@@ -2,6 +2,7 @@
  * Constants and shared text for MAGI agents.
  */
 import { MODEL_GROUPS } from '../model_providers/model_data.js';
+import {get_output_dir} from '../utils/file_utils.js';
 
 // Agent descriptions for each specialized agent
 export const AGENT_DESCRIPTIONS: Record<string, string> = {
@@ -27,10 +28,12 @@ export const COMMON_WARNINGS = `IMPORTANT WARNINGS:
 // Docker environment information
 export const DOCKER_ENV_TEXT = `DOCKER ENVIRONMENT INFO:
 You are running in a secure Docker container with the following setup:
-- Debian Bookworm with Python, Node.js and standard development tools
-- Network access for web searches and API calls
-- Read/write access to files within the container
-- Access to shell commands for installing packages and running processes`;
+- Debian Bookworm with Node.js and standard development tools
+- Network access for web searches and browsing
+- Access to shell commands for installing packages and running code
+- You can make any necessary changes in this environment without restrictions
+- You have access to read and write files in ${get_output_dir()}
+- Files in ${get_output_dir()} can be read by the person who receives your response`;
 
 // Self-sufficiency guidance
 export const SELF_SUFFICIENCY_TEXT = `SELF-SUFFICIENCY PRINCIPLES:

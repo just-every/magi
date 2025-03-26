@@ -17,7 +17,6 @@ import {
 	ResponseInput
 } from '../types.js';
 import { costTracker } from '../utils/cost_tracker.js';
-import { getModelCost, calculateCost } from './model_data.js';
 
 // Convert our tool definition to Claude's format
 function convertToClaudeTools(tools: ToolFunction[]): any[] {
@@ -229,29 +228,14 @@ export class ClaudeProvider implements ModelProvider {
 								message_id: messageId
 							};
 						}
-						
+
 						// Track cost if available in the message_stop event
-						if (event.usage && event.usage.input_tokens && event.usage.output_tokens) {
-							// Get cost information and calculate cost
-							const modelCost = getModelCost('anthropic', model);
-							const totalCost = calculateCost(
-								modelCost,
-								event.usage.input_tokens,
-								event.usage.output_tokens
-							);
-							
-							// Log and track the cost
-							console.log(`[Claude] Usage: ${event.usage.input_tokens} input tokens, ${event.usage.output_tokens} output tokens`);
-							console.log(`[Claude] Usage cost: $${totalCost.toFixed(6)}`);
-							
-							costTracker.addCost(
-								'anthropic', 
-								model, 
-								totalCost, 
-								event.usage.input_tokens + event.usage.output_tokens,
-								event.usage.input_tokens,
-								event.usage.output_tokens
-							);
+						if (event.usage && (event.usage.input_tokens || event.usage.output_tokens)) {
+							costTracker.addUsage({
+								model,
+								input_tokens: event.usage.input_tokens || 0,
+								output_tokens: event.usage.output_tokens || 0,
+							});
 						}
 					}
 					// Handle error event

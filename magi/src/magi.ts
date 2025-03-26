@@ -45,12 +45,6 @@ export async function runCommand(
 	model?: string,
 	modelClass?: string
 ): Promise<void> {
-	// Record command in system memory for context
-	addHistory({
-		role: 'user',
-		content: command,
-	});
-
 	const comm = getCommunicationManager();
 	try {
 		comm.send({
@@ -78,10 +72,10 @@ export async function runCommand(
 		if (existingAgentId) {
 			console.log(`Reusing existing agent_id for ${agentType}: ${existingAgentId}`);
 		}
-		
+
 		// Create the agent with model, modelClass, and optional agent_id parameters
 		const agent = createAgent(agentType, model, modelClass, existingAgentId);
-		
+
 		// Store the agent_id for future use if we don't have one yet
 		if (!existingAgentId) {
 			agentIdMap.set(agentType, agent.agent_id);
@@ -159,26 +153,30 @@ function checkModelProviderApiKeys(): boolean {
 
 // Add exit handlers to print cost summary
 process.on('exit', () => {
-	console.log('\nExiting MAGI system. Printing final cost summary:');
 	costTracker.printSummary();
 });
 
 process.on('SIGINT', () => {
-	console.log('\nReceived SIGINT. Printing cost summary before exit:');
 	costTracker.printSummary();
 	process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-	console.log('\nReceived SIGTERM. Printing cost summary before exit:');
 	costTracker.printSummary();
 	process.exit(0);
 });
 
+// Unhandled rejection handler
+process.on('unhandledRejection', () => {
+	console.log('\nUnhandled Rejection.');
+	costTracker.printSummary();
+});
+
 /**
  * Main function - entry point for the application
+ * Returns a promise that resolves when the command processing is complete
  */
-async function main() {
+async function main(): Promise<void> {
 	// Parse command line arguments
 	const args = parseCommandLineArgs();
 
@@ -259,9 +257,11 @@ async function main() {
 
 		// When running in test mode, print cost summary and exit
 		if (args.test) {
-			console.log('\nTesting complete. Printing cost summary before exiting.');
 			costTracker.printSummary();
 			process.exit(0);
+		} else {
+			// For normal execution, print cost summary when done but don't exit
+			costTracker.printSummary();
 		}
 	} catch (error) {
 		console.error(`**Error** Failed to process command: ${error}`);

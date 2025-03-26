@@ -17,7 +17,6 @@ import {
 	ResponseInput
 } from '../types.js';
 import { costTracker } from '../utils/cost_tracker.js';
-import { getModelCost, calculateCost } from './model_data.js';
 
 // Define a type that includes functionCall property since it's missing in the current TypeScript definitions
 interface FunctionCall {
@@ -203,35 +202,20 @@ export class GeminiProvider implements ModelProvider {
 						message_id: messageId
 					};
 					sentComplete = true;
-                    
+
                     // Estimate token usage and cost
                     try {
                         // Estimate input tokens (prompt + context)
                         const promptTokens = Math.ceil(input.length / 4); // ~4 chars per token
-                        
+
                         // Estimate output tokens from content buffer
                         const outputTokens = Math.ceil(contentBuffer.length / 4);
-                        
-                        // Get cost information and calculate total cost
-                        const modelCost = getModelCost('google', model);
-                        const totalCost = calculateCost(
-                            modelCost,
-                            promptTokens,
-                            outputTokens
-                        );
-                        
-                        // Log and track the cost
-                        console.log(`[Gemini] Estimated usage: ~${promptTokens} input tokens, ~${outputTokens} output tokens`);
-                        console.log(`[Gemini] Usage cost: $${totalCost.toFixed(6)}`);
-                        
-                        costTracker.addCost(
-                            'google',
-                            model,
-                            totalCost,
-                            promptTokens + outputTokens,
-                            promptTokens,
-                            outputTokens
-                        );
+
+						costTracker.addUsage({
+							model,
+							input_tokens: promptTokens || 0,
+							output_tokens: outputTokens || 0,
+						});
                     } catch (costError) {
                         console.error('Error estimating Gemini token usage and cost:', costError);
                     }
