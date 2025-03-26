@@ -10,7 +10,7 @@ import {ModelProvider, ToolFunction, ModelSettings, StreamingEvent, ToolCall, Re
 import OpenAI from 'openai';
 import {v4 as uuidv4} from 'uuid';
 import { costTracker } from '../utils/cost_tracker.js';
-import { calculateCost } from './model_costs.js';
+import { getModelCost, calculateCost } from './model_data.js';
 
 // Convert our tool definition to OpenAI's format
 function convertToOpenAITools(requestParams: any): any {
@@ -148,29 +148,27 @@ export class OpenAIProvider implements ModelProvider {
 						// Log the token usage
 						console.log(`[OpenAI] Token usage: ${tokenUsage.input_tokens} input tokens (${cachedTokens} cached), ${tokenUsage.output_tokens} output tokens`);
 
-						// Calculate and track the cost using our model cost mapping
-						if (tokenUsage.input_tokens > 0 || tokenUsage.output_tokens > 0) {
-							const totalCost = calculateCost(
-								'openai',
-								model,
-								tokenUsage.input_tokens,
-								tokenUsage.output_tokens,
-								cachedTokens
-							);
+						// Get cost information and calculate the cost
+						const modelCost = getModelCost('openai', model);
+						const totalCost = calculateCost(
+							modelCost,
+							tokenUsage.input_tokens,
+							tokenUsage.output_tokens,
+							cachedTokens
+						);
 
-							console.log(`[OpenAI] Usage cost: $${totalCost.toFixed(6)}`);
+						console.log(`[OpenAI] Usage cost: $${totalCost.toFixed(6)}`);
 
-							// Track the cost in our global cost tracker
-							costTracker.addCost(
-								'openai',
-								model,
-								totalCost,
-								tokenUsage.input_tokens + tokenUsage.output_tokens,
-								tokenUsage.input_tokens,
-								tokenUsage.output_tokens,
-								cachedTokens
-							);
-						}
+						// Track the cost in our global cost tracker
+						costTracker.addCost(
+							'openai',
+							model,
+							totalCost,
+							tokenUsage.input_tokens + tokenUsage.output_tokens,
+							tokenUsage.input_tokens,
+							tokenUsage.output_tokens,
+							cachedTokens
+						);
 					}
 
 					// Handle response.output_text.delta - new format for text chunks

@@ -17,7 +17,7 @@ import {
 	ResponseInput
 } from '../types.js';
 import { costTracker } from '../utils/cost_tracker.js';
-import { calculateCost } from './model_costs.js';
+import { getModelCost, calculateCost } from './model_data.js';
 
 // Define a type that includes functionCall property since it's missing in the current TypeScript definitions
 interface FunctionCall {
@@ -212,10 +212,10 @@ export class GeminiProvider implements ModelProvider {
                         // Estimate output tokens from content buffer
                         const outputTokens = Math.ceil(contentBuffer.length / 4);
                         
-                        // Calculate the cost using our model cost mapping
+                        // Get cost information and calculate total cost
+                        const modelCost = getModelCost('google', model);
                         const totalCost = calculateCost(
-                            'google',
-                            model,
+                            modelCost,
                             promptTokens,
                             outputTokens
                         );
