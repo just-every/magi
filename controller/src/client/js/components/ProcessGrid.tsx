@@ -235,7 +235,33 @@ const ProcessGrid: React.FC = () => {
         applyTransition();
     };
 
-    // Focus on a specific process or agent
+    // Focus specifically on an agent box
+    const focusOnAgent = (agentId: string) => {
+        if (isDragging || wasDragged) return;
+        if (!containerRef.current || !boxPositions.has(agentId)) return;
+
+        const position = boxPositions.get(agentId)!;
+        setFocusedProcess(agentId);
+
+        // Get viewport dimensions
+        const viewportWidth = containerSize.width;
+        const header = document.getElementById('main-header');
+        const headerHeight = header ? header.offsetHeight : 0;
+        const viewportHeight = containerSize.height - headerHeight;
+
+        // Set zoom to proper level for agent boxes (they use WORKER_SCALE so we adjust)
+        // This avoids them appearing tiny
+        setZoomLevel(1 / position.scale); // Compensate for the agent's scale
+        
+        // Center the agent (accounting for its scale)
+        setTranslateX((viewportWidth / 2) - position.x);
+        setTranslateY(headerHeight + (viewportHeight / 2) - position.y);
+
+        // Apply smooth transition
+        applyTransition();
+    };
+
+    // Focus on a specific process or group
     const focusOnProcess = (processId: string, focusMode: 'parent-and-children' | 'only-box' = 'parent-and-children') => {
         if (isDragging || wasDragged) return;
         if (!containerRef.current || !boxPositions.has(processId)) return;
@@ -383,8 +409,13 @@ const ProcessGrid: React.FC = () => {
                                 isTyping={agent.isTyping}
                                 parentProcessId={id}
                                 onFocusAgent={(agentId, parentId, focusMode) => {
-                                    // Focus on the parent process with the desired focus mode
-                                    focusOnProcess(parentId, focusMode);
+                                    if (focusMode === 'only-box') {
+                                        // For single click, focus on just this agent
+                                        focusOnAgent(agentId);
+                                    } else {
+                                        // For double click, focus on the parent process + all children
+                                        focusOnProcess(parentId, focusMode);
+                                    }
                                 }}
                             />
                         </div>

@@ -69,11 +69,11 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
                 // If there's a parent process ID and callback handler
                 if (parentProcessId && onFocusAgent) {
                     if (clickCount.current === 1) {
-                        // Single click - focus on parent and all children
-                        onFocusAgent(id, parentProcessId, 'parent-and-children');
-                    } else if (clickCount.current === 2) {
-                        // Double click - focus only on this agent
+                        // Single click - focus only on this agent box
                         onFocusAgent(id, parentProcessId, 'only-box');
+                    } else if (clickCount.current === 2) {
+                        // Double click - focus on parent and all children
+                        onFocusAgent(id, parentProcessId, 'parent-and-children');
                     }
                 }
                 

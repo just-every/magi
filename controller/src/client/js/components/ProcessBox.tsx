@@ -95,13 +95,13 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
             
             // Set timeout to differentiate between single and double clicks
             clickTimeout.current = window.setTimeout(() => {
-                // If it was a single click, focus on parent and children
+                // If it was a single click, focus only on this box
                 if (clickCount.current === 1) {
-                    onFocus(id, 'parent-and-children');
-                } 
-                // If it was a double click, focus only on this box
-                else if (clickCount.current === 2) {
                     onFocus(id, 'only-box');
+                } 
+                // If it was a double click, focus on parent and children
+                else if (clickCount.current === 2) {
+                    onFocus(id, 'parent-and-children');
                 }
                 
                 // Reset click count
