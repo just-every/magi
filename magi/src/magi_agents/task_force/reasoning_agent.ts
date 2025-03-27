@@ -7,6 +7,7 @@
 import {Agent} from '../../utils/agent.js';
 import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT} from '../constants.js';
 import {getSearchTools} from '../../utils/search_utils.js';
+import {createBrowserAgent} from './browser_agent.js';
 
 /**
  * Create the reasoning agent
@@ -47,6 +48,9 @@ IMPORTANT:
 - Consider the question from multiple perspectives before concluding`,
 		tools: [
 			...getSearchTools()
+		],
+		workers: [
+			createBrowserAgent,
 		],
 		modelClass: 'reasoning'
 	});

@@ -17,19 +17,21 @@
   },
   "license": "ISC",
   "dependencies": {
-    "node-pty": "^1.0.0",
-    "undici-types": "^7.5.0",
     "@anthropic-ai/sdk": "^0.17.1",
     "@google/generative-ai": "^0.2.1",
     "axios": "^1.6.8",
     "dotenv": "^16.4.7",
+    "jsdom": "^26.0.0",
+    "node-pty": "^1.0.0",
     "openai": "^4.88.0",
     "playwright": "^1.51.1",
     "sharp": "^0.33.5",
+    "undici-types": "^7.5.0",
     "uuid": "^11.1.0",
     "ws": "^8.18.1"
   },
   "devDependencies": {
+    "@types/jsdom": "^21.1.7",
     "@types/node": "^22.13.10",
     "@types/ws": "^8.18.0",
     "@typescript-eslint/eslint-plugin": "^8.26.1",

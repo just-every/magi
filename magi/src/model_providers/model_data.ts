@@ -59,6 +59,15 @@ export const MODEL_GROUPS: Record<string, string[]> = {
 		'grok-2',                   // X.AI
 	],
 
+	// Monologue models
+	'monologue': [
+		'o3-mini',                  // OpenAI
+		'gemini-2.0-flash',    		// Google
+		'claude-3-7-sonnet',        // Anthropic
+		'gemini-2.0-ultra',         // Google
+		'grok-2',                   // X.AI
+	],
+
 	// Programming models
 	'code': [
 		'claude-code',              // Claude Code

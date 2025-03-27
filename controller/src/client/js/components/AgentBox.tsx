@@ -33,7 +33,7 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
     onFocusAgent
 }) => {
     const logsRef = useRef<HTMLDivElement>(null);
-    
+
     // Track click count and timing for single/double click detection
     const clickTimeout = useRef<number | null>(null);
     const clickCount = useRef<number>(0);
@@ -44,7 +44,7 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
             logsRef.current.scrollTop = logsRef.current.scrollHeight;
         }
     }, [logs, messages]);
-    
+
     // Handle click on agent box
     const handleBoxClick = (e: React.MouseEvent<HTMLDivElement>) => {
         // Check what was clicked
@@ -58,30 +58,40 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
         if (!isClickingControls) {
             // Increment click count
             clickCount.current += 1;
-            
+
             // Clear any existing timeout
             if (clickTimeout.current !== null) {
                 window.clearTimeout(clickTimeout.current);
             }
-            
-            // Set timeout to differentiate between single and double clicks
-            clickTimeout.current = window.setTimeout(() => {
-                // If there's a parent process ID and callback handler
-                if (parentProcessId && onFocusAgent) {
-                    if (clickCount.current === 1) {
-                        // Single click - focus only on this agent box
-                        onFocusAgent(id, parentProcessId, 'only-box');
-                    } else if (clickCount.current === 2) {
-                        // Double click - focus on parent and all children
-                        onFocusAgent(id, parentProcessId, 'parent-and-children');
-                    }
+
+            if (clickCount.current === 1) {
+                // Add a brief delay to allow for a double click event
+                clickTimeout.current = window.setTimeout(() => {
+                    // Single click - focus only on this agent box
+                    onFocusAgent(id, parentProcessId, 'only-box');
+
+                    // Add some extra time to detect double clicks
+                    clickTimeout.current = window.setTimeout(() => {
+                        // Reset click count after handling
+                        clickCount.current = 0;
+                        clickTimeout.current = null;
+                    }, 300);
+                }, 200);
+            }
+            else {
+                if (clickCount.current === 2) {
+                    // Double click - focus on parent and all children
+                    onFocusAgent(id, parentProcessId, 'parent-and-children');
                 }
-                
-                // Reset click count after handling
-                clickCount.current = 0;
-                clickTimeout.current = null;
-            }, 300);
-            
+
+                // Clear after 1 second to allow next event
+                clickTimeout.current = window.setTimeout(() => {
+                    // Reset click count after handling
+                    clickCount.current = 0;
+                    clickTimeout.current = null;
+                }, 500);
+            }
+
             // Stop event propagation to prevent bubbling
             e.stopPropagation();
         }

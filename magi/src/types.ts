@@ -241,7 +241,9 @@ export type StreamEventType =
 	| 'message_start'
 	| 'message_delta'
 	| 'message_complete'
-	| 'message_done'
+	| 'talk_start'
+	| 'talk_delta'
+	| 'talk_complete'
 	| 'tool_start'
 	| 'tool_delta'
 	| 'tool_done'
@@ -291,6 +293,16 @@ export interface MessageEvent extends StreamEvent {
 }
 
 /**
+ * Message streaming event
+ */
+export interface TalkEvent extends StreamEvent {
+	type: 'talk_start' | 'talk_delta' | 'talk_complete';
+	content: string;
+	message_id: string; // Added message_id for tracking deltas and completes
+	order?: number; // Optional order property for message sorting
+}
+
+/**
  * Tool call streaming event
  */
 export interface ToolEvent extends StreamEvent {
@@ -310,7 +322,7 @@ export interface ErrorEvent extends StreamEvent {
 /**
  * Union type for all streaming events
  */
-export type StreamingEvent = ConnectedEvent | CommandEvent | AgentEvent | MessageEvent | ToolEvent | ErrorEvent;
+export type StreamingEvent = ConnectedEvent | CommandEvent | AgentEvent | MessageEvent | TalkEvent | ToolEvent | ErrorEvent;
 
 /**
  * Status of a sequential agent run

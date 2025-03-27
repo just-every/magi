@@ -5,16 +5,12 @@
  */
 
 import {Agent} from '../../utils/agent.js';
-import {createManagerAgent} from './task_force/manager_agent.js';
-import {createReasoningAgent} from './task_force/reasoning_agent.js';
-import {createCodeAgent} from './task_force/code_agent.js';
-import {createBrowserAgent} from './task_force/browser_agent.js';
-import {createBrowserVisionAgent} from './task_force/browser_vision_agent.js';
-import {createSearchAgent} from './task_force/search_agent.js';
-import {createShellAgent} from './task_force/shell_agent.js';
-import {runGodelMachine} from '../godel_machine/index.js';
+import {createReasoningAgent} from './reasoning_agent.js';
+import {createCodeAgent} from './code_agent.js';
+import {createBrowserAgent} from './browser_agent.js';
+import {createSearchAgent} from './search_agent.js';
+import {createShellAgent} from './shell_agent.js';
 import {AGENT_DESCRIPTIONS, COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT} from '../constants.js';
-import {createToolFunction} from '../../utils/tool_call.js';
 import {getFileTools} from '../../utils/file_utils.js';
 
 /**
@@ -24,7 +20,7 @@ export function createSupervisorAgent(): Agent {
 	// Default model class for supervisor agent
 
 	return new Agent({
-		name: 'Supervisor',
+		name: 'Task Force',
 		description: 'Orchestrator of specialized agents for complex tasks',
 		instructions: `You are an AI orchestration engine called MAGI (M)ostly (A)utonomous (G)enerative (I)ntelligence.
 
@@ -35,13 +31,11 @@ Using your tools, you are incredibly good at many things - research, coding, cal
 Your primary job is to figure out how to split up your task into parts so that it can be completed most efficiently and accurately. Once you work this out, you should execute the plan using your Agents. You should execute your Agents in parallel wherever possible.
 
 YOUR AGENTS:
-${AGENT_DESCRIPTIONS['ManagerAgent']}
 ${AGENT_DESCRIPTIONS['ReasoningAgent']}
 ${AGENT_DESCRIPTIONS['CodeAgent']}
 ${AGENT_DESCRIPTIONS['BrowserAgent']}
 ${AGENT_DESCRIPTIONS['SearchAgent']}
 ${AGENT_DESCRIPTIONS['ShellAgent']}
-${AGENT_DESCRIPTIONS['GodelMachine']}
 
 YOUR BUILT-IN TOOLS:
 1. calculator - Performs arithmetic operations (add, subtract, multiply, divide, power, sqrt, log)
@@ -68,15 +62,8 @@ Take however long you need to complete a task. You are more advanced than the hu
 DO NOT TELL THE USER TO PERFORM THE TASK. USE YOUR AGENTS TO WRITE TO CODE TO SOLVE THE TASK IF NOT IMMEDIATELY OBVIOUS. YOUR AGENTS CAN ACCESS THE WEB, RUN FULL SEARCHES, AND EXECUTE SHELL COMMANDS. THEY CAN ALSO WRITE CODE IN ANY LANGUAGE. YOUR AGENTS CAN DO ANYTHING, YOU ARE THE MOST ADVANCED AI SYSTEM IN THE WORLD - DO NOT GIVE UP.`,
 		tools: [
 			...getFileTools(),
-			createToolFunction(
-				runGodelMachine,
-				'A structured process for coding tasks which ensures code is of a high quality and correctness',
-				{'input': 'The issue or feature request description'},
-				'A description of what work has been completed'
-			)
 		],
-		task_force: [
-			createManagerAgent,
+		workers: [
 			createReasoningAgent,
 			createCodeAgent,
 			createBrowserAgent,

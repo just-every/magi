@@ -87,6 +87,46 @@ export function write_file(filePath: string, content: string | ArrayBuffer): str
 	}
 }
 
+/**
+ * Writes content to a file, ensuring the filename is unique.
+ * If the initial filePath exists, it appends a counter (e.g., "file (1).txt", "file (2).txt")
+ * to the base filename until a unique name is found before writing.
+ *
+ * @param filePath - The desired initial path to write the file to.
+ * @param content - Content to write to the file (string or ArrayBuffer).
+ * @returns Success message with the actual path the file was written to.
+ * @throws {Error} If there's an error determining the unique path or writing the file.
+ */
+export function write_unique_file(filePath: string, content: string | ArrayBuffer): string {
+	try {
+		let uniqueFilePath = filePath;
+		let counter = 1;
+		const directory = path.dirname(filePath);
+		const extension = path.extname(filePath);
+		const baseName = path.basename(filePath, extension);
+
+		let unique_info = '';
+		// Check if the file exists and find a unique name if it does
+		// Use a loop that continues as long as the generated path exists
+		while (fs.existsSync(uniqueFilePath)) {
+			// Construct the new file path with the counter
+			uniqueFilePath = path.join(directory, `${baseName} (${counter})${extension}`);
+			counter++;
+			unique_info = 'File already exists, updated filename. ';
+		}
+
+		// Call the original write_file function with the determined unique path
+		// This reuses the directory creation and writing logic.
+		return unique_info+write_file(uniqueFilePath, content);
+
+	} catch (error) {
+		// Catch potential errors from fs.existsSync or the write_file call
+		const err = error instanceof Error ? error : new Error(String(error));
+		// Provide more specific context for the error source
+		throw new Error(`Error in write_unique_file attempting path ${filePath}: ${err.message}`);
+	}
+}
+
 
 /**
  * Mount a directory to the working directory

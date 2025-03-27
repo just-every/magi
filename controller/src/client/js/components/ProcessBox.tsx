@@ -67,7 +67,7 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
     // Track click count and timing for single/double click detection
     const clickTimeout = useRef<number | null>(null);
     const clickCount = useRef<number>(0);
-    
+
     // Handle click on process box
     const handleBoxClick = (e: React.MouseEvent<HTMLDivElement>) => {
         // Check what was clicked
@@ -87,27 +87,27 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
         if (!isClickingInput && !isClickingControls) {
             // Increment click count
             clickCount.current += 1;
-            
+
             // Clear any existing timeout
             if (clickTimeout.current !== null) {
                 window.clearTimeout(clickTimeout.current);
             }
-            
+
             // Set timeout to differentiate between single and double clicks
             clickTimeout.current = window.setTimeout(() => {
                 // If it was a single click, focus only on this box
                 if (clickCount.current === 1) {
                     onFocus(id, 'only-box');
-                } 
+                }
                 // If it was a double click, focus on parent and children
-                else if (clickCount.current === 2) {
+                else if (clickCount.current > 1) {
                     onFocus(id, 'parent-and-children');
                 }
-                
+
                 // Reset click count
                 clickCount.current = 0;
                 clickTimeout.current = null;
-            }, 300); // 300ms is a common double-click threshold
+            }, 400);
         }
     };
 

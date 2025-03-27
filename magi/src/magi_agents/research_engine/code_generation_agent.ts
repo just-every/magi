@@ -1,5 +1,5 @@
 /**
- * Code Generation agent for the Understanding Engine.
+ * Code Generation agent for the Research Engine.
  *
  * This agent generates code solutions based on the requirements
  * identified by the Synthesis agent.

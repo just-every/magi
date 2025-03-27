@@ -1,5 +1,5 @@
 /**
- * Web Search agent for the Understanding Engine.
+ * Web Search agent for the Research Engine.
  *
  * This agent formulates search queries and gathers relevant information from the web
  * based on the research plan created by the Task Decomposition agent.

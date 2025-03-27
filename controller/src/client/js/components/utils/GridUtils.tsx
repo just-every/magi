@@ -4,26 +4,27 @@
 import { ProcessData } from '../../context/SocketContext';
 import { BoxPosition } from '@types';
 
-const GRID_PADDING = 40; // Padding between grid cells
+export const GRID_PADDING = 40; // Padding between grid cells
 const SQUARE_MAX_WIDTH = 1000;
 const SQUARE_MIN_WIDTH = 400;
 const SQUARE_MAX_HEIGHT = 1400;
 const SQUARE_MIN_HEIGHT = 400;
 const WORKER_SCALE = 0.5;
 
+const MIN_ZOOM = 0.2; // Minimum allowed zoom level
+const MAX_ZOOM = 2;   // Maximum allowed zoom level
+
 /**
  * Calculate grid positions for processes and their sub-agents
  * @param processes Map of all active processes
- * @param containerWidth Width of the container
- * @param containerHeight Height of the container
+ * @param containerSize Dimensions of the container
  * @param existingPositions Map of existing box positions
  * @returns Map of calculated box positions
  */
 export const calculateBoxPositions = (
     processes: Map<string, ProcessData>,
-    containerWidth: number,
-    containerHeight: number,
-    existingPositions: Map<string, BoxPosition>
+    containerSize: {width: number, height: number, headerHeight: number},
+    existingPositions: Map<string, BoxPosition>,
 ): Map<string, BoxPosition> => {
     if (processes.size === 0) return new Map<string, BoxPosition>();
 
@@ -40,10 +41,14 @@ export const calculateBoxPositions = (
     const gridCache = calculateBoxPositions.gridCache;
 
     // Calculate dimensions
-    const squareWidth = Math.min(SQUARE_MAX_WIDTH, Math.max(SQUARE_MIN_WIDTH, Math.round(containerWidth * 0.8)));
-    const squareHeight = Math.min(SQUARE_MAX_HEIGHT, Math.max(SQUARE_MIN_HEIGHT, Math.round(squareWidth * (containerHeight / containerWidth))));
+    const squareWidth = Math.min(SQUARE_MAX_WIDTH, Math.max(SQUARE_MIN_WIDTH, Math.round(containerSize.width * 0.8)));
+    const squareHeight = Math.min(SQUARE_MAX_HEIGHT, Math.max(SQUARE_MIN_HEIGHT, Math.round(squareWidth * (containerSize.height / containerSize.width))));
     const workerWidth = squareWidth - (GRID_PADDING/2);
     const workerHeight = squareHeight - (GRID_PADDING/2);
+
+    // Try to position the initial box at the center of the container
+    const originX = (containerSize.width / 2) - (squareWidth/2);
+    const originY = containerSize.headerHeight + (containerSize.height / 2) - (squareHeight/2);
 
     // Create a map to store the final positions
     const positionsMap = new Map<string, BoxPosition>(existingPositions);
@@ -58,8 +63,8 @@ export const calculateBoxPositions = (
 
     // Convert grid position to screen coordinates
     const gridToScreenCoords = (row: number, col: number) => ({
-        x: containerWidth / 2 + col * (squareWidth + GRID_PADDING),
-        y: containerHeight / 2 + row * (squareHeight + GRID_PADDING)
+        x: originX + col * (squareWidth + GRID_PADDING),
+        y: originY + row * (squareHeight + GRID_PADDING)
     });
 
     // Find the nearest available position using a spiral search
@@ -272,9 +277,9 @@ export const calculateBoxPositions = (
 calculateBoxPositions.gridCache = new Map();
 
 /**
- * Calculate bounding box for all positions
+ * Calculate bounding box for all positions, considering their scale.
  * @param positions Map of box positions
- * @returns Object with minX, minY, maxX, maxY
+ * @returns Object with minX, minY, maxX, maxY of the scaled boxes
  */
 export const calculateBoundingBox = (positions: Map<string, BoxPosition>): {
     minX: number,
@@ -282,79 +287,136 @@ export const calculateBoundingBox = (positions: Map<string, BoxPosition>): {
     maxX: number,
     maxY: number
 } => {
-    let minX = Number.MAX_SAFE_INTEGER;
-    let minY = Number.MAX_SAFE_INTEGER;
-    let maxX = Number.MIN_SAFE_INTEGER;
-    let maxY = Number.MIN_SAFE_INTEGER;
+    // Use +/- Infinity for robust initialization
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+    let count = 0;
 
-    // Find the bounds of all positioned boxes
     for (const position of positions.values()) {
-        minX = Math.min(minX, position.x);
-        minY = Math.min(minY, position.y);
-        maxX = Math.max(maxX, position.x + (position.width * position.scale));
-        maxY = Math.max(maxY, position.y + (position.height * position.scale));
+        // Calculate bounds based on scaled dimensions
+        const scaledWidth = position.width * position.scale;
+        const scaledHeight = position.height * position.scale;
+
+        let x = position.x;
+        let y = position.y;
+        if(position.scale < 1) {
+            x += (scaledWidth * position.scale);
+            y += (scaledHeight * position.scale);
+        }
+
+        const boxMinX = x;
+        const boxMinY = y;
+        const boxMaxX = x + scaledWidth;
+        const boxMaxY = y + scaledHeight;
+
+        minX = Math.min(minX, boxMinX);
+        minY = Math.min(minY, boxMinY);
+        maxX = Math.max(maxX, boxMaxX);
+        maxY = Math.max(maxY, boxMaxY);
+        count++;
     }
 
-    // If no valid positions, return default values
-    if (minX === Number.MAX_SAFE_INTEGER) {
+    // If no positions were processed, return a zero-size box at origin
+    if (count === 0) {
         return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
     }
 
     return { minX, minY, maxX, maxY };
 };
 
+
 /**
- * Calculate zoom and translation to fit a bounding box in the viewport
- * @param boundingBox Bounding box to fit
- * @param containerWidth Width of the container
- * @param containerHeight Height of the container
- * @param headerHeight Height of any header element
- * @param padding Padding to add around the bounding box
+ * Calculate zoom and translation to fit items in the viewport.
+ * Assumes the rendering component correctly uses position.scale for visual size.
+ * @param boxPositions Boxes to include in zoom
+ * @param containerSize Dimensions of the container { width, height, headerHeight }
  * @returns Object with zoom, translateX, translateY
  */
 export const calculateZoomToFit = (
-    boundingBox: { minX: number, minY: number, maxX: number, maxY: number },
-    containerWidth: number,
-    containerHeight: number,
-    headerHeight: number = 0,
-    padding: number = 100
+    boxPositions: Map<string, BoxPosition>,
+    containerSize: {width: number, height: number, headerHeight: number},
 ): {
     zoom: number,
     translateX: number,
     translateY: number
 } => {
-    const { minX, minY, maxX, maxY } = boundingBox;
 
-    // Add padding
-    const paddedMinX = minX - padding;
-    const paddedMinY = minY - padding;
-    const paddedMaxX = maxX + padding;
-    const paddedMaxY = maxY + padding;
+    // --- Handle Empty Case ---
+    if (boxPositions.size === 0) {
+        return { zoom: 1, translateX: 0, translateY: 0 };
+    }
 
-    // Calculate content dimensions
-    const contentWidth = paddedMaxX - paddedMinX;
-    const contentHeight = paddedMaxY - paddedMinY;
+    // --- Calculate Bounding Box (of correctly scaled boxes) ---
+    const { minX, minY, maxX, maxY } = calculateBoundingBox(boxPositions);
 
-    // Adjust viewport height for header
-    const viewportHeight = containerHeight - headerHeight;
+    // Handle case where bounding box calculation resulted in zero size (e.g., no items)
+    // Check width/height to handle single points correctly if needed later
+    const actualContentWidth = maxX - minX;
+    const actualContentHeight = maxY - minY;
+    if (actualContentWidth <= 0 && actualContentHeight <= 0) {
+        return { zoom: 1, translateX: 0, translateY: 0 };
+    }
 
-    // Calculate zoom level needed to fit content
-    const zoomX = containerWidth / contentWidth;
-    const zoomY = viewportHeight / contentHeight;
+    // --- Calculate Viewport Center ---
+    const viewportCenterX = containerSize.width / 2;
+    const viewportCenterY = containerSize.headerHeight + (containerSize.height / 2);
 
-    // Use the smaller of the two zoom levels
-    let zoom = Math.min(zoomX, zoomY);
+    let zoom: number;
+    let translateX: number;
+    let translateY: number;
 
-    // Limit zoom to reasonable bounds
-    zoom = Math.min(Math.max(zoom, 0.2), 1);
+    // --- CHOOSE LOGIC BASED ON NUMBER OF BOXES ---
+    if (boxPositions.size === 1) {
+        // --- Single Box: Center the actual box, use zoom = 1 / scale ---
+        // Assumes transform model: Scale from Origin (0,0), then Translate
 
-    // Calculate the center of the content
-    const contentCenterX = (paddedMinX + paddedMaxX) / 2;
-    const contentCenterY = (paddedMinY + paddedMaxY) / 2;
+        const position = boxPositions.values().next().value;
+        const scale = position.scale;
 
-    // Calculate translation to center content
-    const translateX = (containerWidth / 2) - (contentCenterX * zoom);
-    const translateY = (headerHeight / 2) + (viewportHeight / 2) - (contentCenterY * zoom);
+        // Use native zoom based on the box's scale, clamped
+        zoom = 1 / scale;
+        zoom = Math.min(Math.max(zoom, MIN_ZOOM), MAX_ZOOM);
+
+        // Center point is the center of the single scaled box
+        const actualContentCenterX = minX + actualContentWidth / 2;
+        const actualContentCenterY = minY + actualContentHeight / 2;
+
+        // Calculate translation using Model 1 (Scale 0,0 -> Translate)
+        // Moves the scaled center to the viewport center
+        translateX = viewportCenterX - (actualContentCenterX * zoom);
+        translateY = viewportCenterY - (actualContentCenterY * zoom);
+
+    } else {
+        // --- Multiple Boxes: Fit padded bounding box ---
+        // Assumes transform model: Scale from Origin (0,0), then Translate
+
+        // Add padding around the overall bounding box for visual spacing
+        const paddedMinX = minX - GRID_PADDING;
+        const paddedMinY = minY - GRID_PADDING;
+        const paddedMaxX = maxX + GRID_PADDING;
+        const paddedMaxY = maxY + GRID_PADDING;
+
+        // Use Math.max(1, ...) to prevent dimensions <= 0 and division by zero
+        const paddedContentWidth = Math.max(1, paddedMaxX - paddedMinX);
+        const paddedContentHeight = Math.max(1, paddedMaxY - paddedMinY);
+
+        // Calculate zoom level needed to fit the padded content area
+        const zoomX = containerSize.width / paddedContentWidth;
+        const zoomY = containerSize.height / paddedContentHeight;
+        zoom = Math.min(zoomX, zoomY, 1); // Use smaller factor to ensure fit
+        zoom = Math.min(Math.max(zoom, MIN_ZOOM), MAX_ZOOM); // Clamp zoom
+
+        // Find the center of the PADDED area
+        const contentCenterX = paddedMinX + paddedContentWidth / 2;
+        const contentCenterY = paddedMinY + paddedContentHeight / 2;
+
+        // Calculate translation using Model 1 (Scale 0,0 -> Translate)
+        // Moves the center of the padded area (scaled from 0,0) to viewport center
+        translateX = viewportCenterX - (contentCenterX * zoom);
+        translateY = viewportCenterY - (contentCenterY * zoom);
+    }
 
     return { zoom, translateX, translateY };
 };

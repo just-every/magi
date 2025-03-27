@@ -296,6 +296,10 @@ export class CommunicationManager {
 
 		this.connected = false;
 	}
+
+	isClosed(): boolean {
+		return (!this.connected || !this.ws);
+	}
 }
 
 // Create a singleton instance for easy import

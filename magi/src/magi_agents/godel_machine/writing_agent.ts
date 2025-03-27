@@ -58,7 +58,7 @@ export function createWritingAgent(plan_document: string): Agent {
 		tools: [
 			...getFileTools()
 		],
-		modelClass: 'standard'
+		modelClass: 'code'
 	});
 }
 

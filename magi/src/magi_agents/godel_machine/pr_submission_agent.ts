@@ -55,7 +55,7 @@ export function createPRSubmissionAgent(issue_description: string): Agent {
 		tools: [
 			...getFileTools()
 		],
-		modelClass: 'standard'
+		modelClass: 'code'
 	});
 }
 

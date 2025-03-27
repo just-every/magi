@@ -106,6 +106,8 @@ export class OpenAIProvider implements ModelProvider {
 				requestParams = convertToOpenAITools(requestParams);
 			}
 
+			console.log('requestParams', requestParams);
+
 			const stream = await this.client.responses.create(requestParams);
 
 			// Collect tool call data as it streams in

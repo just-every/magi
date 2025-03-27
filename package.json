@@ -6,7 +6,8 @@
   "scripts": {
     "postinstall": "cd controller && npm install && cd ../magi && npm install",
     "build": "cd controller && npm run build && cd ../magi && npm run build",
-    "dev": "cd controller && npm run cleanup && npx nodemon",
+    "build:docker": "docker build -t magi-system:latest -f magi/docker/Dockerfile .",
+    "dev": "npm run build:docker && cd controller && npm run cleanup && npx nodemon",
     "lint": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts'",
     "lint:fix": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts' --fix",
     "lint:ui": "eslint controller/src/client/js/ui/",

@@ -3,7 +3,7 @@
  * Renders the main grid view of all processes with zooming and panning capabilities
  */
 import * as React from 'react';
-import {useState, useEffect, useRef} from 'react';
+import {useState, useEffect, useLayoutEffect, useRef} from 'react';
 import ProcessBox from './ProcessBox';
 import AgentBox from './AgentBox';
 import {useSocket} from '../context/SocketContext';
@@ -12,6 +12,7 @@ import {
     calculateBoxPositions,
     calculateBoundingBox,
     calculateZoomToFit,
+    GRID_PADDING,
 } from './utils/GridUtils';
 
 /**
@@ -30,7 +31,7 @@ const ProcessGrid: React.FC = () => {
     const [startDragX, setStartDragX] = useState<number>(0);
     const [startDragY, setStartDragY] = useState<number>(0);
     const [wasDragged, setWasDragged] = useState<boolean>(false);
-    const [containerSize, setContainerSize] = useState({width: 0, height: 0});
+    const [containerSize, setContainerSize] = useState({width: 0, height: 0, headerHeight: 0});
     const [boxPositions, setBoxPositions] = useState<Map<string, BoxPosition>>(new Map());
 
     // Refs for DOM elements
@@ -38,17 +39,18 @@ const ProcessGrid: React.FC = () => {
     const wrapperRef = useRef<HTMLDivElement>(null);
     const dotBackgroundRef = useRef<HTMLDivElement>(null);
 
-    // Constants for layout
-    const agentBoxScale = 0.25; // Agent boxes are 1/4 size of process boxes
-    const gap = 40; // Gap between process boxes
-
     // Update container size on window resize
     useEffect(() => {
         const updateContainerSize = () => {
             if (containerRef.current) {
+                // Get header height for viewport adjustment
+                const header = document.getElementById('main-header');
+                const headerHeight = header ? header.offsetHeight : 0;
+
                 setContainerSize({
                     width: containerRef.current.clientWidth,
-                    height: containerRef.current.clientHeight
+                    height: (containerRef.current.clientHeight - headerHeight),
+                    headerHeight,
                 });
             }
         };
@@ -67,8 +69,7 @@ const ProcessGrid: React.FC = () => {
 
         const newPositions = calculateBoxPositions(
             processes,
-            containerSize.width,
-            containerSize.height,
+            containerSize,
             boxPositions
         );
 
@@ -79,14 +80,14 @@ const ProcessGrid: React.FC = () => {
     useEffect(() => {
         // Don't auto-zoom immediately to avoid rapid changes
         const timer = setTimeout(() => {
-            autoZoomToFit();
+            zoomToFit();
         }, 100);
 
         return () => clearTimeout(timer);
     }, [boxPositions.size, containerSize]);
 
     // Update transform when zoom or position changes
-    useEffect(() => {
+    useLayoutEffect(() => {
         updateTransform();
     }, [zoomLevel, translateX, translateY]);
 
@@ -193,10 +194,10 @@ const ProcessGrid: React.FC = () => {
     };
 
     // Apply smooth transition to transform
-    const applyTransition = (duration: number = 500) => {
+    const applyTransition = (duration: number = 600) => {
         if (wrapperRef.current && dotBackgroundRef.current) {
-            wrapperRef.current.style.transition = `transform ${duration}ms ease-out`;
-            dotBackgroundRef.current.style.transition = `transform ${duration}ms ease-out`;
+            wrapperRef.current.style.transition = `transform ${duration}ms cubic-bezier(0.65, 0, 0.35, 1)`;
+            dotBackgroundRef.current.style.transition = `transform ${duration}ms cubic-bezier(0.65, 0, 0.35, 1)`;
 
             // Reset transition after animation completes
             setTimeout(() => {
@@ -209,23 +210,14 @@ const ProcessGrid: React.FC = () => {
     };
 
     // Automatically zoom to fit all processes
-    const autoZoomToFit = () => {
-        if (processes.size === 0 || !containerRef.current || boxPositions.size === 0) return;
-
-        // Calculate the bounding box of all processes
-        const boundingBox = calculateBoundingBox(boxPositions);
-
-        // Get header height for viewport adjustment
-        const header = document.getElementById('main-header');
-        const headerHeight = header ? header.offsetHeight : 0;
+    const zoomToFit = (fitBoxes?: Map<string, BoxPosition>) => {
+        fitBoxes = fitBoxes || boxPositions;
+        if (processes.size === 0 || !containerRef.current || fitBoxes.size === 0) return;
 
         // Calculate zoom and translation to fit everything
         const { zoom, translateX: newX, translateY: newY } = calculateZoomToFit(
-            boundingBox,
-            containerSize.width,
-            containerSize.height,
-            headerHeight,
-            80 // Padding
+            fitBoxes,
+            containerSize
         );
 
         // Apply new zoom and position with smooth transition
@@ -235,108 +227,38 @@ const ProcessGrid: React.FC = () => {
         applyTransition();
     };
 
-    // Focus specifically on an agent box
-    const focusOnAgent = (agentId: string) => {
-        if (isDragging || wasDragged) return;
-        if (!containerRef.current || !boxPositions.has(agentId)) return;
-
-        const position = boxPositions.get(agentId)!;
-        setFocusedProcess(agentId);
-
-        // Get viewport dimensions
-        const viewportWidth = containerSize.width;
-        const header = document.getElementById('main-header');
-        const headerHeight = header ? header.offsetHeight : 0;
-        const viewportHeight = containerSize.height - headerHeight;
-
-        // Set zoom to proper level for agent boxes (they use WORKER_SCALE so we adjust)
-        // This avoids them appearing tiny
-        setZoomLevel(1 / position.scale); // Compensate for the agent's scale
-        
-        // Center the agent (accounting for its scale)
-        setTranslateX((viewportWidth / 2) - position.x);
-        setTranslateY(headerHeight + (viewportHeight / 2) - position.y);
-
-        // Apply smooth transition
-        applyTransition();
-    };
-
     // Focus on a specific process or group
     const focusOnProcess = (processId: string, focusMode: 'parent-and-children' | 'only-box' = 'parent-and-children') => {
         if (isDragging || wasDragged) return;
         if (!containerRef.current || !boxPositions.has(processId)) return;
 
-        const position = boxPositions.get(processId)!;
         setFocusedProcess(processId);
 
-        // Get viewport dimensions
-        const viewportWidth = containerSize.width;
-        const header = document.getElementById('main-header');
-        const headerHeight = header ? header.offsetHeight : 0;
-        const viewportHeight = containerSize.height - headerHeight;
+        // Add the focused process (or agent)
+        let focusOnBoxes: Map<string, BoxPosition> = new Map();
+        focusOnBoxes.set(processId, boxPositions.get(processId));
 
         // Process and its child agents
         if (focusMode === 'parent-and-children') {
             // Find the process in our data
             const process = processes.get(processId);
             if (process && process.agent && process.agent.workers && process.agent.workers.size > 0) {
-                // This process has worker agents we need to include in the view
-                // Calculate bounding box of process and all its children
-                const childIds = Array.from(process.agent.workers.keys());
-                
-                // Create a temporary bounding box for the group
-                let minX = position.x;
-                let minY = position.y;
-                let maxX = position.x + position.width;
-                let maxY = position.y + position.height;
-                
                 // Expand bounding box to include all children
-                childIds.forEach(workerId => {
+                Array.from(process.agent.workers.keys()).forEach(workerId => {
                     const childPosition = boxPositions.get(workerId);
-                    if (childPosition) {
-                        minX = Math.min(minX, childPosition.x);
-                        minY = Math.min(minY, childPosition.y);
-                        maxX = Math.max(maxX, childPosition.x + (childPosition.width * childPosition.scale));
-                        maxY = Math.max(maxY, childPosition.y + (childPosition.height * childPosition.scale));
+                    if(childPosition) {
+                        focusOnBoxes.set(workerId, childPosition);
                     }
                 });
-                
-                // Calculate appropriate zoom to fit the process and its children
-                const groupWidth = maxX - minX;
-                const groupHeight = maxY - minY;
-                const groupCenterX = minX + (groupWidth / 2);
-                const groupCenterY = minY + (groupHeight / 2);
-                
-                // Allow some padding
-                const padding = 60;
-                const zoomX = (viewportWidth - padding) / groupWidth;
-                const zoomY = (viewportHeight - padding) / groupHeight;
-                let zoom = Math.min(zoomX, zoomY, 1); // Cap at 1.0 (100%)
-                
-                // Set zoom and center the group
-                setZoomLevel(zoom);
-                setTranslateX((viewportWidth / 2) - (groupCenterX * zoom));
-                setTranslateY(headerHeight + (viewportHeight / 2) - (groupCenterY * zoom));
-            } else {
-                // No children, just focus on this process box
-                setZoomLevel(1);
-                setTranslateX((viewportWidth - position.width) / 2 - position.x);
-                setTranslateY(headerHeight + (viewportHeight - position.height) / 2 - position.y);
             }
-        } else if (focusMode === 'only-box') {
-            // Focus only on this specific box at 100% zoom
-            setZoomLevel(1);
-            setTranslateX((viewportWidth - position.width) / 2 - position.x);
-            setTranslateY(headerHeight + (viewportHeight - position.height) / 2 - position.y);
         }
 
-        // Apply smooth transition
-        applyTransition();
+        zoomToFit(focusOnBoxes);
     };
 
     // Reset zoom to show all processes
     const resetZoom = () => {
-        autoZoomToFit();
+        zoomToFit();
         setFocusedProcess(null);
     };
 
@@ -411,7 +333,7 @@ const ProcessGrid: React.FC = () => {
                                 onFocusAgent={(agentId, parentId, focusMode) => {
                                     if (focusMode === 'only-box') {
                                         // For single click, focus on just this agent
-                                        focusOnAgent(agentId);
+                                        focusOnProcess(agentId, focusMode);
                                     } else {
                                         // For double click, focus on the parent process + all children
                                         focusOnProcess(parentId, focusMode);
@@ -426,37 +348,6 @@ const ProcessGrid: React.FC = () => {
 
         // Return all elements with connections behind boxes
         return [...connectionElements, ...processElements, ...agentElements];
-    };
-
-    // Calculate total width and height needed for the wrapper
-    const getWrapperStyles = () => {
-        if (processes.size === 0 || boxPositions.size === 0) {
-            return {
-                minWidth: '100vw',
-                minHeight: '100vh'
-            };
-        }
-
-        // Calculate bounding box
-        const { minX, minY, maxX, maxY } = calculateBoundingBox(boxPositions);
-
-        // Add padding around the edges
-        const padding = gap;
-        const minXWithPadding = minX - padding;
-        const minYWithPadding = minY - padding;
-        const maxXWithPadding = maxX + padding;
-        const maxYWithPadding = maxY + padding;
-
-        // Calculate total width and height needed
-        const totalWidth = maxXWithPadding - minXWithPadding;
-        const totalHeight = maxYWithPadding - minYWithPadding;
-
-        return {
-            width: `${Math.max(totalWidth, window.innerWidth)}px`,
-            height: `${Math.max(totalHeight, window.innerHeight)}px`,
-            minWidth: '100vw',
-            minHeight: '100vh'
-        };
     };
 
     return (
@@ -508,7 +399,6 @@ const ProcessGrid: React.FC = () => {
                 <div
                     className="process-container-wrapper"
                     ref={wrapperRef}
-                    style={getWrapperStyles()}
                 >
                     {renderBoxes()}
                 </div>

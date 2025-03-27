@@ -21,11 +21,12 @@ function parseCommandLineArgs() {
 	const options = {
 		test: {type: 'boolean' as const, short: 't', default: false},
 		debug: {type: 'boolean' as const, short: 'd', default: false},
-		agent: {type: 'string' as const, short: 'a', default: 'supervisor'},
+		agent: {type: 'string' as const, short: 'a', default: 'overseer'},
 		prompt: {type: 'string' as const, short: 'p'},
 		base64: {type: 'string' as const, short: 'b'},
 		model: {type: 'string' as const, short: 'm'},
 		'model-class': {type: 'string' as const, short: 'c'},
+		research: {type: 'boolean' as const, short: 'r', default: false},
 	};
 
 	const {values} = parseArgs({options, allowPositionals: true});
@@ -36,88 +37,83 @@ function parseCommandLineArgs() {
 // Store agent IDs to reuse them for the same agent type
 const agentIdMap = new Map<AgentType, string>();
 
+
 /**
  * Execute a command using an agent and capture the results
  */
-export async function runCommand(
-	command: string,
-	agentType: AgentType = 'supervisor',
+export async function monologueLoop(
+	input: string,
+	agentType: AgentType = 'overseer',
 	model?: string,
 	modelClass?: string
 ): Promise<void> {
+
+	addHistory({role: 'user', content: input});
+
 	const comm = getCommunicationManager();
-	try {
-		comm.send({
-			type: 'command_start',
-			command
-		});
 
-		// Special debug handling for browser agent with direct execution
-		if (agentType === 'browser' && command.toLowerCase().includes('yahoo')) {
-			console.log('================================================================');
-			console.log('DIRECT BROWSER AGENT HANDLING SHOULD TRIGGER FOR YAHOO REQUEST');
-			console.log('================================================================');
-		}
-
-		// Create the agent with specified type, model, and modelClass
-		if (model) {
-			console.log(`Forcing model: ${model}`);
-		}
-		if (modelClass) {
-			console.log(`Using model class: ${modelClass}`);
-		}
-
-		// Get existing agent_id for this agent type if available
-		const existingAgentId = agentIdMap.get(agentType);
-		if (existingAgentId) {
-			console.log(`Reusing existing agent_id for ${agentType}: ${existingAgentId}`);
-		}
-
-		// Create the agent with model, modelClass, and optional agent_id parameters
-		const agent = createAgent(agentType, model, modelClass, existingAgentId);
-
-		// Store the agent_id for future use if we don't have one yet
-		if (!existingAgentId) {
-			agentIdMap.set(agentType, agent.agent_id);
-			console.log(`Stored new agent_id for ${agentType}: ${agent.agent_id}`);
-		}
-
-		// Get conversation history
-		const history = getHistory();
-
-		// Set up event handlers
-		const handlers = {
-			// Forward all events to the communication channel
-			onEvent: (event: StreamingEvent) => {
-				comm.send(event);
-			},
-		};
-
-		// Run the command with unified tool handling
-		const response = await Runner.runStreamedWithTools(agent, command, history, handlers);
-
-		// Add the final response to history
-		if (response && response.trim()) {
-			addHistory({
-				type: 'message',
-				role: 'assistant',
-				content: response,
-				status: 'completed'
-			});
-		}
-
-		comm.send({type: 'command_done', command});
-	} catch (error: any) {
-		// Handle any error that occurred during agent execution
-		console.error(`Error running agent command: ${error?.message || String(error)}`);
-
-		// Send error through WebSocket
+	do {
 		try {
-			comm.send({type: 'error', error});
-		} catch (commError) {
-			console.error('Failed to send error via WebSocket:', commError);
+			// Create the agent with specified type, model, and modelClass
+			if (model) {
+				console.log(`Forcing model: ${model}`);
+			}
+			if (modelClass) {
+				console.log(`Using model class: ${modelClass}`);
+			}
+
+			// Get existing agent_id for this agent type if available
+			const existingAgentId = agentIdMap.get(agentType);
+			if (existingAgentId) {
+				console.log(`Reusing existing agent_id for ${agentType}: ${existingAgentId}`);
+			}
+
+			// Create the agent with model, modelClass, and optional agent_id parameters
+			const agent = createAgent(agentType, model, modelClass, existingAgentId);
+
+			// Store the agent_id for future use if we don't have one yet
+			if (!existingAgentId) {
+				agentIdMap.set(agentType, agent.agent_id);
+				console.log(`Stored new agent_id for ${agentType}: ${agent.agent_id}`);
+			}
+
+			// Get conversation history
+			const history = getHistory();
+
+			// Set up event handlers
+			const handlers = {
+				// Forward all events to the communication channel
+				onEvent: (event: StreamingEvent) => {
+					comm.send(event);
+				},
+			};
+
+			// Run the command with unified tool handling
+			const response = await Runner.runStreamedWithTools(agent, '', history, handlers);
+
+			// Add the final response to history
+			if (response && response.trim()) {
+				addHistory({
+					type: 'message',
+					role: 'assistant',
+					content: response,
+					status: 'completed'
+				});
+			}
+
+		} catch (error: any) {
+			// Handle any error that occurred during agent execution
+			console.error(`Error running agent command: ${error?.message || String(error)}`);
+
+			// Send error through WebSocket
+			try {
+				comm.send({type: 'error', error});
+			} catch (commError) {
+				console.error('Failed to send error via WebSocket:', commError);
+			}
 		}
 	}
+	while (agentType === 'overseer' && !comm.isClosed());
 }
 
 /**
@@ -201,21 +197,11 @@ async function main(): Promise<void> {
 			// Print cost summary before exit
 			costTracker.printSummary();
 			process.exit(0);
-		} else if (cmd.type === 'command') {
+		} else if (cmd.type === 'command' && cmd.command) {
 			// Process user-provided follow-up commands
 			console.log(`Processing user command: ${cmd.command}`);
-			runCommand(
-				cmd.command || '',
-				args.agent as AgentType,
-				args.model,
-				args['model-class']
-			).catch(error => {
-				console.error(`Error processing user command: ${error}`);
-				comm.send({
-					type: 'error',
-					error: `Failed to process command: ${error}`
-				});
-			});
+
+			addHistory({role: 'user', content: cmd.command});
 		}
 	});
 
@@ -246,9 +232,9 @@ async function main(): Promise<void> {
 		process.exit(1);
 	}
 
-	// Run the command
+	// Run the command or research pipeline
 	try {
-		await runCommand(
+		await monologueLoop(
 			promptText,
 			args.agent as AgentType,
 			args.model,

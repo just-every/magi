@@ -339,8 +339,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 							} as ToolResultMessage);
 						}
 					}
-				} else if (eventType === 'message_start' || eventType === 'message_delta' ||
-					eventType === 'message_complete') {
+				} else if (eventType === 'message_start' || eventType === 'message_delta' || eventType === 'message_complete' || eventType === 'talk_start' || eventType === 'talk_delta' || eventType === 'talk_complete') {
 					// Assistant message
 					if ('content' in streamingEvent && 'message_id' in streamingEvent) {
 						const content = streamingEvent.content || '';
@@ -388,7 +387,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 										.map(key => updatedMessage.deltaChunks![key])
 										.join('');
 								}
-							} else if (eventType === 'message_complete' && existingMessage) {
+							} else if ((eventType === 'message_complete' || eventType === 'talk_complete') && existingMessage) {
 								// Update the existing message in place
 								updatedMessage.content = content;
 								updatedMessage.isDelta = false;

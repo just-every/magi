@@ -183,11 +183,12 @@ export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<
 export function createToolFunction(
 	func: (...args: any[]) => any,
 	description?: string,
-	paramMap?: Record<string, string | { name?: string, description?: string, type?: string }>,
-	returns?: string
+	paramMap?: Record<string, string | { name?: string, description?: string, type?: string, optional?: boolean }>,
+	returns?: string,
+	functionName?: string
 ): ToolFunction {
 	const funcStr = func.toString();
-	const funcName = func.name;
+	const funcName = (functionName || '').replaceAll(' ', '_') || func.name;
 
 	let toolDescription = description || `Tool for ${funcName}`;
 	if (returns) {
@@ -247,14 +248,16 @@ export function createToolFunction(
 				}
 			}
 
+			const description = paramInfo?.description || `The ${cleanParamName} parameter`;
+
 			// Create parameter definition
 			properties[apiParamName] = {
 				type: paramType,
-				description: paramInfo?.description || `The ${cleanParamName} parameter`
+				description,
 			};
 
 			// If parameter has no default value, it's required
-			if (defaultValue === undefined) {
+			if (defaultValue === undefined && !paramInfo?.optional) {
 				required.push(apiParamName);
 			}
 		}

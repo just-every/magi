@@ -133,8 +133,6 @@ header {
     position: absolute;
     transform-origin: top left;
     transition: none; /* Disable transitions initially */
-    min-width: 100vw;
-    min-height: 100vh;
 }
 
 .process-terminate {

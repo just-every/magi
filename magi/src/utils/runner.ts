@@ -21,7 +21,7 @@ export class Runner {
 	 */
 	static async* runStreamed(
 		agent: Agent,
-		input: string,
+		input?: string,
 		conversationHistory: ResponseInput = []
 	): AsyncGenerator<StreamingEvent> {
 		// Get our selected model for this run
@@ -144,7 +144,7 @@ export class Runner {
 	 */
 	static async runStreamedWithTools(
 		agent: Agent,
-		input: string,
+		input?: string,
 		conversationHistory: ResponseInput = [],
 		handlers: {
 			onEvent?: (event: StreamingEvent) => void,
@@ -320,7 +320,9 @@ export class Runner {
 
 				// Add previous history and input
 				toolCallMessages.push(...conversationHistory);
-				toolCallMessages.push({role: 'user', content: input});
+				if(input) {
+					toolCallMessages.push({role: 'user', content: input});
+				}
 
 				// We need to create messages with the proper format for the responses API
 				// We need to convert our regular messages to the correct format
@@ -328,12 +330,14 @@ export class Runner {
 				// Start with initial messages - convert standard message format to responses format
 				const messageItems: ResponseInput = [...conversationHistory];
 
-				// Add the user input message
-				messageItems.push({
-					type: 'message',
-					role: 'user',
-					content: input
-				});
+				if(input) {
+					// Add the user input message
+					messageItems.push({
+						type: 'message',
+						role: 'user',
+						content: input
+					});
+				}
 
 				// Add the function calls
 				for (const toolCall of collectedToolCalls) {

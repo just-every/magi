@@ -54,7 +54,7 @@ export function createTestingAgent(): Agent {
 		tools: [
 			...getFileTools()
 		],
-		modelClass: 'standard'
+		modelClass: 'code'
 	});
 }
 

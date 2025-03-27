@@ -44,7 +44,7 @@ export class Agent implements AgentInterface {
 
 	constructor(definition: AgentDefinition, modelSettings?: ModelSettings) {
 		this.agent_id = definition.agent_id || uuid();
-		this.name = definition.name;
+		this.name = definition.name.replace(' ', '_');
 		this.description = definition.description;
 		this.instructions = definition.instructions;
 		this.tools = definition.tools || [];
@@ -71,9 +71,9 @@ export class Agent implements AgentInterface {
 		if (this.tools) {
 			description += '\n\nThis agent has access to the following tools:\n';
 			this.tools.forEach(tool => {
-				description += `- ${tool.definition.function.name}: ${tool.definition.function.description}\n`;
+				description += `- ${tool.definition.function.name}\n`;
 			});
-			description += '\nUse the tool list as a guide when to call the agent, but generally you should let the agent decide which tools to use. You do not need to specify the tools in the prompt, as the agent will automatically choose the best tool for the task.';
+			description += '\nUse the tool list as a guide when to call the agent, but you should let the agent decide which tools to use.';
 		}
 		return {
 			function: (...args: (string | number | boolean)[]) => runAgentTool(this, String(args[0])),

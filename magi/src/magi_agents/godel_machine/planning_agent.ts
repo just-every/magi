@@ -7,6 +7,7 @@
 
 import {Agent} from '../../utils/agent.js';
 import {getFileTools} from '../../utils/file_utils.js';
+import {createBrowserAgent} from '../task_force/browser_agent.js';
 // These constants can be used in the instructions if needed
 // import { COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT } from '../constants.js';
 
@@ -58,7 +59,10 @@ export function createPlanningAgent(issue_description: string): Agent {
 		tools: [
 			...getFileTools()
 		],
-		modelClass: 'standard'
+		workers: [
+			createBrowserAgent,
+		],
+		modelClass: 'reasoning'
 	});
 }
 

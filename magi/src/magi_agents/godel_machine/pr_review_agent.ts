@@ -64,7 +64,7 @@ export function createPRReviewAgent(issue_description: string, pr_details?: stri
 		tools: [
 			...getFileTools()
 		],
-		modelClass: 'standard'
+		modelClass: 'code'
 	});
 }
 

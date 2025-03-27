@@ -15,7 +15,7 @@ import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT
 export function createBrowserAgent(): Agent {
 	return new Agent({
 		name: 'BrowserAgent',
-		description: 'Controls a browser to interact with websites, fill forms, and extract data',
+		description: 'Quickly reads and interacts with websites, fill forms and extracts data',
 		instructions: `You are a specialized browser agent with the ability to interact with websites.
 
 Your browsing capabilities include:
