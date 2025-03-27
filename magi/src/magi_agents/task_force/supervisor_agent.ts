@@ -4,18 +4,18 @@
  * This agent orchestrates other specialized agents to complete tasks.
  */
 
-import {Agent} from '../utils/agent.js';
-import {createManagerAgent} from './workers/manager_agent.js';
-import {createReasoningAgent} from './workers/reasoning_agent.js';
-import {createCodeAgent} from './workers/code_agent.js';
-import {createBrowserAgent} from './workers/browser_agent.js';
-import {createBrowserVisionAgent} from './workers/browser_vision_agent.js';
-import {createSearchAgent} from './workers/search_agent.js';
-import {createShellAgent} from './workers/shell_agent.js';
-import {runGodelMachine} from './godel_machine/index.js';
-import {AGENT_DESCRIPTIONS, COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT} from './constants.js';
-import {createToolFunction} from '../utils/tool_call.js';
-import {getFileTools} from '../utils/file_utils.js';
+import {Agent} from '../../utils/agent.js';
+import {createManagerAgent} from './task_force/manager_agent.js';
+import {createReasoningAgent} from './task_force/reasoning_agent.js';
+import {createCodeAgent} from './task_force/code_agent.js';
+import {createBrowserAgent} from './task_force/browser_agent.js';
+import {createBrowserVisionAgent} from './task_force/browser_vision_agent.js';
+import {createSearchAgent} from './task_force/search_agent.js';
+import {createShellAgent} from './task_force/shell_agent.js';
+import {runGodelMachine} from '../godel_machine/index.js';
+import {AGENT_DESCRIPTIONS, COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT} from '../constants.js';
+import {createToolFunction} from '../../utils/tool_call.js';
+import {getFileTools} from '../../utils/file_utils.js';
 
 /**
  * Create the supervisor agent
@@ -35,14 +35,13 @@ Using your tools, you are incredibly good at many things - research, coding, cal
 Your primary job is to figure out how to split up your task into parts so that it can be completed most efficiently and accurately. Once you work this out, you should execute the plan using your Agents. You should execute your Agents in parallel wherever possible.
 
 YOUR AGENTS:
-1. ${AGENT_DESCRIPTIONS['ManagerAgent']}
-2. ${AGENT_DESCRIPTIONS['ReasoningAgent']}
-3. ${AGENT_DESCRIPTIONS['CodeAgent']}
-4. ${AGENT_DESCRIPTIONS['BrowserAgent']}
-5. ${AGENT_DESCRIPTIONS['BrowserVisionAgent']}
-6. ${AGENT_DESCRIPTIONS['SearchAgent']}
-7. ${AGENT_DESCRIPTIONS['ShellAgent']}
-8. ${AGENT_DESCRIPTIONS['GodelMachine']}
+${AGENT_DESCRIPTIONS['ManagerAgent']}
+${AGENT_DESCRIPTIONS['ReasoningAgent']}
+${AGENT_DESCRIPTIONS['CodeAgent']}
+${AGENT_DESCRIPTIONS['BrowserAgent']}
+${AGENT_DESCRIPTIONS['SearchAgent']}
+${AGENT_DESCRIPTIONS['ShellAgent']}
+${AGENT_DESCRIPTIONS['GodelMachine']}
 
 YOUR BUILT-IN TOOLS:
 1. calculator - Performs arithmetic operations (add, subtract, multiply, divide, power, sqrt, log)
@@ -76,15 +75,14 @@ DO NOT TELL THE USER TO PERFORM THE TASK. USE YOUR AGENTS TO WRITE TO CODE TO SO
 				'A description of what work has been completed'
 			)
 		],
-		workers: [
+		task_force: [
 			createManagerAgent,
 			createReasoningAgent,
 			createCodeAgent,
 			createBrowserAgent,
-			createBrowserVisionAgent,
 			createSearchAgent,
 			createShellAgent
 		],
-		modelClass: 'reasoning'
+		modelClass: 'standard'
 	});
 }

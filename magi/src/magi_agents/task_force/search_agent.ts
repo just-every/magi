@@ -5,9 +5,10 @@
  */
 
 import {Agent} from '../../utils/agent.js';
-import {getFileTools} from '../../utils/file_utils.js';
+// import {getFileTools} from '../../utils/file_utils.js';
 import {getSearchTools} from '../../utils/search_utils.js';
 import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
+import {createBrowserAgent} from './browser_agent.js';
 
 /**
  * Create the search agent
@@ -56,8 +57,10 @@ IMPORTANT:
 - Use multiple search queries to verify information when necessary
 - When handling real-time or current information queries, be sure to use up-to-date sources`,
 		tools: [
-			...getFileTools(),
 			...getSearchTools()
+		],
+		workers: [
+			createBrowserAgent,
 		],
 		modelClass: 'standard'
 	});
