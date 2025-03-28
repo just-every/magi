@@ -87,6 +87,7 @@ export const MODEL_CLASSES: Record<string, ModelClass> = {
 			'deepseek-chat',        	// DeepSeek
 			'deepseek-reasoner',       	// DeepSeek
 		],
+		random: true,
 	},
 
 	// Programming models

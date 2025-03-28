@@ -34,7 +34,7 @@ import {log_llm_request} from '../utils/file_utils.js';
 
 // Convert our tool definition to Gemini's format
 function convertToGeminiTools(tools: ToolFunction[]): ToolListUnion {
-	return tools.map(tool => {
+	const functionDeclarations: FunctionDeclaration[] = tools.map(tool => {
 		const properties: Record<string, Schema> = {};
 
 		for (const [name, param] of Object.entries(tool.definition.function.parameters.properties)) {
@@ -73,10 +73,12 @@ function convertToGeminiTools(tools: ToolFunction[]): ToolListUnion {
 			...tool.definition.function,
 			parameters,
 		};
-		return {
-			functionDeclarations: [functionDeclaration]
-		};
+		return functionDeclaration;
 	});
+
+	return [
+		{ functionDeclarations }
+	];
 }
 
 /**

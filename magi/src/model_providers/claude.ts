@@ -13,7 +13,7 @@ import {
 	ModelSettings,
 	StreamingEvent,
 	ToolCall,
-	ResponseInput
+	ResponseInput, ResponseInputItem
 } from '../types.js';
 import { costTracker } from '../utils/cost_tracker.js';
 import { log_llm_request } from '../utils/file_utils.js';
@@ -22,13 +22,72 @@ import { convertHistoryFormat } from '../utils/llm_utils.js';
 // Convert our tool definition to Claude's format
 function convertToClaudeTools(tools: ToolFunction[]): any[] {
 	return tools.map(tool => ({
-		type: 'custom',
-		custom: {
-			name: tool.definition.function.name,
-			description: tool.definition.function.description,
-			parameters: tool.definition.function.parameters
-		}
+		// Directly map the properties to the top level
+		name: tool.definition.function.name,
+		description: tool.definition.function.description,
+		// Map 'parameters' from your definition to 'input_schema' for Claude
+		input_schema: tool.definition.function.parameters
 	}));
+}
+
+// Assuming ResponseInputItem is your internal message structure type
+// Assuming ClaudeMessage is the structure Anthropic expects (or null)
+type ClaudeMessage = { role: 'user' | 'assistant' | 'system'; content: any; } | null; // Simplified type
+
+/**
+ * Converts a custom ResponseInputItem into Anthropic Claude's message format.
+ * Handles text messages, tool use requests (function calls), and tool results (function outputs).
+ *
+ * @param role The original role associated with the message ('user', 'assistant', 'system').
+ * @param content The text content, primarily for non-tool messages.
+ * @param msg The detailed message object (ResponseInputItem).
+ * @returns A Claude message object or null if conversion is not applicable (e.g., system message, empty content).
+ */
+function convertToClaudeMessage(role: string, content: string, msg: ResponseInputItem): ClaudeMessage {
+
+	// --- Handle Tool Use (Function Call) ---
+	if (msg.type === 'function_call') {
+		let inputArgs: Record<string, unknown> = {};
+		try {
+			// Claude expects 'input' as an object
+			inputArgs = JSON.parse(msg.arguments || '{}');
+		} catch (e) {
+			console.error(`Error parsing function call arguments for ${msg.name}: ${msg.arguments}`, e);
+			return null;
+		}
+
+		const toolUseBlock = {
+			type: 'tool_use',
+			id: msg.call_id, // Use the consistent ID field
+			name: msg.name,
+			input: inputArgs,
+		};
+
+		return { role: 'assistant', content: [toolUseBlock] };
+	}
+	else if (msg.type === 'function_call_output') {
+		const toolResultBlock = {
+			type: 'tool_result',
+			tool_use_id: msg.call_id, // ID must match the corresponding tool_use block
+			content: msg.output || "", // Default to empty string if output is missing
+			...(msg.status === 'incomplete' ? { is_error: true } : {}),
+		};
+
+		// Anthropic expects role: 'user' for tool_result
+		return { role: 'user', content: [toolResultBlock] };
+	}
+	else {
+		// Skip messages with no actual text content
+		if (!content) {
+			return null;
+		}
+
+		// Use the simple string content format for text messages
+		return {
+			role: role === 'assistant' ? 'assistant' : (role === 'system' ? 'system' : 'user'),
+			content: content,
+		};
+	}
 }
 
 /**
@@ -58,28 +117,37 @@ export class ClaudeProvider implements ModelProvider {
 	): AsyncGenerator<StreamingEvent> {
 		try {
 			// Convert messages format for Claude
-			const claudeMessages = convertHistoryFormat(messages);
+			const claudeMessages = convertHistoryFormat(messages, convertToClaudeMessage);
+
+			// Extract the system prompt content (assuming one system message, might need adjustment if multiple are possible)
+			const systemPromptMessages = claudeMessages.filter(m => m.role === 'system');
+			// Ensure content is a string. Handle cases where content might be structured differently or missing.
+			const systemPrompt = systemPromptMessages.length > 0 && typeof systemPromptMessages[0].content === 'string'
+				? systemPromptMessages[0].content
+				: undefined;
 
 			// Format the request according to Claude API specifications
 			const requestParams: any = {
 				model: model,
-				// Only include messages that have a role property and aren't system messages
-				messages: claudeMessages.filter(m => m.role !== 'system'),
-				system: claudeMessages.filter(m => m.role === 'system'),
+				// Filter for only user and assistant messages for the 'messages' array
+				messages: claudeMessages.filter(m => m.role === 'user' || m.role === 'assistant'),
+				// Add system prompt string if it exists
+				...(systemPrompt ? { system: systemPrompt } : {}),
 				stream: true,
-				// Add optional parameters
-				...(settings?.temperature ? {temperature: settings.temperature} : {}),
-				...(settings?.max_tokens ? {max_tokens: settings.max_tokens} : {})
+				// Add optional parameters (added undefined check for robustness)
+				...(settings?.temperature !== undefined ? { temperature: settings.temperature } : {}),
+				...(settings?.max_tokens !== undefined ? { max_tokens: settings.max_tokens } : {})
 			};
 
-			// Add tools if provided
+			// Add tools if provided, using the corrected conversion function
 			if (tools && tools.length > 0) {
-				requestParams.tools = convertToClaudeTools(tools);
+				requestParams.tools = convertToClaudeTools(tools); // Uses the corrected function
 			}
 
 			// Log the request before sending
 			log_llm_request('anthropic', model, requestParams);
 
+			// Make the API call
 			const stream = await this.client.messages.create(requestParams);
 
 			// Track current tool call info

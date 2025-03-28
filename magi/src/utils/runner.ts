@@ -69,6 +69,11 @@ export class Runner {
 				event.agent = event.agent ? event.agent : agent.export();
 				if (!event.agent.model) event.agent.model = selectedModel;
 				yield event;
+
+				if(event.type === 'error') {
+					// Make sure we try a different model instead
+					throw event;
+				}
 			}
 		} catch (error) {
 			// If the model fails, try to find an alternative in the same class
@@ -125,6 +130,11 @@ export class Runner {
 						event.agent = event.agent ? event.agent : agent.export();
 						if (!event.agent.model) event.agent.model = alternativeModel;
 						yield event;
+
+						if(event.type === 'error') {
+							// Make sure we try a different model instead
+							throw event;
+						}
 					}
 
 					// If we got here, the alternative model worked, so exit the loop
