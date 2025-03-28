@@ -5,8 +5,19 @@
  * for Google's Gemini models and handles streaming responses.
  */
 
-import 'dotenv/config';
-import {GoogleGenerativeAI, HarmCategory, HarmBlockThreshold} from '@google/generative-ai';
+import {
+	GoogleGenAI,
+	GenerateContentConfig,
+	ContentListUnion,
+	ToolListUnion,
+	FunctionDeclaration,
+	Schema,
+	Type,
+	ContentUnion,
+	Part,
+	FunctionCall,
+	GenerateContentResponse
+} from '@google/genai';
 import {v4 as uuidv4} from 'uuid';
 import {
 	ModelProvider,
@@ -14,60 +25,127 @@ import {
 	ModelSettings,
 	StreamingEvent,
 	ToolCall,
-	ResponseInput
+	ResponseInput,
+	ResponseInputItem,
 } from '../types.js';
 import { costTracker } from '../utils/cost_tracker.js';
-
-// Define a type that includes functionCall property since it's missing in the current TypeScript definitions
-interface FunctionCall {
-	name: string;
-	args: any;
-}
+import { convertHistoryFormat } from '../utils/llm_utils.js';
+import {log_llm_request} from '../utils/file_utils.js';
 
 // Convert our tool definition to Gemini's format
-function convertToGeminiTools(tools: ToolFunction[]): any[] {
+function convertToGeminiTools(tools: ToolFunction[]): ToolListUnion {
 	return tools.map(tool => {
-		// Deep copy of parameters to avoid modifying the original
-		const parameters = JSON.parse(JSON.stringify(tool.definition.function.parameters));
+		const properties: Record<string, Schema> = {};
 
-		// Convert type values to uppercase for Gemini
-		if (parameters.type) {
-			parameters.type = parameters.type.toUpperCase();
-		}
-
-		// Also convert property types to uppercase
-		if (parameters.properties) {
-			for (const property in parameters.properties) {
-				if (parameters.properties[property].type) {
-					parameters.properties[property].type = parameters.properties[property].type.toUpperCase();
-				}
+		for (const [name, param] of Object.entries(tool.definition.function.parameters.properties)) {
+			let type = Type.STRING;
+			switch(param.type) {
+				case 'string':
+					type = Type.STRING;
+					break;
+				case 'number':
+					type = Type.NUMBER;
+					break;
+				case 'boolean':
+					type = Type.BOOLEAN;
+					break;
+				case 'null':
+				case 'object':
+					type = Type.OBJECT;
+					break;
+				case 'array':
+					type = Type.ARRAY;
+					break;
 			}
+
+			properties[name] = {
+				type,
+				description: param.description,
+			};
 		}
 
+		const parameters: Schema = {
+			type: Type.OBJECT,
+			properties,
+			required: tool.definition.function.parameters.required
+		};
+		const functionDeclaration: FunctionDeclaration = {
+			...tool.definition.function,
+			parameters,
+		};
 		return {
-			functionDeclarations: [{
-				name: tool.definition.function.name,
-				description: tool.definition.function.description,
-				parameters: parameters
-			}]
+			functionDeclarations: [functionDeclaration]
 		};
 	});
+}
+
+/**
+ * Converts a custom ResponseInputItem into Google Gemini's Content format.
+ *
+ * Note: The original function signature included 'role' and 'content' parameters
+ * which seem redundant given the 'msg' object contains this info.
+ * This revised version primarily relies on the 'msg' object.
+ *
+ * @param msg The message or function call/output item to convert.
+ * @returns A Gemini Content object or null if conversion is not possible (e.g., empty content).
+ */
+function convertToGeminiContent(role: string, content: string, msg: ResponseInputItem): ContentUnion | null {
+
+	if (msg.type === 'function_call') {
+		const args: Record<string, unknown> = JSON.parse(msg.arguments);
+		const functionCallPart: Part = {
+			functionCall: {
+				id: msg.id || msg.call_id,
+				name: msg.name,
+				args,
+			}
+		};
+		return { role: 'model', parts: [functionCallPart] };
+	}
+	else if (msg.type === 'function_call_output') {
+
+		let responseContent: Record<string, unknown>;
+		try {
+			// Attempt to parse if it looks like JSON, otherwise treat as plain text
+			if (msg.output.trim().startsWith('{') || msg.output.trim().startsWith('[')) {
+				responseContent = JSON.parse(msg.output);
+			} else {
+				// If not JSON, wrap it simply. Adjust wrapping as needed.
+				responseContent = { content: msg.output };
+			}
+		} catch (e) {
+			responseContent = { content: msg.output };
+		}
+
+		const functionResponsePart: Part = {
+			functionResponse: {
+				id: msg.id || msg.call_id,
+				name: msg.name,
+				response: responseContent, // Gemini expects an object here
+			}
+		};
+		return { role: 'user', parts: [functionResponsePart] };
+	}
+	else {
+		return !content ? null : {
+			role: role === 'assistant' ? 'model' : 'user',
+			parts: [{ text: content }],
+		};
+	}
 }
 
 /**
  * Gemini model provider implementation
  */
 export class GeminiProvider implements ModelProvider {
-	private client: GoogleGenerativeAI;
+	private client: GoogleGenAI;
 
-	constructor(apiKey?: string) {
-		this.client = new GoogleGenerativeAI(
-			apiKey || process.env.GOOGLE_API_KEY || ''
-		);
-
+	constructor() {
 		if (!process.env.GOOGLE_API_KEY) {
 			throw new Error('Failed to initialize Gemini client. Make sure GOOGLE_API_KEY is set.');
 		}
+
+		this.client = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
 	}
 
 	/**
@@ -79,214 +157,173 @@ export class GeminiProvider implements ModelProvider {
 		tools?: ToolFunction[],
 		settings?: ModelSettings
 	): AsyncGenerator<StreamingEvent> {
+
+		let contentBuffer = ''; // Accumulates text
+		const messageId = uuidv4();
+		let eventOrder = 0;
+		let streamError: Error | null = null;
+		let lastChunk: GenerateContentResponse | null = null;
+
 		try {
-			// Create a generative model instance
-			const genModel = this.client.getGenerativeModel({model: model});
-
 			// Configure generation parameters
-			const generationConfig = {
-				temperature: settings?.temperature || 0.7,
+			const config: GenerateContentConfig = {
+				temperature: settings?.temperature,
 				maxOutputTokens: settings?.max_tokens,
-				topK: 40,
-				topP: settings?.top_p || 0.95,
+				topP: settings?.top_p,
 			};
-
-			// Configure safety settings (set to allow most content)
-			const safetySettings = [
-				{
-					category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-					threshold: HarmBlockThreshold.BLOCK_NONE,
-				},
-				{
-					category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-					threshold: HarmBlockThreshold.BLOCK_NONE,
-				},
-				{
-					category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-					threshold: HarmBlockThreshold.BLOCK_NONE,
-				},
-				{
-					category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-					threshold: HarmBlockThreshold.BLOCK_NONE,
-				},
-			];
-
-			// Convert message format to Gemini content format
-			const input = convertMessagesToGeminiFormat(messages);
-
-			// Configure tool settings if tools are provided
-			let geminiTools = undefined;
 			if (tools && tools.length > 0) {
-				geminiTools = convertToGeminiTools(tools);
+				config.tools = convertToGeminiTools(tools);
 			}
 
-			// Create request configuration
-			const requestOptions: any = {
-				generationConfig,
-				safetySettings,
+			const contents: ContentListUnion = convertHistoryFormat(messages, convertToGeminiContent);
+
+			const requestParams = {
+				model,
+				contents,
+				config,
 			};
 
-			// Add tools if provided
-			if (geminiTools) {
-				requestOptions.tools = geminiTools;
-			}
+			// Log the request for debugging
+			log_llm_request('google', model, requestParams);
 
-			// Start a streaming chat session
-			const chat = genModel.startChat();
+			const responseStream = await this.client.models.generateContentStream(requestParams);
 
-			// Send the message and get stream
-			const streamingResult = await chat.sendMessageStream(input);
+			// --- Stream Processing Loop ---
+			for await (const chunk of responseStream) {
+				lastChunk = chunk; // Store the latest chunk
+				let chunkProcessedAnyPart = false; // Track if any part of the chunk was handled
 
-			// Track current tool call
-			let currentToolCall: any = null;
-			let contentBuffer = ''; // Buffer to collect text content
-			let sentComplete = false; // To track if we've sent a message_complete
-			// Generate a unique message ID for this response
-			const messageId = uuidv4();
-			// Track delta positions
-			let deltaPosition = 0;
-
-			try {
-				for await (const chunk of streamingResult.stream) {
-					// Check for tool calls (function calls in Gemini terminology)
-					if (chunk.candidates?.[0]?.content?.parts) {
-						for (const part of chunk.candidates[0].content.parts) {
-							// Handle function calls - treat as any type since TS doesn't know about functionCall
-							const partAny = part as any;
-							if (partAny.functionCall) {
-								const functionCall = partAny.functionCall as FunctionCall;
-
-								// Create a tool call in our format
-								currentToolCall = {
-									id: `call_${Date.now()}`,
-									type: 'function',
-									function: {
-										name: functionCall.name,
-										arguments: typeof functionCall.args === 'string'
-											? functionCall.args
-											: JSON.stringify(functionCall.args)
-									}
-								};
-
-								// Emit the tool call immediately
-								yield {
-									type: 'tool_start',
-									tool_calls: [currentToolCall as ToolCall]
-								};
-
-								currentToolCall = null;
-							}
-							// Handle text content
-							else if (part.text) {
-								// Emit delta event for streaming UI updates
-								// Include incrementing order parameter for organizing deltas
-								yield {
-									type: 'message_delta',
-									content: part.text,
-									message_id: messageId,
-									order: deltaPosition++
-								};
-
-								// Accumulate content for final message
-								contentBuffer += part.text;
-							}
-						}
+				// 1. Check for Function Calls using the getter
+				// Note: .functionCalls getter filters parts from the first candidate.
+				const functionCalls = chunk.functionCalls; // Use getter
+				if (functionCalls) { // Check if undefined or empty array
+					const toolCallsToEmit: ToolCall[] = functionCalls.map((fc: FunctionCall) => {
+						const id = fc.id || `call_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+						return {
+							id,
+							type: 'function',
+							function: { name: (fc.name || id), arguments: JSON.stringify(fc.args) }
+						};
+					});
+					if (toolCallsToEmit.length > 0) {
+						yield { type: 'tool_start', tool_calls: toolCallsToEmit };
+						chunkProcessedAnyPart = true;
 					}
 				}
 
-				// Always emit a message_complete at the end with the accumulated content
-				if (contentBuffer && !sentComplete) {
+				// 2. Check for Text Content using the getter
+				// Note: .text getter concatenates text from first candidate, warns for non-text parts.
+				const chunkText = chunk.text; // Use getter
+				if (chunkText !== undefined && chunkText !== '') { // Check for non-empty string
 					yield {
-						type: 'message_complete',
-						content: contentBuffer,
-						message_id: messageId
+						type: 'message_delta',
+						content: chunkText,
+						message_id: messageId,
+						order: eventOrder++
 					};
-					sentComplete = true;
-
-                    // Estimate token usage and cost
-                    try {
-                        // Estimate input tokens (prompt + context)
-                        const promptTokens = Math.ceil(input.length / 4); // ~4 chars per token
-
-                        // Estimate output tokens from content buffer
-                        const outputTokens = Math.ceil(contentBuffer.length / 4);
-
-						costTracker.addUsage({
-							model,
-							input_tokens: promptTokens || 0,
-							output_tokens: outputTokens || 0,
-						});
-                    } catch (costError) {
-                        console.error('Error estimating Gemini token usage and cost:', costError);
-                    }
+					contentBuffer += chunkText;
+					chunkProcessedAnyPart = true;
 				}
 
-			} catch (streamError) {
-				console.error('Error processing Gemini stream:', streamError);
-				yield {
-					type: 'error',
-					error: String(streamError)
-				};
-
-				// If we have accumulated content but no message_complete was sent due to an error,
-				// still try to send it
-				if (contentBuffer && !sentComplete) {
-					yield {
-						type: 'message_complete',
-						content: contentBuffer,
-						message_id: messageId
-					};
+				// 3. Check for Non-Text Parts (e.g., Images) by inspecting raw parts
+				// This is necessary because the `.text` getter explicitly ignores/warns about non-text parts.
+				// Only do this if the primary helpers didn't yield significant content,
+				// or adjust logic if mixed content chunks are common/expected.
+				// This example prioritizes text/function calls found by helpers first.
+				// Let's refine: Check parts *regardless* of text, as a chunk might contain both.
+				const parts = chunk.candidates?.[0]?.content?.parts;
+				if (parts) {
+					for (const part of parts) {
+						// Check specifically for inlineData (images)
+						if (part.inlineData?.data) {
+							// Avoid double-processing if handled by text getter (unlikely for images)
+							// Check if we already processed text/function call *from this specific part type*
+							// This simple check assumes inlineData won't be processed by .text or .functionCalls
+							const inlineData = part.inlineData;
+							yield {
+								type: 'file_complete',
+								data_format: 'base64',
+								data: inlineData.data || '',
+								mime_type: inlineData.mimeType,
+								message_id: uuidv4(),
+								order: eventOrder++
+							};
+							chunkProcessedAnyPart = true;
+						}
+						// Add checks for other potential non-text part types here if needed
+						// else if (part.executableCode) { ... }
+						// else if (part.codeExecutionResult) { ... }
+					}
 				}
+
+				// Debug log for chunks that didn't seem to trigger any known processing path
+				if (!chunkProcessedAnyPart && !chunk.promptFeedback) { // Ignore chunks that are just initial feedback
+					// Check if it's just an empty chunk before warning
+					if (!chunk.text && !chunk.functionCalls && (!parts || parts.length === 0)){
+						// Likely an empty chunk, can happen, probably ignore.
+					} else {
+						console.debug('Chunk processed no known parts:', JSON.stringify(chunk));
+					}
+				}
+			} // End of for await loop
+
+			// --- Stream Finished ---
+			if (!lastChunk) {
+				// Handle case where stream was empty
+				console.warn('Stream finished without yielding any chunks.');
+				yield { type: 'message_complete', content: contentBuffer, message_id: messageId };
+				return;
 			}
-		} catch (error) {
-			console.error('Error in Gemini streaming completion:', error);
+
+			// Check final state/blocking using the lastChunk
+			// Note: promptFeedback might also appear ONLY in the first chunk if blocked early.
+			// Checking lastChunk covers blocks determined at the *end* of generation.
+			const finalPromptFeedback = lastChunk.promptFeedback;
+			if (finalPromptFeedback?.blockReason) {
+				const blockReason = finalPromptFeedback.blockReason;
+				const blockMessage = finalPromptFeedback.blockReasonMessage || `Blocked due to: ${blockReason}`;
+				streamError = new Error(blockMessage);
+				// Yield accumulated text before error?
+				yield { type: 'message_complete', content: contentBuffer, message_id: messageId };
+				yield { type: 'error', error: blockMessage };
+				return;
+			}
+
+			// --- Emit Final Events ---
 			yield {
-				type: 'error',
-				error: String(error)
+				type: 'message_complete',
+				content: contentBuffer, // Accumulated text
+				message_id: messageId
 			};
-		}
-	}
-}
 
-/**
- * Convert OpenAI-style messages to Gemini format
- */
-function convertMessagesToGeminiFormat(messages: ResponseInput): string {
-	// Gemini doesn't have a direct equivalent to OpenAI's message structure
-	// Instead, we'll combine the messages into a single text string
-	let systemMessage = '';
-	let conversation = '';
-
-	for (const message of messages) {
-		let role = 'system';
-		if ('role' in message) {
-			role = message.role;
-		}
-		let content = '';
-		if ('content' in message) {
-			if (typeof message.content === 'string') {
-				content = message.content;
-			} else if ('text' in message.content && typeof message.content.text === 'string') {
-				content = message.content.text;
+			// Usage Metadata: Assumed to be populated on the lastChunk
+			const usage = lastChunk.usageMetadata;
+			if (usage) {
+				costTracker.addUsage({
+					model,
+					input_tokens: usage.promptTokenCount || 0,
+					output_tokens: usage.candidatesTokenCount || 0,
+					cached_tokens: usage.cachedContentTokenCount || 0,
+					metadata: {
+						reasoning_tokens: usage.thoughtsTokenCount || 0,
+						tool_tokens: usage.toolUsePromptTokenCount || 0,
+						total_tokens: usage.totalTokenCount || 0,
+					},
+				});
 			}
-		}
 
-		if (role === 'system') {
-			systemMessage = content;
-		} else if (role === 'user') {
-			conversation += `User: ${content}\n\n`;
-		} else if (role === 'assistant') {
-			conversation += `Assistant: ${content}\n\n`;
+		} catch (error) {
+			// Handle errors during API call or stream iteration
+			streamError = error instanceof Error ? error : new Error(String(error));
+			console.error('Error during Gemini stream processing:', streamError);
+			yield { type: 'error', error: streamError.message };
+			// Yield accumulated text even on error
+			yield { type: 'message_complete', content: contentBuffer, message_id: messageId };
 		}
 	}
-
-	// Prepend system message if available
-	if (systemMessage) {
-		return `${systemMessage}\n\n${conversation}`;
-	}
-
-	return conversation;
 }
+
+
 
 // Export an instance of the provider
 export const geminiProvider = new GeminiProvider();

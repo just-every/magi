@@ -4,7 +4,6 @@
  * This module exports all available agents and provides functions to create them.
  */
 
-import 'dotenv/config';
 import {Agent} from '../utils/agent.js';
 import {createSupervisorAgent} from './task_force/supervisor_agent.js';
 import {createManagerAgent} from './task_force/manager_agent.js';

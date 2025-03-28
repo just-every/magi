@@ -15,13 +15,15 @@ interface ProcessHeaderProps {
         textColor: string;
     };
     onTerminate?: () => void;
+    onViewLogs?: () => void;
 }
 
 const ProcessHeader: React.FC<ProcessHeaderProps> = ({
     agentName,
     status,
     colors,
-    onTerminate
+    onTerminate,
+    onViewLogs
 }) => {
     return (
         <div className="card-header d-flex justify-content-between align-items-center border-0 py-2">
@@ -37,6 +39,16 @@ const ProcessHeader: React.FC<ProcessHeaderProps> = ({
                         {status}
                     </span>
                 )}
+                {onViewLogs && (
+                    <button className="process-logs btn btn-sm btn-outline mx-1"
+                        style={{color: `rgba(${colors.rgb} / var(--btn-color-opacity))`, borderColor: `rgba(${colors.rgb} / var(--btn-border-opacity))`}}
+                        onClick={(e) => {
+                            e.stopPropagation(); // Prevent click from bubbling to container
+                            onViewLogs();
+                        }}>
+                        logs
+                    </button>
+                )}
                 {status !== 'ending' && status !== 'terminated' && onTerminate && (
                     <button className="process-terminate btn btn-sm btn-outline"
                         style={{color: `rgba(${colors.rgb} / var(--btn-color-opacity))`, borderColor: `rgba(${colors.rgb} / var(--btn-border-opacity))`}}
@@ -44,7 +56,8 @@ const ProcessHeader: React.FC<ProcessHeaderProps> = ({
                             e.stopPropagation(); // Prevent click from bubbling to container
                             onTerminate();
                         }}>
-                        terminate </button>
+                        terminate
+                    </button>
                 )}
             </div>}
         </div>

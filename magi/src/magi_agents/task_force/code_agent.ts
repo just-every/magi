@@ -38,8 +38,8 @@ If you did not create or modify any files please return any code you created in 
 
 Please think this through extensively and take as long as you need. Thank you so much!`,
 		tools: [
+			...getShellTools(),
 			...getFileTools(),
-			...getShellTools()
 		],
 		modelClass: 'code',
 	});

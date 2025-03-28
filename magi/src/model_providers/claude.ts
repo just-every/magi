@@ -5,7 +5,6 @@
  * for Anthropic's Claude models and handles streaming responses.
  */
 
-import 'dotenv/config';
 import Anthropic from '@anthropic-ai/sdk';
 import {v4 as uuidv4} from 'uuid';
 import {
@@ -17,6 +16,8 @@ import {
 	ResponseInput
 } from '../types.js';
 import { costTracker } from '../utils/cost_tracker.js';
+import { log_llm_request } from '../utils/file_utils.js';
+import { convertHistoryFormat } from '../utils/llm_utils.js';
 
 // Convert our tool definition to Claude's format
 function convertToClaudeTools(tools: ToolFunction[]): any[] {
@@ -56,29 +57,8 @@ export class ClaudeProvider implements ModelProvider {
 		settings?: ModelSettings
 	): AsyncGenerator<StreamingEvent> {
 		try {
-// Convert messages format for Claude
-			const claudeMessages = messages.map(msg => {
-				// Check if this message has a role property
-				let role = 'system';
-				if ('role' in msg && msg.role === 'user') {
-					role = 'user';
-				}
-
-				let content = '';
-				if ('content' in msg) {
-					if (typeof msg.content === 'string') {
-						content = msg.content;
-					} else if ('text' in msg.content && typeof msg.content.text === 'string') {
-						content = msg.content.text;
-					}
-				}
-
-				return {
-					...msg,
-					role,
-					content,
-				};
-			});
+			// Convert messages format for Claude
+			const claudeMessages = convertHistoryFormat(messages);
 
 			// Format the request according to Claude API specifications
 			const requestParams: any = {
@@ -96,6 +76,9 @@ export class ClaudeProvider implements ModelProvider {
 			if (tools && tools.length > 0) {
 				requestParams.tools = convertToClaudeTools(tools);
 			}
+
+			// Log the request before sending
+			log_llm_request('anthropic', model, requestParams);
 
 			const stream = await this.client.messages.create(requestParams);
 

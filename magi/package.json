@@ -18,7 +18,7 @@
   "license": "ISC",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.17.1",
-    "@google/generative-ai": "^0.2.1",
+    "@google/genai": "^0.7.0",
     "axios": "^1.6.8",
     "dotenv": "^16.4.7",
     "jsdom": "^26.0.0",

@@ -29,6 +29,27 @@ export function addHistory(message: ResponseInputMessage | ResponseOutputMessage
 }
 
 /**
+ * Add a message to history
+ */
+export function addMonologue(content: string): void {
+	history.messages.push({
+		role: 'user',
+		content: `Magi thought: ${content}`
+	});
+}
+
+/**
+ * Add a message to history
+ */
+export function addHumanMessage(content: string): void {
+	const person = process.env.YOUR_NAME || 'Human';
+	history.messages.push({
+		role: 'developer',
+		content: `${person} said: ${content}`
+	});
+}
+
+/**
  * Get message history
  */
 export function getHistory(): ResponseInput {

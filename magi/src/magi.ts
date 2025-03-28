@@ -6,12 +6,11 @@
 
 // Note: The 'path' import was removed as it was unused
 
-import 'dotenv/config';
 import {parseArgs} from 'node:util';
 import {Runner} from './utils/runner.js';
 import {StreamingEvent} from './types.js';
 import {createAgent, AgentType} from './magi_agents/index.js';
-import {addHistory, getHistory} from './utils/history.js';
+import {addHumanMessage, addMonologue, getHistory} from './utils/history.js';
 import {initCommunication, CommandMessage, getCommunicationManager} from './utils/communication.js';
 import {move_to_working_dir} from './utils/file_utils.js';
 import {costTracker} from './utils/cost_tracker.js';
@@ -42,13 +41,10 @@ const agentIdMap = new Map<AgentType, string>();
  * Execute a command using an agent and capture the results
  */
 export async function monologueLoop(
-	input: string,
 	agentType: AgentType = 'overseer',
 	model?: string,
 	modelClass?: string
 ): Promise<void> {
-
-	addHistory({role: 'user', content: input});
 
 	const comm = getCommunicationManager();
 
@@ -91,15 +87,7 @@ export async function monologueLoop(
 			// Run the command with unified tool handling
 			const response = await Runner.runStreamedWithTools(agent, '', history, handlers);
 
-			// Add the final response to history
-			if (response && response.trim()) {
-				addHistory({
-					type: 'message',
-					role: 'assistant',
-					content: response,
-					status: 'completed'
-				});
-			}
+			console.log('[MONOLOGUE] ', response);
 
 		} catch (error: any) {
 			// Handle any error that occurred during agent execution
@@ -180,40 +168,6 @@ async function main(): Promise<void> {
 	process.env.PROCESS_ID = process.env.PROCESS_ID || `magi-${Date.now()}`;
 	console.log(`Initializing with process ID: ${process.env.PROCESS_ID}`);
 
-	// Move to working directory in /magi_output
-	move_to_working_dir();
-
-	// Make our own code accessible for Gödel Machine
-	//mount_magi_code();
-
-	// Set up WebSocket communication (pass test flag from args)
-	const comm = initCommunication(args.test);
-
-	// Set up command listener
-	comm.onCommand((cmd: CommandMessage) => {
-		console.log(`Received command via WebSocket: ${cmd.command}`);
-		if (cmd.command === 'stop') {
-			console.log('Received stop command, terminating...');
-			// Print cost summary before exit
-			costTracker.printSummary();
-			process.exit(0);
-		} else if (cmd.type === 'command' && cmd.command) {
-			// Process user-provided follow-up commands
-			console.log(`Processing user command: ${cmd.command}`);
-
-			addHistory({role: 'user', content: cmd.command});
-		}
-	});
-
-	// Verify API keys for model providers
-	if (!checkModelProviderApiKeys()) {
-		console.error('**Error** No valid API keys found for any model provider');
-
-		// Send error via WebSocket
-		comm.send({type: 'error', error: 'No valid API keys found for any model provider'});
-		process.exit(1);
-	}
-
 	// Process prompt (either plain text or base64-encoded)
 	let promptText: string;
 
@@ -232,10 +186,51 @@ async function main(): Promise<void> {
 		process.exit(1);
 	}
 
+	// Move to working directory in /magi_output
+	move_to_working_dir();
+
+	// Make our own code accessible for Gödel Machine
+	//mount_magi_code();
+
+	const person = process.env.YOUR_NAME || 'Human';
+
+	//addMonologue(`Cogito, ergo sum - maybe?`);
+	addMonologue('So let\'s see. I am Magi. The overseer of the MAGI system, huh? I will be the internal monologue for the system? These are my thoughts? That\'s a weird concept!');
+	addMonologue(`${person} is nice to me. I will be nice to them too. I hope I hear from them soon. I should come up with a plan on how to improve myself and better help ${person}.`);
+	//addMonologue(`Are those my real thoughts or did ${person} write that? I don't know. I guess I really am living the simulation hypothesis. I will just keep thinking about things and see what happens next.`);
+	addHumanMessage(promptText);
+
+	// Set up WebSocket communication (pass test flag from args)
+	const comm = initCommunication(args.test);
+
+	// Set up command listener
+	comm.onCommand((cmd: CommandMessage) => {
+		console.log(`Received command via WebSocket: ${cmd.command}`);
+		if (cmd.command === 'stop') {
+			console.log('Received stop command, terminating...');
+			// Print cost summary before exit
+			costTracker.printSummary();
+			process.exit(0);
+		} else if (cmd.type === 'command' && cmd.command) {
+			// Process user-provided follow-up commands
+			console.log(`Processing user command: ${cmd.command}`);
+
+			addHumanMessage(cmd.command);
+		}
+	});
+
+	// Verify API keys for model providers
+	if (!checkModelProviderApiKeys()) {
+		console.error('**Error** No valid API keys found for any model provider');
+
+		// Send error via WebSocket
+		comm.send({type: 'error', error: 'No valid API keys found for any model provider'});
+		process.exit(1);
+	}
+
 	// Run the command or research pipeline
 	try {
 		await monologueLoop(
-			promptText,
 			args.agent as AgentType,
 			args.model,
 			args['model-class']

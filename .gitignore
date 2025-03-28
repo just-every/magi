@@ -58,3 +58,8 @@ yarn-error.log
 
 # Local state storage
 .server
+
+# Ignore compiled files
+*.js
+*.jsx
+*.css

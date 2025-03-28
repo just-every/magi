@@ -5,13 +5,14 @@
  * to get the appropriate provider implementation.
  */
 
-import {ModelProvider} from '../types.js';
+import {ModelProvider, ModelProviderID} from '../types.js';
 import {openaiProvider} from './openai.js';
 import {claudeCodeProvider} from './claude_code.js';
 import {claudeProvider} from './claude.js';
 import {geminiProvider} from './gemini.js';
 import {grokProvider} from './grok.js';
-import {MODEL_GROUPS} from './model_data.js';
+import {deepSeekProvider} from './deepseek.js';
+import {MODEL_CLASSES} from './model_data.js';
 
 // Provider mapping by model prefix
 const MODEL_PROVIDER_MAP: Record<string, ModelProvider> = {
@@ -28,14 +29,16 @@ const MODEL_PROVIDER_MAP: Record<string, ModelProvider> = {
 	'gemini-': geminiProvider,
 
 	// Grok/X.AI models
-	'grok': grokProvider,
 	'grok-': grokProvider,
+
+	// DeepSeek models
+	'deepseek-': deepSeekProvider,
 };
 
 /**
  * Check if an API key for a model provider exists and is valid
  */
-function isProviderKeyValid(provider: string): boolean {
+function isProviderKeyValid(provider: ModelProviderID): boolean {
 	// Basic check to see if an API key exists with the expected format
 	switch (provider) {
 		case 'openai':
@@ -45,7 +48,9 @@ function isProviderKeyValid(provider: string): boolean {
 		case 'google':
 			return !!process.env.GOOGLE_API_KEY;
 		case 'xai':
-			return !!process.env.XAI_API_KEY;
+			return !!process.env.XAI_API_KEY && process.env.XAI_API_KEY.startsWith('xai-');
+		case 'deepseek':
+			return !!process.env.DEEPSEEK_API_KEY && process.env.DEEPSEEK_API_KEY.startsWith('sk-');
 		default:
 			return false;
 	}
@@ -54,17 +59,19 @@ function isProviderKeyValid(provider: string): boolean {
 /**
  * Get the provider name from a model name
  */
-function getProviderFromModel(model: string): string {
+export function getProviderFromModel(model: string): ModelProviderID {
 	if (model.startsWith('gpt-') || model.startsWith('o3-') || model.startsWith('computer-use-preview')) {
 		return 'openai';
 	} else if (model.startsWith('claude-')) {
 		return 'anthropic';
 	} else if (model.startsWith('gemini-')) {
 		return 'google';
-	} else if (model.startsWith('grok')) {
+	} else if (model.startsWith('grok-')) {
 		return 'xai';
+	} else if (model.startsWith('deepseek-')) {
+		return 'deepseek';
 	}
-	return 'unknown';
+	throw new Error(`Unknown model prefix: ${model}`);
 }
 
 /**
@@ -72,11 +79,17 @@ function getProviderFromModel(model: string): string {
  */
 export function getModelFromClass(modelClass?: string): string {
 	// Default to standard class if none specified
-	const modelGroup = modelClass && MODEL_GROUPS[modelClass] ? modelClass : 'standard';
+	const modelGroup = modelClass && MODEL_CLASSES[modelClass] ? modelClass : 'standard';
 
 	// Try each model in the group until we find one with a valid API key
-	if (MODEL_GROUPS[modelGroup]) {
-		for (const model of MODEL_GROUPS[modelGroup]) {
+	if (MODEL_CLASSES[modelGroup]) {
+		const models = [...MODEL_CLASSES[modelGroup].models];
+
+		if (MODEL_CLASSES[modelGroup].random) {
+			models.sort(() => Math.random() - 0.5);
+		}
+
+		for (const model of models) {
 			const provider = getProviderFromModel(model);
 			if (isProviderKeyValid(provider)) {
 				return model;
@@ -85,8 +98,8 @@ export function getModelFromClass(modelClass?: string): string {
 	}
 
 	// If we couldn't find a valid model in the specified class, try the standard class
-	if (modelGroup !== 'standard' && MODEL_GROUPS['standard']) {
-		for (const model of MODEL_GROUPS['standard']) {
+	if (modelGroup !== 'standard' && MODEL_CLASSES['standard']) {
+		for (const model of MODEL_CLASSES['standard'].models) {
 			const provider = getProviderFromModel(model);
 			if (isProviderKeyValid(provider)) {
 				return model;
@@ -96,7 +109,7 @@ export function getModelFromClass(modelClass?: string): string {
 
 	// Last resort: return first model in the class, even if we don't have a valid key
 	// The provider will handle the error appropriately
-	const defaultModel = MODEL_GROUPS[modelGroup]?.[0] || 'gpt-4o';
+	const defaultModel = MODEL_CLASSES[modelGroup]?.models?.[0] || 'gpt-4o';
 	console.log(`No valid API key found for any model in class ${modelGroup}, using default: ${defaultModel}`);
 	return defaultModel;
 }

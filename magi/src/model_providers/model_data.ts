@@ -34,65 +34,91 @@ export interface ModelUsage {
 	timestamp?: Date;
 }
 
+export interface ModelClass {
+	models: string[],
+	random?: boolean,
+}
+
 // Model groups organized by capability
-export const MODEL_GROUPS: Record<string, string[]> = {
+export const MODEL_CLASSES: Record<string, ModelClass> = {
 	// Standard models with good all-around capabilities
-	'standard': [
-		'gpt-4o',              // OpenAI
-		'gemini-2.0-flash',    // Google
-		'gemini-pro',          // Google
-		'claude-3-sonnet'      // Anthropic
-	],
+	'standard': {
+		models: [
+			'gpt-4o',              		// OpenAI
+			'gemini-2.0-flash',    		// Google
+			'claude-3-5-haiku',     	// Anthropic
+			'grok-2',               	// X.AI
+			'deepseek-chat',        	// DeepSeek
+		]
+	},
 
 	// Mini/smaller models - faster but less capable
-	'mini': [
-		'gpt-4o-mini',             // OpenAI
-		'claude-3-5-haiku',        // Anthropic
-		'gemini-2.0-flash-lite',   // Google
-	],
+	'mini': {
+		models: [
+			'gpt-4o-mini',             	// OpenAI
+			'claude-3-5-haiku',        	// Anthropic
+			'gemini-2.0-flash-lite',		// Google
+			'deepseek-chat',        	// DeepSeek
+		],
+	},
 
 	// Advanced reasoning models
-	'reasoning': [
-		'o3-mini',                  // OpenAI
-		'claude-3-7-sonnet',        // Anthropic
-		'gemini-2.0-ultra',         // Google
-		'grok-2',                   // X.AI
-	],
+	'reasoning': {
+		models: [
+			'gemini-2.5-pro-exp-03-25', // Google
+			'o3-mini',                  // OpenAI
+			'claude-3-7-sonnet',        // Anthropic
+			'grok-2',                   // X.AI
+			'deepseek-reasoner',       	// DeepSeek
+		],
+	},
 
 	// Monologue models
-	'monologue': [
-		'o3-mini',                  // OpenAI
-		'gemini-2.0-flash',    		// Google
-		'claude-3-7-sonnet',        // Anthropic
-		'gemini-2.0-ultra',         // Google
-		'grok-2',                   // X.AI
-	],
+	'monologue': {
+		models: [
+			'gemini-2.5-pro-exp-03-25', // Google
+			'o3-mini',                  // OpenAI
+			'gpt-4o-mini',             	// OpenAI
+			'gpt-4o',              		// OpenAI
+			'gemini-2.5-pro-exp-03-25', // Google
+			'gemini-2.0-flash',    		// Google
+			'claude-3-7-sonnet',        // Anthropic
+			'grok-2',                   // X.AI
+			'deepseek-chat',        	// DeepSeek
+			'deepseek-reasoner',       	// DeepSeek
+		],
+	},
 
 	// Programming models
-	'code': [
-		'claude-code',              // Claude Code
-		'claude-3-7-sonnet',        // Anthropic
-		'o3-mini',                  // OpenAI
-		'gemini-2.0-flash',    		// Google
-	],
+	'code': {
+		models: [
+			'gemini-2.5-pro-exp-03-25', // Google
+			'claude-code',              // Claude Code
+			'claude-3-7-sonnet',        // Anthropic
+			'o3-mini',                  // OpenAI
+			'gemini-2.0-flash',    		// Google
+		],
+	},
 
 	// Models with vision capabilities
-	'vision': [
-		'computer-use-preview',     // OpenAI
-		'gemini-pro-vision',        // Google
-		'gemini-2.0-pro-vision',    // Google
-		'gemini-2.0-ultra-vision',  // Google
-		'grok-1.5-vision',          // X.AI
-		'grok-2-vision',            // X.AI
-	],
+	'vision': {
+		models:  [
+			'computer-use-preview',     // OpenAI
+			'gpt-4o',              		// OpenAI
+			'gemini-2.0-flash',    		// Google
+			'grok-2-vision',            // X.AI
+		],
+	},
 
 	// Models with search capabilities
-	'search': [
-		'gpt-4o-search-preview',       // OpenAI
-		'gpt-4o-mini-search-preview',  // OpenAI
-	],
-};
+	'search':{
+		models: [
+			'gpt-4o-search-preview',       // OpenAI
+			'gpt-4o-mini-search-preview',  // OpenAI
+		],
+	},
 
+};
 
 // Main model registry with all supported models
 export const MODEL_REGISTRY: ModelEntry[] = [
@@ -401,9 +427,24 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 		context_length: 200000
 	},
 
+
 	//
 	// Google (Gemini) models
 	//
+
+	// Gemini 2.5 models
+	{
+		id: 'gemini-2.5-pro-exp-03-25',
+		provider: 'google',
+		cost: {
+			input_per_million: 0,
+			output_per_million: 0,
+			cached_input_per_million: 0
+		},
+		class: 'reasoning',
+		description: 'Coding, Reasoning & Multimodal understanding',
+		context_length: 1048576
+	},
 
 	// Gemini 2.0 models
 	{
@@ -416,7 +457,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 		},
 		class: 'standard',
 		description: 'Fast, cost-effective Gemini model',
-		context_length: 1000000
+		context_length: 1048576
 	},
 	{
 		id: 'gemini-2.0-flash-lite',
@@ -427,37 +468,17 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 		},
 		class: 'mini',
 		description: 'Lightweight version of Gemini 2.0 Flash',
-		context_length: 1000000
+		context_length: 1048576
 	},
 	{
-		id: 'gemini-2.0-pro-vision',
+		id: 'gemini-2.0-flash-thinking-exp-01-21',
 		provider: 'google',
 		cost: {
-			input_per_million: 0.10,
-			output_per_million: 0.40
-		},
-		class: 'vision',
-		description: 'Gemini 2.0 with vision capabilities'
-	},
-	{
-		id: 'gemini-2.0-ultra-vision',
-		provider: 'google',
-		cost: {
-			input_per_million: 10.0,
-			output_per_million: 30.0
-		},
-		class: 'vision',
-		description: 'Advanced Gemini 2.0 with vision capabilities'
-	},
-	{
-		id: 'gemini-2.0-ultra',
-		provider: 'google',
-		cost: {
-			input_per_million: 10.0,
-			output_per_million: 30.0
+			input_per_million: 0,
+			output_per_million: 0
 		},
 		class: 'reasoning',
-		description: 'Most powerful Gemini model with advanced reasoning'
+		description: 'Thinking version of gemini-2.0-flash'
 	},
 
 	// Gemini 1.5 models
@@ -553,26 +574,32 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 		description: 'Original Grok vision model'
 	},
 
-	// Grok beta models
+	// DeepSeek models
 	{
-		id: 'grok-vision-beta',
-		provider: 'xai',
+		id: 'deepseek-chat',
+		provider: 'deepseek',
 		cost: {
-			input_per_million: 5.0,
-			output_per_million: 15.0
+			// @todo add support for peak/off-peak pricing
+			input_per_million: 0.27,
+			output_per_million: 1.10,
+			cached_input_per_million: 0.07
 		},
-		class: 'vision',
-		description: 'Beta version of Grok with vision capabilities'
+		class: 'standard',
+		description: 'Front line DeepSeek model',
+		context_length: 64000
 	},
 	{
-		id: 'grok-beta',
-		provider: 'xai',
+		id: 'deepseek-reasoner',
+		provider: 'deepseek',
 		cost: {
-			input_per_million: 5.0,
-			output_per_million: 15.0
+			// @todo add support for peak/off-peak pricing
+			input_per_million: 0.55,
+			output_per_million: 2.19,
+			cached_input_per_million: 0.14
 		},
 		class: 'reasoning',
-		description: 'Beta version of Grok'
+		description: 'Thinking version of DeepSeek model',
+		context_length: 64000
 	}
 ];
 

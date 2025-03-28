@@ -8,8 +8,8 @@
 import {StreamingEvent, ToolEvent, MessageEvent, ToolCall, ResponseInput, RunStatus, RunResult} from '../types.js';
 import {Agent} from './agent.js';
 import {getModelProvider} from '../model_providers/model_provider.js';
-import {MODEL_GROUPS} from '../model_providers/model_data.js';
-import {getModelFromClass} from '../model_providers/model_provider.js';
+import {MODEL_CLASSES} from '../model_providers/model_data.js';
+import {getModelFromClass, getProviderFromModel} from '../model_providers/model_provider.js';
 import {processToolCall} from './tool_call.js';
 
 /**
@@ -31,7 +31,7 @@ export class Runner {
 		const provider = getModelProvider(selectedModel);
 
 		// Prepare messages with conversation history and the current input
-		const messages: ResponseInput = [
+		let messages: ResponseInput = [
 			// Add a system message with instructions
 			{role: 'system', content: agent.instructions},
 			// Add conversation history
@@ -49,6 +49,11 @@ export class Runner {
 				agent: agent.export(),
 				input,
 			};
+
+			// Allow the agent to modify the messages before sending
+			if(agent.onRequest) {
+				messages = agent.onRequest(messages, selectedModel, getProviderFromModel(selectedModel));
+			}
 
 			// Create a streaming generator
 			const stream = provider.createResponseStream(
@@ -80,12 +85,14 @@ export class Runner {
 			let modelsToTry: string[];
 
 			// Always include standard models for fallback
-			modelsToTry = [...MODEL_GROUPS['standard']];
+			modelsToTry = [...MODEL_CLASSES['standard'].models];
 
 			// If using a non-standard model class, add models from that class too
 			if (agent.modelClass && agent.modelClass !== 'standard') {
-				const classModels = MODEL_GROUPS[agent.modelClass as keyof typeof MODEL_GROUPS] || [];
-				modelsToTry = [...classModels, ...modelsToTry];
+				const classModels = MODEL_CLASSES[agent.modelClass as keyof typeof MODEL_CLASSES].models || [];
+				if(classModels) {
+					modelsToTry = [...classModels];
+				}
 			}
 
 			// Make sure we don't try the same model that just failed
@@ -115,6 +122,8 @@ export class Runner {
 					// Forward all events from the alternative stream
 					for await (const event of alternativeStream) {
 						// Update the model in events to show the actually used model
+						event.agent = event.agent ? event.agent : agent.export();
+						if (!event.agent.model) event.agent.model = alternativeModel;
 						yield event;
 					}
 
@@ -355,6 +364,7 @@ export class Runner {
 						messageItems.push({
 							type: 'function_call_output',
 							call_id: toolCall.id,
+							name: toolCall.function.name,
 							output: result.output
 						});
 					}
@@ -383,6 +393,11 @@ export class Runner {
 			// If there's a response handler, call it with the final complete response
 			if (handlers.onComplete) {
 				handlers.onComplete();
+			}
+
+			// Allow the agent to process the final response before returning
+			if(agent.onResponse) {
+				fullResponse = agent.onResponse(fullResponse);
 			}
 
 			return fullResponse;

@@ -22,6 +22,7 @@ interface ProcessBoxProps {
     logs: string;
     focused: boolean;
     onFocus: (id: string, focusMode?: 'parent-and-children' | 'only-box') => void;
+    onViewLogs?: (id: string) => void;
 }
 
 /**
@@ -34,7 +35,8 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
     colors,
     logs,
     focused,
-    onFocus
+    onFocus,
+    onViewLogs
 }) => {
     const { sendProcessCommand, terminateProcess, processes } = useSocket();
     const logsRef = useRef<HTMLDivElement>(null);
@@ -120,6 +122,7 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
                     status={status}
                     colors={colors}
                     onTerminate={handleTerminate}
+                    onViewLogs={onViewLogs ? () => onViewLogs(id) : undefined}
                 />
 
                 <div className="process-logs card-body overflow-auto" ref={logsRef}>

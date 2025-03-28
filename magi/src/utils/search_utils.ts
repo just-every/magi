@@ -6,7 +6,6 @@
 
 import axios from 'axios';
 import {ToolFunction} from '../types.js';
-import 'dotenv/config';
 import {createToolFunction} from './tool_call.js';
 
 const DEFAULT_RESULTS_COUNT = 5;

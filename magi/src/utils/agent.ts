@@ -14,7 +14,7 @@ import {
 	WorkerFunction,
 	StreamingEvent,
 	ResponseInput,
-	AgentInterface
+	AgentInterface, ModelProviderID
 } from '../types.js';
 
 import {v4 as uuid} from 'uuid';
@@ -42,7 +42,12 @@ export class Agent implements AgentInterface {
 	onToolCall?: (toolCall: any) => void;
 	onToolResult?: (result: any) => void;
 
+	// Event handlers for request and response
+	onRequest?: (messages: ResponseInput, model: string, provider: ModelProviderID) => ResponseInput;
+	onResponse?: (response: string) => string;
+
 	constructor(definition: AgentDefinition, modelSettings?: ModelSettings) {
+
 		this.agent_id = definition.agent_id || uuid();
 		this.name = definition.name.replace(' ', '_');
 		this.description = definition.description;
@@ -52,6 +57,10 @@ export class Agent implements AgentInterface {
 		this.modelClass = definition.modelClass;
 		this.modelSettings = modelSettings;
 		this.maxToolCalls = definition.maxToolCalls || 10; // Default to 10 if not specified
+
+		this.onRequest = definition.onRequest;
+		this.onResponse = definition.onResponse;
+
 		if (definition.workers) {
 			this.workers = definition.workers.map((createAgentFn: WorkerFunction) => {
 				// Call the function with no arguments or adjust based on what ExecutableFunction expects

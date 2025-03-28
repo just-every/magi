@@ -302,12 +302,139 @@ export class ServerManager {
 	 * Set up Express routes
 	 */
 	private setupRoutes(): void {
-		// Exclude /magi_output paths from the catch-all route
-		// This ensures the static file middleware handles these routes
+		// Set up API route for LLM logs list
+		this.app.get('/api/llm-logs/:processId', (req, res) => {
+			try {
+				const processId = req.params.processId;
+				const containerName = `magi-${processId}`;
+
+				// Get Docker logs
+				exec(`docker exec ${containerName} node -e "const fs = require('fs'); const path = require('path'); const dir = '/magi_output/${processId}/logs/llm'; if (fs.existsSync(dir)) { const logs = fs.readdirSync(dir).filter(f => f.endsWith('.json')).sort(); console.log(JSON.stringify(logs)); } else { console.log('[]'); }"`, (err, stdout) => {
+					if (err) {
+						console.error(`Error getting LLM logs for ${processId}:`, err);
+						res.status(500).json({ error: 'Error retrieving logs', details: String(err) });
+						return;
+					}
+
+					// Parse the list of log files
+					let logFiles;
+					try {
+						logFiles = JSON.parse(stdout.trim());
+					} catch (parseErr) {
+						console.error('Error parsing log files list:', parseErr);
+						res.status(500).json({ error: 'Error parsing log files', details: String(parseErr) });
+						return;
+					}
+
+					res.json({
+						processId,
+						logFiles
+					});
+				});
+			} catch (error) {
+				console.error('Error handling LLM logs request:', error);
+				res.status(500).json({ error: 'Server error', details: String(error) });
+			}
+		});
+
+		// Set up API route to get a specific log file
+		this.app.get('/api/llm-logs/:processId/:logFile', (req, res) => {
+			try {
+				const processId = req.params.processId;
+				const logFile = req.params.logFile;
+				const containerName = `magi-${processId}`;
+
+				// Validate log file name to prevent injection
+				if (!logFile.match(/^[\w-]+\.json$/)) {
+					res.status(400).json({ error: 'Invalid log file name' });
+					return;
+				}
+
+				// Get log file content from Docker container
+				exec(`docker exec ${containerName} cat /magi_output/${processId}/logs/llm/${logFile}`, (err, stdout) => {
+					if (err) {
+						console.error(`Error getting log file ${logFile} for ${processId}:`, err);
+						res.status(500).json({ error: 'Error retrieving log file', details: String(err) });
+						return;
+					}
+
+					// Parse the log file content as JSON
+					let logContent;
+					try {
+						logContent = JSON.parse(stdout.trim());
+						res.json(logContent);
+					} catch (parseErr) {
+						console.error('Error parsing log file content:', parseErr);
+						res.status(500).json({ error: 'Error parsing log file content', details: String(parseErr) });
+					}
+				});
+			} catch (error) {
+				console.error('Error handling log file request:', error);
+				res.status(500).json({ error: 'Server error', details: String(error) });
+			}
+		});
+
+		// Set up API route to get cost tracking data
+		this.app.get('/api/cost-tracker/:processId', (req, res) => {
+			try {
+				const processId = req.params.processId;
+				const containerName = `magi-${processId}`;
+
+				// Get cost tracker data from Docker container
+				exec(`docker exec ${containerName} node -e "const { costTracker } = require('./dist/utils/cost_tracker.js'); console.log(JSON.stringify({ total: costTracker.getTotalCost(), byModel: costTracker.getCostsByModel() }))"`, (err, stdout) => {
+					if (err) {
+						console.error(`Error getting cost tracker data for ${processId}:`, err);
+						res.status(500).json({ error: 'Error retrieving cost data', details: String(err) });
+						return;
+					}
+
+					// Parse the cost tracker data
+					let costData;
+					try {
+						costData = JSON.parse(stdout.trim());
+						res.json(costData);
+					} catch (parseErr) {
+						console.error('Error parsing cost tracker data:', parseErr);
+						res.status(500).json({ error: 'Error parsing cost tracker data', details: String(parseErr) });
+					}
+				});
+			} catch (error) {
+				console.error('Error handling cost tracker request:', error);
+				res.status(500).json({ error: 'Server error', details: String(error) });
+			}
+		});
+
+		// Set up API route to get Docker container logs
+		this.app.get('/api/docker-logs/:processId', (req, res) => {
+			try {
+				const processId = req.params.processId;
+				const containerName = `magi-${processId}`;
+				const lines = req.query.lines ? parseInt(req.query.lines as string) : 1000;
+
+				// Get Docker container logs
+				exec(`docker logs --tail=${lines} ${containerName}`, (err, stdout) => {
+					if (err) {
+						console.error(`Error getting Docker logs for ${processId}:`, err);
+						res.status(500).json({ error: 'Error retrieving Docker logs', details: String(err) });
+						return;
+					}
+
+					res.json({
+						processId,
+						logs: stdout.split('\n')
+					});
+				});
+			} catch (error) {
+				console.error('Error handling Docker logs request:', error);
+				res.status(500).json({ error: 'Server error', details: String(error) });
+			}
+		});
+
+		// Exclude /magi_output and /api paths from the catch-all route
 		this.app.get('*', (req, res, next) => {
-			// Check if the request path starts with /magi_output
-			if (req.path.startsWith('/magi_output/')) {
-				// Skip to the next middleware (which should be the static file handler)
+			// Check if the request path starts with /magi_output or /api
+			if (req.path.startsWith('/magi_output/') || req.path.startsWith('/api/')) {
+				// Skip to the next middleware
 				return next();
 			}
 

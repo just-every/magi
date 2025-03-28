@@ -4,7 +4,6 @@
  * This module uses claude-cli to run the Claude AI coding tool via its command-line interface.
  */
 
-import 'dotenv/config';
 import {v4 as uuidv4} from 'uuid';
 import {
 	ModelProvider,
@@ -13,7 +12,7 @@ import {
 } from '../types.js';
 import { costTracker } from '../utils/cost_tracker.js';
 import pty from 'node-pty';
-import {get_working_dir} from '../utils/file_utils.js';
+import {get_working_dir, log_llm_request} from '../utils/file_utils.js';
 
 
 // Regex to strip ANSI escape codes (covers common CSI sequences)
@@ -31,6 +30,12 @@ const ansiRegex = /\x1b\[[?0-9;]*[a-zA-Z]/g;
 async function runClaudeCLI(prompt: string, working_directory?: string): Promise<string> {
 	const cwd = working_directory || process.cwd();
 	console.log('[CodeAgent] Running Claude CLI via node-pty');
+
+	// Log the request before sending
+	log_llm_request('anthropic', 'claude-code', {
+		prompt,
+		working_directory: cwd
+	});
 
 	return new Promise<string>((resolve, reject) => {
 		let stdoutData = '';

@@ -1,7 +1,6 @@
 /**
  * Constants and shared text for MAGI agents.
  */
-import { MODEL_GROUPS } from '../model_providers/model_data.js';
 import {get_output_dir} from '../utils/file_utils.js';
 
 // Agent descriptions for each specialized agent
@@ -47,13 +46,3 @@ Assume you have been given all the information necessary to complete the task.
 export const FILE_TOOLS_TEXT = `FILE TOOLS:
 - read_file: Read files from the file system (provide absolute path)
 - write_file: Write content to files (provide absolute path and content)`;
-
-// Export all constants
-export default {
-	AGENT_DESCRIPTIONS,
-	MODEL_GROUPS,
-	COMMON_WARNINGS,
-	DOCKER_ENV_TEXT,
-	SELF_SUFFICIENCY_TEXT,
-	FILE_TOOLS_TEXT
-};

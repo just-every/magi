@@ -15,13 +15,17 @@ import {
     GRID_PADDING,
 } from './utils/GridUtils';
 
+type ProcessGridProps = {
+    onProcessSelect?: (processId: string) => void;
+};
+
 /**
  * ProcessGrid is responsible for:
  * - Layout of process boxes in a responsive grid
  * - Zoom and pan navigation
  * - Displaying connections between main processes and sub-agents
  */
-const ProcessGrid: React.FC = () => {
+const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
     const {processes} = useSocket();
     const [focusedProcess, setFocusedProcess] = useState<string | null>(null);
     const [zoomLevel, setZoomLevel] = useState<number>(1);
@@ -297,6 +301,7 @@ const ProcessGrid: React.FC = () => {
                         logs={process.logs}
                         focused={focusedProcess === id}
                         onFocus={focusOnProcess}
+                        onViewLogs={onProcessSelect}
                     />
                 </div>
             );

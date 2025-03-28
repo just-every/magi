@@ -7,7 +7,7 @@
 
 import {
 	ToolCall,
-	ToolEvent, ToolFunction, ToolParameter,
+	ToolEvent, ToolFunction, ToolParameter, ToolParameterType, validToolParameterTypes,
 } from '../types.js';
 import {Agent} from './agent.js';
 
@@ -225,11 +225,11 @@ export function createToolFunction(
 			const apiParamName = paramInfo?.name || cleanParamName;
 
 			// Determine parameter type based on default value or param map
-			let paramType = 'string'; // Default type
+			let paramType: ToolParameterType = 'string'; // Default type
 
-			if (paramInfo?.type) {
+			if (paramInfo?.type && validToolParameterTypes.includes(paramInfo.type as any)) {
 				// Use explicit type from paramMap if provided
-				paramType = paramInfo.type;
+				paramType = paramInfo.type as ToolParameterType;
 			} else if (isRestParam) {
 				// Rest parameters are arrays
 				paramType = 'array';

@@ -13,8 +13,10 @@ interface SystemMessageProps {
 const SystemMessage: React.FC<SystemMessageProps> = ({ message }) => {
     return (
         <div className="message-group system-message" key={message.id}>
-            <div className="message-bubble system-bubble">
-                <div dangerouslySetInnerHTML={parseMarkdown(message.content)}/>
+            <div className="message-bubble">
+                <div className={"alert "+(message.type === 'error' ? ' alert-danger' : 'alert-secondary')}>
+                    <div dangerouslySetInnerHTML={parseMarkdown(message.content)}/>
+                </div>
             </div>
         </div>
     );

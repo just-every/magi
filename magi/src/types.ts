@@ -32,16 +32,20 @@ declare global {
 			ANTHROPIC_API_KEY?: string;
 			GOOGLE_API_KEY?: string;
 			XAI_API_KEY?: string;
+			DEEPSEEK_API_KEY?: string;
 			BRAVE_API_KEY?: string;
 		}
 	}
 }
 
+export type ToolParameterType = 'string' | 'number' | 'boolean' | 'object' | 'array' | 'null';
+export const validToolParameterTypes: ToolParameterType[] = ['string', 'number', 'boolean', 'object', 'array', 'null'];
+
 /**
  * Tool parameter type definitions using strict schema format for OpenAI function calling
  */
 export interface ToolParameter {
-	type: string;
+	type: ToolParameterType;
 	description?: string;
 	enum?: string[];
 	items?: ToolParameter | { type: string };
@@ -96,6 +100,8 @@ export interface AgentDefinition {
 	model?: string;
 	modelClass?: string;
 	maxToolCalls?: number;
+	onRequest?: (messages: ResponseInput, model: string, provider: ModelProviderID) => ResponseInput;
+	onResponse?: (response: string) => string;
 }
 
 /**
@@ -162,7 +168,8 @@ export type ResponseContent = string | Array<ResponseContentText | ResponseConte
 /**
  * ResponseInput
  */
-export type ResponseInput = Array<ResponseInputMessage | ResponseOutputMessage | ResponseInputFunctionCall | ResponseInputFunctionCallOutput>;
+export type ResponseInput = Array<ResponseInputItem>;
+export type ResponseInputItem = ResponseInputMessage | ResponseOutputMessage | ResponseInputFunctionCall | ResponseInputFunctionCallOutput;
 
 
 /**
@@ -204,6 +211,7 @@ export interface ResponseInputFunctionCall {
 export interface ResponseInputFunctionCallOutput {
 	type: 'function_call_output',
 	call_id: string,
+	name: string,
 	output: string,
 	id?: string,
 	status?: 'in_progress' | 'completed' | 'incomplete',
@@ -247,6 +255,9 @@ export type StreamEventType =
 	| 'tool_start'
 	| 'tool_delta'
 	| 'tool_done'
+	| 'file_start'
+	| 'file_delta'
+	| 'file_complete'
 	| 'error';
 
 /**
@@ -295,6 +306,18 @@ export interface MessageEvent extends StreamEvent {
 /**
  * Message streaming event
  */
+export interface FileEvent extends StreamEvent {
+	type: 'file_start' | 'file_delta' | 'file_complete'; // Changed 'message_done' to 'message_complete'
+	message_id: string; // Added message_id for tracking deltas and completes
+	mime_type?: string;
+	data_format: 'base64';
+	data: string;
+	order?: number; // Optional order property for message sorting
+}
+
+/**
+ * Message streaming event
+ */
 export interface TalkEvent extends StreamEvent {
 	type: 'talk_start' | 'talk_delta' | 'talk_complete';
 	content: string;
@@ -322,7 +345,7 @@ export interface ErrorEvent extends StreamEvent {
 /**
  * Union type for all streaming events
  */
-export type StreamingEvent = ConnectedEvent | CommandEvent | AgentEvent | MessageEvent | TalkEvent | ToolEvent | ErrorEvent;
+export type StreamingEvent = ConnectedEvent | CommandEvent | AgentEvent | MessageEvent | FileEvent | TalkEvent | ToolEvent | ErrorEvent;
 
 /**
  * Status of a sequential agent run
@@ -354,3 +377,14 @@ export interface ModelProvider {
 		settings?: ModelSettings
 	): AsyncGenerator<StreamingEvent>;
 }
+
+/**
+ * Streaming event types
+ */
+export type ModelProviderID =
+	'openai'
+	| 'anthropic'
+	| 'google'
+	| 'xai'
+	| 'deepseek'
+	;

@@ -4,7 +4,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import {ToolFunction} from '../types.js';
+import {ModelProviderID, ToolFunction} from '../types.js';
 import {createToolFunction} from './tool_call.js';
 
 // Global directory path for this process
@@ -173,4 +173,64 @@ export function getFileTools(): ToolFunction[] {
 			'Success message with the path'
 		),
 	];
+}
+
+/**
+ * Log LLM request data to a file in the output directory.
+ *
+ * @param providerName Name of the LLM provider (e.g., 'openai', 'claude')
+ * @param requestData The request data to log
+ * @param timestamp Optional timestamp (defaults to current time)
+ * @returns Path to the log file
+ */
+export function log_llm_request(providerName: ModelProviderID, model: string, requestData: any, timestamp: Date = new Date()): string {
+	try {
+		// Create logs directory if needed
+		const logsDir = get_output_dir('logs/llm');
+
+		// Format timestamp for filename
+		const formattedTime = timestamp.toISOString().replace(/[:.]/g, '-');
+		const fileName = `${formattedTime}_${providerName}.json`;
+		const filePath = path.join(logsDir, fileName);
+
+		// Add timestamp to the logged data
+		const logData = {
+			timestamp: timestamp.toISOString(),
+			provider: providerName,
+			model,
+			request: requestData
+		};
+
+		// Write the log file
+		fs.writeFileSync(filePath, JSON.stringify(logData, null, 2), 'utf8');
+
+		return filePath;
+	} catch (err) {
+		console.error('Error logging LLM request:', err);
+		return '';
+	}
+}
+
+/**
+ * Get all LLM request logs in chronological order.
+ *
+ * @returns Array of log file paths
+ */
+export function get_llm_logs(): string[] {
+	try {
+		const logsDir = get_output_dir('logs/llm');
+		if (!fs.existsSync(logsDir)) {
+			return [];
+		}
+
+		// Get all .json files and sort by name (which includes timestamp)
+		const logFiles = fs.readdirSync(logsDir)
+			.filter(file => file.endsWith('.json'))
+			.sort();
+
+		return logFiles.map(file => path.join(logsDir, file));
+	} catch (err) {
+		console.error('Error getting LLM logs:', err);
+		return [];
+	}
 }

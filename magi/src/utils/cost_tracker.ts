@@ -4,6 +4,9 @@
  * Tracks costs across all model providers and provides reporting functions.
  */
 import {findModel, ModelUsage} from '../model_providers/model_data.js';
+import path from 'path';
+import fs from 'fs';
+import {get_output_dir} from './file_utils.js';
 
 /**
  * Singleton class to track costs across all model providers
@@ -52,9 +55,25 @@ class CostTracker {
 	 * @param usage ModelUsage object containing the cost and usage details
 	 */
 	addUsage(usage: ModelUsage): void {
-		usage.timestamp = new Date();
-		usage = this.calculateCost(usage);
-		this.entries.push(usage);
+		try {
+			// Calculate cost if not already set
+			usage = this.calculateCost(usage);
+			usage.timestamp = new Date();
+			this.entries.push(usage);
+
+			// Create logs directory if needed
+			const logsDir = get_output_dir('logs/usage');
+
+			// Format timestamp for filename
+			const formattedTime = usage.timestamp.toISOString().replace(/[:.]/g, '-');
+			const fileName = `${formattedTime}_${usage.model}.json`;
+			const filePath = path.join(logsDir, fileName);
+
+			// Write the log file
+			fs.writeFileSync(filePath, JSON.stringify(usage, null, 2), 'utf8');
+		} catch (err) {
+			console.error('Error recording usage:', err);
+		}
 	}
 
 	/**
