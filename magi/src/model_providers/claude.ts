@@ -18,6 +18,8 @@ import {
 import { costTracker } from '../utils/cost_tracker.js';
 import { log_llm_request } from '../utils/file_utils.js';
 import { convertHistoryFormat } from '../utils/llm_utils.js';
+import {Agent} from '../utils/agent.js';
+import {ModelClassID} from './model_data.js';
 
 // Convert our tool definition to Claude's format
 function convertToClaudeTools(tools: ToolFunction[]): any[] {
@@ -69,7 +71,7 @@ function convertToClaudeMessage(role: string, content: string, msg: ResponseInpu
 		const toolResultBlock = {
 			type: 'tool_result',
 			tool_use_id: msg.call_id, // ID must match the corresponding tool_use block
-			content: msg.output || "", // Default to empty string if output is missing
+			content: msg.output || '', // Default to empty string if output is missing
 			...(msg.status === 'incomplete' ? { is_error: true } : {}),
 		};
 
@@ -84,7 +86,7 @@ function convertToClaudeMessage(role: string, content: string, msg: ResponseInpu
 
 		// Use the simple string content format for text messages
 		return {
-			role: role === 'assistant' ? 'assistant' : (role === 'system' ? 'system' : 'user'),
+			role: role === 'assistant' ? 'assistant' : (role === 'developer' || role === 'system' ? 'system' : 'user'),
 			content: content,
 		};
 	}
@@ -112,10 +114,38 @@ export class ClaudeProvider implements ModelProvider {
 	async* createResponseStream(
 		model: string,
 		messages: ResponseInput,
-		tools?: ToolFunction[],
-		settings?: ModelSettings
+		agent?: Agent,
 	): AsyncGenerator<StreamingEvent> {
 		try {
+			const tools: ToolFunction[] | undefined = agent?.tools;
+			const settings: ModelSettings | undefined = agent?.modelSettings;
+			const modelClass: ModelClassID | undefined = agent?.modelClass;
+
+			let thinking = undefined;
+			let max_tokens = settings?.max_tokens || 8192; // Default max tokens if not specified
+			switch (modelClass) {
+				case 'monologue':
+				case 'reasoning':
+				case 'code':
+					if(model === 'claude-3-7-sonnet-latest') {
+						// Extended thinking
+						thinking = {
+							type: 'enabled',
+							budget_tokens: 120000
+						};
+						max_tokens = Math.min(max_tokens, 128000);
+					}
+					else {
+						max_tokens = Math.min(max_tokens, 8192);
+					}
+					break;
+				case 'standard':
+					max_tokens = Math.min(max_tokens, 8192);
+					break;
+				default:
+					max_tokens = Math.min(max_tokens, 4096); // Lower limit for other classes
+			}
+
 			// Convert messages format for Claude
 			const claudeMessages = convertHistoryFormat(messages, convertToClaudeMessage);
 
@@ -134,9 +164,10 @@ export class ClaudeProvider implements ModelProvider {
 				// Add system prompt string if it exists
 				...(systemPrompt ? { system: systemPrompt } : {}),
 				stream: true,
+				max_tokens,
+				thinking,
 				// Add optional parameters (added undefined check for robustness)
 				...(settings?.temperature !== undefined ? { temperature: settings.temperature } : {}),
-				...(settings?.max_tokens !== undefined ? { max_tokens: settings.max_tokens } : {})
 			};
 
 			// Add tools if provided, using the corrected conversion function
@@ -293,7 +324,7 @@ export class ClaudeProvider implements ModelProvider {
 					else if (event.type === 'error') {
 						yield {
 							type: 'error',
-							error: event.error ? event.error.message : 'Unknown Claude API error'
+							error: 'Claude API error: '+(event.error ? event.error.message : 'Unknown error')
 						};
 					}
 				}
@@ -311,7 +342,7 @@ export class ClaudeProvider implements ModelProvider {
 				console.error('Error processing Claude stream:', streamError);
 				yield {
 					type: 'error',
-					error: String(streamError)
+					error: 'Claude processing stream error: '+String(streamError)
 				};
 
 				// If we have accumulated content but no message_complete was sent
@@ -329,7 +360,7 @@ export class ClaudeProvider implements ModelProvider {
 			console.error('Error in Claude streaming completion:', error);
 			yield {
 				type: 'error',
-				error: String(error)
+				error: 'Claude streaming error: '+String(error)
 			};
 		}
 	}

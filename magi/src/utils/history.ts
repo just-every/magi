@@ -28,13 +28,21 @@ export function addHistory(message: ResponseInputMessage | ResponseOutputMessage
 	history.messages.push(message);
 }
 
+function escapeRegex(str:string) {
+	return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Make sure that we can set and remove the prefix from the monologue
+const monologue_prefix = `${(process.env.AI_NAME || 'Magi')} thoughts: `;
+const monologue_regex = new RegExp(`^\\s*${escapeRegex(monologue_prefix)}`);
+
 /**
  * Add a message to history
  */
 export function addMonologue(content: string): void {
 	history.messages.push({
 		role: 'user',
-		content: `Magi thought: ${content}`
+		content: monologue_prefix+content.replace(monologue_regex, ''),
 	});
 }
 

@@ -16,9 +16,9 @@ export interface ModelCost {
 export interface ModelEntry {
 	id: string;           // Model identifier used in API calls
 	aliases?: string[];   // Alternative names for the model
-	provider: string;     // Provider (openai, anthropic, google, xai)
+	provider: ModelProviderID;     // Provider (openai, anthropic, google, xai)
 	cost: ModelCost;      // Cost information
-	class?: string;       // Model class (standard, mini, reasoning, vision, etc.)
+	class?: ModelClassID;       // Model class (standard, mini, reasoning, vision, etc.)
 	description?: string; // Short description of the model's capabilities
 	context_length?: number; // Maximum context length in tokens
 }
@@ -39,27 +39,55 @@ export interface ModelClass {
 	random?: boolean,
 }
 
+
+/**
+ * Available model providers
+ */
+export type ModelProviderID =
+	'openai'
+	| 'anthropic'
+	| 'google'
+	| 'xai'
+	| 'deepseek'
+	;
+
+/**
+ * Available model classes
+ */
+export type ModelClassID =
+	'standard'
+	| 'mini'
+	| 'reasoning'
+	| 'monologue'
+	| 'code'
+	| 'vision'
+	| 'search'
+	;
+
+
 // Model groups organized by capability
-export const MODEL_CLASSES: Record<string, ModelClass> = {
+export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 	// Standard models with good all-around capabilities
 	'standard': {
 		models: [
 			'gpt-4o',              		// OpenAI
 			'gemini-2.0-flash',    		// Google
-			'claude-3-5-haiku',     	// Anthropic
+			'claude-3-7-sonnet-latest', // Anthropic
 			'grok-2',               	// X.AI
 			'deepseek-chat',        	// DeepSeek
-		]
+		],
+		random: true,
 	},
 
 	// Mini/smaller models - faster but less capable
 	'mini': {
 		models: [
 			'gpt-4o-mini',             	// OpenAI
-			'claude-3-5-haiku',        	// Anthropic
+			'claude-3-5-haiku-latest',  // Anthropic
 			'gemini-2.0-flash-lite',		// Google
 			'deepseek-chat',        	// DeepSeek
 		],
+		random: true,
 	},
 
 	// Advanced reasoning models
@@ -67,10 +95,11 @@ export const MODEL_CLASSES: Record<string, ModelClass> = {
 		models: [
 			'gemini-2.5-pro-exp-03-25', // Google
 			'o3-mini',                  // OpenAI
-			'claude-3-7-sonnet',        // Anthropic
+			'claude-3-7-sonnet-latest', // Anthropic
 			'grok-2',                   // X.AI
 			'deepseek-reasoner',       	// DeepSeek
 		],
+		random: true,
 	},
 
 	// Monologue models
@@ -78,13 +107,7 @@ export const MODEL_CLASSES: Record<string, ModelClass> = {
 		models: [
 			'gemini-2.5-pro-exp-03-25', // Google
 			'o3-mini',                  // OpenAI
-			'gpt-4o-mini',             	// OpenAI
-			'gpt-4o',              		// OpenAI
-			'gemini-2.5-pro-exp-03-25', // Google
-			'gemini-2.0-flash',    		// Google
-			'claude-3-7-sonnet',        // Anthropic
-			'grok-2',                   // X.AI
-			'deepseek-chat',        	// DeepSeek
+			'claude-3-7-sonnet-latest', // Anthropic
 			'deepseek-reasoner',       	// DeepSeek
 		],
 		random: true,
@@ -94,10 +117,9 @@ export const MODEL_CLASSES: Record<string, ModelClass> = {
 	'code': {
 		models: [
 			'gemini-2.5-pro-exp-03-25', // Google
-			'claude-code',              // Claude Code
+			'claude-code',              // Anthropic
 			'claude-3-7-sonnet',        // Anthropic
 			'o3-mini',                  // OpenAI
-			'gemini-2.0-flash',    		// Google
 		],
 	},
 
@@ -114,9 +136,11 @@ export const MODEL_CLASSES: Record<string, ModelClass> = {
 	// Models with search capabilities
 	'search':{
 		models: [
-			'gpt-4o-search-preview',       // OpenAI
-			'gpt-4o-mini-search-preview',  // OpenAI
+			'gpt-4o',					// OpenAI
+			'deepseek-reasoner',       	// DeepSeek
+			'gemini-2.5-pro-exp-03-25', // Google
 		],
+		random: true,
 	},
 
 };
@@ -137,7 +161,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 			cached_input_per_million: 37.5,
 			output_per_million: 150.0
 		},
-		class: 'premium',
+		class: 'standard',
 		description: 'Latest premium GPT model from OpenAI'
 	},
 
@@ -176,7 +200,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 			input_per_million: 2.5,
 			output_per_million: 10.0
 		},
-		class: 'audio',
+		class: 'standard',
 		description: 'GPT-4o with enhanced audio capabilities'
 	},
 	{
@@ -187,7 +211,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 			input_per_million: 0.15,
 			output_per_million: 0.6
 		},
-		class: 'audio',
+		class: 'standard',
 		description: 'Smaller GPT-4o with audio capabilities'
 	},
 	{
@@ -199,7 +223,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 			cached_input_per_million: 2.5,
 			output_per_million: 20.0
 		},
-		class: 'realtime',
+		class: 'standard',
 		description: 'GPT-4o optimized for realtime applications'
 	},
 	{
@@ -211,7 +235,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 			cached_input_per_million: 0.3,
 			output_per_million: 2.4
 		},
-		class: 'realtime',
+		class: 'standard',
 		description: 'Smaller GPT-4o optimized for realtime applications'
 	},
 	{
@@ -258,7 +282,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 			input_per_million: 150.0,
 			output_per_million: 600.0
 		},
-		class: 'premium',
+		class: 'standard',
 		description: 'Premium O-series model from OpenAI'
 	},
 	{
@@ -318,7 +342,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 
 	// Claude 3.7 Sonnet
 	{
-		id: 'claude-3-7-sonnet',
+		id: 'claude-3-7-sonnet-latest',
 		provider: 'anthropic',
 		cost: {
 			input_per_million: 3.0,
@@ -332,7 +356,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 
 	// Claude 3.5 Haiku
 	{
-		id: 'claude-3-5-haiku',
+		id: 'claude-3-5-haiku-latest',
 		provider: 'anthropic',
 		cost: {
 			input_per_million: 0.8,
@@ -354,7 +378,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 			output_per_million: 75.0,
 			cached_input_per_million: 1.5
 		},
-		class: 'premium',
+		class: 'standard',
 		description: 'Most powerful Claude model',
 		context_length: 200000
 	},

@@ -14,12 +14,13 @@ import {
 	WorkerFunction,
 	StreamingEvent,
 	ResponseInput,
-	AgentInterface, ModelProviderID
+	AgentInterface, ToolCall,
 } from '../types.js';
 
 import {v4 as uuid} from 'uuid';
 import {getCommunicationManager} from './communication.js';
 import {Runner} from './runner.js';
+import {ModelClassID} from '../model_providers/model_data.js';
 
 
 /**
@@ -34,16 +35,16 @@ export class Agent implements AgentInterface {
 	workers?: Agent[];
 	tools?: ToolFunction[];
 	model?: string;
-	modelClass?: string;
+	modelClass?: ModelClassID;
 	modelSettings?: ModelSettings;
 	maxToolCalls: number;
 
 	// Event handlers for tool calls and results
-	onToolCall?: (toolCall: any) => void;
-	onToolResult?: (result: any) => void;
+	onToolCall?: (toolCall: ToolCall) => void;
+	onToolResult?: (toolCall: ToolCall, result: string) => void;
 
 	// Event handlers for request and response
-	onRequest?: (messages: ResponseInput, model: string, provider: ModelProviderID) => ResponseInput;
+	onRequest?: (messages: ResponseInput, model: string) => [ResponseInput, string];
 	onResponse?: (response: string) => string;
 
 	constructor(definition: AgentDefinition, modelSettings?: ModelSettings) {
@@ -58,6 +59,8 @@ export class Agent implements AgentInterface {
 		this.modelSettings = modelSettings;
 		this.maxToolCalls = definition.maxToolCalls || 10; // Default to 10 if not specified
 
+		this.onToolCall = definition.onToolCall;
+		this.onToolResult = definition.onToolResult;
 		this.onRequest = definition.onRequest;
 		this.onResponse = definition.onResponse;
 
@@ -141,39 +144,31 @@ async function runAgentTool(
 	const toolCalls: any[] = [];
 
 	try {
-		// Create a custom event handler to intercept tool calls and results
-		// for agents running within agents
-		const onToolCall = (toolCall: any) => {
-			console.log(`${agent.name} intercepted tool call:`, toolCall);
-			toolCalls.push(toolCall);
-		};
-
-		const onToolResult = (result: any) => {
-			try {
-				console.log(`${agent.name} intercepted tool result:`, result);
-				if (result) {
-					const resultString = typeof result === 'string'
-						? result
-						: JSON.stringify(result, null, 2);
-
-					// Store results so we can include them in the response if needed
-					toolResultsToInclude += resultString + '\n';
-					console.log(`${agent.name} captured tool result: ${resultString.substring(0, 100)}...`);
-				}
-			} catch (err) {
-				console.error(`Error processing intercepted tool result in ${agent.name}:`, err);
-			}
-		};
-
-		// Set up interception
-		agent.onToolCall = onToolCall;
-		agent.onToolResult = onToolResult;
-
 		const comm = getCommunicationManager();
 		console.log(`runAgentTool using Runner.runStreamedWithTools for ${agent.name}`, prompt);
 
 		// Set up handlers for the unified streaming function
 		const handlers = {
+			onToolCall: (toolCall: ToolCall) => {
+				console.log(`${agent.name} intercepted tool call:`, toolCall);
+				toolCalls.push(toolCall);
+			},
+			onToolResult: (toolCall: ToolCall, result: string) => {
+				try {
+					console.log(`${agent.name} intercepted tool result:`, result);
+					if (result) {
+						const resultString = typeof result === 'string'
+							? result
+							: JSON.stringify(result, null, 2);
+
+						// Store results so we can include them in the response if needed
+						toolResultsToInclude += resultString + '\n';
+						console.log(`${agent.name} captured tool result: ${resultString.substring(0, 100)}...`);
+					}
+				} catch (err) {
+					console.error(`Error processing intercepted tool result in ${agent.name}:`, err);
+				}
+			},
 			onEvent: (event: StreamingEvent) => {
 				comm.send(event);
 

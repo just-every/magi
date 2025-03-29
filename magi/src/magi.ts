@@ -14,6 +14,7 @@ import {addHumanMessage, addMonologue, getHistory} from './utils/history.js';
 import {initCommunication, CommandMessage, getCommunicationManager} from './utils/communication.js';
 import {move_to_working_dir} from './utils/file_utils.js';
 import {costTracker} from './utils/cost_tracker.js';
+import {ModelClassID} from './model_providers/model_data.js';
 
 // Parse command line arguments
 function parseCommandLineArgs() {
@@ -24,7 +25,6 @@ function parseCommandLineArgs() {
 		prompt: {type: 'string' as const, short: 'p'},
 		base64: {type: 'string' as const, short: 'b'},
 		model: {type: 'string' as const, short: 'm'},
-		'model-class': {type: 'string' as const, short: 'c'},
 		research: {type: 'boolean' as const, short: 'r', default: false},
 	};
 
@@ -43,7 +43,7 @@ const agentIdMap = new Map<AgentType, string>();
 export async function monologueLoop(
 	agentType: AgentType = 'overseer',
 	model?: string,
-	modelClass?: string
+	modelClass?: ModelClassID
 ): Promise<void> {
 
 	const comm = getCommunicationManager();
@@ -233,7 +233,6 @@ async function main(): Promise<void> {
 		await monologueLoop(
 			args.agent as AgentType,
 			args.model,
-			args['model-class']
 		);
 
 		// When running in test mode, print cost summary and exit

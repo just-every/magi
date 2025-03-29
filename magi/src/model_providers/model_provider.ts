@@ -5,14 +5,14 @@
  * to get the appropriate provider implementation.
  */
 
-import {ModelProvider, ModelProviderID} from '../types.js';
+import {ModelProvider} from '../types.js';
 import {openaiProvider} from './openai.js';
 import {claudeCodeProvider} from './claude_code.js';
 import {claudeProvider} from './claude.js';
 import {geminiProvider} from './gemini.js';
 import {grokProvider} from './grok.js';
 import {deepSeekProvider} from './deepseek.js';
-import {MODEL_CLASSES} from './model_data.js';
+import {MODEL_CLASSES, ModelClassID, ModelProviderID} from './model_data.js';
 
 // Provider mapping by model prefix
 const MODEL_PROVIDER_MAP: Record<string, ModelProvider> = {
@@ -77,16 +77,16 @@ export function getProviderFromModel(model: string): ModelProviderID {
 /**
  * Get a suitable model from a model class, with fallback
  */
-export function getModelFromClass(modelClass?: string): string {
+export function getModelFromClass(modelClass?: ModelClassID): string {
 	// Default to standard class if none specified
 	const modelGroup = modelClass && MODEL_CLASSES[modelClass] ? modelClass : 'standard';
 
 	// Try each model in the group until we find one with a valid API key
 	if (MODEL_CLASSES[modelGroup]) {
-		const models = [...MODEL_CLASSES[modelGroup].models];
+		let models = [...MODEL_CLASSES[modelGroup].models];
 
 		if (MODEL_CLASSES[modelGroup].random) {
-			models.sort(() => Math.random() - 0.5);
+			models = models.sort(() => Math.random() - 0.5);
 		}
 
 		for (const model of models) {

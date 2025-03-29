@@ -31,6 +31,7 @@ import {
 import { costTracker } from '../utils/cost_tracker.js';
 import { convertHistoryFormat } from '../utils/llm_utils.js';
 import {log_llm_request} from '../utils/file_utils.js';
+import {Agent} from '../utils/agent.js';
 
 // Convert our tool definition to Gemini's format
 function convertToGeminiTools(tools: ToolFunction[]): ToolListUnion {
@@ -156,9 +157,10 @@ export class GeminiProvider implements ModelProvider {
 	async* createResponseStream(
 		model: string,
 		messages: ResponseInput,
-		tools?: ToolFunction[],
-		settings?: ModelSettings
+		agent?: Agent,
 	): AsyncGenerator<StreamingEvent> {
+		const tools: ToolFunction[] | undefined = agent?.tools;
+		const settings: ModelSettings | undefined = agent?.modelSettings;
 
 		let contentBuffer = ''; // Accumulates text
 		const messageId = uuidv4();
@@ -287,7 +289,7 @@ export class GeminiProvider implements ModelProvider {
 				streamError = new Error(blockMessage);
 				// Yield accumulated text before error?
 				yield { type: 'message_complete', content: contentBuffer, message_id: messageId };
-				yield { type: 'error', error: blockMessage };
+				yield { type: 'error', error: 'Gemini blocked error: '+blockMessage };
 				return;
 			}
 
@@ -318,7 +320,7 @@ export class GeminiProvider implements ModelProvider {
 			// Handle errors during API call or stream iteration
 			streamError = error instanceof Error ? error : new Error(String(error));
 			console.error('Error during Gemini stream processing:', streamError);
-			yield { type: 'error', error: streamError.message };
+			yield { type: 'error', error: 'Gemini stream error: '+streamError.message };
 			// Yield accumulated text even on error
 			yield { type: 'message_complete', content: contentBuffer, message_id: messageId };
 		}

@@ -35,6 +35,7 @@ import {
 	UnderstandingStage
 } from './research_engine/index.js';
 import {createOverseerAgent} from './overseer_agent.js';
+import {ModelClassID} from '../model_providers/model_data.js';
 
 // Export all constants from the constants module
 export * from './constants.js';
@@ -67,7 +68,7 @@ export type AgentType =
 /**
  * Create an agent of the specified type with optional model override and agent_id
  */
-export function createAgent(type: AgentType, model?: string, modelClass?: string, agent_id?: string): Agent {
+export function createAgent(type: AgentType, model?: string, modelClass?: ModelClassID, agent_id?: string): Agent {
 	let agent: Agent;
 
 	switch (type) {

@@ -14,7 +14,6 @@ import { costTracker } from '../utils/cost_tracker.js';
 import pty from 'node-pty';
 import {get_working_dir, log_llm_request} from '../utils/file_utils.js';
 
-
 // Regex to strip ANSI escape codes (covers common CSI sequences)
 // eslint-disable-next-line no-control-regex
 const ansiRegex = /\x1b\[[?0-9;]*[a-zA-Z]/g;
@@ -131,7 +130,7 @@ export class ClaudeCodeProvider implements ModelProvider {
 	 */
 	async* createResponseStream(
 		model: string,
-		messages: ResponseInput
+		messages: ResponseInput,
 	): AsyncGenerator<StreamingEvent> {
 		try {
 			const prompt = messages.map(msg => {
@@ -157,7 +156,7 @@ export class ClaudeCodeProvider implements ModelProvider {
 
 			yield {
 				type: 'error',
-				error: error?.message || String(error)
+				error: 'Claude code error: '+(error?.message || String(error))
 			};
 		}
 	}

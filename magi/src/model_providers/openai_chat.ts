@@ -13,12 +13,13 @@ import {
 	StreamingEvent,
 	ToolCall,
 	ResponseInput,
-	ModelProviderID
 } from '../types.js';
 import OpenAI from 'openai';
 import { v4 as uuidv4 } from 'uuid';
 import { costTracker } from '../utils/cost_tracker.js';
 import { log_llm_request } from '../utils/file_utils.js';
+import {Agent} from '../utils/agent.js';
+import {ModelProviderID} from './model_data.js';
 
 // Convert our tool definition to OpenAI's chat.completions format
 // NOTE: Removed specific handling for 'web_search_preview' and 'computer_use_preview'
@@ -68,15 +69,21 @@ export class OpenAIChat implements ModelProvider {
 		}
 	}
 
+	prepareParameters(requestParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming): OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming {
+		return requestParams;
+	}
+
 	/**
 	 * Create a streaming completion using OpenAI's chat.completions.create API
 	 */
 	async* createResponseStream(
 		model: string,
 		messages: ResponseInput,
-		tools?: ToolFunction[],
-		settings?: ModelSettings
+		agent?: Agent,
 	): AsyncGenerator<StreamingEvent> {
+		const tools: ToolFunction[] | undefined = agent?.tools;
+		const settings: ModelSettings | undefined = agent?.modelSettings;
+
 		try {
 
 			// Convert input messages to the format expected by chat.completions.create
@@ -114,14 +121,19 @@ export class OpenAIChat implements ModelProvider {
 						content = message.content.text;
 					}
 				}
+
+				let role = message.role || 'user';
+				if(role === 'developer') {
+					role = 'system';
+				}
 				return {
-					role: message.role || 'user',
+					role,
 					content,
 				};
 			});
 
 			// Build request parameters for chat.completions.create
-			const requestParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
+			let requestParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
 				model,
 				messages: chatMessages,
 				stream: true,
@@ -148,6 +160,9 @@ export class OpenAIChat implements ModelProvider {
 			if (tools && tools.length > 0) {
 				requestParams.tools = convertToOpenAITools(tools);
 			}
+
+			// Allow providers to rewrite params before sending
+			requestParams = this.prepareParameters(requestParams);
 
 			// Log the request for debugging
 			log_llm_request(this.provider, model, requestParams); // Log baseURL too
@@ -280,15 +295,15 @@ export class OpenAIChat implements ModelProvider {
 						};
 					} else {
 						console.warn("Finish reason was 'tool_calls', but no complete tool calls were aggregated.");
-						yield { type: 'error', error: 'Model indicated tool calls, but none were parsed correctly.' };
+						yield { type: 'error', error: `Error (${this.provider}): Model indicated tool calls, but none were parsed correctly.` };
 					}
 				} else if (finishReason === 'length') {
 					// Yield partial content first if desired
 					// yield { type: 'message_complete', content: aggregatedContent, message_id: messageId };
-					yield { type: 'error', error: `Response truncated due to length limit (max_tokens). Partial content: ${aggregatedContent.substring(0, 100)}...` };
+					yield { type: 'error', error: `Error (${this.provider}): Response truncated due to length limit (max_tokens). Partial content: ${aggregatedContent.substring(0, 100)}...` };
 				} else if (finishReason) {
 					// Handle other potential finish reasons (e.g., 'content_filter')
-					yield { type: 'error', error: `Response stopped due to: ${finishReason}` };
+					yield { type: 'error', error: `Error (${this.provider}): Response stopped due to: ${finishReason}` };
 				} else if (aggregatedContent) {
 					// If stream finished without a reason but we got content, yield it as complete.
 					console.warn('Stream finished without a finish_reason, but content was received.');
@@ -301,12 +316,12 @@ export class OpenAIChat implements ModelProvider {
 					// Handle case where stream ends unexpectedly during tool call generation
 					console.warn('Stream finished without a finish_reason, but partial tool calls exist.');
 					// Optionally yield incomplete tool calls or an error
-					yield { type: 'error', error: 'Stream ended unexpectedly during tool call generation.' };
+					yield { type: 'error', error: `Error (${this.provider}): Stream ended unexpectedly during tool call generation.` };
 				} else {
 					// Stream finished without content, tools, or a clear reason
 					console.warn('Stream finished without a finish_reason and no content or tool calls.');
 					// Optionally yield an empty message or an error
-					yield { type: 'error', error: 'Stream finished unexpectedly with no output.' };
+					yield { type: 'error', error: `Error (${this.provider}): Stream finished unexpectedly with no output.` };
 				}
 
 			} catch (streamError) {
@@ -314,7 +329,7 @@ export class OpenAIChat implements ModelProvider {
 				console.error('Error processing chat completions stream:', streamError);
 				yield {
 					type: 'error',
-					error: `Stream processing error: ${String(streamError)}`
+					error: `Stream processing error (${this.provider}): ${String(streamError)}`
 				};
 			} finally {
 				// Cleanup maps if needed (though they should be local to the call)
@@ -323,13 +338,13 @@ export class OpenAIChat implements ModelProvider {
 			}
 
 		} catch (error) {
-			console.error('Error setting up OpenAI chat completions stream:', error);
+			console.error(`Error running ${this.provider} chat completions stream:`, error);
 			yield {
 				type: 'error',
 				// Check if it's an OpenAI API error for better formatting
-				error: (error instanceof OpenAI.APIError)
-					? `OpenAI API Error: ${error.status} ${error.name} ${error.message}`
-					: String(error)
+				error: `API Error (${this.provider}): `+((error instanceof OpenAI.APIError)
+					? `${error.status} ${error.name} ${error.message}`
+					: String(error))
 			};
 		}
 	}

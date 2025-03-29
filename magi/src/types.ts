@@ -1,6 +1,8 @@
 /**
  * Common type definitions for the MAGI system.
  */
+import {Agent} from './utils/agent.js';
+import {ModelClassID} from './model_providers/model_data.js';
 
 // Define the Agent interface to avoid circular dependency
 export interface AgentInterface {
@@ -15,8 +17,8 @@ export interface AgentInterface {
     modelClass?: string;
     modelSettings?: ModelSettings;
     maxToolCalls?: number;
-    onToolCall?: (toolCall: any) => void;
-    onToolResult?: (result: any) => void;
+    onToolCall?: (toolCall: ToolCall) => void;
+    onToolResult?: (toolCall: ToolCall, result: string) => void;
     export(): AgentExportDefinition;
     asTool(): ToolFunction;
 }
@@ -98,9 +100,12 @@ export interface AgentDefinition {
 	workers?: WorkerFunction[];
 	tools?: ToolFunction[];
 	model?: string;
-	modelClass?: string;
+	modelClass?: ModelClassID;
 	maxToolCalls?: number;
-	onRequest?: (messages: ResponseInput, model: string, provider: ModelProviderID) => ResponseInput;
+
+	onToolCall?: (toolCall: ToolCall) => void;
+	onToolResult?: (toolCall: ToolCall, result: string) => void;
+	onRequest?: (messages: ResponseInput, model: string) => [ResponseInput, string];
 	onResponse?: (response: string) => string;
 }
 
@@ -138,6 +143,16 @@ export interface ToolCall {
 		arguments: string;
 	};
 }
+
+export interface ToolCallHandler {
+	onToolCall?: (toolCall: ToolCall) => void,
+	onToolResult?: (toolCall: ToolCall, result: string) => void,
+	onEvent?: (event: StreamingEvent) => void,
+	onResponse?: (content: string) => void,
+	onComplete?: () => void
+}
+
+
 
 
 export interface ResponseContentText {
@@ -373,18 +388,6 @@ export interface ModelProvider {
 	createResponseStream(
 		model: string,
 		messages: ResponseInput,
-		tools?: ToolFunction[],
-		settings?: ModelSettings
+		agent?: Agent,
 	): AsyncGenerator<StreamingEvent>;
 }
-
-/**
- * Streaming event types
- */
-export type ModelProviderID =
-	'openai'
-	| 'anthropic'
-	| 'google'
-	| 'xai'
-	| 'deepseek'
-	;

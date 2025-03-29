@@ -10,6 +10,7 @@ import OpenAI from 'openai';
 // import {v4 as uuidv4} from 'uuid';
 import { costTracker } from '../utils/cost_tracker.js';
 import { log_llm_request } from '../utils/file_utils.js';
+import {Agent} from '../utils/agent.js';
 
 // Convert our tool definition to OpenAI's format
 function convertToOpenAITools(requestParams: any): any {
@@ -18,7 +19,7 @@ function convertToOpenAITools(requestParams: any): any {
 				requestParams.model = 'gpt-4o'; // Force model for web_search
 				return {
 					type: 'web_search_preview',
-					search_context_size: 'medium',
+					search_context_size: 'high',
 				};
 			} else if (tool.definition.function.name === 'computer_use') {
 				requestParams.model = 'computer-use-preview'; // Force model for computer_use
@@ -69,9 +70,11 @@ export class OpenAIProvider implements ModelProvider {
 	async* createResponseStream(
 		model: string,
 		messages: ResponseInput,
-		tools?: ToolFunction[],
-		settings?: ModelSettings
+		agent?: Agent,
 	): AsyncGenerator<StreamingEvent> {
+		const tools: ToolFunction[] | undefined = agent?.tools;
+		const settings: ModelSettings | undefined = agent?.modelSettings;
+
 		try {
 
 			// Ensure input is in the correct format for the responses API
@@ -153,7 +156,7 @@ export class OpenAIProvider implements ModelProvider {
 						console.error(`Response ${event.response.id} failed: [${errorInfo.code}] ${errorInfo.message}`);
 						yield {
 							type: 'error',
-							error: `Response failed: [${errorInfo.code}] ${errorInfo.message}`
+							error: `OpenAI response  failed: [${errorInfo.code}] ${errorInfo.message}`
 						};
 					}
 					else if (event.type === 'response.incomplete' && event.response?.incomplete_details) {
@@ -162,7 +165,7 @@ export class OpenAIProvider implements ModelProvider {
 						console.warn(`Response ${event.response.id} incomplete: ${reason}`);
 						yield {
 							type: 'error', // Or a more general 'response_incomplete'
-							error: reason,
+							error: 'OpenAI response incomplete: '+reason,
 						};
 					}
 
@@ -257,7 +260,7 @@ export class OpenAIProvider implements ModelProvider {
 					else if (event.type === 'response.refusal.done' && event.refusal) {
 						// Refusal text finalized
 						console.log(`Refusal done for item ${event.item_id}: ${event.refusal}`);
-						yield { type: 'error', error: event.refusal };
+						yield { type: 'error', error: 'OpenAI refusal error: '+event.refusal };
 					}
 
 					// --- Function Call Events (Based on Docs) ---
@@ -324,7 +327,7 @@ export class OpenAIProvider implements ModelProvider {
 						console.error(`API Stream Error: [${event.code || 'N/A'}] ${event.message}`);
 						yield {
 							type: 'error',
-							error: `API Error: [${event.code || 'N/A'}] ${event.message}`
+							error: `OpenAI API error: [${event.code || 'N/A'}] ${event.message}`
 						};
 					}
 
@@ -338,7 +341,7 @@ export class OpenAIProvider implements ModelProvider {
 				console.error('Error processing response stream:', streamError);
 				yield {
 					type: 'error',
-					error: String(streamError) // Or more detailed error info
+					error: 'OpenAI stream processing error: '+String(streamError) // Or more detailed error info
 				};
 			} finally {
 				// Clean up: Check if any tool calls were started but not completed
@@ -363,7 +366,7 @@ export class OpenAIProvider implements ModelProvider {
 			console.error('Error in OpenAI streaming response:', error);
 			yield {
 				type: 'error',
-				error: String(error)
+				error: 'OpenAI streaming error: '+String(error)
 			};
 		}
 	}

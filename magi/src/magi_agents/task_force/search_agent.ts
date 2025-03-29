@@ -62,6 +62,6 @@ IMPORTANT:
 		workers: [
 			createBrowserAgent,
 		],
-		modelClass: 'standard'
+		modelClass: 'search'
 	});
 }

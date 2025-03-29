@@ -7,14 +7,23 @@
 
 import {
 	ToolCall,
-	ToolEvent, ToolFunction, ToolParameter, ToolParameterType, validToolParameterTypes,
+	ToolCallHandler,
+	ToolEvent,
+	ToolFunction,
+	ToolParameter,
+	ToolParameterType,
+	validToolParameterTypes,
 } from '../types.js';
 import {Agent} from './agent.js';
 
 /**
  * Process a tool call from an agent
  */
-export async function processToolCall(toolCall: ToolEvent, agent: Agent): Promise<string> {
+export async function processToolCall(
+	toolCall: ToolEvent,
+	agent: Agent,
+	handlers: ToolCallHandler = {}): Promise<string> {
+
 	try {
 		// Extract tool call data
 		const {tool_calls} = toolCall;
@@ -46,7 +55,7 @@ export async function processToolCall(toolCall: ToolEvent, agent: Agent): Promis
 				}
 
 				// Handle the tool call (pass the agent for event handlers)
-				const result = await handleToolCall(call, agent);
+				const result = await handleToolCall(call, agent, handlers);
 
 				// Log tool call
 				const {function: {name}} = call;
@@ -74,7 +83,11 @@ export async function processToolCall(toolCall: ToolEvent, agent: Agent): Promis
 /**
  * Handle a tool call by executing the appropriate tool function or worker agent
  */
-export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<string> {
+export async function handleToolCall(
+	toolCall: ToolCall,
+	agent: Agent,
+	handlers: ToolCallHandler = {}): Promise<string> {
+
 	// Validate the tool call structure
 	if (!toolCall.function || !toolCall.function.name) {
 		throw new Error('Invalid tool call structure: missing function name');
@@ -83,12 +96,15 @@ export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<
 	const {function: {name, arguments: argsString}} = toolCall;
 
 	// Trigger onToolCall handler if available
-	if (agent && agent.onToolCall) {
-		try {
+	try {
+		if (agent && agent.onToolCall) {
 			agent.onToolCall(toolCall);
-		} catch (error) {
-			console.error('Error in onToolCall handler:', error);
 		}
+		if(handlers.onToolCall) {
+			handlers.onToolCall(toolCall);
+		}
+	} catch (error) {
+		console.error('Error in onToolCall handler:', error);
 	}
 
 	// Parse the arguments with better error handling
@@ -117,7 +133,7 @@ export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<
 
 	// Call the implementation with the parsed arguments
 	try {
-		let result;
+		let result: string;
 		if (typeof args === 'object' && args !== null) {
 			// Extract named parameters based on implementation function definition
 			const paramNames = Object.keys(tool.definition.function.parameters.properties);
@@ -155,12 +171,15 @@ export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<
 		}
 
 		// Trigger onToolResult handler if available
-		if (agent && agent.onToolResult) {
-			try {
-				agent.onToolResult(result);
-			} catch (error) {
-				console.error('Error in onToolResult handler:', error);
+		try {
+			if (agent && agent.onToolResult) {
+				agent.onToolResult(toolCall, result);
 			}
+			if(handlers.onToolResult) {
+				handlers.onToolResult(toolCall, result);
+			}
+		} catch (error) {
+			console.error('Error in onToolResult handler:', error);
 		}
 
 		return result;
@@ -183,7 +202,7 @@ export async function handleToolCall(toolCall: ToolCall, agent: Agent): Promise<
 export function createToolFunction(
 	func: (...args: any[]) => any,
 	description?: string,
-	paramMap?: Record<string, string | { name?: string, description?: string, type?: string, optional?: boolean }>,
+	paramMap?: Record<string, string | { name?: string, description?: string, type?: ToolParameterType, enum?: string[], optional?: boolean }>,
 	returns?: string,
 	functionName?: string
 ): ToolFunction {
@@ -255,6 +274,10 @@ export function createToolFunction(
 				type: paramType,
 				description,
 			};
+
+			if (paramType === 'string' && paramInfo?.enum) {
+				properties[apiParamName].enum = paramInfo.enum;
+			}
 
 			// If parameter has no default value, it's required
 			if (defaultValue === undefined && !paramInfo?.optional) {

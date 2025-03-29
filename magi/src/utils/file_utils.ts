@@ -4,8 +4,9 @@
 
 import fs from 'fs';
 import path from 'path';
-import {ModelProviderID, ToolFunction} from '../types.js';
+import {ToolFunction} from '../types.js';
 import {createToolFunction} from './tool_call.js';
+import {ModelProviderID} from '../model_providers/model_data.js';
 
 // Global directory path for this process
 let processDirectory: string | null = null;

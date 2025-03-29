@@ -5,11 +5,20 @@
  * with tools.
  */
 
-import {StreamingEvent, ToolEvent, MessageEvent, ToolCall, ResponseInput, RunStatus, RunResult} from '../types.js';
+import {
+	StreamingEvent,
+	ToolEvent,
+	MessageEvent,
+	ToolCall,
+	ResponseInput,
+	RunStatus,
+	RunResult,
+	ToolCallHandler
+} from '../types.js';
 import {Agent} from './agent.js';
 import {getModelProvider} from '../model_providers/model_provider.js';
 import {MODEL_CLASSES} from '../model_providers/model_data.js';
-import {getModelFromClass, getProviderFromModel} from '../model_providers/model_provider.js';
+import {getModelFromClass} from '../model_providers/model_provider.js';
 import {processToolCall} from './tool_call.js';
 
 /**
@@ -25,7 +34,7 @@ export class Runner {
 		conversationHistory: ResponseInput = []
 	): AsyncGenerator<StreamingEvent> {
 		// Get our selected model for this run
-		const selectedModel = agent.model || getModelFromClass(agent.modelClass || 'standard');
+		let selectedModel = agent.model || getModelFromClass(agent.modelClass || 'standard');
 
 		// Get the model provider based on the selected model
 		const provider = getModelProvider(selectedModel);
@@ -33,7 +42,7 @@ export class Runner {
 		// Prepare messages with conversation history and the current input
 		let messages: ResponseInput = [
 			// Add a system message with instructions
-			{role: 'system', content: agent.instructions},
+			{role: 'developer', content: agent.instructions},
 			// Add conversation history
 			...conversationHistory,
 		];
@@ -43,6 +52,11 @@ export class Runner {
 		}
 
 		try {
+			// Allow the agent to modify the messages before sending
+			if(agent.onRequest) {
+				[messages, selectedModel] = agent.onRequest(messages, selectedModel);
+			}
+
 			agent.model = selectedModel;
 			yield {
 				type: 'agent_start',
@@ -50,17 +64,11 @@ export class Runner {
 				input,
 			};
 
-			// Allow the agent to modify the messages before sending
-			if(agent.onRequest) {
-				messages = agent.onRequest(messages, selectedModel, getProviderFromModel(selectedModel));
-			}
-
 			// Create a streaming generator
 			const stream = provider.createResponseStream(
 				selectedModel,
 				messages,
-				agent.tools,
-				agent.modelSettings
+				agent
 			);
 
 			// Forward all events from the stream
@@ -120,8 +128,7 @@ export class Runner {
 					const alternativeStream = alternativeProvider.createResponseStream(
 						alternativeModel,
 						messages,
-						agent.tools,
-						agent.modelSettings
+						agent,
 					);
 
 					// Forward all events from the alternative stream
@@ -165,11 +172,7 @@ export class Runner {
 		agent: Agent,
 		input?: string,
 		conversationHistory: ResponseInput = [],
-		handlers: {
-			onEvent?: (event: StreamingEvent) => void,
-			onResponse?: (content: string) => void,
-			onComplete?: () => void
-		} = {},
+		handlers: ToolCallHandler = {},
 		toolCallCount = 0 // Track the number of tool call iterations across recursive calls
 	): Promise<string> {
 		let fullResponse = '';
@@ -233,7 +236,7 @@ export class Runner {
 						});
 
 						// Process all tool calls in parallel
-						const toolResult = await processToolCall(toolEvent, agent);
+						const toolResult = await processToolCall(toolEvent, agent, handlers);
 
 						// Parse tool results for better logging
 						let parsedResults;
@@ -367,7 +370,6 @@ export class Runner {
 						arguments: toolCall.function.arguments
 					});
 
-
 					// Add the corresponding tool result
 					const result = collectedToolResults.find(r => r.call_id === toolCall.id);
 					if (result) {
@@ -409,6 +411,7 @@ export class Runner {
 			if(agent.onResponse) {
 				fullResponse = agent.onResponse(fullResponse);
 			}
+			agent.model = undefined; // Allow a new model to be selected for the next run
 
 			return fullResponse;
 		} catch (error) {
