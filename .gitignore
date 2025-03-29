@@ -61,5 +61,10 @@ yarn-error.log
 
 # Ignore compiled files
 *.js
+*.js.map
 *.jsx
 *.css
+
+# Allow specific JS files
+!controller/webpack.config.js
+!eslint.config.js
