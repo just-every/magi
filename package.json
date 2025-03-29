@@ -18,6 +18,9 @@
     "type": "git",
     "url": "git+https://github.com/has-context/magi-system.git"
   },
+  "overrides": {
+    "tar-fs": "^2.1.2"
+  },
   "devDependencies": {
     "@eslint/js": "^8.56.0",
     "@types/node": "^22.13.13",

@@ -30,6 +30,9 @@
     "uuid": "^11.1.0",
     "ws": "^8.18.1"
   },
+  "overrides": {
+    "tar-fs": "^2.1.2"
+  },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",
     "@types/node": "^22.13.10",
