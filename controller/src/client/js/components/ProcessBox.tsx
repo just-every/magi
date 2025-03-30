@@ -2,8 +2,8 @@
  * ProcessBox Component
  * Renders a process card with messages, status, and input controls
  */
-import * as React from 'react';
-import { useRef, useEffect } from 'react';
+import * RReact from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { ProcessStatus } from '@types';
 import { useSocket } from '../context/SocketContext';
 import MessageList from './message/MessageList';
