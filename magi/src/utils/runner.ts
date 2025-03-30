@@ -383,14 +383,15 @@ export class Runner {
 				}
 
 				// Use the input array as our messages
-				toolCallMessages = messageItems;
+				// Use the collected items, but ensure correct sequence for API
+				toolCallMessages = this.ensureToolResultSequence(messageItems);
 
 				// Run the agent again with the tool results
-				console.log('[Runner] Running agent with tool call results');
+				console.log('[Runner] Running agent with reordered tool call results');
 
 				const followUpResponse = await this.runStreamedWithTools(
 					agent,
-					'', // No new user input is needed
+					'', // No new user input is needed, history contains results
 					toolCallMessages,
 					handlers,
 					toolCallCount // Pass the current toolCallCount to track across recursive calls
@@ -595,5 +596,80 @@ export class Runner {
 		}
 
 		return results;
+	}
+
+	/**
+	 * Reorders messages to ensure that tool result messages (`function_call_output`)
+	 * immediately follow the corresponding assistant message containing the tool calls (`function_call`).
+	 * Any messages originally between the call and its result are moved after the result.
+	 *
+	 * @param messages The array of messages to reorder.
+	 * @returns A new array with messages potentially reordered.
+	 */
+	private static ensureToolResultSequence(messages: ResponseInput): ResponseInput {
+		let lastToolCallBlockStartIndex = -1;
+		let toolCallIdsInBlock: string[] = [];
+
+		// Find the start index of the last block of consecutive 'function_call' messages
+		for (let i = messages.length - 1; i >= 0; i--) {
+			if (messages[i].type === 'function_call') {
+				// Found a tool call, now find the start of this block
+				lastToolCallBlockStartIndex = i;
+				toolCallIdsInBlock.push(messages[i].call_id);
+				while (lastToolCallBlockStartIndex > 0 && messages[lastToolCallBlockStartIndex - 1].type === 'function_call') {
+					lastToolCallBlockStartIndex--;
+					toolCallIdsInBlock.push(messages[lastToolCallBlockStartIndex].call_id);
+				}
+				// Reverse IDs to match original order (though order doesn't strictly matter for matching)
+				toolCallIdsInBlock.reverse();
+				break; // Found the last block
+			}
+		}
+
+		// If no tool calls found, return original messages
+		if (lastToolCallBlockStartIndex === -1) {
+			return messages;
+		}
+
+		const numToolCallsInBlock = toolCallIdsInBlock.length;
+		console.debug(`[Runner] Found last tool call block starting at index ${lastToolCallBlockStartIndex} with ${numToolCallsInBlock} calls (IDs: ${toolCallIdsInBlock.join(', ')})`);
+
+		const messagesBeforeBlock = messages.slice(0, lastToolCallBlockStartIndex);
+		const toolCallBlock = messages.slice(lastToolCallBlockStartIndex, lastToolCallBlockStartIndex + numToolCallsInBlock);
+
+		// Find all corresponding tool results *anywhere* after the tool call block start
+		const toolResultMessages = messages
+			.slice(lastToolCallBlockStartIndex) // Search from the call block onwards
+			.filter(msg => msg.type === 'function_call_output' && toolCallIdsInBlock.includes(msg.call_id));
+
+		// Collect all messages that were *after* the tool call block but *are not* the results we just found
+		const intermediateAndLaterMessages = messages
+			.slice(lastToolCallBlockStartIndex + numToolCallsInBlock) // Messages originally after the block
+			.filter(msg => !(msg.type === 'function_call_output' && toolCallIdsInBlock.includes(msg.call_id))); // Exclude the results
+
+		// Verify we found all results
+		if (toolResultMessages.length !== numToolCallsInBlock) {
+			const foundResultIds = toolResultMessages.map(r => r.call_id);
+			const missingResultIds = toolCallIdsInBlock.filter(id => !foundResultIds.includes(id));
+			console.warn(`[Runner] Mismatch: Found ${toolResultMessages.length} results for ${numToolCallsInBlock} tool calls. Missing results for IDs: ${missingResultIds.join(', ')}`);
+			// Proceeding with potentially incomplete results, API will likely fail.
+		} else {
+			console.debug(`[Runner] Found ${toolResultMessages.length} corresponding tool results.`);
+		}
+
+		// Assemble the reordered list: Before Calls + Calls + Results + Intermediate/Later Messages
+		const finalMessages = [
+			...messagesBeforeBlock,
+			...toolCallBlock,
+			...toolResultMessages,
+			...intermediateAndLaterMessages
+		];
+
+		console.debug("[Runner] Messages reordered for API call sequence compliance.");
+		// Optional: Log the final sequence for debugging
+		// console.log("[Runner] Reordered Messages:", JSON.stringify(finalMessages.map(m => ({ type: m.type, role: m.role, call_id: m.call_id, name: m.name })), null, 2));
+
+
+		return finalMessages;
 	}
 }
