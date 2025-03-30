@@ -2,13 +2,15 @@ import * as React from 'react';
 import {useState, useRef, useEffect, CSSProperties} from 'react';
 import {useSocket} from '../context/SocketContext';
 import {TRANSITION_EASE, TRANSITION_TIME} from "../constants";
+import TextareaAutosize from 'react-textarea-autosize';
 
 const CommandInput: React.FC = () => {
 	const {runCommand, sendCoreCommand, processes, coreProcessId} = useSocket();
 	const [command, setCommand] = useState('');
-	const inputRef = useRef<HTMLInputElement>(null);
+	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const containerRef = useRef(null); // Ref to get element height
 	const [isFirstProcess, setIsFirstProcess] = useState(processes.size === 0);
+	const [isMultiline, setIsMultiline] = useState(false);
 
 	const coreProcess = Array.from(processes.values()).find((process) => process.id === coreProcessId);
 	const agentName = coreProcess?.agent.name && !coreProcess.agent.name.startsWith('AI-') ? coreProcess?.agent.name : '';
@@ -33,6 +35,11 @@ const CommandInput: React.FC = () => {
 		return () => clearTimeout(timer);
 	}, [isFirstProcess, processes.size]);
 
+	// Check if content is multiline
+	useEffect(() => {
+		setIsMultiline(command.includes('\n'));
+	}, [command]);
+
 	const handleSubmit = (e: React.FormEvent) => {
 		if(e.preventDefault) e.preventDefault();
 
@@ -50,11 +57,13 @@ const CommandInput: React.FC = () => {
 				}
 			}
 			setCommand('');
+			setIsMultiline(false);
 		}
 	};
 
-	const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-		if (e.key === 'Enter') {
+	const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+		// Enter without shift submits the form
+		if (e.key === 'Enter' && !e.shiftKey) {
 			if(e.preventDefault) e.preventDefault();
 			handleSubmit(e);
 		}
@@ -86,24 +95,32 @@ const CommandInput: React.FC = () => {
 	};
 
 	return (
-			<div
-				id="center-input-container"
-				ref={containerRef}
-				style={isFirstProcess ? centerStyle : bottomStyle}
-			>
+		<div
+			id="center-input-container"
+			ref={containerRef}
+			style={isFirstProcess ? centerStyle : bottomStyle}
+		>
 			<form id="center-command-form" onSubmit={handleSubmit}>
 				<div className="input-group shadow-sm">
 					<span className="input-group-text bg-white">&gt;</span>
-					<input
-						type="text"
+					<TextareaAutosize
 						id="center-command-input"
-						className="form-control form-control-lg"
+						className={`form-control form-control-lg ${isMultiline ? 'multiline' : ''}`}
 						placeholder={isFirstProcess ? "Start task..." : `Talk${agentName ? ' to '+agentName : ''}...`}
 						value={command}
 						onChange={(e) => setCommand(e.target.value)}
 						onKeyDown={handleKeyDown}
 						ref={inputRef}
 						autoComplete="off"
+						minRows={1}
+						maxRows={6}
+						style={{
+							resize: 'none',
+							overflow: 'hidden',
+							paddingTop: isMultiline ? '0.75rem' : 'inherit',
+							paddingBottom: isMultiline ? '0.75rem' : 'inherit',
+							lineHeight: '1.5'
+						}}
 					/>
 				</div>
 			</form>
