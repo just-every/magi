@@ -17,7 +17,6 @@ import {
 } from '../types.js';
 import { costTracker } from '../utils/cost_tracker.js';
 import { log_llm_request } from '../utils/file_utils.js';
-// Removed: import { convertHistoryFormat } from '../utils/llm_utils.js';
 import {Agent} from '../utils/agent.js';
 import {ModelClassID} from './model_data.js';
 
