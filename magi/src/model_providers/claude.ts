@@ -17,7 +17,7 @@ import {
 } from '../types.js';
 import { costTracker } from '../utils/cost_tracker.js';
 import { log_llm_request } from '../utils/file_utils.js';
-import { convertHistoryFormat } from '../utils/llm_utils.js';
+// Removed: import { convertHistoryFormat } from '../utils/llm_utils.js';
 import {Agent} from '../utils/agent.js';
 import {ModelClassID} from './model_data.js';
 
@@ -81,15 +81,26 @@ function convertToClaudeMessage(role: string, content: string, msg: ResponseInpu
 	else {
 		// Skip messages with no actual text content
 		if (!content) {
-			return null;
+			return null; // Skip messages with no text content
 		}
 
-		// Use the simple string content format for text messages
-		return {
-			role: role === 'assistant' ? 'assistant' : (role === 'developer' || role === 'system' ? 'system' : 'user'),
-			content: content,
-		};
+		const messageRole = role === 'assistant' ? 'assistant' : (role === 'developer' || role === 'system' ? 'system' : 'user');
+
+		// System messages expect string content
+		if (messageRole === 'system') {
+			// System prompts are handled separately later
+			return { role: 'system', content: content };
+		} else {
+			// User and Assistant messages must use the array format when tools are potentially involved.
+			// Use array format consistently for safety.
+			return {
+				role: messageRole,
+				content: [{ type: 'text', text: content }]
+			};
+		}
 	}
+	// Default case for unhandled or irrelevant message types for Claude history
+	return null;
 }
 
 /**
@@ -146,11 +157,11 @@ export class ClaudeProvider implements ModelProvider {
 					max_tokens = Math.min(max_tokens, 4096); // Lower limit for other classes
 			}
 
-			// Convert messages format for Claude
-			const claudeMessages = convertHistoryFormat(messages, convertToClaudeMessage);
+			// Convert messages using the Claude-specific history processor
+			const processedClaudeMessages = convertHistoryForClaude(messages);
 
-			// Extract the system prompt content (assuming one system message, might need adjustment if multiple are possible)
-			const systemPromptMessages = claudeMessages.filter(m => m.role === 'system');
+			// Extract the system prompt content (should be only one, handled by convertHistoryForClaude)
+			const systemPromptMessages = processedClaudeMessages.filter(m => m.role === 'system');
 			// Ensure content is a string. Handle cases where content might be structured differently or missing.
 			const systemPrompt = systemPromptMessages.length > 0 && typeof systemPromptMessages[0].content === 'string'
 				? systemPromptMessages[0].content
@@ -159,8 +170,8 @@ export class ClaudeProvider implements ModelProvider {
 			// Format the request according to Claude API specifications
 			const requestParams: any = {
 				model: model,
-				// Filter for only user and assistant messages for the 'messages' array
-				messages: claudeMessages.filter(m => m.role === 'user' || m.role === 'assistant'),
+				// Use the processed messages, filtering out any remaining system messages here
+				messages: processedClaudeMessages.filter(m => m.role === 'user' || m.role === 'assistant'),
 				// Add system prompt string if it exists
 				...(systemPrompt ? { system: systemPrompt } : {}),
 				stream: true,
