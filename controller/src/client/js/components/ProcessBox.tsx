@@ -8,7 +8,6 @@ import { ProcessStatus } from '@types';
 import { useSocket } from '../context/SocketContext';
 import MessageList from './message/MessageList';
 import ProcessHeader from './ui/ProcessHeader';
-import ProcessInput from './ui/ProcessInput';
 
 interface ProcessBoxProps {
     id: string;
@@ -38,7 +37,7 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
     onFocus,
     onViewLogs
 }) => {
-    const { sendProcessCommand, terminateProcess, processes } = useSocket();
+    const { terminateProcess, processes } = useSocket();
     const logsRef = useRef<HTMLDivElement>(null);
 
     // Get data directly from the socket context
@@ -59,13 +58,6 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
         terminateProcess(id);
     };
 
-    // Handle form submission
-    const handleSubmit = (input: string) => {
-        if (input.trim()) {
-            sendProcessCommand(id, input);
-        }
-    };
-
     // Track click count and timing for single/double click detection
     const clickTimeout = useRef<number | null>(null);
     const clickCount = useRef<number>(0);
@@ -75,18 +67,13 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
         // Check what was clicked
         const target = e.target as HTMLElement;
 
-        // Check if clicking on input area
-        const isClickingInput =
-            target.classList.contains('process-input') ||
-            !!target.closest('.process-input-container');
-
         // Check if clicking on header controls
         const isClickingControls =
             target.classList.contains('process-status') ||
-            target.classList.contains('process-terminate') ||
-            !!target.closest('.process-terminate');
+            target.classList.contains('process-btn') ||
+            !!target.closest('.process-btn');
 
-        if (!isClickingInput && !isClickingControls) {
+        if (!isClickingControls) {
             // Increment click count
             clickCount.current += 1;
 
@@ -133,8 +120,6 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
                         colors={colors}
                     />
                 </div>
-
-                <ProcessInput onSubmit={handleSubmit} />
             </div>
         </div>
     );
