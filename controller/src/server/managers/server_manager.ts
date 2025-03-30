@@ -596,7 +596,7 @@ export class ServerManager {
 	 * @param data - The command data
 	 */
 	private async handleProcessCommand(socket: Socket, data: ProcessCommandEvent): Promise<void> {
-		const {processId, command} = data;
+		const {processId, command, sourceProcessId} = data;
 
 		// Verify the process exists and is running
 		const process = this.processManager.getProcess(processId);
@@ -621,9 +621,15 @@ export class ServerManager {
 		// Try WebSocket communication first
 		let success = false;
 		if (this.communicationManager.hasActiveConnection(processId)) {
-			success = await this.communicationManager.sendCommand(processId, command);
+			success = await this.communicationManager.sendCommand(
+				processId, 
+				command, 
+				{}, 
+				sourceProcessId
+			);
+			
 			if (success) {
-				console.log(`Command sent to process ${processId} successfully via WebSocket`);
+				console.log(`Command sent to process ${processId} successfully via WebSocket${sourceProcessId ? ` from process ${sourceProcessId}` : ''}`);
 				this.processManager.updateProcess(
 					processId,
 					'[INFO] Command sent via WebSocket'

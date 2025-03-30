@@ -2,6 +2,7 @@
  * MAGI System Client-Side Application
  * React-based UI for MAGI system
  */
+
 import * as React from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './js/components/App';

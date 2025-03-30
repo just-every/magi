@@ -40,7 +40,7 @@ const ProcessHeader: React.FC<ProcessHeaderProps> = ({
                     </span>
                 )}
                 {onViewLogs && (
-                    <button className="process-logs btn btn-sm btn-outline mx-1"
+                    <button className="process-btn btn btn-sm btn-outline me-1"
                         style={{color: `rgba(${colors.rgb} / var(--btn-color-opacity))`, borderColor: `rgba(${colors.rgb} / var(--btn-border-opacity))`}}
                         onClick={(e) => {
                             e.stopPropagation(); // Prevent click from bubbling to container
@@ -50,7 +50,7 @@ const ProcessHeader: React.FC<ProcessHeaderProps> = ({
                     </button>
                 )}
                 {status !== 'ending' && status !== 'terminated' && onTerminate && (
-                    <button className="process-terminate btn btn-sm btn-outline"
+                    <button className="process-btn btn btn-sm btn-outline"
                         style={{color: `rgba(${colors.rgb} / var(--btn-color-opacity))`, borderColor: `rgba(${colors.rgb} / var(--btn-border-opacity))`}}
                         onClick={(e) => {
                             e.stopPropagation(); // Prevent click from bubbling to container

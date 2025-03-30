@@ -50,6 +50,7 @@ export interface ClientMessage {
 export interface ToolCallMessage extends ClientMessage {
 	type: 'tool_call';
 	toolName: string;
+	toolCallId: string;
 	toolParams: Record<string, unknown>;
 	command?: string; // The equivalent shell command if applicable
 }
@@ -57,6 +58,7 @@ export interface ToolCallMessage extends ClientMessage {
 export interface ToolResultMessage extends ClientMessage {
 	type: 'tool_result';
 	toolName: string;
+	toolCallId: string;
 	result: unknown;
 }
 
@@ -65,10 +67,11 @@ interface SocketContextInterface {
 	socket: Socket | null;
 	runCommand: (command: string) => void;
 	sendProcessCommand: (processId: string, command: string) => void;
+	sendCoreCommand: (command: string) => void;
 	terminateProcess: (processId: string) => void;
 	processes: Map<string, ProcessData>;
-	isFirstProcess: boolean;
 	serverVersion: string | null;
+	coreProcessId: string | null;
 }
 
 export interface AgentData {
@@ -99,15 +102,13 @@ export interface ProcessData {
 // Create the context with a default value
 const SocketContext = createContext<SocketContextInterface>({
 	socket: null,
-	runCommand: () => {
-	},
-	sendProcessCommand: () => {
-	},
-	terminateProcess: () => {
-	},
+	runCommand: () => {},
+	sendProcessCommand: () => {},
+	sendCoreCommand: () => {},
+	terminateProcess: () => {},
 	processes: new Map<string, ProcessData>(),
-	isFirstProcess: true,
-	serverVersion: null
+	serverVersion: null,
+	coreProcessId: null,
 });
 
 // Define props for the provider
@@ -119,8 +120,8 @@ interface SocketProviderProps {
 export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 	const [socket, setSocket] = useState<Socket | null>(null);
 	const [processes, setProcesses] = useState<Map<string, ProcessData>>(new Map());
-	const [isFirstProcess, setIsFirstProcess] = useState<boolean>(true);
 	const [serverVersion, setServerVersion] = useState<string | null>(null);
+	const [coreProcessId, setCoreProcessId] = useState<string | null>(null);
 
 	// Initialize socket connection
 	useEffect(() => {
@@ -166,15 +167,16 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 						isTyping: true,
 						workers: new Map<string, AgentData>(),
 					},
-
 				});
+
+				// Set the core process ID if this is the first process created
+				if (newProcesses.size === 1 || !coreProcessId) {
+					setCoreProcessId(event.id);
+					console.log(`Setting core process ID to ${event.id}`);
+				}
+
 				return newProcesses;
 			});
-
-			// If this is the first process, set isFirstProcess to false
-			if (isFirstProcess) {
-				setIsFirstProcess(false);
-			}
 		});
 
 		// Helper function to generate unique IDs
@@ -296,7 +298,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 
 							// Generate command representation for certain tool types
 							let command: string = '';
-							['prompt', 'input', 'command'].forEach(
+							['prompt', 'input', 'command', 'message'].forEach(
 								(param: string) => {
 									if (!command && param in toolParams && typeof toolParams[param] === 'string') {
 										command = toolParams[param];
@@ -311,6 +313,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 								content: `Using ${toolName}`,
 								timestamp: timestamp,
 								toolName: toolName,
+								toolCallId: toolCall.id,
 								toolParams: toolParams,
 								command: command,
 								rawEvent: data
@@ -334,6 +337,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 								content: `Result from ${toolName}`,
 								timestamp: timestamp,
 								toolName: toolName,
+								toolCallId: toolCall.id,
 								result: result,
 								rawEvent: data
 							} as ToolResultMessage);
@@ -495,7 +499,6 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 				const newProcesses = new Map(prevProcesses);
 				const process = newProcesses.get(event.id);
 
-
 				console.log(`${event.id} Received process:update`, event);
 
 				if (process) {
@@ -507,16 +510,27 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 
 					// If process is terminated, handle sub-agents and remove after delay
 					if (event.status === 'terminated') {
+						// If this was the core process, we should find a new one
+						if (event.id === coreProcessId) {
+							// Find the first non-terminated process to be the new core
+							const remainingProcesses = Array.from(newProcesses.entries())
+								.filter(([id, p]) => id !== event.id && p.status !== 'terminated');
+
+							if (remainingProcesses.length > 0) {
+								const newCoreId = remainingProcesses[0][0];
+								console.log(`Core process ${coreProcessId} terminated, setting new core to ${newCoreId}`);
+								setCoreProcessId(newCoreId);
+							} else {
+								console.log(`Core process ${coreProcessId} terminated, no remaining processes`);
+								setCoreProcessId(null);
+							}
+						}
+
 						// Remove the process after animation delay
 						setTimeout(() => {
 							setProcesses(prevProcesses => {
 								const updatedProcesses = new Map(prevProcesses);
 								updatedProcesses.delete(event.id);
-
-								// If there are no more processes, show the centered input again
-								if (updatedProcesses.size === 0) {
-									setIsFirstProcess(true);
-								}
 
 								return updatedProcesses;
 							});
@@ -530,11 +544,6 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 
 		socketInstance.on('connect', () => {
 			// Wait a bit to make sure we've received any existing processes
-			setTimeout(() => {
-				if (processes.size > 0) {
-					setIsFirstProcess(false);
-				}
-			}, 100);
 		});
 
 		// Clean up on unmount
@@ -542,17 +551,12 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 			// Disconnect the socket
 			socketInstance.disconnect();
 		};
-	}, [serverVersion]);
+	}, [serverVersion, coreProcessId]);
 
 	// Define command functions
 	const runCommand = (command: string) => {
 		if (socket && command.trim()) {
 			socket.emit('command:run', command);
-
-			// If this is the first process, set isFirstProcess to false
-			if (isFirstProcess) {
-				setIsFirstProcess(false);
-			}
 		}
 	};
 
@@ -589,6 +593,22 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 		}
 	};
 
+	// Function to send a command always to the core process
+	const sendCoreCommand = (command: string) => {
+		if (coreProcessId) {
+			sendProcessCommand(coreProcessId, command);
+		} else if (processes.size > 0) {
+			// Find the first active process if core isn't set
+			const firstProcessId = Array.from(processes.keys())[0];
+			sendProcessCommand(firstProcessId, command);
+			// Also update the core process ID
+			setCoreProcessId(firstProcessId);
+		} else {
+			// If no processes, create a new one
+			runCommand(command);
+		}
+	};
+
 	// Helper function to generate unique IDs
 	const generateId = (): string => {
 		return Math.random().toString(36).substring(2, 15) +
@@ -606,10 +626,11 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 		socket,
 		runCommand,
 		sendProcessCommand,
+		sendCoreCommand,
 		terminateProcess,
 		processes,
-		isFirstProcess,
-		serverVersion
+		serverVersion,
+		coreProcessId
 	};
 
 	return (

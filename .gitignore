@@ -68,3 +68,4 @@ yarn-error.log
 # Allow specific JS files
 !controller/webpack.config.js
 !eslint.config.js
+.aider*

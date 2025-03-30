@@ -1,11 +1,13 @@
 import * as React from 'react';
-import {useRef, useEffect} from 'react';
+import {useRef, useEffect, useState} from 'react';
 import {ClientMessage} from '../context/SocketContext';
 import MessageList from "@components/message/MessageList";
 import ProcessHeader from "@components/ui/ProcessHeader";
+import {ProcessStatus} from "@types";
 
 interface AgentBoxProps {
     id: string;
+    status: ProcessStatus;
     colors: {
         rgb: string;
         bgColor: string;
@@ -24,6 +26,7 @@ interface AgentBoxWithParentProcess extends AgentBoxProps {
 
 const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
     id,
+    status,
     colors,
     logs,
     agentName,
@@ -33,10 +36,9 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
     onFocusAgent
 }) => {
     const logsRef = useRef<HTMLDivElement>(null);
-
-    // Track click count and timing for single/double click detection
     const clickTimeout = useRef<number | null>(null);
     const clickCount = useRef<number>(0);
+    const [mounted, setMounted] = useState(false);
 
     // Scroll to bottom of logs when they update
     useEffect(() => {
@@ -44,6 +46,11 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
             logsRef.current.scrollTop = logsRef.current.scrollHeight;
         }
     }, [logs, messages]);
+
+    // Effect to handle mount animation
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     // Handle click on agent box
     const handleBoxClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -53,7 +60,7 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
         // Check if clicking on header controls or not an interactive area
         const isClickingControls =
             target.classList.contains('process-status') ||
-            !!target.closest('.process-terminate');
+            !!target.closest('.process-btn');
 
         if (!isClickingControls) {
             // Increment click count
@@ -98,7 +105,7 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
     };
 
     return (
-        <div className="process-box agent-box card border-0 shadow" onClick={handleBoxClick}>
+        <div className={`process-box agent-box card border-0 shadow ${mounted && status !== 'terminated' ? 'mounted' : ''}`} onClick={handleBoxClick}>
             <div className="process-box-bg" style={{backgroundColor: colors.bgColor}}>
                 <ProcessHeader
                     agentName={agentName}

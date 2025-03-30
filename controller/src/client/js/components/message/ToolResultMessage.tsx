@@ -8,22 +8,27 @@ import { getToolResultContent } from '../utils/ProcessBoxUtils';
 
 interface ToolResultMessageProps {
     message: ToolResultMessageType;
+    followsCall: boolean;
 }
 
-const ToolResultMessage: React.FC<ToolResultMessageProps> = ({ message }) => {
+const ToolResultMessage: React.FC<ToolResultMessageProps> = ({ message, followsCall }) => {
+    if(message.toolName.startsWith('Talk_to_')) {
+        // Don't show talk results
+        return null;
+    }
+
     // Get the content and image path from the result
     const { content, imagePath } = getToolResultContent(message);
-    
     return (
         <div className="message-group tool-result-message" key={message.id}>
             <div className="message-bubble tool-result-bubble">
-                <div className="tool-result-header">
+                { !followsCall && <div className="tool-result-header">
                     <span className="tool-result-icon">✓</span>
-                    <span className="tool-result-name">{message.toolName} result</span>
-                </div>
+                    <span className="tool-result-name">{message.toolName.replaceAll('_', ' ')} Complete</span>
+                </div> }
                 <div className="tool-result-content">
                     <pre>{content}</pre>
-                    
+
                     {/* Display image if an image path was found */}
                     {imagePath && (
                         <div className="magi-output-image">

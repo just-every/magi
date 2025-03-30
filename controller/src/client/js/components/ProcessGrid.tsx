@@ -14,6 +14,7 @@ import {
     calculateZoomToFit,
     GRID_PADDING,
 } from './utils/GridUtils';
+import {TRANSITION_EASE, TRANSITION_TIME} from "../constants";
 
 type ProcessGridProps = {
     onProcessSelect?: (processId: string) => void;
@@ -26,7 +27,7 @@ type ProcessGridProps = {
  * - Displaying connections between main processes and sub-agents
  */
 const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
-    const {processes} = useSocket();
+    const {processes, coreProcessId} = useSocket();
     const [focusedProcess, setFocusedProcess] = useState<string | null>(null);
     const [zoomLevel, setZoomLevel] = useState<number>(1);
     const [translateX, setTranslateX] = useState<number>(0);
@@ -35,26 +36,24 @@ const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
     const [startDragX, setStartDragX] = useState<number>(0);
     const [startDragY, setStartDragY] = useState<number>(0);
     const [wasDragged, setWasDragged] = useState<boolean>(false);
-    const [containerSize, setContainerSize] = useState({width: 0, height: 0, headerHeight: 0});
+    const [containerSize, setContainerSize] = useState({width: 0, height: 0});
     const [boxPositions, setBoxPositions] = useState<Map<string, BoxPosition>>(new Map());
+    const [showFirstProcess, setShowFirstProcess] = useState<boolean>(true);
 
     // Refs for DOM elements
     const containerRef = useRef<HTMLDivElement>(null);
     const wrapperRef = useRef<HTMLDivElement>(null);
     const dotBackgroundRef = useRef<HTMLDivElement>(null);
 
+    const isFirstProcess = processes.size === 0;
+
     // Update container size on window resize
     useEffect(() => {
         const updateContainerSize = () => {
             if (containerRef.current) {
-                // Get header height for viewport adjustment
-                const header = document.getElementById('main-header');
-                const headerHeight = header ? header.offsetHeight : 0;
-
                 setContainerSize({
                     width: containerRef.current.clientWidth,
-                    height: (containerRef.current.clientHeight - headerHeight),
-                    headerHeight,
+                    height: containerRef.current.clientHeight,
                 });
             }
         };
@@ -80,8 +79,28 @@ const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
         setBoxPositions(newPositions);
     }, [processes, containerSize]);
 
+    // Update the positions whenever processes change
+    useEffect(() => {
+        if (isFirstProcess && containerSize.height > 0) {
+            setShowFirstProcess(true);
+            setZoomLevel(1);
+            setTranslateX(0);
+            setTranslateY(-(containerSize.height/2));
+            applyTransition(showFirstProcess ? 0 : TRANSITION_TIME);
+        }
+        else if (!isFirstProcess && showFirstProcess) {
+            setShowFirstProcess(false);
+            setZoomLevel(1);
+            setTranslateX(0);
+            setTranslateY(0);
+            applyTransition();
+        }
+
+    }, [isFirstProcess, containerSize]);
+
     // Auto-zoom to fit all processes when processes change
     useEffect(() => {
+        if(containerSize.width === 0) return;
         // Don't auto-zoom immediately to avoid rapid changes
         const timer = setTimeout(() => {
             zoomToFit();
@@ -198,10 +217,10 @@ const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
     };
 
     // Apply smooth transition to transform
-    const applyTransition = (duration: number = 600) => {
+    const applyTransition = (duration: number = TRANSITION_TIME) => {
         if (wrapperRef.current && dotBackgroundRef.current) {
-            wrapperRef.current.style.transition = `transform ${duration}ms cubic-bezier(0.65, 0, 0.35, 1)`;
-            dotBackgroundRef.current.style.transition = `transform ${duration}ms cubic-bezier(0.65, 0, 0.35, 1)`;
+            wrapperRef.current.style.transition = `transform ${duration}ms ${TRANSITION_EASE}`;
+            dotBackgroundRef.current.style.transition = `transform ${duration}ms ${TRANSITION_EASE}`;
 
             // Reset transition after animation completes
             setTimeout(() => {
@@ -279,25 +298,33 @@ const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
             const position = boxPositions.get(id);
             if (!position) continue;
 
+            const isCoreProcess = process.id === coreProcessId;
+
             // Style for main process box
             const style = {
                 width: `${position.width}px`,
                 height: `${position.height}px`,
                 left: `${position.x}px`,
                 top: `${position.y}px`,
-                opacity: process.status === 'terminated' ? '0.2' : '1',
-                transition: 'left 0.3s ease-in-out, top 0.3s ease-in-out',
+                opacity: '1',
+                transition: `left ${TRANSITION_TIME}ms ${TRANSITION_EASE}, top ${TRANSITION_TIME}ms ${TRANSITION_EASE}`,
                 transform: `scale(${position.scale})`,
             };
 
+            const colors = isCoreProcess ? {
+                rgb: `0 0 0`,
+                bgColor: `rgba(255 255 255)`,
+                textColor: `rgba(0 0 0 / 0.9)`,
+            } : process.colors;
+
             // Add the process box
             processElements.push(
-                <div key={id} style={style} className="process-wrapper">
+                <div key={id} style={style} className={"process-wrapper"+ (isCoreProcess ? ' core-process' : '')}>
                     <ProcessBox
                         id={id}
                         command={process.command}
                         status={process.status}
-                        colors={process.colors}
+                        colors={colors}
                         logs={process.logs}
                         focused={focusedProcess === id}
                         onFocus={focusOnProcess}
@@ -319,7 +346,7 @@ const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
                         height: `${agentPosition.height}px`,
                         left: `${agentPosition.x}px`,
                         top: `${agentPosition.y}px`,
-                        opacity: process.status === 'terminated' ? '0.2' : '1',
+                        opacity: '1',
                         transition: 'left 0.3s ease-in-out, top 0.3s ease-in-out',
                         transform: `scale(${agentPosition.scale})`,
                     };
@@ -329,6 +356,7 @@ const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
                         <div key={workerId} style={agentStyle} className="agent-wrapper">
                             <AgentBox
                                 id={workerId}
+                                status={process.status}
                                 colors={process.colors}
                                 logs={process.logs}
                                 agentName={agent.name || workerId}
@@ -409,7 +437,7 @@ const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
                 </div>
 
                 {/* Instructions for navigation */}
-                <div className="zoom-hint" style={{opacity: processes.size > 0 ? '1' : '0'}}>
+                <div className={"zoom-hint"+(processes.size > 0 ? ' show' : '')}>
                     <div><span className="zoom-hint-icon">👆</span> Click to focus on a process</div>
                     <div><span className="zoom-hint-icon">👋</span> Drag to pan view</div>
                     <div>

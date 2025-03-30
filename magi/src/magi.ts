@@ -101,7 +101,7 @@ export async function monologueLoop(
 			}
 		}
 	}
-	while (agentType === 'overseer' && !comm.isClosed());
+	while (agentType === 'code' && !comm.isClosed());
 }
 
 /**

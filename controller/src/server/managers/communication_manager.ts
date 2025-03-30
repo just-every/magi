@@ -315,7 +315,7 @@ export class CommunicationManager {
 	/**
 	 * Send a command to a specific container
 	 */
-	async sendCommand(processId: string, command: string, args?: any): Promise<boolean> {
+	async sendCommand(processId: string, command: string, args?: any, sourceId?: string): Promise<boolean> {
 		const connection = this.connections.get(processId);
 
 		if (!connection) {
@@ -327,7 +327,11 @@ export class CommunicationManager {
 			const commandMessage: CommandMessage = {
 				type: 'command',
 				command,
-				args
+				args: {
+					...args,
+					// Include the source process ID if provided
+					sourceProcessId: sourceId
+				}
 			};
 
 			connection.send(JSON.stringify(commandMessage));

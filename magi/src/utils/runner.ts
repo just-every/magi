@@ -36,9 +36,6 @@ export class Runner {
 		// Get our selected model for this run
 		let selectedModel = agent.model || getModelFromClass(agent.modelClass || 'standard');
 
-		// Get the model provider based on the selected model
-		const provider = getModelProvider(selectedModel);
-
 		// Prepare messages with conversation history and the current input
 		let messages: ResponseInput = [
 			// Add a system message with instructions
@@ -63,6 +60,9 @@ export class Runner {
 				agent: agent.export(),
 				input,
 			};
+
+			// Get the model provider based on the selected model
+			const provider = getModelProvider(selectedModel);
 
 			// Create a streaming generator
 			const stream = provider.createResponseStream(

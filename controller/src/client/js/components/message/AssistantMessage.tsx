@@ -10,11 +10,12 @@ import { getDeltaMessageContent } from '../utils/ProcessBoxUtils';
 interface AssistantMessageProps {
     message: ClientMessage;
     rgb: string;
+    isLast: boolean;
 }
 
-const AssistantMessage: React.FC<AssistantMessageProps> = ({ message, rgb }) => {
+const AssistantMessage: React.FC<AssistantMessageProps> = ({ message, rgb, isLast }) => {
     // Add a special class for delta messages (streaming)
-    const bubbleClass = message.isDelta
+    const bubbleClass = message.isDelta && isLast
         ? "message-bubble assistant-bubble streaming"
         : "message-bubble assistant-bubble";
 

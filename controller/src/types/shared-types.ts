@@ -153,6 +153,7 @@ export interface ProcessUpdateEvent {
 export interface ProcessCommandEvent {
 	processId: string;    // Target process ID
 	command: string;      // Command to send
+	sourceProcessId?: string; // Optional source process ID for process-to-process communication
 }
 
 // Event for server information sent to clients

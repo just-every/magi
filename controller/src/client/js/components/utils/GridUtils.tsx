@@ -3,6 +3,7 @@
  */
 import { ProcessData } from '../../context/SocketContext';
 import { BoxPosition } from '@types';
+import {X_OFFSET, Y_OFFSET} from "../../constants";
 
 export const GRID_PADDING = 40; // Padding between grid cells
 const SQUARE_MAX_WIDTH = 1000;
@@ -23,7 +24,7 @@ const MAX_ZOOM = 2;   // Maximum allowed zoom level
  */
 export const calculateBoxPositions = (
     processes: Map<string, ProcessData>,
-    containerSize: {width: number, height: number, headerHeight: number},
+    containerSize: {width: number, height: number},
     existingPositions: Map<string, BoxPosition>,
 ): Map<string, BoxPosition> => {
     if (processes.size === 0) return new Map<string, BoxPosition>();
@@ -40,15 +41,18 @@ export const calculateBoxPositions = (
     }
     const gridCache = calculateBoxPositions.gridCache;
 
+    const containerWidth = X_OFFSET + containerSize.width;
+    const containerHeight = Y_OFFSET + containerSize.height;
+
     // Calculate dimensions
-    const squareWidth = Math.min(SQUARE_MAX_WIDTH, Math.max(SQUARE_MIN_WIDTH, Math.round(containerSize.width * 0.8)));
-    const squareHeight = Math.min(SQUARE_MAX_HEIGHT, Math.max(SQUARE_MIN_HEIGHT, Math.round(squareWidth * (containerSize.height / containerSize.width))));
+    const squareWidth = Math.min(SQUARE_MAX_WIDTH, Math.max(SQUARE_MIN_WIDTH, Math.round(containerWidth * 0.8)));
+    const squareHeight = Math.min(SQUARE_MAX_HEIGHT, (containerHeight * 0.7), Math.max(SQUARE_MIN_HEIGHT, Math.round(squareWidth * Math.max(1, (containerHeight / containerWidth)))));
     const workerWidth = squareWidth - (GRID_PADDING/2);
     const workerHeight = squareHeight - (GRID_PADDING/2);
 
     // Try to position the initial box at the center of the container
-    const originX = (containerSize.width / 2) - (squareWidth/2);
-    const originY = containerSize.headerHeight + (containerSize.height / 2) - (squareHeight/2);
+    const originX = X_OFFSET + (containerSize.width / 2) - (squareWidth/2);
+    const originY = Y_OFFSET + (containerSize.height / 2) - (squareHeight/2);
 
     // Create a map to store the final positions
     const positionsMap = new Map<string, BoxPosition>(existingPositions);
@@ -331,12 +335,12 @@ export const calculateBoundingBox = (positions: Map<string, BoxPosition>): {
  * Calculate zoom and translation to fit items in the viewport.
  * Assumes the rendering component correctly uses position.scale for visual size.
  * @param boxPositions Boxes to include in zoom
- * @param containerSize Dimensions of the container { width, height, headerHeight }
+ * @param containerSize Dimensions of the container { width, height }
  * @returns Object with zoom, translateX, translateY
  */
 export const calculateZoomToFit = (
     boxPositions: Map<string, BoxPosition>,
-    containerSize: {width: number, height: number, headerHeight: number},
+    containerSize: {width: number, height: number},
 ): {
     zoom: number,
     translateX: number,
@@ -360,8 +364,8 @@ export const calculateZoomToFit = (
     }
 
     // --- Calculate Viewport Center ---
-    const viewportCenterX = containerSize.width / 2;
-    const viewportCenterY = containerSize.headerHeight + (containerSize.height / 2);
+    const viewportCenterX = X_OFFSET + containerSize.width / 2;
+    const viewportCenterY = Y_OFFSET + (containerSize.height / 2);
 
     let zoom: number;
     let translateX: number;

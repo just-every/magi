@@ -19,7 +19,10 @@ export interface MagiMessage {
 export interface CommandMessage {
 	type: 'command' | 'connect';
 	command: string;
-	args?: any;
+	args?: {
+		sourceProcessId?: string; // Added for process-to-process communication
+		[key: string]: any;
+	};
 }
 
 export class CommunicationManager {

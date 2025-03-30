@@ -2,7 +2,7 @@
  * ProcessBox Component
  * Renders a process card with messages, status, and input controls
  */
-import * RReact from 'react';
+import React from 'react';
 import { useRef, useEffect, useState } from 'react';
 import { ProcessStatus } from '@types';
 import { useSocket } from '../context/SocketContext';
@@ -35,10 +35,11 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
     logs,
     focused,
     onFocus,
-    onViewLogs
+   onViewLogs
 }) => {
     const { terminateProcess, processes } = useSocket();
     const logsRef = useRef<HTMLDivElement>(null);
+    const [mounted, setMounted] = useState(false);
 
     // Get data directly from the socket context
     const process = processes.get(id);
@@ -52,6 +53,11 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
             logsRef.current.scrollTop = logsRef.current.scrollHeight;
         }
     }, [logs, messages]);
+
+    // Effect to handle mount animation
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     // Handle terminate button click
     const handleTerminate = () => {
@@ -101,7 +107,7 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
     };
 
     return (
-        <div className={`process-box card border-0 shadow ${focused ? 'focused' : ''}`}
+        <div className={`process-box card border-0 shadow ${focused ? 'focused' : ''} ${mounted && status !== 'terminated' ? 'mounted' : ''}`}
             onClick={handleBoxClick}>
             <div className="process-box-bg" style={{backgroundColor: colors.bgColor}}>
                 <ProcessHeader

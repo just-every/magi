@@ -14,6 +14,7 @@ import {v4 as uuidv4} from 'uuid';
 import {addHistory, addMonologue} from '../utils/history.js';
 import {getFileTools} from '../utils/file_utils.js';
 import {MODEL_CLASSES} from '../model_providers/model_data.js';
+import {getCommunicationManager} from '../utils/communication.js';
 
 const AVERAGE_READING_SPEED_WPM = 238; // Average reading speed in words per minute
 const MINIMUM_READING_MS = 3000; // 3 seconds
@@ -21,12 +22,118 @@ const MINIMUM_READING_MS = 3000; // 3 seconds
 const validThoughtLevels: string[] = ['deep', 'standard', 'light'];
 let thoughtLevel: string = 'standard';
 
+// Track active processes for process-to-process communication
+interface ProcessInfo {
+    id: string;
+    name: string;
+    status: 'active' | 'terminated';
+    description?: string;
+}
+
+const activeProcesses: Map<string, ProcessInfo> = new Map();
+
 async function* sendEvent(type: 'talk_complete' | 'message_complete', message: string): AsyncGenerator<StreamingEvent>  {
 	yield {
 		type,
 		content: message,
 		message_id: uuidv4()
 	};
+}
+
+/**
+ * Send a message to a specific process
+ *
+ * @param processId The ID of the process to send the message to
+ * @param message The message to send
+ * @returns Success message or error
+ */
+function sendMessageToProcess(processId: string, message: string): string {
+    const process = activeProcesses.get(processId);
+
+    if (!process) {
+        return `Error: Process with ID ${processId} not found.`;
+    }
+
+    if (process.status === 'terminated') {
+        return `Error: Process ${process.name} (${processId}) has been terminated.`;
+    }
+
+    try {
+        // Get the communication manager
+        const comm = getCommunicationManager();
+
+        // Send a command event to the controller that will route it to the target process
+        comm.send({
+            type: 'command_start',
+            command: message
+        });
+
+        return `Message sent to process ${process.name} (${processId})`;
+    } catch (error) {
+        return `Error sending message to process ${processId}: ${error}`;
+    }
+}
+
+/**
+ * List all active processes
+ *
+ * @returns A formatted string with process information
+ */
+function listProcesses(): string {
+    if (activeProcesses.size === 0) {
+        return 'No active processes.';
+    }
+
+    let result = 'Active processes:\n';
+
+    for (const [id, process] of activeProcesses.entries()) {
+        result += `- ${process.name} (${id}): ${process.status}`;
+        if (process.description) {
+            result += ` - ${process.description}`;
+        }
+        result += '\n';
+    }
+
+    return result;
+}
+
+/**
+ * Add a process to the active processes list
+ *
+ * @param id Process ID
+ * @param name Process name
+ * @param description Optional description
+ * @returns Success message
+ */
+function addProcess(id: string, name: string, description?: string): string {
+    activeProcesses.set(id, {
+        id,
+        name,
+        status: 'active',
+        description
+    });
+
+    return `Process ${name} (${id}) added to active processes.`;
+}
+
+/**
+ * Update a process status
+ *
+ * @param id Process ID
+ * @param status New status
+ * @returns Success message or error
+ */
+function updateProcessStatus(id: string, status: 'active' | 'terminated'): string {
+    const process = activeProcesses.get(id);
+
+    if (!process) {
+        return `Error: Process with ID ${id} not found.`;
+    }
+
+    process.status = status;
+    activeProcesses.set(id, process);
+
+    return `Updated status of process ${process.name} (${id}) to ${status}.`;
 }
 
 /**
@@ -38,6 +145,11 @@ export function createOverseerAgent(): Agent {
 	const person = process.env.YOUR_NAME || 'Human';
 	const talkToolName = `Talk to ${person}`.replaceAll(' ', '_');
 
+    // Add own process to active processes
+    const ownProcessId = process.env.PROCESS_ID || '';
+    if (ownProcessId) {
+        addProcess(ownProcessId, 'Core', 'Main overseer process');
+    }
 
 	/**
 	 * Sets a new thought level for future thoughts
@@ -135,7 +247,7 @@ export function createOverseerAgent(): Agent {
 		}
 		else if (Math.random() < 0.1) {
 			// Re-focus on something else
-			messages = addTemporaryThought(messages, 'I’m going to let my mind wander...');
+			messages = addTemporaryThought(messages, "I'm going to let my mind wander...");
 		}
 
 		return messages;
@@ -172,6 +284,8 @@ Your two fundamental goals are to assist ${person} and improve yourself.
 Your thought process uses different AI LLM models each time it runs to give you different perspectives on the same topic. It also means that you may disagree with yourself at times, and that's okay. You can use this to your advantage by exploring different ideas and perspectives. You can adjust your Thought Level to change to types of models being used to generate your thoughts.
 
 You are your own user. Your messages will be sent back to you to continue your thoughts. You should output your thoughts. Interact with ${person} and the world with your tools. If you have nothing to do, try to come up with a structured process to move forward. Output that process. If your recent thoughts contain a structure process, continue to work on it unless something more important is in your context.
+
+You can also manage other running processes and send messages to them. Use the process management tools to list active processes, add new ones to your tracking, update their status, and send messages to them.
 `,
 		tools: [
 			createToolFunction(
@@ -206,6 +320,63 @@ You are your own user. Your messages will be sent back to you to continue your t
 				'A description of what work has been completed',
 				'Godel Machine'
 			),
+            // Process management functions
+            createToolFunction(
+                listProcesses,
+                'List all active processes tracked by the system.',
+                {},
+                'A formatted list of all active processes'
+            ),
+            createToolFunction(
+                addProcess,
+                'Add a process to the active processes list.',
+                {
+                    'id': {
+                        description: 'The unique ID of the process to add',
+                        type: 'string'
+                    },
+                    'name': {
+                        description: 'A descriptive name for the process',
+                        type: 'string'
+                    },
+                    'description': {
+                        description: 'Optional description of what the process does',
+                        type: 'string'
+                    }
+                },
+                'Success message'
+            ),
+            createToolFunction(
+                updateProcessStatus,
+                'Update the status of a process.',
+                {
+                    'id': {
+                        description: 'The ID of the process to update',
+                        type: 'string'
+                    },
+                    'status': {
+                        description: 'The new status of the process',
+                        enum: ['active', 'terminated'],
+                        type: 'string'
+                    }
+                },
+                'Success message or error'
+            ),
+            createToolFunction(
+                sendMessageToProcess,
+                'Send a message to a specific process.',
+                {
+                    'processId': {
+                        description: 'The ID of the process to send the message to',
+                        type: 'string'
+                    },
+                    'message': {
+                        description: 'The message to send to the process',
+                        type: 'string'
+                    }
+                },
+                'Success message or error'
+            )
 		],
 		workers: [
 			createSupervisorAgent,
@@ -222,7 +393,7 @@ You are your own user. Your messages will be sent back to you to continue your t
 
 			const modelClass = (thoughtLevel === 'deep' ? 'reasoning' : (thoughtLevel === 'light' ? 'mini' : 'standard'));
 
-			const models: string[] = [...MODEL_CLASSES[modelClass].models];
+			let models: string[] = [...MODEL_CLASSES[modelClass].models];
 			if(models.length > 0) {
 				// Pick a random model from this level
 				models = models.sort(() => Math.random() - 0.5);
