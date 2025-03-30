@@ -64,10 +64,13 @@ export class Runner {
 			// Get the model provider based on the selected model
 			const provider = getModelProvider(selectedModel);
 
+			// Ensure correct message sequence before sending to the provider
+			const sequencedMessages = this.ensureToolResultSequence(messages);
+
 			// Create a streaming generator
 			const stream = provider.createResponseStream(
 				selectedModel,
-				messages,
+				sequencedMessages, // Use the sequenced messages
 				agent
 			);
 
@@ -124,10 +127,13 @@ export class Runner {
 						agent: agent.export()
 					};
 
+					// Ensure correct message sequence before sending to the alternative provider
+					const sequencedFallbackMessages = this.ensureToolResultSequence(messages);
+
 					// Try with the alternative model
 					const alternativeStream = alternativeProvider.createResponseStream(
 						alternativeModel,
-						messages,
+						sequencedFallbackMessages, // Use the sequenced messages
 						agent,
 					);
 
@@ -383,11 +389,10 @@ export class Runner {
 				}
 
 				// Use the input array as our messages
-				// Use the collected items, but ensure correct sequence for API
-				toolCallMessages = this.ensureToolResultSequence(messageItems);
+				toolCallMessages = messageItems; // Use the collected items directly
 
 				// Run the agent again with the tool results
-				console.log('[Runner] Running agent with reordered tool call results');
+				console.log('[Runner] Running agent with tool call results');
 
 				const followUpResponse = await this.runStreamedWithTools(
 					agent,
