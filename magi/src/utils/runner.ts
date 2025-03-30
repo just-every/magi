@@ -617,13 +617,19 @@ export class Runner {
 
 		// Find the start index of the last block of consecutive 'function_call' messages
 		for (let i = messages.length - 1; i >= 0; i--) {
-			if (messages[i].type === 'function_call') {
+			const currentMsg = messages[i];
+			if (currentMsg.type === 'function_call') {
 				// Found a tool call, now find the start of this block
 				lastToolCallBlockStartIndex = i;
-				toolCallIdsInBlock.push(messages[i].call_id);
-				while (lastToolCallBlockStartIndex > 0 && messages[lastToolCallBlockStartIndex - 1].type === 'function_call') {
-					lastToolCallBlockStartIndex--;
-					toolCallIdsInBlock.push(messages[lastToolCallBlockStartIndex].call_id);
+				toolCallIdsInBlock.push(currentMsg.call_id); // Safe: type is 'function_call'
+				while (lastToolCallBlockStartIndex > 0) {
+					const prevMsg = messages[lastToolCallBlockStartIndex - 1];
+					if (prevMsg.type === 'function_call') {
+						lastToolCallBlockStartIndex--;
+						toolCallIdsInBlock.push(prevMsg.call_id); // Safe: type is 'function_call'
+					} else {
+						break; // Stop if the previous message is not a function call
+					}
 				}
 				// Reverse IDs to match original order (though order doesn't strictly matter for matching)
 				toolCallIdsInBlock.reverse();
@@ -645,16 +651,23 @@ export class Runner {
 		// Find all corresponding tool results *anywhere* after the tool call block start
 		const toolResultMessages = messages
 			.slice(lastToolCallBlockStartIndex) // Search from the call block onwards
-			.filter(msg => msg.type === 'function_call_output' && toolCallIdsInBlock.includes(msg.call_id));
+			.filter(msg =>
+				msg.type === 'function_call_output' && toolCallIdsInBlock.includes(msg.call_id) // Safe: type checked first
+			);
 
 		// Collect all messages that were *after* the tool call block but *are not* the results we just found
 		const intermediateAndLaterMessages = messages
 			.slice(lastToolCallBlockStartIndex + numToolCallsInBlock) // Messages originally after the block
-			.filter(msg => !(msg.type === 'function_call_output' && toolCallIdsInBlock.includes(msg.call_id))); // Exclude the results
+			.filter(msg =>
+				!(msg.type === 'function_call_output' && toolCallIdsInBlock.includes(msg.call_id)) // Safe: type checked first
+			);
 
 		// Verify we found all results
 		if (toolResultMessages.length !== numToolCallsInBlock) {
-			const foundResultIds = toolResultMessages.map(r => r.call_id);
+			// Map safely by ensuring type before accessing call_id
+			const foundResultIds = toolResultMessages
+				.filter(r => r.type === 'function_call_output') // Redundant check for safety/clarity
+				.map(r => r.call_id);
 			const missingResultIds = toolCallIdsInBlock.filter(id => !foundResultIds.includes(id));
 			console.warn(`[Runner] Mismatch: Found ${toolResultMessages.length} results for ${numToolCallsInBlock} tool calls. Missing results for IDs: ${missingResultIds.join(', ')}`);
 			// Proceeding with potentially incomplete results, API will likely fail.
