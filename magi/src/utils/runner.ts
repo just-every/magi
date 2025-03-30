@@ -645,45 +645,51 @@ export class Runner {
 		const numToolCallsInBlock = toolCallIdsInBlock.length;
 		console.debug(`[Runner] Found last tool call block starting at index ${lastToolCallBlockStartIndex} with ${numToolCallsInBlock} calls (IDs: ${toolCallIdsInBlock.join(', ')})`);
 
+		const lastToolCallBlockEndIndex = lastToolCallBlockStartIndex + numToolCallsInBlock - 1;
+
+		// Slice the array into three parts: before the calls, the calls themselves, and everything after.
 		const messagesBeforeBlock = messages.slice(0, lastToolCallBlockStartIndex);
-		const toolCallBlock = messages.slice(lastToolCallBlockStartIndex, lastToolCallBlockStartIndex + numToolCallsInBlock);
+		const toolCallBlock = messages.slice(lastToolCallBlockStartIndex, lastToolCallBlockEndIndex + 1);
+		const messagesOriginallyAfterBlock = messages.slice(lastToolCallBlockEndIndex + 1);
 
-		// Find all corresponding tool results *anywhere* after the tool call block start
-		const toolResultMessages = messages
-			.slice(lastToolCallBlockStartIndex) // Search from the call block onwards
-			.filter(msg =>
-				msg.type === 'function_call_output' && toolCallIdsInBlock.includes(msg.call_id) // Safe: type checked first
-			);
+		// Separate the messagesOriginallyAfterBlock into the results we need and the rest
+		const foundResults: ResponseInput = [];
+		const otherMessagesAfterBlock: ResponseInput = [];
+		const foundResultIds = new Set<string>();
 
-		// Collect all messages that were *after* the tool call block but *are not* the results we just found
-		const intermediateAndLaterMessages = messages
-			.slice(lastToolCallBlockStartIndex + numToolCallsInBlock) // Messages originally after the block
-			.filter(msg =>
-				!(msg.type === 'function_call_output' && toolCallIdsInBlock.includes(msg.call_id)) // Safe: type checked first
-			);
-
-		// Verify we found all results
-		if (toolResultMessages.length !== numToolCallsInBlock) {
-			// Map safely by ensuring type before accessing call_id
-			const foundResultIds = toolResultMessages
-				.filter(r => r.type === 'function_call_output') // Redundant check for safety/clarity
-				.map(r => r.call_id);
-			const missingResultIds = toolCallIdsInBlock.filter(id => !foundResultIds.includes(id));
-			console.warn(`[Runner] Mismatch: Found ${toolResultMessages.length} results for ${numToolCallsInBlock} tool calls. Missing results for IDs: ${missingResultIds.join(', ')}`);
-			// Proceeding with potentially incomplete results, API will likely fail.
-		} else {
-			console.debug(`[Runner] Found ${toolResultMessages.length} corresponding tool results.`);
+		for (const msg of messagesOriginallyAfterBlock) {
+			if (msg.type === 'function_call_output' && toolCallIdsInBlock.includes(msg.call_id)) {
+				// This is a result corresponding to one of our calls
+				if (!foundResultIds.has(msg.call_id)) { // Avoid adding duplicate results if they somehow exist
+					foundResults.push(msg);
+					foundResultIds.add(msg.call_id);
+				} else {
+					console.warn(`[Runner] Duplicate tool result found for call_id ${msg.call_id}. Skipping.`);
+				}
+			} else {
+				// This message is not one of the results we're looking for
+				otherMessagesAfterBlock.push(msg);
+			}
 		}
 
-		// Assemble the reordered list: Before Calls + Calls + Results + Intermediate/Later Messages
+		// Verify we found all results
+		if (foundResults.length !== numToolCallsInBlock) {
+			const missingResultIds = toolCallIdsInBlock.filter(id => !foundResultIds.has(id));
+			console.warn(`[Runner] Mismatch: Found ${foundResults.length} results for ${numToolCallsInBlock} tool calls. Missing results for IDs: ${missingResultIds.join(', ')}`);
+			// Proceeding with potentially incomplete results, API will likely fail.
+		} else {
+			console.debug(`[Runner] Found ${foundResults.length} corresponding tool results.`);
+		}
+
+		// Assemble the reordered list: Before Calls + Calls + Found Results + Other Messages After
 		const finalMessages = [
 			...messagesBeforeBlock,
 			...toolCallBlock,
-			...toolResultMessages,
-			...intermediateAndLaterMessages
+			...foundResults, // Place results immediately after calls
+			...otherMessagesAfterBlock // Place the rest afterwards
 		];
 
-		console.debug("[Runner] Messages reordered for API call sequence compliance.");
+		console.debug("[Runner] Messages potentially reordered for API call sequence compliance.");
 		// Optional: Log the final sequence for debugging
 		// console.log("[Runner] Reordered Messages:", JSON.stringify(finalMessages.map(m => ({ type: m.type, role: m.role, call_id: m.call_id, name: m.name })), null, 2));
 
