@@ -23,12 +23,13 @@ const ToolCallMessage: React.FC<ToolCallMessageProps> = ({ message, rgb, complet
             </div>
         );
     }
-
     return (
         <div className="message-group tool-message" key={message.id}>
             <div className="message-bubble tool-bubble">
                 <div className="tool-call-header">
-                    <span className="tool-name">{(complete ? "": "Running ")+message.toolName.replaceAll('_', ' ')+(complete ? " Complete" : "...")}</span>
+                    <span className="tool-name">
+                        {(complete ? "": "Running ")+message.toolName.replaceAll('_', ' ')+(message.agent?.model ? ` (${message.agent.model})` : '')+(complete ? " Complete" : "...")}
+                    </span>
                 </div>
                 {message.command && (
                     <div className="tool-call-command message-bubble assistant-bubble" style={{color: `rgba(${rgb} / 1)`}}>

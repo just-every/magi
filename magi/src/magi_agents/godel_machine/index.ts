@@ -69,8 +69,8 @@ export async function runGodelMachine(
 	// Run the sequence starting with the planning stage
 	return await Runner.runSequential(
 		godelMachine,
-		input, // Initial input is the issue description
 		GodelStage.PLANNING, // Start with the planning stage
+		input, // Initial input is the issue description
 		3, // Max retries per stage
 		10 // Max total retries
 	);

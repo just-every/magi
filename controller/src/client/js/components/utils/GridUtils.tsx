@@ -3,7 +3,7 @@
  */
 import { ProcessData } from '../../context/SocketContext';
 import { BoxPosition } from '@types';
-import {X_OFFSET, Y_OFFSET} from "../../constants";
+import {X_OFFSET, Y_OFFSET} from "../../utils/constants";
 
 export const GRID_PADDING = 40; // Padding between grid cells
 const SQUARE_MAX_WIDTH = 1000;

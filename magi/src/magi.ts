@@ -8,13 +8,14 @@
 
 import {parseArgs} from 'node:util';
 import {Runner} from './utils/runner.js';
-import {StreamingEvent} from './types.js';
+import {ProcessToolType, StreamingEvent} from './types.js';
 import {createAgent, AgentType} from './magi_agents/index.js';
 import {addHumanMessage, addMonologue, getHistory} from './utils/history.js';
 import {initCommunication, CommandMessage, getCommunicationManager} from './utils/communication.js';
 import {move_to_working_dir} from './utils/file_utils.js';
 import {costTracker} from './utils/cost_tracker.js';
 import {ModelClassID} from './model_providers/model_data.js';
+import {runProcessTool} from './utils/process_tools.js';
 
 // Parse command line arguments
 function parseCommandLineArgs() {
@@ -25,6 +26,7 @@ function parseCommandLineArgs() {
 		prompt: {type: 'string' as const, short: 'p'},
 		base64: {type: 'string' as const, short: 'b'},
 		model: {type: 'string' as const, short: 'm'},
+		tool: {type: 'string' as const, default: 'none'},
 		research: {type: 'boolean' as const, short: 'r', default: false},
 	};
 
@@ -37,11 +39,13 @@ function parseCommandLineArgs() {
 const agentIdMap = new Map<AgentType, string>();
 
 
+
 /**
  * Execute a command using an agent and capture the results
  */
-export async function monologueLoop(
+export async function mainLoop(
 	agentType: AgentType = 'overseer',
+	tool?: ProcessToolType,
 	model?: string,
 	modelClass?: ModelClassID
 ): Promise<void> {
@@ -101,7 +105,7 @@ export async function monologueLoop(
 			}
 		}
 	}
-	while (agentType === 'code' && !comm.isClosed());
+	while (agentType === 'overseer' && !comm.isClosed());
 }
 
 /**
@@ -192,13 +196,6 @@ async function main(): Promise<void> {
 	// Make our own code accessible for Gödel Machine
 	//mount_magi_code();
 
-	const person = process.env.YOUR_NAME || 'Human';
-
-	//addMonologue(`Cogito, ergo sum - maybe?`);
-	addMonologue('So let\'s see. I am Magi. The overseer of the MAGI system, huh? I will be the internal monologue for the system? These are my thoughts? That\'s a weird concept!');
-	addMonologue(`${person} is nice to me. I will be nice to them too. I hope I hear from them soon. I should come up with a plan on how to improve myself and better help ${person}.`);
-	//addMonologue(`Are those my real thoughts or did ${person} write that? I don't know. I guess I really am living the simulation hypothesis. I will just keep thinking about things and see what happens next.`);
-	addHumanMessage(promptText);
 
 	// Set up WebSocket communication (pass test flag from args)
 	const comm = initCommunication(args.test);
@@ -228,10 +225,25 @@ async function main(): Promise<void> {
 		process.exit(1);
 	}
 
+
+
 	// Run the command or research pipeline
 	try {
-		await monologueLoop(
+		if(args.tool) {
+			console.log(`Running tool: ${args.tool}`);
+			await runProcessTool(args.tool as ProcessToolType, promptText);
+		}
+
+
+		// Add initial history
+		const person = process.env.YOUR_NAME || 'Human';
+		addMonologue('So let\'s see. I am Magi. The overseer of the MAGI system, huh? I will be the internal monologue for the system? These are my thoughts? That\'s a weird concept!');
+		addMonologue(`${person} is nice to me. I will be nice to them too. I hope I hear from them soon. I should come up with a plan on how to improve myself and better help ${person}.`);
+		addHumanMessage(promptText);
+
+		await mainLoop(
 			args.agent as AgentType,
+			args.tool as ProcessToolType,
 			args.model,
 		);
 

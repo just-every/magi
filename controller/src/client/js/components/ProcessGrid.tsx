@@ -14,7 +14,7 @@ import {
     calculateZoomToFit,
     GRID_PADDING,
 } from './utils/GridUtils';
-import {TRANSITION_EASE, TRANSITION_TIME} from "../constants";
+import {TRANSITION_EASE, TRANSITION_TIME} from "../utils/constants";
 
 type ProcessGridProps = {
     onProcessSelect?: (processId: string) => void;

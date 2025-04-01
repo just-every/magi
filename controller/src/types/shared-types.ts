@@ -123,6 +123,7 @@ export type ProcessStatus = 'running' | 'completed' | 'failed' | 'terminated' | 
 export interface ProcessCreateEvent {
 	id: string;           // Process ID
 	command: string;      // Command that created the process
+	name: string;
 	status: ProcessStatus;       // Initial status (usually 'running')
 	colors: {
 		rgb: string;		// Primary color (rgb)

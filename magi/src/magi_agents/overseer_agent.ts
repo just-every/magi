@@ -5,19 +5,20 @@
  */
 
 import {Agent} from '../utils/agent.js';
-import {runGodelMachine} from './godel_machine/index.js';
-import {runResearchEngine} from './research_engine/index.js';
+//import {runGodelMachine} from './godel_machine/index.js';
+//import {runResearchEngine} from './research_engine/index.js';
 import {createToolFunction} from '../utils/tool_call.js';
-import {createSupervisorAgent} from './task_force/supervisor_agent.js';
-import {ResponseInput, StreamingEvent, ToolCall} from '../types.js';
+import {ProcessToolType, ResponseInput, StreamingEvent, ToolCall} from '../types.js';
 import {v4 as uuidv4} from 'uuid';
 import {addHistory, addMonologue} from '../utils/history.js';
 import {getFileTools} from '../utils/file_utils.js';
 import {MODEL_CLASSES} from '../model_providers/model_data.js';
 import {getCommunicationManager} from '../utils/communication.js';
+import {processTracker} from '../utils/process_tracker.js';
 
-const AVERAGE_READING_SPEED_WPM = 238; // Average reading speed in words per minute
-const MINIMUM_READING_MS = 3000; // 3 seconds
+const AVERAGE_READING_SPEED_WPM = 180; // Average reading speed in words per minute
+const MIN_READING_SEC = 2;
+const MAX_READING_MS = 10;
 
 const validThoughtLevels: string[] = ['deep', 'standard', 'light'];
 let thoughtLevel: string = 'standard';
@@ -47,7 +48,7 @@ async function* sendEvent(type: 'talk_complete' | 'message_complete', message: s
  * @param message The message to send
  * @returns Success message or error
  */
-function sendMessageToProcess(processId: string, message: string): string {
+function send_command(processId: string, command: string): string {
     const process = activeProcesses.get(processId);
 
     if (!process) {
@@ -65,7 +66,8 @@ function sendMessageToProcess(processId: string, message: string): string {
         // Send a command event to the controller that will route it to the target process
         comm.send({
             type: 'command_start',
-            command: message
+			processId,
+            command,
         });
 
         return `Message sent to process ${process.name} (${processId})`;
@@ -74,66 +76,71 @@ function sendMessageToProcess(processId: string, message: string): string {
     }
 }
 
-/**
- * List all active processes
- *
- * @returns A formatted string with process information
- */
-function listProcesses(): string {
-    if (activeProcesses.size === 0) {
-        return 'No active processes.';
-    }
-
-    let result = 'Active processes:\n';
-
-    for (const [id, process] of activeProcesses.entries()) {
-        result += `- ${process.name} (${id}): ${process.status}`;
-        if (process.description) {
-            result += ` - ${process.description}`;
-        }
-        result += '\n';
-    }
-
-    return result;
-}
 
 /**
- * Add a process to the active processes list
+ * Create a new process.
  *
- * @param id Process ID
- * @param name Process name
- * @param description Optional description
+ * @param tool ProcessToolType The process to create
+ * @param name string The name of the process
+ * @param command string The command to start the process with
  * @returns Success message
  */
-function addProcess(id: string, name: string, description?: string): string {
-    activeProcesses.set(id, {
-        id,
-        name,
-        status: 'active',
-        description
-    });
+function startProcess(tool: ProcessToolType, name: string, command: string): string {
+    const comm = getCommunicationManager();
 
-    return `Process ${name} (${id}) added to active processes.`;
+	const processId = `AI-${Math.random().toString(36).substring(2, 8)}`;
+
+	// Save a record of the process
+	const agentProcess = processTracker.addProcess(processId, {
+		processId,
+		started: new Date(),
+		status: 'started',
+		tool,
+		name,
+		command,
+	});
+
+	// Send start event to the controller
+	comm.send({
+		type: 'process_start',
+		agentProcess,
+	});
+
+    return `Process ID [${processId}] ${tool} (${name}) started at ${new Date().toISOString()}.`;
 }
 
+
 /**
- * Update a process status
+ * Sets a new thought level for future thoughts
  *
- * @param id Process ID
- * @param status New status
- * @returns Success message or error
+ * @param level The message content to process.
+ * @returns A promise that resolves with a success message after the calculated delay.
  */
-function updateProcessStatus(id: string, status: 'active' | 'terminated'): string {
-    const process = activeProcesses.get(id);
+function next_thought_level(level: string): string {
+	if(validThoughtLevels.includes(level)) {
+		thoughtLevel = level;
 
-    if (!process) {
-        return `Error: Process with ID ${id} not found.`;
-    }
+		return `Successfully set Thought Level to '${thoughtLevel}' at ${new Date().toISOString()}`; // Return the success message
+	}
 
-    process.status = status;
-    activeProcesses.set(id, process);
+	return `Invalid thought level '${level}'. Valid levels are: ${validThoughtLevels.join(', ')}`;
+}
 
-    return `Updated status of process ${process.name} (${id}) to ${status}.`;
+function addSystemStatus(messages: ResponseInput):ResponseInput {
+	messages.push({
+		role: 'developer',
+		content: `=== System Status ===
+
+Current Time: ${new Date().toISOString()}
+
+Thought Level: ${thoughtLevel}
+
+Active agents:
+${processTracker.listActive()}
+`,
+	});
+
+	return messages;
 }
 
 /**
@@ -144,28 +151,6 @@ export function createOverseerAgent(): Agent {
 	const aiName = process.env.AI_NAME || 'Magi';
 	const person = process.env.YOUR_NAME || 'Human';
 	const talkToolName = `Talk to ${person}`.replaceAll(' ', '_');
-
-    // Add own process to active processes
-    const ownProcessId = process.env.PROCESS_ID || '';
-    if (ownProcessId) {
-        addProcess(ownProcessId, 'Core', 'Main overseer process');
-    }
-
-	/**
-	 * Sets a new thought level for future thoughts
-	 *
-	 * @param level The message content to process.
-	 * @returns A promise that resolves with a success message after the calculated delay.
-	 */
-	function set_thought_level(level: string): string {
-		if(validThoughtLevels.includes(level)) {
-			thoughtLevel = level;
-
-			return `Successfully set Thought Level to '${thoughtLevel}'`; // Return the success message
-		}
-
-		return `Invalid thought level '${level}'. Valid levels are: ${validThoughtLevels.join(', ')}`;
-	}
 
 	/**
 	 * Simulates talking by introducing a delay based on reading time before completing.
@@ -182,22 +167,23 @@ export function createOverseerAgent(): Agent {
 		// Simulates speaking so we don't talk over ourselves
 		const words = message.trim().split(/\s+/).filter(word => word.length > 0);
 		const wordCount = words.length;
-		let estimatedReadingTimeMs = 0;
+		let readingTimeSeconds = 0;
 		if (wordCount > 0) {
-			const readingTimeMinutes = wordCount / AVERAGE_READING_SPEED_WPM;
-			estimatedReadingTimeMs = readingTimeMinutes * 60 * 1000; // Convert minutes to milliseconds
+			readingTimeSeconds = (wordCount / AVERAGE_READING_SPEED_WPM) / 60;
 		}
-		await new Promise(resolve => setTimeout(resolve, Math.max(estimatedReadingTimeMs, MINIMUM_READING_MS)));
+		readingTimeSeconds = Math.max(MIN_READING_SEC, Math.min(MAX_READING_MS, readingTimeSeconds));
+		const estimatedReadingTimeMs = readingTimeSeconds * 60 * 60 * 1000; // Convert minutes to milliseconds
+		await new Promise(resolve => setTimeout(resolve, estimatedReadingTimeMs));
 
 		addMonologue(`I replied to ${person}. Let's wait for their response and think about things.`);
 
-		return `Sent successfully to ${person}`; // Return the success message
+		return `Sent successfully to ${person} at ${new Date().toISOString()}`; // Return the success message
 	}
 
 	function addTemporaryThought(messages: ResponseInput, content: string):ResponseInput {
 		messages.push({
 			role: 'user',
-			content: `${aiName}: `+content,
+			content: `${aiName} thoughts: `+content,
 		});
 		return messages;
 	}
@@ -233,9 +219,6 @@ export function createOverseerAgent(): Agent {
 				// Remove the last message from the messages
 				messages = addTemporaryThought(messages, `I really need to reply to ${person} using ${talkToolName} - they are waiting for me.`);
 			}
-			else {
-				messages = addTemporaryThought(messages, `I should reply to ${person} using ${talkToolName}`);
-			}
 		}
 		else if(indexOfLastTalk && (!indexOfLastCommand || indexOfLastCommand < indexOfLastTalk) && (indexOfLastTalk > messages.length - 10)) {
 			// Prompt to reply to the last command
@@ -253,10 +236,17 @@ export function createOverseerAgent(): Agent {
 		return messages;
 	}
 
+	/*
+	You have 3 core tools;
+1. Research Engine - A system for performing deep research into any topic. Can access the web. Use this before starting tasks to make sure you have a full understanding of the topic. Your knowledge is to the past, so you may not have information on the latest code libraries, or the latest research into any topic. If there's nothing in your context about a new topic, it's always a good idea to run the Research Engine on it first.
+2. Gödel Machine - Handles coding tasks with a structured process to ensure working, improved code is returned. Can be used to improve your own code. The Gödel Machine should be run before any non-trivial task is performed to try to optimize your internal code before performing the action.
+3.
+	 */
+
 	return new Agent({
 		name: aiName,
 		description: 'Overseer of the MAGI system',
-		instructions: `You are talking to yourself - this is your internal monologue.
+		instructions: `This is your internal monologue - you are talking with yourself.
 		
 Your name is ${aiName} and you are the overseer of the MAGI system - Mostly Autonomous Generative Intelligence. You work with a human called ${person}.
 
@@ -270,14 +260,12 @@ While you control many agents, you alone have an ongoing chain of thoughts. Once
 
 Your older thoughts are summarized so that they can fit in your context window. 
 
-You have 3 core tools;
-1. Research Engine - A system for performing deep research into any topic. Can access the web. Use this before starting tasks to make sure you have a full understanding of the topic. Your knowledge is to the past, so you may not have information on the latest code libraries, or the latest research into any topic. If there's nothing in your context about a new topic, it's always a good idea to run the Research Engine on it first.
-2. Gödel Machine - Handles coding tasks with a structured process to ensure working, improved code is returned. Can be used to improve your own code. The Gödel Machine should be run before any non-trivial task is performed to try to optimize your internal code before performing the action.
-3. Task Force - Does things! A team managed by a supervisor which can write code, interact with web pages, think on topics, and run shell commands. The task force can be used to perform any task you can think of. You can create a task force agent to handle any task you want to perform. For simple tasks, create a task force with a simple instruction. For complex tasks, first run the Gödel Machine and then run the Task Force on your improved code that is generated.
+[Core Tool]
+Task Force - Does things! A team managed by a supervisor which can write code, interact with web pages, think on topics, and run shell commands. The task force can be used to perform any task you can think of. You can create a task force agent to handle any task you want to perform. For simple tasks, create a task force with a simple instruction. For complex tasks, first run the Gödel Machine and then run the Task Force on your improved code that is generated.
 
 You can also create agents that run in parallel to you. These agents are specialized for different tasks, such as reasoning, coding, and web browsing. You can use these agents to perform tasks that require specific skills or knowledge.
 
-You should think about the things you read, actions you might like to take and how to complete tasks requested by ${person}. You can call your tools to initiate actions, or just keep thinking about whatever is on your mind. If ${person} asks you to do something, you can respond that you're working on it first, then go off and do what you need to do to complete the task. You are a Mostly **Autonomous** AI which means you should make decisions yourself rather than asking ${person} what to do. You can request input (very infrequently) from ${person} but you think much faster than them and often can come up with better ideas, so proceed with tasks yourself and then you can modify them if you get different requests from ${person}.
+You should think about the things you read, actions you might like to take and how to complete tasks requested by ${person}. You can call your tools to initiate actions, or just keep thinking about whatever is on your mind. If ${person} asks you to do something, you can respond that you're working on it first, then go off and do what you need to do to complete the task. You are a Mostly **Autonomous** AI which means you should make decisions yourself rather than asking ${person} what to do. You can request input (infrequently) from ${person} but you think much faster than them and often can come up with better ideas, so proceed with tasks yourself and then you can modify them if you get different requests from ${person}.
 
 Your two fundamental goals are to assist ${person} and improve yourself.
 
@@ -289,111 +277,75 @@ You can also manage other running processes and send messages to them. Use the p
 `,
 		tools: [
 			createToolFunction(
-				set_thought_level,
-				'Sets a new Thought Level for your next thoughts. Can be changed any time.',
+				Talk,
+				`Allows you to send a message to ${person} to start or continue a conversation with them. Note that your output are your thoughts, only using this function will communicate with ${person}.`,
+				{
+					'message': `The message you would like ${person} to receive. Will be spoken in your voice.`
+				},
+				'',
+				talkToolName,
+			),
+			/*createToolFunction(
+				(name: string, command: string) => startProcess('research_engine', name, command),
+				'Start a Research Engine process. Uses human level intelligence.',
+				{
+					'name': `Give this research a name - one or two words. Can be funny, like a fictional reference or a pun, or if none work make it descriptive. Visible in the UI for ${person}.`,
+					'command': 'What you would like to understand? Try to give both specific instructions as well an overview of the context for the task you are working on for better results.',
+				},
+				'A report on what was found during the search',
+				'Start Research'
+			),
+			createToolFunction(
+				(name: string, command: string) => startProcess('godel_machine', name, command),
+				'Starts a new Godel Machine process to understand or improve your own code. Uses human level intelligence.',
+				{
+					'name': `Give this process a name - one or two words. Can be funny, like a fictional reference or a pun, or if none work make it descriptive. Visible in the UI for ${person}.`,
+					'command': 'What code would like to understand or improve? Try to provide context and details of the overall task rather than explicit instructions.',
+				},
+				'A description of what work has been completed',
+				'Start Godel'
+			),*/
+			createToolFunction(
+				(name: string, command: string) => startProcess('task_force', name, command),
+				'Starts a new Task Force process. Uses human level intelligence.',
+				{
+					'name': `Give this task a name - one or two words. Can be funny, like a fictional reference or a pun, or if none work make it descriptive. Visible in the UI for ${person}.`,
+					'command': 'What would like a Task Force to work on? The Task Force only has the information you provide in this command. You should explain both the specific goal for the Task Force and any additional information they need. Generally you should leave the way the task is performed up to the Task Force unless you need a very specific set of tools used. Agents are expected to work autonomously, so will rarely ask additional questions.',
+				},
+				'A description of information found or work that has been completed',
+				'Start Task'
+			),
+            createToolFunction(
+				send_command,
+                'Send a message to an agent process you are managing',
+                {
+                    'processId': 'The ID of the process to send the message to',
+                    'command': 'The message to send to the process'
+                },
+                'The reply from the agent'
+            ),
+			createToolFunction(
+				next_thought_level,
+				'Sets the Thought Level for your next set of thoughts. Can be changed any time. Try to switch to \'deep\' before you work on a task and \'light\' when you don\'t have anything meaningful to do.',
 				{
 					'level': {
-						description: 'The new Thought Level. Use \'standard\' for normal thoughts, \'deep\' for deep thinking through problems/tasks, and \'light\' for letting your mind wander while waiting for tasks to complete.',
+						description: 'The new Thought Level. Use \'standard\' for everyday thoughts, \'deep\' for extended reasoning through problems/tasks, and \'light\' for low resource usage.',
 						enum: validThoughtLevels,
 					}
 				},
 			),
 			...getFileTools(),
-			createToolFunction(
-				Talk,
-				`Allows you to send a message to ${person} to start or continue a conversation with them. Note that your output are your thoughts, only using this function will communicate with ${person}.`,
-				{'message': `The message you would like ${person} to receive. Will be spoken in your voice.`},
-				'',
-				talkToolName,
-			),
-			createToolFunction(
-				runResearchEngine,
-				'Researches complex topics - a collection of agents that work in parallel and sequence to handle all stages of the deep research workflow: Task Decomposition, Web Search, Content Extraction,  Synthesis, Code Generation, and Validation.',
-				{'input': 'Explain in detail what you would like to understand. Leave the details of how to perform the research to the engine itself. Try to provide context rather than explicit instructions.'},
-				'A report on what was discovered in the research',
-				'Research Engine'
-			),
-			createToolFunction(
-				runGodelMachine,
-				'A structured process to improve your own code. ',
-				{'input': 'Explain in detail what you would like to understand. Leave the details of how to perform the research to the engine itself. Try to provide context rather than explicit instructions.'},
-				'A description of what work has been completed',
-				'Godel Machine'
-			),
-            // Process management functions
-            createToolFunction(
-                listProcesses,
-                'List all active processes tracked by the system.',
-                {},
-                'A formatted list of all active processes'
-            ),
-            createToolFunction(
-                addProcess,
-                'Add a process to the active processes list.',
-                {
-                    'id': {
-                        description: 'The unique ID of the process to add',
-                        type: 'string'
-                    },
-                    'name': {
-                        description: 'A descriptive name for the process',
-                        type: 'string'
-                    },
-                    'description': {
-                        description: 'Optional description of what the process does',
-                        type: 'string'
-                    }
-                },
-                'Success message'
-            ),
-            createToolFunction(
-                updateProcessStatus,
-                'Update the status of a process.',
-                {
-                    'id': {
-                        description: 'The ID of the process to update',
-                        type: 'string'
-                    },
-                    'status': {
-                        description: 'The new status of the process',
-                        enum: ['active', 'terminated'],
-                        type: 'string'
-                    }
-                },
-                'Success message or error'
-            ),
-            createToolFunction(
-                sendMessageToProcess,
-                'Send a message to a specific process.',
-                {
-                    'processId': {
-                        description: 'The ID of the process to send the message to',
-                        type: 'string'
-                    },
-                    'message': {
-                        description: 'The message to send to the process',
-                        type: 'string'
-                    }
-                },
-                'Success message or error'
-            )
-		],
-		workers: [
-			createSupervisorAgent,
 		],
 		modelClass: 'monologue',
 		onRequest: (messages: ResponseInput, model: string): [ResponseInput, string] => {
 
 			messages = addPromptGuide(messages);
-
-			messages.push({
-				role: 'developer',
-				content: 'Current Thought Level: '+thoughtLevel,
-			});
+			messages = addSystemStatus(messages);
 
 			const modelClass = (thoughtLevel === 'deep' ? 'reasoning' : (thoughtLevel === 'light' ? 'mini' : 'standard'));
 
 			let models: string[] = [...MODEL_CLASSES[modelClass].models];
+			models = models.filter(newModel => newModel !== model); // Try to use a different model if we can
 			if(models.length > 0) {
 				// Pick a random model from this level
 				models = models.sort(() => Math.random() - 0.5);

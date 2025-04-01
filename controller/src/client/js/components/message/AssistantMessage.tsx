@@ -26,6 +26,14 @@ const AssistantMessage: React.FC<AssistantMessageProps> = ({ message, rgb, isLas
         <div className="message-group assistant-message" key={message.message_id || message.id}>
             <div className={bubbleClass}
                 style={{color: `rgba(${rgb} / 1)`}}>
+                { message.agent?.model && <div className="message-header">
+                    {isLast && <>
+                        Thinking ({message.agent.model})...
+                    </>}
+                    {!isLast && <>
+                        Thoughts ({message.agent.model})
+                    </>}
+                </div> }
                 <div dangerouslySetInnerHTML={parseMarkdown(displayContent)}/>
             </div>
         </div>

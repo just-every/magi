@@ -24,6 +24,7 @@ import {
 	monitorContainerLogs,
 	getRunningMagiContainers
 } from './container_manager';
+import {AgentProcess, ProcessToolType} from './communication_manager';
 
 /**
  * Process data interface
@@ -42,6 +43,7 @@ export interface ProcessData {
 		bgColor: string;            // Background color (rgba)
 		textColor: string;          // Text color (rgba)
 	};
+	agentProcess?: AgentProcess;
 }
 
 /**
@@ -54,7 +56,8 @@ interface Processes {
 
 export class ProcessManager {
 	private processes: Processes = {};
-	public io: Server; // Made public so communication_manager can access it
+	public io: Server;
+	public coreProcessId: string | undefined;
 
 	constructor(io: Server) {
 		this.io = io;
@@ -86,17 +89,28 @@ export class ProcessManager {
 	 * @param command - Command to execute
 	 * @returns The created process data
 	 */
-	createProcess(processId: string, command: string): ProcessData {
+	createProcess(processId: string, command: string, agentProcess?: AgentProcess): ProcessData {
 		// Generate colors for the process
 		const colors = generateProcessColors();
+
+		if(!this.coreProcessId) {
+			this.coreProcessId = processId;
+		}
+
+		const status = 'running';
+		if(agentProcess) {
+			agentProcess.status = status;
+			agentProcess.output = 'Container started';
+		}
 
 		// Create and initialize process record
 		const processData: ProcessData = {
 			id: processId,
 			command,
-			status: 'running',
+			status,
 			logs: [],
-			colors
+			colors,
+			agentProcess,
 		};
 
 		// Store the process
@@ -105,10 +119,14 @@ export class ProcessManager {
 		// Notify all clients about the new process
 		this.io.emit('process:create', {
 			id: processId,
+			name: agentProcess?.name || (this.coreProcessId === processId ? process.env.AI_NAME : processId),
 			command,
-			status: 'running',
-			colors
+			status,
+			colors,
 		} as ProcessCreateEvent);
+
+		// Start Docker container and command execution
+		this.spawnDockerProcess(processId, command, agentProcess?.tool);
 
 		return processData;
 	}
@@ -207,7 +225,7 @@ export class ProcessManager {
 	 * @param command - The MAGI command to execute
 	 * @returns Promise that resolves when setup is complete (not when the command finishes)
 	 */
-	async spawnDockerProcess(processId: string, command: string): Promise<void> {
+	async spawnDockerProcess(processId: string, command: string, tool?: ProcessToolType): Promise<void> {
 		try {
 			// Step 1: Verify Docker is available on the system
 			const dockerAvailable = await isDockerAvailable();
@@ -239,7 +257,8 @@ export class ProcessManager {
 			// Step 4: Start the Docker container
 			const containerId = await runDockerContainer({
 				processId,
-				command
+				command,
+				tool
 			});
 
 			// Handle container start failure

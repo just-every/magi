@@ -9,6 +9,7 @@ import {Server as HttpServer} from 'http';
 import {ProcessManager} from './process_manager';
 import fs from 'fs';
 import path from 'path';
+import {talk} from '../utils/talk';
 
 // Event types for the server-client communication
 export interface MagiMessage {
@@ -43,6 +44,24 @@ export interface CommandMessage {
 	type: 'command' | 'connect';
 	command: string;
 	args?: any;
+}
+
+
+export type ProcessToolType = 'research_engine' | 'godel_machine' | 'task_force';
+
+export interface AgentProcess {
+	processId: string;
+	started: Date;
+	status: 'started' | 'running' | 'waiting' | 'terminated';
+	tool: ProcessToolType;
+	command: string;
+	name: string;
+	output?: string;
+}
+
+export interface ProcessEvent {
+	type: 'process_start' | 'process_updated' | 'process_done';
+	agentProcess: AgentProcess;
 }
 
 export interface ContainerConnection {
@@ -210,51 +229,68 @@ export class CommunicationManager {
 			// First, check if this is the new format with 'event' property
 			if (message.event) {
 				const eventType = message.event.type;
-				
+
 				// Process any content field to fix references to /magi_output paths
 				// Helper function to process strings with magi_output paths
 				const processOutputPaths = (text: string): string => {
 					// Replace "sandbox:/magi_output/" with "/magi_output/" (sandbox prefix)
 					let processed = text.replace(/sandbox:\/magi_output\//g, '/magi_output/');
-					
+
 					// Also handle other sandbox paths
 					processed = processed.replace(/sandbox:(\/[^\s)"']+)/g, '$1');
-					
-					// Fix undefined links by replacing markdown link syntax with the text content only
-					processed = processed.replace(/\[([^\]]+)\]\(undefined\)/g, '$1');
-					
-					// Fix links with [object Object] in the URL - get just the link text
-					processed = processed.replace(/\[([^\]]+)\]\(\[object Object\]\)/g, '$1');
-					
-					// Fix undefined text with undefined URLs
-					processed = processed.replace(/undefined\s*\(undefined\)/g, '');
-					
+
 					// Make sure URLs like /magi_output/... are correctly formatted as markdown links
 					processed = processed.replace(
-						/(\s|^)(\/magi_output\/[^\s)"']+\.(png|jpg|jpeg|gif|svg))(\s|$|[,.;])/gi, 
+						/(\s|^)(\/magi_output\/[^\s)"']+\.(png|jpg|jpeg|gif|svg))(\s|$|[,.;])/gi,
 						(match, pre, url, ext, post) => `${pre}[${url}](${url})${post}`
 					);
-					
+
 					return processed;
 				};
-				
+
 				// Process content field
 				if (message.event.content && typeof message.event.content === 'string') {
 					message.event.content = processOutputPaths(message.event.content);
 				}
-				
+
+				// Process tool results for image paths
+				if (message.event.type === 'process_start' && message.event.agentProcess && typeof message.event.agentProcess === 'object') {
+
+					const processEvent = message.event as any as ProcessEvent;
+					this.processManager.createProcess(processEvent.agentProcess.processId, processEvent.agentProcess.command, processEvent.agentProcess);
+				}
+
+				// Check if this is a talk output
+				if (message.event.type === 'tool_start' && message.event.tool_calls && Array.isArray(message.event.tool_calls)) {
+					for (const toolCall of message.event.tool_calls) {
+
+						if(toolCall.function.name.startsWith('Talk_to_')) {
+							const toolParams: Record<string, unknown> = JSON.parse(toolCall.function.arguments);
+							if (toolParams.message && typeof toolParams.message === 'string') {
+
+								// Call talk, but don't await it.
+								const talkPromise = talk(toolParams.message);
+
+								talkPromise.catch(error => {
+									console.error('Error calling talk:', error);
+								});
+							}
+						}
+					}
+				}
+
 				// Process tool results for image paths
 				if (message.event.type === 'tool_done' && message.event.results && typeof message.event.results === 'object') {
 					// Process each result to fix output paths in result strings
 					const results = message.event.results as Record<string, any>;
 					for (const resultId in results) {
 						const result = results[resultId];
-						
+
 						// Fix paths in string results
 						if (typeof result === 'string') {
 							results[resultId] = processOutputPaths(result);
 						}
-						
+
 						// Fix paths in object results with output property
 						else if (typeof result === 'object' && result !== null && 'output' in result && typeof result.output === 'string') {
 							result.output = processOutputPaths(result.output);

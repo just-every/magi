@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {useState, useRef, useEffect, CSSProperties} from 'react';
 import {useSocket} from '../context/SocketContext';
-import {TRANSITION_EASE, TRANSITION_TIME} from "../constants";
+import {TRANSITION_EASE, TRANSITION_TIME} from "../utils/constants";
 import TextareaAutosize from 'react-textarea-autosize';
 
 const CommandInput: React.FC = () => {
@@ -105,7 +105,7 @@ const CommandInput: React.FC = () => {
 					<span className="input-group-text bg-white">&gt;</span>
 					<TextareaAutosize
 						id="center-command-input"
-						className={`form-control form-control-lg ${isMultiline ? 'multiline' : ''}`}
+						className={`form-control form-control-lg py-2 ${isMultiline ? 'multiline' : ''}`}
 						placeholder={isFirstProcess ? "Start task..." : `Talk${agentName ? ' to '+agentName : ''}...`}
 						value={command}
 						onChange={(e) => setCommand(e.target.value)}

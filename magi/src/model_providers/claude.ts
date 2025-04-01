@@ -65,20 +65,18 @@ function convertToClaudeMessage(role: string, content: string, msg: ResponseInpu
 			input: inputArgs,
 		};
 
-		return { role: 'assistant', content: [toolUseBlock] };
-	}
-	else if (msg.type === 'function_call_output') {
+		return {role: 'assistant', content: [toolUseBlock]};
+	} else if (msg.type === 'function_call_output') {
 		const toolResultBlock = {
 			type: 'tool_result',
 			tool_use_id: msg.call_id, // ID must match the corresponding tool_use block
 			content: msg.output || '', // Default to empty string if output is missing
-			...(msg.status === 'incomplete' ? { is_error: true } : {}),
+			...(msg.status === 'incomplete' ? {is_error: true} : {}),
 		};
 
 		// Anthropic expects role: 'user' for tool_result
-		return { role: 'user', content: [toolResultBlock] };
-	}
-	else {
+		return {role: 'user', content: [toolResultBlock]};
+	} else {
 		// Skip messages with no actual text content
 		if (!content) {
 			return null; // Skip messages with no text content
@@ -89,18 +87,20 @@ function convertToClaudeMessage(role: string, content: string, msg: ResponseInpu
 		// System messages expect string content
 		if (messageRole === 'system') {
 			// System prompts are handled separately later
-			return { role: 'system', content: content };
+			return {role: 'system', content: content};
 		} else {
 			// User and Assistant messages must use the array format when tools are potentially involved.
 			// Use array format consistently for safety.
 			return {
 				role: messageRole,
-				content: [{ type: 'text', text: content }]
+				content: [{type: 'text', text: content}]
 			};
 		}
 	}
 	// Default case for unhandled or irrelevant message types for Claude history
 	return null;
+}
+
 /**
  * Claude model provider implementation
  */
@@ -131,7 +131,7 @@ export class ClaudeProvider implements ModelProvider {
 			const modelClass: ModelClassID | undefined = agent?.modelClass;
 
 			let thinking = undefined;
-			let max_tokens = settings?.max_tokens || 8192; // Default max tokens if not specified
+			let max_tokens = settings?.max_tokens || 64000; // Default max tokens if not specified
 			switch (modelClass) {
 				case 'monologue':
 				case 'reasoning':
@@ -140,9 +140,9 @@ export class ClaudeProvider implements ModelProvider {
 						// Extended thinking
 						thinking = {
 							type: 'enabled',
-							budget_tokens: 120000
+							budget_tokens: 32000
 						};
-						max_tokens = Math.min(max_tokens, 128000);
+						max_tokens = Math.min(max_tokens, 64000);
 					}
 					else {
 						max_tokens = Math.min(max_tokens, 8192);
@@ -174,8 +174,7 @@ export class ClaudeProvider implements ModelProvider {
 				...(systemPrompt ? { system: systemPrompt } : {}),
 				stream: true,
 				max_tokens,
-				thinking,
-				// Add optional parameters (added undefined check for robustness)
+				...(thinking ? { thinking } : {}),
 				...(settings?.temperature !== undefined ? { temperature: settings.temperature } : {}),
 			};
 
@@ -188,7 +187,7 @@ export class ClaudeProvider implements ModelProvider {
 			log_llm_request('anthropic', model, requestParams);
 
 			// Make the API call
-			const stream = await this.client.messages.create(requestParams);
+			const stream =  await this.client.messages.create(requestParams);
 
 			// Track current tool call info
 			let currentToolCall: any = null;

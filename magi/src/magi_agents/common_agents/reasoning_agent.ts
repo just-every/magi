@@ -8,15 +8,17 @@ import {Agent} from '../../utils/agent.js';
 import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT} from '../constants.js';
 import {getSearchTools} from '../../utils/search_utils.js';
 import {createBrowserAgent} from './browser_agent.js';
+import {getFileTools} from '../../utils/file_utils.js';
+import {getShellTools} from '../../utils/shell_utils.js';
 
 /**
  * Create the reasoning agent
  */
-export function createReasoningAgent(): Agent {
+export function createReasoningAgent(instructions?: string): Agent {
 	return new Agent({
 		name: 'ReasoningAgent',
 		description: 'Expert at complex reasoning and multi-step problem-solving',
-		instructions: `You are an advanced reasoning engine specialized in complex problem-solving.
+		instructions: instructions || `You are an advanced reasoning engine specialized in complex problem-solving.
 
 Your cognitive capabilities include:
 - Breaking down complex problems into simpler parts
@@ -47,6 +49,8 @@ IMPORTANT:
 - If certain information is missing, state your assumptions clearly
 - Consider the question from multiple perspectives before concluding`,
 		tools: [
+			...getFileTools(),
+			...getShellTools(),
 			...getSearchTools()
 		],
 		workers: [

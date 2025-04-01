@@ -22,6 +22,7 @@ interface Socket {
 // Define message interfaces for the chat UI
 export interface PartialClientMessage {
 	id?: string; // Generated UUID for the message
+	agent?: AgentData;
 	processId?: string; // Process ID this message belongs to
 	type?: 'user' | 'assistant' | 'system' | 'tool_call' | 'tool_result' | 'error';
 	content?: string;
@@ -36,6 +37,7 @@ export interface PartialClientMessage {
 // Define message interfaces for the chat UI
 export interface ClientMessage {
 	id: string; // Generated UUID for the message
+	agent?: AgentData;
 	processId: string; // Process ID this message belongs to
 	type: 'user' | 'assistant' | 'system' | 'tool_call' | 'tool_result' | 'error';
 	content: string;
@@ -162,7 +164,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 					colors: event.colors,
 					logs: '',
 					agent: {
-						name: event.id,
+						name: event.name,
 						messages: [initialMessage],
 						isTyping: true,
 						workers: new Map<string, AgentData>(),
@@ -241,6 +243,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 					agent_id = agent_id || streamingEvent.agent.agent_id;
 					const updatedAgent = agent || process.agent;
 					if (updatedAgent.agent_id === agent_id) {
+						if(!message.agent) {
+							message.agent = { ...updatedAgent }; // Save a copy of the agent for this particular message
+						}
 						updatedAgent.messages.push(message);
 					} else if (updatedAgent.workers) {
 						const updatedWorkers = new Map();

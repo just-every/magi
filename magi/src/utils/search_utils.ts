@@ -75,8 +75,8 @@ export function getSearchTools(): ToolFunction[] {
 	return [
 		createToolFunction(
 			web_search,
-			'Perform a web search and get results',
-			{'query': 'The search query', 'numResults': { type: 'number', description: 'Number of results to return (default: 5)'}}
+			'Search the web and get results',
+			{'query': 'The search query - format this as you would any search in Google.', 'numResults': { type: 'number', description: 'Number of results to return (default: 5)'}}
 		)
 	];
 }

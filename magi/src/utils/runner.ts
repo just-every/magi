@@ -11,15 +11,16 @@ import {
 	MessageEvent,
 	ToolCall,
 	ResponseInput,
-	RunStatus,
-	RunResult,
-	ToolCallHandler
+	ToolCallHandler,
+	RunnerConfig,
 } from '../types.js';
 import {Agent} from './agent.js';
 import {getModelProvider} from '../model_providers/model_provider.js';
 import {MODEL_CLASSES} from '../model_providers/model_data.js';
 import {getModelFromClass} from '../model_providers/model_provider.js';
 import {processToolCall} from './tool_call.js';
+import {capitalize} from './llm_utils.js';
+import {getCommunicationManager} from './communication.js';
 
 /**
  * Agent runner class for executing agents with tools
@@ -433,45 +434,35 @@ export class Runner {
 	 *
 	 * @param agentSequence An object mapping stage names to agent factory functions
 	 * @param input The initial input to the first agent
-	 * @param initialStage The name of the first stage to execute
 	 * @param maxRetries Maximum number of retries per stage before giving up
 	 * @param maxTotalRetries Maximum total retries across all stages before giving up
-	 * @param handlers Event handlers for streaming events
 	 * @returns The final response from the last successful agent in the chain
 	 */
 	static async runSequential(
-		agentSequence: Record<string, (metadata?: any) => Agent>,
+		agentSequence: RunnerConfig,
 		input: string,
-		initialStage: string,
 		maxRetries: number = 3,
 		maxTotalRetries: number = 10,
-		handlers: {
-			onEvent?: (event: StreamingEvent, stage: string) => void,
-			onResponse?: (content: string, stage: string) => void,
-			onStageComplete?: (stage: string, result: RunResult) => void,
-			onComplete?: (allResults: Record<string, RunResult>) => void
-		} = {}
-	): Promise<Record<string, RunResult>> {
-		// Validate inputs
-		if (!agentSequence[initialStage]) {
-			throw new Error(`Initial stage "${initialStage}" not found in agent sequence`);
-		}
+	): Promise<string> {
 
-		const results: Record<string, RunResult> = {};
-		let currentStage = initialStage;
-		let currentInput = input;
-		let currentMetadata: any = null;
+		const history: ResponseInput = [{role: 'user', content: input}];
+		const lastOutput: Record<string, string> = {};
+
+		let currentStage = Object.keys(agentSequence)[0]; // Start with the first stage
 		let totalRetries = 0;
 		const stageRetries: Record<string, number> = {};
 
-		// Create event handler wrappers that include the current stage
-		const stageEventHandler = handlers.onEvent
-			? (event: StreamingEvent) => handlers.onEvent!(event, currentStage)
-			: undefined;
+		const comm = getCommunicationManager();
 
-		const stageResponseHandler = handlers.onResponse
-			? (content: string) => handlers.onResponse!(content, currentStage)
-			: undefined;
+		function addOutput(stage: string, output: string) {
+			history.push({
+				type: 'message',
+				role: 'assistant',
+				status: 'completed',
+				content: `${capitalize(stage)} Output:\n${output}`,
+			});
+			lastOutput[stage] = output;
+		}
 
 		// Process the sequence of agents
 		while (currentStage && totalRetries < maxTotalRetries) {
@@ -480,108 +471,53 @@ export class Runner {
 			// Initialize retry counter for this stage if not already set
 			stageRetries[currentStage] = stageRetries[currentStage] || 0;
 
-			// Check if we've exceeded the max retries for this stage
-			if (stageRetries[currentStage] >= maxRetries) {
-				console.error(`[Runner] Exceeded max retries (${maxRetries}) for stage: ${currentStage}`);
-				results[currentStage] = {
-					status: RunStatus.FAILURE,
-					response: `Exceeded maximum retries (${maxRetries}) for this stage.`
-				};
-				break;
-			}
-
 			try {
-				// Create the agent for this stage using current metadata (if any)
-				const agent = agentSequence[currentStage](currentMetadata);
-
 				// Run the agent with the current input
 				const response = await this.runStreamedWithTools(
-					agent,
-					currentInput,
-					[], // No conversation history for sequential runs
+					agentSequence[currentStage].agent(),
+					undefined,
+					[...(agentSequence[currentStage].input?.(history, lastOutput) || history)],
 					{
-						onEvent: stageEventHandler,
-						onResponse: stageResponseHandler
+						// Forward all events to the communication channel
+						onEvent: (event: StreamingEvent) => {
+							comm.send(event);
+						},
 					}
 				);
 
-				// Parse the response to determine next steps
-				// We'll look for specific markers in the response to decide what to do
+				addOutput(currentStage, response);
 
-				// Default successful result assuming standard progression
-				const result: RunResult = {
-					status: RunStatus.SUCCESS,
-					response
-				};
-
-				// Check for specific markers in the response
-				if (response.includes('STATUS: NEEDS_RETRY') || response.includes('STATUS:NEEDS_RETRY')) {
-					result.status = RunStatus.NEEDS_RETRY;
-					stageRetries[currentStage]++;
-					totalRetries++;
-					console.log(`[Runner] Stage ${currentStage} requires retry (${stageRetries[currentStage]}/${maxRetries})`);
-				} else if (response.includes('STATUS: FAILURE') || response.includes('STATUS:FAILURE')) {
-					result.status = RunStatus.FAILURE;
-					console.error(`[Runner] Stage ${currentStage} failed`);
-				} else {
-					// Look for "NEXT: {stage_name}" pattern to determine the next stage
-					const nextStageMatch = response.match(/NEXT:\s*(\w+)/i);
-					if (nextStageMatch && nextStageMatch[1] && agentSequence[nextStageMatch[1]]) {
-						result.next = nextStageMatch[1];
-					} else {
-						// If no explicit next stage, determine next stage based on sequence order
-						const stages = Object.keys(agentSequence);
-						const currentIndex = stages.indexOf(currentStage);
-						if (currentIndex < stages.length - 1) {
-							result.next = stages[currentIndex + 1];
-						}
-					}
-
-					// Look for JSON metadata in the response using the pattern "METADATA: {...}"
-					const metadataMatch = response.match(/METADATA:\s*({.*})/s);
-					if (metadataMatch && metadataMatch[1]) {
-						try {
-							result.metadata = JSON.parse(metadataMatch[1]);
-						} catch (err) {
-							console.warn(`[Runner] Failed to parse metadata JSON: ${err}`);
-						}
-					}
-				}
-
-				// Store the result for this stage
-				results[currentStage] = result;
-
-				// Call the stage complete handler if provided
-				if (handlers.onStageComplete) {
-					handlers.onStageComplete(currentStage, result);
-				}
-
-				// If this stage failed or needs retry, handle accordingly
-				if (result.status === RunStatus.FAILURE) {
-					break; // Stop the sequence on failure
-				} else if (result.status === RunStatus.NEEDS_RETRY) {
-					// We'll retry this same stage
-					continue;
-				}
-
-				// Move to the next stage if there is one
-				if (result.next) {
-					// Use the output of this stage as input to the next, plus any metadata
-					currentStage = result.next;
-					currentInput = response;
-					currentMetadata = result.metadata;
-				} else {
-					// No next stage, we're done
+				const nextStage = agentSequence[currentStage].next(response);
+				if(!nextStage) {
+					console.log('[Runner] No next stage found, ending sequence.');
 					break;
 				}
+
+				// Check that if the next stage is going backwards
+				const stages = Object.keys(agentSequence);
+				const currentIndex = stages.indexOf(currentStage);
+				const nextIndex = nextStage ? stages.indexOf(nextStage) : -1;
+				if (nextStage && nextIndex < currentIndex) {
+
+					// Only increment retries when we're looping back to an earlier stage
+					stageRetries[currentStage]++;
+					totalRetries++;
+
+					// Retry this stage unless we've hit the limit
+					if (stageRetries[currentStage] >= maxRetries) {
+						console.error(`[Runner] Exceeded max retries for stage ${currentStage}`);
+						break;
+					}
+				}
+
+				// We have another stage, to loop again
+				currentStage = nextStage;
+
 			} catch (error) {
 				console.error(`[Runner] Error in sequential stage ${currentStage}: ${error}`);
 
 				// Record the error as a failure
-				results[currentStage] = {
-					status: RunStatus.FAILURE,
-					response: `Error: ${error}`
-				};
+				addOutput(currentStage, `Error: ${error}`);
 
 				// Increment retry counters
 				stageRetries[currentStage]++;
@@ -595,12 +531,20 @@ export class Runner {
 			}
 		}
 
-		// Call the completion handler with all results
-		if (handlers.onComplete) {
-			handlers.onComplete(results);
-		}
+		let output = '';
+		Object.keys(lastOutput).forEach((key) => {
+			if (lastOutput[key]) {
+				output += `${capitalize(key)} Output:\n${lastOutput[key]}\n\n`;
+			}
+		});
 
-		return results;
+		comm.send({
+			type: 'run_done',
+			output,
+			history,
+		});
+
+		return output;
 	}
 
 	/**
@@ -613,7 +557,7 @@ export class Runner {
 	 */
 	private static ensureToolResultSequence(messages: ResponseInput): ResponseInput {
 		let lastToolCallBlockStartIndex = -1;
-		let toolCallIdsInBlock: string[] = [];
+		const toolCallIdsInBlock: string[] = [];
 
 		// Find the start index of the last block of consecutive 'function_call' messages
 		for (let i = messages.length - 1; i >= 0; i--) {
@@ -689,7 +633,7 @@ export class Runner {
 			...otherMessagesAfterBlock // Place the rest afterwards
 		];
 
-		console.debug("[Runner] Messages potentially reordered for API call sequence compliance.");
+		console.debug('[Runner] Messages potentially reordered for API call sequence compliance.');
 		// Optional: Log the final sequence for debugging
 		// console.log("[Runner] Reordered Messages:", JSON.stringify(finalMessages.map(m => ({ type: m.type, role: m.role, call_id: m.call_id, name: m.name })), null, 2));
 

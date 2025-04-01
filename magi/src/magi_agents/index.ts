@@ -5,14 +5,13 @@
  */
 
 import {Agent} from '../utils/agent.js';
-import {createSupervisorAgent} from './task_force/supervisor_agent.js';
-import {createManagerAgent} from './task_force/manager_agent.js';
-import {createReasoningAgent} from './task_force/reasoning_agent.js';
-import {createCodeAgent} from './task_force/code_agent.js';
-import {createBrowserAgent} from './task_force/browser_agent.js';
-import {createBrowserVisionAgent} from './task_force/browser_vision_agent.js';
-import {createSearchAgent} from './task_force/search_agent.js';
-import {createShellAgent} from './task_force/shell_agent.js';
+import {createManagerAgent} from './common_agents/manager_agent.js';
+import {createReasoningAgent} from './common_agents/reasoning_agent.js';
+import {createCodeAgent} from './common_agents/code_agent.js';
+import {createBrowserAgent} from './common_agents/browser_agent.js';
+import {createBrowserVisionAgent} from './common_agents/browser_vision_agent.js';
+import {createSearchAgent} from './common_agents/search_agent.js';
+import {createShellAgent} from './common_agents/shell_agent.js';
 import {
 	createPlanningAgent,
 	createWritingAgent,
@@ -74,9 +73,6 @@ export function createAgent(type: AgentType, model?: string, modelClass?: ModelC
 	switch (type) {
 		case 'overseer':
 			agent = createOverseerAgent();
-			break;
-		case 'supervisor':
-			agent = createSupervisorAgent();
 			break;
 		case 'manager':
 			agent = createManagerAgent();
@@ -157,7 +153,6 @@ export function createAgent(type: AgentType, model?: string, modelClass?: ModelC
 
 // Export all agent creation functions
 export {
-	createSupervisorAgent,
 	createManagerAgent,
 	createReasoningAgent,
 	createCodeAgent,

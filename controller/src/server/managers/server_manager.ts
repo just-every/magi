@@ -523,7 +523,7 @@ export class ServerManager {
 	 *
 	 * @param command - The command to run
 	 */
-	private handleCommandRun(command: string): void {
+	handleCommandRun(command: string): void {
 		// Validate command string
 		if (!command || typeof command !== 'string' || !command.trim()) {
 			console.error('Invalid command received:', command);
@@ -535,9 +535,6 @@ export class ServerManager {
 
 		// Create a new process
 		this.processManager.createProcess(processId, command);
-
-		// Start Docker container and command execution
-		this.processManager.spawnDockerProcess(processId, command);
 	}
 
 	/**
@@ -622,12 +619,12 @@ export class ServerManager {
 		let success = false;
 		if (this.communicationManager.hasActiveConnection(processId)) {
 			success = await this.communicationManager.sendCommand(
-				processId, 
-				command, 
-				{}, 
+				processId,
+				command,
+				{},
 				sourceProcessId
 			);
-			
+
 			if (success) {
 				console.log(`Command sent to process ${processId} successfully via WebSocket${sourceProcessId ? ` from process ${sourceProcessId}` : ''}`);
 				this.processManager.updateProcess(

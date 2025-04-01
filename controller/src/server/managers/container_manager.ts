@@ -10,6 +10,7 @@ import {
 	validateContainerName,
 	execPromise
 } from '../utils/docker_commands';
+import {ProcessToolType} from './communication_manager';
 
 export interface DockerBuildOptions {
 	tag?: string;
@@ -20,6 +21,7 @@ export interface DockerBuildOptions {
 export interface DockerRunOptions {
 	processId: string;
 	command: string;
+	tool?: ProcessToolType;
 }
 
 /**
@@ -116,6 +118,7 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
       -v magi_output:/magi_output:rw \
       --add-host=host.docker.internal:host-gateway \
       magi-system:latest \
+      --tool ${options.tool || 'none'} \
       --base64 "${base64Command}"`;
 
 		// Execute the command and get the container ID

@@ -4,6 +4,23 @@
 import {Agent} from './utils/agent.js';
 import {ModelClassID} from './model_providers/model_data.js';
 
+declare global {
+	namespace NodeJS {
+		interface ProcessEnv {
+			NODE_ENV: 'development' | 'production';
+			PROCESS_ID: string;
+			CONTROLLER_PORT: string;
+			HOST_HOSTNAME: string;
+			OPENAI_API_KEY?: string;
+			ANTHROPIC_API_KEY?: string;
+			GOOGLE_API_KEY?: string;
+			XAI_API_KEY?: string;
+			DEEPSEEK_API_KEY?: string;
+			BRAVE_API_KEY?: string;
+		}
+	}
+}
+
 // Define the Agent interface to avoid circular dependency
 export interface AgentInterface {
     agent_id: string;
@@ -23,21 +40,14 @@ export interface AgentInterface {
     asTool(): ToolFunction;
 }
 
-declare global {
-	namespace NodeJS {
-		interface ProcessEnv {
-			NODE_ENV: 'development' | 'production';
-			PROCESS_ID: string;
-			CONTROLLER_PORT: string;
-			HOST_HOSTNAME: string;
-			OPENAI_API_KEY?: string;
-			ANTHROPIC_API_KEY?: string;
-			GOOGLE_API_KEY?: string;
-			XAI_API_KEY?: string;
-			DEEPSEEK_API_KEY?: string;
-			BRAVE_API_KEY?: string;
-		}
-	}
+export interface AgentProcess {
+	processId: string;
+	started: Date;
+	status: 'started' | 'running' | 'waiting' | 'terminated';
+	tool: ProcessToolType;
+	command: string;
+	name: string;
+	agent?: AgentInterface;
 }
 
 export type ToolParameterType = 'string' | 'number' | 'boolean' | 'object' | 'array' | 'null';
@@ -258,6 +268,11 @@ export type StreamEventType =
 	'connected'
 	| 'command_start'
 	| 'command_done'
+	| 'run_start'
+	| 'run_done'
+	| 'process_start'
+	| 'process_updated'
+	| 'process_done'
 	| 'agent_start'
 	| 'agent_updated'
 	| 'agent_done'
@@ -296,7 +311,28 @@ export interface ConnectedEvent extends StreamEvent {
  */
 export interface CommandEvent extends StreamEvent {
 	type: 'command_start' | 'command_done';
+	processId: string;
 	command: string;
+}
+
+
+export type ProcessToolType = 'research_engine' | 'godel_machine' | 'task_force';
+
+/**
+ * Agent updated streaming event
+ */
+export interface ProcessEvent extends StreamEvent {
+	type: 'process_start' | 'process_updated' | 'process_done';
+	agentProcess: AgentProcess;
+}
+
+/**
+ * Agent updated streaming event
+ */
+export interface RunEvent extends StreamEvent {
+	type: 'run_start' | 'run_done';
+	output?: string;
+	history: ResponseInput;
 }
 
 /**
@@ -360,7 +396,7 @@ export interface ErrorEvent extends StreamEvent {
 /**
  * Union type for all streaming events
  */
-export type StreamingEvent = ConnectedEvent | CommandEvent | AgentEvent | MessageEvent | FileEvent | TalkEvent | ToolEvent | ErrorEvent;
+export type StreamingEvent = ConnectedEvent | CommandEvent | ProcessEvent | RunEvent | AgentEvent | MessageEvent | FileEvent | TalkEvent | ToolEvent | ErrorEvent;
 
 /**
  * Status of a sequential agent run
@@ -380,6 +416,25 @@ export interface RunResult {
 	next?: string; // Optional name of the next agent to run
 	metadata?: any; // Optional metadata to pass to the next agent
 }
+
+/**
+ * Configuration for individual runner stages
+ */
+export interface RunnerStageConfig {
+	input?: (history: ResponseInput, lastOutput: Record<string, string>) => ResponseInput; // Prepares the input for the agent based on past conversation history
+
+	agent: () => Agent; // Returns the agent for this stage
+
+	next: (output: string) => string | null; // Determines the next stage based on the output. Null if this is the last stage
+}
+
+/**
+ * Complete configuration for runner stages
+ */
+export type RunnerConfig = {
+	[stage: string]: RunnerStageConfig;
+};
+
 
 /**
  * Model provider interface

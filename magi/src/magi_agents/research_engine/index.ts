@@ -86,8 +86,8 @@ export async function runResearchEngine(
   // Run the sequence starting with the task decomposition stage
   return await Runner.runSequential(
     understandingEngine,
-    query, // Initial input is the research query
     UnderstandingStage.TASK_DECOMPOSITION, // Start with the task decomposition stage
+	query, // Initial input is the research query
     3, // Max retries per stage
     10 // Max total retries
   );
