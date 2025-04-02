@@ -21,70 +21,248 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 const envPath = path.join(rootDir, '.env');
+const envExamplePath = path.join(rootDir, '.env.example');
 
-// Check if .env file exists (used in the initial setup check)
-
+// Store environment variables
+let envVars: Record<string, string> = {};
 let openaiApiKey = '';
 
-function getOpenAIKey(): void {
-	console.log('\x1b[33m%s\x1b[0m', 'Step 1: Setting up OpenAI API Key');
-
-	// Check if .env file already exists
-	if (fs.existsSync(envPath)) {
-		console.log('\x1b[33m%s\x1b[0m', 'A .env file already exists.');
-
-		// Try to read the current API key
-		try {
-			const envContent = fs.readFileSync(envPath, 'utf8');
-			const apiKeyMatch = envContent.match(/OPENAI_API_KEY=([^\s]+)/);
-
-			if (apiKeyMatch && apiKeyMatch[1]) {
-				console.log('Current API key found: ' + apiKeyMatch[1].substring(0, 4) + '...' + apiKeyMatch[1].substring(apiKeyMatch[1].length - 4));
-			}
-		} catch {
-			// Ignore read errors
-		}
-
-		rl.question('Do you want to update the OpenAI API Key? (y/n): ', (answer) => {
-			if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
-				promptForApiKey();
-			} else {
-				console.log('\x1b[32m%s\x1b[0m', '✓ Using existing OpenAI API key');
-				installDependencies();
-			}
-		});
-		return;
-	}
-
-	promptForApiKey();
+// Parse environment variables from file
+function parseEnvFile(filePath: string): Record<string, string> {
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const result: Record<string, string> = {};
+    
+    content.split('\n').forEach(line => {
+      // Skip comments and empty lines
+      if (line.trim().startsWith('#') || line.trim() === '') {
+        return;
+      }
+      
+      // Split by first = sign (to handle values that contain = signs)
+      const separatorIndex = line.indexOf('=');
+      if (separatorIndex > 0) {
+        const key = line.substring(0, separatorIndex).trim();
+        const value = line.substring(separatorIndex + 1).trim();
+        
+        // Skip placeholders and example values
+        if (value && 
+            !value.includes('your_') && 
+            !value.includes('_here') && 
+            !value.includes('_if_applicable')) {
+          result[key] = value;
+        }
+      }
+    });
+    
+    return result;
+  } catch (error) {
+    console.error(`Error reading ${filePath}: ${error instanceof Error ? error.message : String(error)}`);
+    return {};
+  }
 }
 
-function promptForApiKey(): void {
-	console.log('You need an OpenAI API key to use this system.');
-	console.log('Get your API key at: \x1b[34mhttps://platform.openai.com/api-keys\x1b[0m');
+function ensureAllEnvVars(): void {
+  console.log('\x1b[33m%s\x1b[0m', 'Step 1: Setting up environment variables');
+  
+  // Load example env vars as templates
+  const exampleEnvVars = parseEnvFile(envExamplePath);
+  
+  // Check if .env file already exists and load existing values
+  if (fs.existsSync(envPath)) {
+    console.log('\x1b[33m%s\x1b[0m', 'A .env file already exists. Checking for missing variables...');
+    
+    // Load current env vars
+    envVars = parseEnvFile(envPath);
+    
+    // Check if OpenAI API key exists (needed for next steps)
+    const apiKey = envVars['OPENAI_API_KEY'];
+    if (apiKey) {
+      openaiApiKey = apiKey;
+      console.log('Current OpenAI API key found: ' + apiKey.substring(0, 4) + '...' + apiKey.substring(apiKey.length - 4));
+    }
+    
+    // Create a list of missing variables
+    const missingVars = Object.keys(exampleEnvVars).filter(key => !envVars[key]);
+    
+    if (missingVars.length === 0) {
+      console.log('\x1b[32m%s\x1b[0m', '✓ All environment variables are set');
+      promptForMissingKeys();
+      return;
+    }
+    
+    console.log(`Found ${missingVars.length} missing environment variables:`);
+    missingVars.forEach(key => {
+      console.log(`  - ${key}`);
+    });
+    
+    rl.question('Do you want to set up missing environment variables? (y/n): ', (answer) => {
+      if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
+        promptForMissingKeys();
+      } else {
+        console.log('\x1b[32m%s\x1b[0m', '✓ Using existing environment variables');
+        installDependencies();
+      }
+    });
+    return;
+  }
+  
+  // No .env file exists, create from scratch
+  console.log('Creating new .env file from template...');
+  envVars = {};
+  promptForMissingKeys();
+}
 
-	rl.question('Enter your OpenAI API Key: ', (answer) => {
-		if (!answer || answer.trim() === '') {
-			console.log('\x1b[31m%s\x1b[0m', 'API key cannot be empty. Please try again.');
-			promptForApiKey();
-			return;
-		}
+function promptForMissingKeys(): void {
+  // Check if OpenAI key is missing (required)
+  if (!openaiApiKey) {
+    promptForOpenAIKey();
+    return;
+  }
+  
+  // First make sure YOUR_NAME and AI_NAME are set
+  if (!envVars['YOUR_NAME']) {
+    rl.question('Enter your name (default: Human): ', (answer) => {
+      envVars['YOUR_NAME'] = answer.trim() || 'Human';
+      promptForMissingKeys();
+    });
+    return;
+  }
+  
+  if (!envVars['AI_NAME']) {
+    rl.question('Enter AI name (default: Magi): ', (answer) => {
+      envVars['AI_NAME'] = answer.trim() || 'Magi';
+      promptForMissingKeys();
+    });
+    return;
+  }
+  
+  // Ask for optional API keys
+  const apiKeyPrompts = [
+    { 
+      key: 'ANTHROPIC_API_KEY', 
+      question: 'Do you want to set up Anthropic API key for Claude models? (y/n): ',
+      prompt: 'Enter your Anthropic API Key: '
+    },
+    { 
+      key: 'ANTHROPIC_ORG_ID', 
+      question: 'Do you want to set up Anthropic Organization ID? (y/n): ',
+      prompt: 'Enter your Anthropic Organization ID: '
+    },
+    { 
+      key: 'GOOGLE_API_KEY', 
+      question: 'Do you want to set up Google API key for Gemini models? (y/n): ',
+      prompt: 'Enter your Google API Key: '
+    },
+    { 
+      key: 'XAI_API_KEY', 
+      question: 'Do you want to set up X.AI API key for Grok models? (y/n): ',
+      prompt: 'Enter your X.AI API Key: '
+    },
+    { 
+      key: 'DEEPSEEK_API_KEY', 
+      question: 'Do you want to set up DeepSeek API key? (y/n): ',
+      prompt: 'Enter your DeepSeek API Key: '
+    },
+    { 
+      key: 'BRAVE_API_KEY', 
+      question: 'Do you want to set up Brave API key for web search? (y/n): ',
+      prompt: 'Enter your Brave API Key: '
+    }
+  ];
+  
+  // Find first missing key that hasn't been prompted yet
+  const nextPrompt = apiKeyPrompts.find(item => !envVars[item.key]);
+  
+  if (nextPrompt) {
+    // Skip if already has value
+    if (envVars[nextPrompt.key]) {
+      promptForMissingKeys();
+      return;
+    }
+    
+    rl.question(nextPrompt.question, (answer) => {
+      if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
+        rl.question(nextPrompt.prompt, (keyValue) => {
+          if (keyValue && keyValue.trim() !== '') {
+            envVars[nextPrompt.key] = keyValue.trim();
+          }
+          promptForMissingKeys();
+        });
+      } else {
+        // Mark as processed by setting to empty string
+        envVars[nextPrompt.key] = '';
+        promptForMissingKeys();
+      }
+    });
+    return;
+  }
+  
+  // All environment variables have been processed
+  saveEnvFile();
+}
 
-		openaiApiKey = answer.trim();
-		saveEnvFile();
-	});
+function promptForOpenAIKey(): void {
+  console.log('You need an OpenAI API key to use this system.');
+  console.log('Get your API key at: \x1b[34mhttps://platform.openai.com/api-keys\x1b[0m');
+
+  rl.question('Enter your OpenAI API Key: ', (answer) => {
+    if (!answer || answer.trim() === '') {
+      console.log('\x1b[31m%s\x1b[0m', 'API key cannot be empty. Please try again.');
+      promptForOpenAIKey();
+      return;
+    }
+
+    openaiApiKey = answer.trim();
+    envVars['OPENAI_API_KEY'] = openaiApiKey;
+    promptForMissingKeys();
+  });
 }
 
 function saveEnvFile(): void {
-	try {
-		// Create or update .env file
-		fs.writeFileSync(envPath, `OPENAI_API_KEY=${openaiApiKey}\n`);
-		console.log('\x1b[32m%s\x1b[0m', '✓ OpenAI API key saved to .env file');
-		installDependencies();
-	} catch (error) {
-		console.error('\x1b[31m%s\x1b[0m', `Error saving .env file: ${error instanceof Error ? error.message : String(error)}`);
-		process.exit(1);
-	}
+  try {
+    // Build .env file content from envVars
+    let envContent = '';
+    
+    // Add standard header
+    envContent += '# MAGI System Environment Variables\n\n';
+    
+    // Essential variables first
+    if (envVars['YOUR_NAME']) {
+      envContent += `YOUR_NAME=${envVars['YOUR_NAME']}\n`;
+    }
+    
+    if (envVars['AI_NAME']) {
+      envContent += `AI_NAME=${envVars['AI_NAME']}\n`;
+    }
+    
+    // Always include OpenAI key
+    envContent += `OPENAI_API_KEY=${openaiApiKey}\n\n`;
+    
+    // Add optional API keys if they exist
+    const optionalKeys = [
+      { key: 'ANTHROPIC_API_KEY', comment: '# Anthropic API key for Claude models' },
+      { key: 'ANTHROPIC_ORG_ID', comment: '# Anthropic Organization ID if applicable' },
+      { key: 'GOOGLE_API_KEY', comment: '# Google API key for Gemini models' },
+      { key: 'XAI_API_KEY', comment: '# X.AI API key for Grok models' },
+      { key: 'DEEPSEEK_API_KEY', comment: '# DeepSeek API key' },
+      { key: 'BRAVE_API_KEY', comment: '# Brave API key for web search' }
+    ];
+    
+    optionalKeys.forEach(({ key, comment }) => {
+      if (envVars[key] && envVars[key].trim() !== '') {
+        envContent += `${comment}\n${key}=${envVars[key]}\n\n`;
+      }
+    });
+    
+    // Write to .env file
+    fs.writeFileSync(envPath, envContent);
+    console.log('\x1b[32m%s\x1b[0m', '✓ Environment variables saved to .env file');
+    installDependencies();
+  } catch (error) {
+    console.error('\x1b[31m%s\x1b[0m', `Error saving .env file: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
 }
 
 function installDependencies(): void {
@@ -238,4 +416,4 @@ if (args.includes('--help') || args.includes('-h')) {
 }
 
 // Start setup process
-getOpenAIKey();
+ensureAllEnvVars();
