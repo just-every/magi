@@ -148,31 +148,37 @@ function promptForMissingKeys(): void {
     { 
       key: 'ANTHROPIC_API_KEY', 
       prompt: 'Enter your Anthropic API Key (press Enter to skip): ',
+      infoUrl: 'https://console.anthropic.com/settings/keys',
       description: 'Anthropic API key for Claude models'
     },
     { 
       key: 'ANTHROPIC_ORG_ID', 
       prompt: 'Enter your Anthropic Organization ID (press Enter to skip): ',
+      infoUrl: 'https://console.anthropic.com/settings/organization',
       description: 'Anthropic Organization ID if applicable'
     },
     { 
       key: 'GOOGLE_API_KEY', 
       prompt: 'Enter your Google API Key (press Enter to skip): ',
+      infoUrl: 'https://makersuite.google.com/app/apikey',
       description: 'Google API key for Gemini models'
     },
     { 
       key: 'XAI_API_KEY', 
       prompt: 'Enter your X.AI API Key (press Enter to skip): ',
+      infoUrl: 'https://platform.x.com/products/grok',
       description: 'X.AI API key for Grok models'
     },
     { 
       key: 'DEEPSEEK_API_KEY', 
       prompt: 'Enter your DeepSeek API Key (press Enter to skip): ',
+      infoUrl: 'https://platform.deepseek.com/',
       description: 'DeepSeek API key'
     },
     { 
       key: 'BRAVE_API_KEY', 
       prompt: 'Enter your Brave API Key (press Enter to skip): ',
+      infoUrl: 'https://api.search.brave.com/register',
       description: 'Brave API key for web search'
     }
   ];
@@ -187,6 +193,9 @@ function promptForMissingKeys(): void {
       return;
     }
 
+    // Add a newline before each prompt
+    console.log('');
+    
     // Show description if available
     if (nextPrompt.description) {
       console.log(`\x1b[90m${nextPrompt.description}\x1b[0m`);
@@ -194,7 +203,8 @@ function promptForMissingKeys(): void {
     
     // Show info URL if available
     if (nextPrompt.infoUrl) {
-      console.log(`Get it at: \x1b[34m${nextPrompt.infoUrl}\x1b[0m`);
+      // Use Hyperlink escape sequences to make the URL clickable in compatible terminals
+      console.log(`Get it at: \x1b]8;;${nextPrompt.infoUrl}\x1b\\\x1b[34m${nextPrompt.infoUrl}\x1b[0m\x1b]8;;\x1b\\`);
     }
     
     rl.question(nextPrompt.prompt, (keyValue) => {
