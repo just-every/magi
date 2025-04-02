@@ -83,29 +83,7 @@ function parseEnvFile(filePath: string): Record<string, string> {
   }
 }
 
-function installRootDependencies(): void {
-  console.log('\x1b[33m%s\x1b[0m', 'Step 1: Installing core dependencies');
-  
-  try {
-    console.log('Running npm install...');
-    execSync('npm install', { stdio: 'inherit', cwd: rootDir });
-    console.log('\x1b[32m%s\x1b[0m', '✓ Core dependencies installed successfully');
-    ensureAllEnvVars();
-  } catch (error) {
-    console.error('\x1b[31m%s\x1b[0m', 'Failed to install core dependencies.');
-    console.error('Error: ', error instanceof Error ? error.message : String(error));
-    
-    rl.question('Do you want to continue setup without installing dependencies? (y/n): ', (answer) => {
-      if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
-        console.log('\x1b[33m%s\x1b[0m', 'Continuing without installing dependencies. This may cause issues later.');
-        ensureAllEnvVars();
-      } else {
-        console.log('Setup aborted. Please fix the installation issues and try again.');
-        process.exit(1);
-      }
-    });
-  }
-}
+// Core dependencies are now installed by bootstrap.js before this script runs
 
 function ensureAllEnvVars(): void {
   console.log('\x1b[33m%s\x1b[0m', 'Step 2: Setting up environment variables');
@@ -454,4 +432,4 @@ if (args.includes('--help') || args.includes('-h')) {
 }
 
 // Start setup process
-installRootDependencies();
+ensureAllEnvVars();

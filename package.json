@@ -11,7 +11,7 @@
     "lint": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts'",
     "lint:fix": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts' --fix",
     "lint:ui": "eslint controller/src/client/js/ui/",
-    "setup": "npx tsc -p setup && node dist/setup/setup.js",
+    "setup": "node setup/bootstrap.js",
     "setup-claude": "npx tsc -p setup && node dist/setup/claude_setup.js"
   },
   "repository": {
