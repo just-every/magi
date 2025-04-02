@@ -11,11 +11,6 @@ const rl = readline.createInterface({
 	output: process.stdout
 });
 
-console.log('\x1b[36m%s\x1b[0m', '┌─────────────────────────────────────┐');
-console.log('\x1b[36m%s\x1b[0m', '│           MAGI SYSTEM SETUP         │');
-console.log('\x1b[36m%s\x1b[0m', '└─────────────────────────────────────┘');
-console.log('');
-
 // Get the directory name in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -86,6 +81,7 @@ function parseEnvFile(filePath: string): Record<string, string> {
 // Core dependencies are now installed by bootstrap.js before this script runs
 
 function ensureAllEnvVars(): void {
+  console.log('');
   console.log('\x1b[36m%s\x1b[0m', 'Step 2: Setting up environment variables');
   
   // Load example env vars as templates
