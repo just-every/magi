@@ -28,6 +28,13 @@ RUN --mount=type=cache,target=/root/.npm \
 # Use the same base image for consistency
 FROM node:23-slim
 
+# Define desired UID/GID using ARG for flexibility during build
+# You can override these with --build-arg TARGET_UID=xxxx at docker build time
+ARG TARGET_UID=1001
+ARG TARGET_GID=1001
+ARG USER_NAME=magi_user
+ARG GROUP_NAME=magi_user
+
 # Install latest npm globally
 RUN npm install -g npm
 
@@ -40,14 +47,14 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user and group, create app and config directories
-# Ensure cache dir exists and is owned by user BEFORE switching to user
-RUN useradd -m magi_user
+RUN groupadd --gid ${TARGET_GID} ${GROUP_NAME} || true && \
+    useradd --uid ${TARGET_UID} --gid ${TARGET_GID} -m --shell /bin/bash ${USER_NAME}
 RUN mkdir -p /app && chown -R magi_user:magi_user /app
 RUN mkdir -p /home/magi_user/.claude && \
     touch /home/magi_user/.claude/config.json && \
     touch /home/magi_user/.claude.json && \
     chown -R magi_user:magi_user /home/magi_user/.claude /home/magi_user/.claude.json
-RUN mkdir -p /home/magi_user/.cache && chown -R magi_user:magi_user /home/magi_user/.cache && chmod -R 777 /home/magi_user/.cache # Ensure write permissions
+RUN mkdir -p /home/magi_user/.cache && chown -R magi_user:magi_user /home/magi_user/.cache && chmod -R 777 /home/magi_user/.cache
 
 # Set the working directory
 WORKDIR /app
@@ -74,6 +81,7 @@ COPY --chown=magi_user:magi_user magi/. ./
 # Build the application (runs as root)
 RUN npm run build
 
+# Switch to the final user
 USER magi_user
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
