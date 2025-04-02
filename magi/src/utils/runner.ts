@@ -27,6 +27,62 @@ import {getCommunicationManager} from './communication.js';
  */
 export class Runner {
 	/**
+	 * Run a summarization task using an agent
+	 * @param agent The agent to use for summarization
+	 * @param messages The messages to summarize
+	 * @param maxTokens Optional maximum length of the summary
+	 * @returns The summarized content
+	 */
+	static async summarizeContent(
+		agent: Agent,
+		messages: ResponseInput,
+		maxTokens: number = 500
+	): Promise<string> {
+		// Convert the messages to a readable format
+		const messagesText = messages.map(msg => {
+			if('role' in msg && 'content' in msg) {
+				const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+				return `Role: ${msg.role}\nContent: ${content}\n`;
+			} else if('type' in msg && msg.type === 'function_call') {
+				return `Tool Call: ${msg.name}\nArguments: ${msg.arguments}\n`;
+			} else if('type' in msg && msg.type === 'function_call_output') {
+				return `Tool Result: ${msg.name}\nOutput: ${msg.output}\n`;
+			}
+			return JSON.stringify(msg);
+		}).join('\n---\n');
+
+		// Prepare the summarization prompt
+		const summarizationPrompt = `Summarize the following conversation history concisely, focusing on:
+1. Key topics discussed
+2. Important decisions or actions taken
+3. Main user requests and assistant responses
+4. Essential information only - omit repetitive or irrelevant details
+
+Keep the summary clear and comprehensive while staying under ${maxTokens} tokens.
+
+Conversation History:
+${messagesText}
+
+SUMMARY:`;
+
+		// Define a handler to collect the output
+		let summary = '';
+		const handlers = {
+			onResponse: (content: string) => {
+				summary += content;
+			}
+		};
+
+		// Run the agent with the summarization prompt
+		try {
+			await this.runStreamedWithTools(agent, summarizationPrompt, [], handlers);
+			return summary.trim();
+		} catch (error) {
+			console.error('Error summarizing content:', error);
+			return `Failed to generate summary: ${error}`;
+		}
+	}
+	/**
 	 * Run an agent with streaming responses
 	 */
 	static async* runStreamed(

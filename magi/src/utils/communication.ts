@@ -2,6 +2,11 @@
  * Communication module for MAGI client
  *
  * Handles WebSocket communication with the controller
+ * 
+ * Provides functions for:
+ * - Initializing WebSocket connection
+ * - Sending and receiving messages
+ * - Streaming events to clients
  */
 import WebSocket from 'ws';
 import fs from 'fs';
@@ -336,6 +341,22 @@ export function initCommunication(testMode: boolean = false): CommunicationManag
 		communicationManager.connect();
 	}
 	return communicationManager;
+}
+
+/**
+ * Send a streaming event to the controller
+ */
+export function sendStreamEvent(event: StreamingEvent): void {
+	const message: MagiMessage = {
+		processId: process.env.PROCESS_ID || `magi-${Date.now()}`,
+		event: event
+	};
+	
+	if (communicationManager) {
+		communicationManager.sendMessage(message);
+	} else {
+		console.error('Cannot send stream event: Communication manager not initialized');
+	}
 }
 
 export function getCommunicationManager(): CommunicationManager {

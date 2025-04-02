@@ -9,6 +9,8 @@
     --accent-secondary: #555;
     --border-color: #ddd;
     --border-hover: #ccc;
+    --cost-display-bg: rgba(255, 255, 255, 0.9);
+    --cost-display-border: #ddd;
     --status-running-color: #555;
     --status-completed-bg: #f0f0f0;
     --status-completed-color: #333;
@@ -861,4 +863,23 @@ header {
             border-color: #007bff;
         }
     }
+}
+
+/* Cost Display Component */
+.cost-display {
+    background-color: var(--cost-display-bg);
+    border: 1px solid var(--cost-display-border);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.cost-display:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.cost-display .model-name {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }

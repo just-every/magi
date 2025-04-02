@@ -289,6 +289,7 @@ export type StreamEventType =
 	| 'file_start'
 	| 'file_delta'
 	| 'file_complete'
+	| 'cost_update'
 	| 'error';
 
 /**
@@ -388,9 +389,21 @@ export interface ErrorEvent extends StreamEvent {
 }
 
 /**
+ * Cost update streaming event
+ */
+export interface CostUpdateEvent extends StreamEvent {
+	type: 'cost_update';
+	totalCost: number;
+	modelCosts: Record<string, { cost: number; calls: number; }>;
+	timestamp: string;
+	thoughtLevel?: number;
+	delay?: number;
+}
+
+/**
  * Union type for all streaming events
  */
-export type StreamingEvent = ConnectedEvent | CommandEvent | ProcessEvent | AgentEvent | MessageEvent | FileEvent | TalkEvent | ToolEvent | ErrorEvent;
+export type StreamingEvent = ConnectedEvent | CommandEvent | ProcessEvent | AgentEvent | MessageEvent | FileEvent | TalkEvent | ToolEvent | ErrorEvent | CostUpdateEvent;
 
 /**
  * Status of a sequential agent run

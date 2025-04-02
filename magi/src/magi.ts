@@ -15,7 +15,8 @@ import {
 	initCommunication,
 	ServerMessage,
 	getCommunicationManager,
-	CommandMessage
+	CommandMessage,
+	sendStreamEvent
 } from './utils/communication.js';
 import {move_to_working_dir} from './utils/file_utils.js';
 import {costTracker} from './utils/cost_tracker.js';
@@ -115,18 +116,40 @@ function checkModelProviderApiKeys(): boolean {
 	return hasValidKey;
 }
 
-// Add exit handlers to print cost summary
+// Function to send cost data to the controller
+function sendCostData() {
+	const totalCost = costTracker.getTotalCost();
+	const modelCosts = costTracker.getCostsByModel();
+	
+	// Create cost update event
+	const costEvent: StreamingEvent = {
+		type: 'cost_update',
+		totalCost,
+		modelCosts,
+		timestamp: new Date().toISOString(),
+		thoughtLevel: process.env.THOUGHT_LEVEL ? parseInt(process.env.THOUGHT_LEVEL) : undefined,
+		delay: process.env.DELAY_MS ? parseInt(process.env.DELAY_MS) : undefined
+	};
+	
+	// Send the cost data
+	sendStreamEvent(costEvent);
+}
+
+// Add exit handlers to print cost summary and send cost data
 process.on('exit', () => {
 	costTracker.printSummary();
+	sendCostData();
 });
 
 process.on('SIGINT', () => {
 	costTracker.printSummary();
+	sendCostData();
 	process.exit(0);
 });
 
 process.on('SIGTERM', () => {
 	costTracker.printSummary();
+	sendCostData();
 	process.exit(0);
 });
 
@@ -134,6 +157,7 @@ process.on('SIGTERM', () => {
 process.on('unhandledRejection', () => {
 	console.log('\nUnhandled Rejection.');
 	costTracker.printSummary();
+	sendCostData();
 });
 
 /**
@@ -183,8 +207,9 @@ async function main(): Promise<void> {
 		console.log(`Received command via WebSocket: ${commandMessage.command}`);
 		if (commandMessage.command === 'stop') {
 			console.log('Received stop command, terminating...');
-			// Print cost summary before exit
+			// Print cost summary and send cost data before exit
 			costTracker.printSummary();
+			sendCostData();
 			process.exit(0);
 		} else {
 			// Process user-provided follow-up commands
@@ -224,10 +249,17 @@ async function main(): Promise<void> {
 		// When running in test mode, print cost summary and exit
 		if (args.test) {
 			costTracker.printSummary();
+			sendCostData();
 			process.exit(0);
 		} else {
 			// For normal execution, print cost summary when done but don't exit
 			costTracker.printSummary();
+			sendCostData();
+			
+			// Set up a periodic cost update (every 30 seconds)
+			setInterval(() => {
+				sendCostData();
+			}, 30000);
 		}
 	} catch (error) {
 		console.error(`**Error** Failed to process command: ${error}`);

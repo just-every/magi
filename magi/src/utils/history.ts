@@ -27,21 +27,57 @@ const history: History = {
 async function compactHistory(): Promise<void> {
 	const approxTokens = (JSON.stringify(history.messages).length / 4);
 	if(approxTokens > COMPACT_TOKENS_AT) {
-		// Compact the history to save space
-
+		console.log(`[History] Compacting history: approx ${approxTokens} tokens exceeds limit of ${COMPACT_TOKENS_AT}`);
+		
+		// Determine how much of the history to summarize (approximately the oldest 30%)
 		let split = Math.ceil(history.messages.length * 0.3);
 		if(split > (history.messages.length - 4)) {
 			split = history.messages.length - 4;
 		}
-
-		// const compactMessages = history.messages.slice(0, split);
-		history.messages = history.messages.slice(split);
-
-		// @todo use AI to summarize compactMessages and add back as a single message
-
-
+		
+		// Extract the messages to be summarized
+		const messagesToSummarize = history.messages.slice(0, split);
+		console.log(`[History] Summarizing ${messagesToSummarize.length} messages`);
+		
+		try {
+			// Import the necessary modules and create the agent
+			// We need to import these here to avoid circular dependencies
+			const { createReasoningAgent } = await import('../magi_agents/common_agents/reasoning_agent.js');
+			const { Runner } = await import('./runner.js');
+			
+			// Create a reasoning agent specifically for summarization
+			const summarizationAgent = createReasoningAgent(`You are a history summarization agent. 
+Your task is to concisely summarize conversation history, preserving the most important information
+while significantly reducing the token count. Focus on key points, decisions, and outcomes. 
+Maintain a neutral, factual tone. The summary will replace these messages in the conversation history.`);
+			
+			// Summarize the messages using our new summarization method
+			const summary = await Runner.summarizeContent(
+				summarizationAgent,
+				messagesToSummarize,
+				1000 // Reasonable token limit for the summary
+			);
+			
+			console.log(`[History] Generated summary: ${summary.substring(0, 100)}...`);
+			
+			// Replace the summarized messages with a single summary message
+			history.messages = [
+				{
+					role: 'system',
+					content: `Summary of previous conversation:\n\n${summary}`
+				},
+				...history.messages.slice(split) // Keep the messages after the summarized portion
+			];
+			
+			console.log(`[History] Compacted history from ${messagesToSummarize.length} messages to a summary + ${history.messages.length - 1} recent messages`);
+		} catch (error) {
+			console.error('[History] Error summarizing history:', error);
+			
+			// Fallback: if summarization fails, just trim the older messages
+			console.log('[History] Falling back to simple truncation');
+			history.messages = history.messages.slice(split);
+		}
 	}
-	history.messages = history.messages.slice(history.messages.length * 0.3);
 }
 
 /**

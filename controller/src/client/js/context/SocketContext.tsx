@@ -7,7 +7,9 @@ import {
 	ProcessUpdateEvent,
 	ProcessCommandEvent,
 	ProcessMessageEvent,
-	ProcessStatus
+	ProcessStatus,
+	CostInfoEvent,
+	CostData
 } from '@types';
 
 // Define the type for the Socket.io socket
@@ -74,6 +76,7 @@ interface SocketContextInterface {
 	processes: Map<string, ProcessData>;
 	serverVersion: string | null;
 	coreProcessId: string | null;
+	costData: CostData | null;
 }
 
 export interface AgentData {
@@ -111,6 +114,7 @@ const SocketContext = createContext<SocketContextInterface>({
 	processes: new Map<string, ProcessData>(),
 	serverVersion: null,
 	coreProcessId: null,
+	costData: null,
 });
 
 // Define props for the provider
@@ -124,6 +128,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 	const [processes, setProcesses] = useState<Map<string, ProcessData>>(new Map());
 	const [serverVersion, setServerVersion] = useState<string | null>(null);
 	const [coreProcessId, setCoreProcessId] = useState<string | null>(null);
+	const [costData, setCostData] = useState<CostData | null>(null);
 
 	// Initialize socket connection
 	useEffect(() => {
@@ -142,6 +147,11 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 			}
 
 			setServerVersion(data.version);
+		});
+		
+		// Handle cost information updates
+		socketInstance.on('cost:info', (event: CostInfoEvent) => {
+			setCostData(event.cost);
 		});
 
 		socketInstance.on('process:create', (event: ProcessCreateEvent) => {
@@ -645,7 +655,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 		terminateProcess,
 		processes,
 		serverVersion,
-		coreProcessId
+		coreProcessId,
+		costData
 	};
 
 	return (

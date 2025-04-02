@@ -20,6 +20,7 @@ export type StreamEventType =
     | 'tool_start'
     | 'tool_delta'
     | 'tool_done'
+    | 'cost_update'
     | 'error';
 
 // Basic agent definition for messages
@@ -97,6 +98,15 @@ export interface ToolEvent extends StreamEvent {
     result?: any;
 }
 
+// Cost update event
+export interface CostUpdateEvent extends StreamEvent {
+    type: 'cost_update';
+    totalCost: number;
+    modelCosts: Record<string, { cost: number; calls: number; }>;
+    thoughtLevel?: number;
+    delay?: number;
+}
+
 // Error event
 export interface ErrorEvent extends StreamEvent {
     type: 'error';
@@ -104,7 +114,7 @@ export interface ErrorEvent extends StreamEvent {
 }
 
 // Union type for all streaming events
-export type StreamingEvent = ConnectedEvent | CommandEvent | AgentEvent | MessageEvent | TalkEvent | ToolEvent | ErrorEvent;
+export type StreamingEvent = ConnectedEvent | CommandEvent | AgentEvent | MessageEvent | TalkEvent | ToolEvent | CostUpdateEvent | ErrorEvent;
 
 /**
  * MagiMessage format for communication between containers and controller
@@ -116,6 +126,23 @@ export interface MagiMessage {
 
 // Process status type
 export type ProcessStatus = 'running' | 'completed' | 'failed' | 'terminated' | 'ending';
+
+// Cost tracking interfaces
+export interface ModelCostSummary {
+	model: string;
+	cost: number;
+	calls: number;
+}
+
+export interface CostData {
+	totalCost: number;
+	costPerMinute: number;
+	modelCosts: ModelCostSummary[];
+	numProcesses: number;
+	thoughtLevel?: number;
+	delay?: number;
+	timestamp: number;
+}
 
 // Socket.io event interfaces
 
@@ -160,6 +187,11 @@ export interface ProcessCommandEvent {
 // Event for server information sent to clients
 export interface ServerInfoEvent {
 	version: string;      // Server version
+}
+
+// Event for cost information sent to clients
+export interface CostInfoEvent {
+	cost: CostData;       // Cost information
 }
 
 // Position for absolute positioning of boxes

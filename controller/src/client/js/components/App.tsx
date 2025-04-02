@@ -1,9 +1,10 @@
 import * as React from 'react';
 import {useState} from 'react';
-import {SocketProvider} from '../context/SocketContext';
+import {SocketProvider, useSocket} from '../context/SocketContext';
 import ProcessGrid from './ProcessGrid';
 import CommandInput from './CommandInput';
 import LogsViewer from './LogsViewer';
+import CostDisplay from './ui/CostDisplay';
 
 const App: React.FC = () => {
 	const [showLogs, setShowLogs] = useState<boolean>(false);
@@ -29,6 +30,9 @@ const App: React.FC = () => {
 				>
 					Magi
 				</h1>
+				
+				{/* Cost display */}
+				<CostDisplay />
 
 				{/* Main command input */}
 				<CommandInput/>

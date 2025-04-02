@@ -10,6 +10,7 @@ import {ProcessManager} from './process_manager';
 import fs from 'fs';
 import path from 'path';
 import {talk} from '../utils/talk';
+import {CostData} from '@types';
 
 // Event types for the server-client communication
 export interface MagiMessage {
@@ -76,6 +77,14 @@ export class CommunicationManager {
 	private connections: Map<string, WebSocket> = new Map();
 	private containerData: Map<string, ContainerConnection> = new Map();
 	private storageDir: string;
+	private costData: CostData = {
+		totalCost: 0,
+		costPerMinute: 0,
+		modelCosts: [],
+		numProcesses: 0,
+		timestamp: Date.now()
+	};
+	private costStartTime: number = Date.now();
 
 	constructor(server: HttpServer, processManager: ProcessManager) {
 		this.processManager = processManager;
@@ -222,6 +231,51 @@ export class CommunicationManager {
 	}
 
 	/**
+	 * Updates cost data and emits to clients
+	 */
+	private updateCostData(costUpdate: any): void {
+		try {
+			if (costUpdate.totalCost !== undefined) {
+				// Calculate cost per minute
+				const elapsedMinutes = (Date.now() - this.costStartTime) / 60000;
+				const costPerMinute = elapsedMinutes > 0 ? costUpdate.totalCost / elapsedMinutes : 0;
+
+				// Update cost data
+				this.costData = {
+					totalCost: costUpdate.totalCost,
+					costPerMinute: costPerMinute,
+					modelCosts: Object.entries(costUpdate.modelCosts || {}).map(([model, data]: [string, any]) => ({
+						model,
+						cost: data.cost,
+						calls: data.calls
+					})),
+					numProcesses: Object.keys(this.processManager.getAllProcesses()).length,
+					thoughtLevel: costUpdate.thoughtLevel,
+					delay: costUpdate.delay,
+					timestamp: Date.now()
+				};
+
+				// Notify all connected clients
+				this.processManager.io.emit('cost:info', {
+					cost: this.costData
+				});
+			}
+		} catch (error) {
+			console.error('Error updating cost data:', error);
+		}
+	}
+
+	/**
+	 * Handles cost events from containers
+	 * @param message The message containing cost data
+	 */
+	public handleCostEvent(message: any): void {
+		if (message && message.data) {
+			this.updateCostData(message.data);
+		}
+	}
+
+	/**
 	 * Process messages received from containers
 	 */
 	private processContainerMessage(processId: string, message: MagiMessage): void {
@@ -302,6 +356,11 @@ export class CommunicationManager {
 							result.output = processOutputPaths(result.output);
 						}
 					}
+				}
+
+				// Handle cost update events
+				if (eventType === 'cost_update') {
+					this.updateCostData(message.event);
 				}
 
 				// Emit a dedicated event for structured messages directly to Socket.io clients
