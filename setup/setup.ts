@@ -114,31 +114,26 @@ function ensureAllEnvVars(): void {
 }
 
 function promptForMissingKeys(): void {
-  // Check if OpenAI key is missing (required)
-  if (!openaiApiKey) {
-    promptForOpenAIKey();
-    return;
-  }
-  
-  // First make sure YOUR_NAME and AI_NAME are set
-  if (!envVars['YOUR_NAME']) {
-    rl.question('Enter your name (default: Human): ', (answer) => {
-      envVars['YOUR_NAME'] = answer.trim() || 'Human';
-      promptForMissingKeys();
-    });
-    return;
-  }
-  
-  if (!envVars['AI_NAME']) {
-    rl.question('Enter AI name (default: Magi): ', (answer) => {
-      envVars['AI_NAME'] = answer.trim() || 'Magi';
-      promptForMissingKeys();
-    });
-    return;
-  }
-  
-  // Ask for optional API keys
-  const apiKeyPrompts = [
+  // All configuration options
+  const configPrompts = [
+    { 
+      key: 'YOUR_NAME', 
+      question: 'Do you want to set your name? (y/n): ',
+      prompt: 'Enter your name (default: Human): ',
+      defaultValue: 'Human'
+    },
+    { 
+      key: 'AI_NAME', 
+      question: 'Do you want to set AI name? (y/n): ',
+      prompt: 'Enter AI name (default: Magi): ',
+      defaultValue: 'Magi'
+    },
+    { 
+      key: 'OPENAI_API_KEY', 
+      question: 'Do you want to set up OpenAI API key? (y/n): ',
+      prompt: 'Enter your OpenAI API Key: ',
+      infoUrl: 'https://platform.openai.com/api-keys'
+    },
     { 
       key: 'ANTHROPIC_API_KEY', 
       question: 'Do you want to set up Anthropic API key for Claude models? (y/n): ',
@@ -172,7 +167,7 @@ function promptForMissingKeys(): void {
   ];
   
   // Find first missing key that hasn't been prompted yet
-  const nextPrompt = apiKeyPrompts.find(item => !envVars[item.key]);
+  const nextPrompt = configPrompts.find(item => !envVars[item.key] && envVars[item.key] !== '');
   
   if (nextPrompt) {
     // Skip if already has value
@@ -183,9 +178,22 @@ function promptForMissingKeys(): void {
     
     rl.question(nextPrompt.question, (answer) => {
       if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
+        // Show info URL if available
+        if (nextPrompt.infoUrl) {
+          console.log(`Get your ${nextPrompt.key} at: \x1b[34m${nextPrompt.infoUrl}\x1b[0m`);
+        }
+        
         rl.question(nextPrompt.prompt, (keyValue) => {
           if (keyValue && keyValue.trim() !== '') {
             envVars[nextPrompt.key] = keyValue.trim();
+            
+            // Update openaiApiKey if we're setting that value
+            if (nextPrompt.key === 'OPENAI_API_KEY') {
+              openaiApiKey = keyValue.trim();
+            }
+          } else if (nextPrompt.defaultValue) {
+            // Use default value if available and user input is empty
+            envVars[nextPrompt.key] = nextPrompt.defaultValue;
           }
           promptForMissingKeys();
         });
@@ -202,23 +210,6 @@ function promptForMissingKeys(): void {
   saveEnvFile();
 }
 
-function promptForOpenAIKey(): void {
-  console.log('You need an OpenAI API key to use this system.');
-  console.log('Get your API key at: \x1b[34mhttps://platform.openai.com/api-keys\x1b[0m');
-
-  rl.question('Enter your OpenAI API Key: ', (answer) => {
-    if (!answer || answer.trim() === '') {
-      console.log('\x1b[31m%s\x1b[0m', 'API key cannot be empty. Please try again.');
-      promptForOpenAIKey();
-      return;
-    }
-
-    openaiApiKey = answer.trim();
-    envVars['OPENAI_API_KEY'] = openaiApiKey;
-    promptForMissingKeys();
-  });
-}
-
 function saveEnvFile(): void {
   try {
     // Build .env file content from envVars
@@ -227,20 +218,11 @@ function saveEnvFile(): void {
     // Add standard header
     envContent += '# MAGI System Environment Variables\n\n';
     
-    // Essential variables first
-    if (envVars['YOUR_NAME']) {
-      envContent += `YOUR_NAME=${envVars['YOUR_NAME']}\n`;
-    }
-    
-    if (envVars['AI_NAME']) {
-      envContent += `AI_NAME=${envVars['AI_NAME']}\n`;
-    }
-    
-    // Always include OpenAI key
-    envContent += `OPENAI_API_KEY=${openaiApiKey}\n\n`;
-    
-    // Add optional API keys if they exist
-    const optionalKeys = [
+    // Define all the configuration keys and their comments
+    const configKeys = [
+      { key: 'YOUR_NAME', comment: '# Your name - identifies you in primary commands' },
+      { key: 'AI_NAME', comment: '# AI name - identifies the AI in thought processes' },
+      { key: 'OPENAI_API_KEY', comment: '# OpenAI API key for GPT models' },
       { key: 'ANTHROPIC_API_KEY', comment: '# Anthropic API key for Claude models' },
       { key: 'ANTHROPIC_ORG_ID', comment: '# Anthropic Organization ID if applicable' },
       { key: 'GOOGLE_API_KEY', comment: '# Google API key for Gemini models' },
@@ -249,7 +231,8 @@ function saveEnvFile(): void {
       { key: 'BRAVE_API_KEY', comment: '# Brave API key for web search' }
     ];
     
-    optionalKeys.forEach(({ key, comment }) => {
+    // Add each variable if it exists and has a value
+    configKeys.forEach(({ key, comment }) => {
       if (envVars[key] && envVars[key].trim() !== '') {
         envContent += `${comment}\n${key}=${envVars[key]}\n\n`;
       }
