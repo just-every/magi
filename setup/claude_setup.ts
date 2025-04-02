@@ -17,9 +17,6 @@ export async function setupClaudeAuth(): Promise<boolean> {
 	console.log("Setting up Claude authentication...");
 
 	try {
-		// Check if volume exists, create it if not
-		console.log("Checking for claude_credentials volume...");
-
 		const volumeExistsResult = await new Promise<string>((resolve, reject) => {
 			exec('docker volume ls --filter name=claude_credentials --format "{{.Name}}"', (error, stdout) => {
 				if (error) {
@@ -57,9 +54,6 @@ export async function setupClaudeAuth(): Promise<boolean> {
       claude --dangerously-skip-permissions
     `;
 
-		// Run the container in interactive mode
-		console.log("Launching interactive container for Claude authentication...");
-
 		const containerIdResult = await new Promise<string>((resolve, reject) => {
 			exec(
 				`docker run -d --rm -v claude_credentials:/claude_shared -it magi-system:latest sh -c "${setupCmd}"`,
@@ -74,13 +68,10 @@ export async function setupClaudeAuth(): Promise<boolean> {
 		});
 
 		const containerId = containerIdResult;
-		console.log(`Claude container started with ID: ${containerId}`);
 
-		// Execute docker attach command as a subprocess so user can interact with it
-		const attachCmd = `docker attach ${containerId}`;
-		console.log(`Running: ${attachCmd}`);
-		console.log("Follow the prompts to authenticate Claude...");
-		console.log("Press Ctrl+C to exit the authentication process once finished.");
+		console.log("Please follow the prompts to authenticate Claude...");
+		console.log('\x1b[32m%s\x1b[0m', 'Press Ctrl+C twice to exit once Claude Code has authenticated.');
+		console.log("");
 
 		// Run docker attach in a child process
 		const attachProcess = spawn('docker', ['attach', containerId], {
@@ -98,7 +89,7 @@ export async function setupClaudeAuth(): Promise<boolean> {
 
 		// Verify the volume has the expected files
 		try {
-			const verifyResult = await new Promise<string>((resolve, reject) => {
+			await new Promise<string>((resolve, reject) => {
 				exec(
 					'docker run --rm -v claude_credentials:/claude_data:ro alpine:latest sh -c "ls -la /claude_data/.claude/ && cat /claude_data/.claude.json"',
 					(error, stdout) => {
@@ -110,9 +101,6 @@ export async function setupClaudeAuth(): Promise<boolean> {
 					}
 				);
 			});
-
-			console.log("Volume contents verification:");
-			console.log(verifyResult);
 		} catch (verifyError) {
 			console.log(`Could not verify volume contents: ${verifyError}`);
 		}

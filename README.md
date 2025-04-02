@@ -191,12 +191,55 @@ MAGI_ENABLE_SELF_OPTIMIZATION=false test/magi-docker.sh -p "your prompt here"
 5. Fix any errors
 6. Repeat until everything works correctly
 
+## Docker Mode
+
+For improved cross-platform compatibility (especially on Windows), you can run the entire MAGI system in Docker:
+
+### Option 1: Docker Compose (Recommended)
+
+Run the full system in Docker containers:
+
+```bash
+# Windows
+start-docker-windows.bat
+
+# macOS/Linux
+./start-docker.sh
+```
+
+### Option 2: Hybrid Mode (Best for Windows)
+
+Run controller locally, but agents in Docker (solves common Windows issues):
+
+```bash
+# Windows
+run-local.bat
+
+# macOS/Linux
+./run-local.sh
+```
+
+### Option 3: Host Network Mode
+
+Alternative approach for tricky networking environments:
+
+```bash
+# Windows
+use-host-network.bat
+
+# macOS/Linux
+./use-host-network.sh
+```
+
+These containerized approaches solve host networking issues between containers. For detailed instructions and troubleshooting, see [DOCKER.md](DOCKER.md).
+
 ## Troubleshooting
 
 - **Docker Connection Issues**: Ensure Docker is running
 - **Permission Errors**: May need sudo/admin for Docker operations
 - **API Key Problems**: Verify your OpenAI API key is valid
 - **Port Conflicts**: If port 3001 is in use, the system will try alternative ports
+- **Windows Docker Network Issues**: Use Docker mode with `start-docker-windows.bat`
 
 ## License
 

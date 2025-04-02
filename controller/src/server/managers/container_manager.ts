@@ -109,14 +109,17 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
 		console.error('Start docker with CONTROLLER_PORT:', serverPort);
 
 		// Create the docker run command using base64 encoded command
+		// Get HOST_HOSTNAME from environment variable, fallback to docker service name
+		const hostName = process.env.HOST_HOSTNAME || 'controller';
+		
 		const dockerRunCommand = `docker run -d --rm --name ${containerName} \
       -e PROCESS_ID=${processId} \
-      -e HOST_HOSTNAME=host.docker.internal \
+      -e HOST_HOSTNAME=${hostName} \
       -e CONTROLLER_PORT=${serverPort} \
-      --env-file ${path.resolve(projectRoot, '.env')} \
+      --env-file ${path.resolve(projectRoot, '../.env')} \
       -v claude_credentials:/claude_shared:rw \
       -v magi_output:/magi_output:rw \
-      --add-host=host.docker.internal:host-gateway \
+      --network magi-system_magi-network \
       magi-system:latest \
       --tool ${options.tool || 'none'} \
       --base64 "${base64Command}"`;
@@ -127,6 +130,30 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
 	} catch (error) {
 		console.error('Error running Docker container:', error);
 		return '';
+	}
+}
+
+/**
+ * Send a command to a running MAGI System Docker container through FIFO
+ * @param processId The process ID of the container to send the command to
+ * @param command The command to send
+ * @returns Promise resolving to true if successful, false otherwise
+ */
+export async function sendCommandToContainer(processId: string, command: string): Promise<boolean> {
+	try {
+		const containerName = validateContainerName(`magi-${processId}`);
+		
+		// Base64 encode the command to avoid shell escaping issues
+		const base64Command = Buffer.from(command).toString('base64');
+		
+		// Execute the docker exec command to write the base64 command to the container's FIFO
+		const execCmd = `docker exec ${containerName} sh -c "echo '${base64Command}' > /magi_output/${processId}/fifo"`;
+		
+		await execPromise(execCmd);
+		return true;
+	} catch (error) {
+		console.error(`Error sending command to container ${processId}:`, error);
+		return false;
 	}
 }
 
@@ -241,23 +268,30 @@ export async function getRunningMagiContainers(): Promise<{ id: string, containe
 			return [];
 		}
 
-		// Parse container info
-		return stdout.trim().split('\n').map(line => {
-			const [containerId, name, command] = line.split('|');
+		// Parse container info and filter out system containers
+		return stdout.trim().split('\n')
+			.map(line => {
+				const [containerId, name, command] = line.split('|');
 
-			// Extract process ID from name (remove 'magi-' prefix)
-			const id = name.replace('magi-', '');
+				// Extract process ID from name (remove 'magi-' prefix)
+				const id = name.replace('magi-', '');
 
-			// Extract original command (it's in the format 'python -m... "command"')
-			const originalCommandMatch = command.match(/"(.+)"$/);
-			const originalCommand = originalCommandMatch ? originalCommandMatch[1] : '';
+				// Extract original command (it's in the format 'python -m... "command"')
+				const originalCommandMatch = command.match(/"(.+)"$/);
+				const originalCommand = originalCommandMatch ? originalCommandMatch[1] : '';
 
-			return {
-				id,
-				containerId,
-				command: originalCommand
-			};
-		});
+				return {
+					id,
+					containerId,
+					command: originalCommand
+				};
+			})
+			// Filter out system containers that aren't MAGI LLM process containers
+			.filter(container => {
+				// Skip controller container and any other system containers
+				// Valid MAGI process IDs are in format AI-xxxxx
+				return container.id.startsWith('AI-');
+			});
 	} catch (err) {
 		console.error('Error getting running MAGI containers:', err);
 		return [];
@@ -270,36 +304,85 @@ export async function getRunningMagiContainers(): Promise<{ id: string, containe
  */
 export async function cleanupAllContainers(): Promise<boolean> {
 	try {
-		// First get all containers with magi- prefix
+		// First approach: Stop any containers with magi-AI prefix (the ones we create for processes)
 		try {
+			console.log('Attempt 1: Stopping all AI process containers');
+			const stopAICommand = "docker ps -a --filter 'name=magi-AI' -q | xargs -r docker stop --time=2 2>/dev/null || true";
+			await execPromise(stopAICommand);
+
+			// Force remove those containers
+			const removeAICommand = "docker ps -a --filter 'name=magi-AI' -q | xargs -r docker rm -f 2>/dev/null || true";
+			await execPromise(removeAICommand);
+
+			// Print what containers are still running
+			console.log('Post AI cleanup container check:');
+			await execPromise("docker ps --filter 'name=magi-AI' --format '{{.Names}}' | xargs -r echo 'Still running: '");
+		} catch (commandError) {
+			console.error('Error during AI container cleanup:', commandError);
+		}
+
+		// Second approach: Try to clean up all magi- containers
+		try {
+			console.log('Attempt 2: Stopping all containers with magi- prefix');
 			// First attempt to stop all containers with name starting with magi- with a 2 second timeout
-			const stopCommand = "docker ps -aq -f 'name=magi-' | xargs -r docker stop --time=2 2>/dev/null || true";
+			const stopCommand = "docker ps -a --filter 'name=magi-' -q | xargs -r docker stop --time=2 2>/dev/null || true";
 			await execPromise(stopCommand);
 
 			// Then try to forcefully remove any containers with the magi-system image
-			const removeCommand = "docker ps -aq -f 'ancestor=magi-system:latest' | xargs -r docker rm -f 2>/dev/null || true";
+			const removeCommand = "docker ps -a --filter 'ancestor=magi-system:latest' -q | xargs -r docker rm -f 2>/dev/null || true";
 			await execPromise(removeCommand);
-
 		} catch (commandError) {
-			console.error('Error during container cleanup command:', commandError);
-			// Continue despite error
+			console.error('Error during general container cleanup:', commandError);
 		}
 
-		// As a backup approach, get a list of containers and stop them all in parallel
+		// Third approach: More targeted explicit cleanup with container names
 		try {
+			console.log('Attempt 3: Explicit container cleanup by name');
+			// First, get both running and stopped containers with magi-AI prefix
+			const {stdout: aiContainerStdout} = await execPromise("docker ps -a --filter 'name=magi-AI' --format '{{.Names}}'");
+			
+			if (aiContainerStdout.trim()) {
+				const aiContainerNames = aiContainerStdout.trim().split('\n');
+				console.log(`Found ${aiContainerNames.length} AI containers to clean up: ${aiContainerNames.join(', ')}`);
+				
+				// First stop all AI containers in parallel
+				await Promise.all(
+					aiContainerNames.map(async (containerName) => {
+						try {
+							console.log(`Stopping AI container ${containerName}`);
+							await execPromise(`docker stop --time=2 ${containerName}`);
+						} catch (containerError) {
+							console.error(`Error stopping AI container ${containerName}:`, containerError);
+						}
+					})
+				);
+				
+				// Then remove all AI containers in parallel
+				await Promise.all(
+					aiContainerNames.map(async (containerName) => {
+						try {
+							console.log(`Removing AI container ${containerName}`);
+							await execPromise(`docker rm -f ${containerName}`);
+						} catch (containerError) {
+							console.error(`Error removing AI container ${containerName}:`, containerError);
+						}
+					})
+				);
+			}
+			
+			// Next, get all other magi containers
 			const {stdout} = await execPromise("docker ps -a --filter 'name=magi-' --format '{{.Names}}'");
 
 			if (stdout.trim()) {
 				const containerNames = stdout.trim().split('\n');
-				console.log(`Found ${containerNames.length} MAGI containers to clean up in parallel`);
+				console.log(`Found ${containerNames.length} other MAGI containers to clean up: ${containerNames.join(', ')}`);
 
 				// First stop all containers in parallel
 				await Promise.all(
 					containerNames.map(async (containerName) => {
 						try {
-							// Only indicate how many containers we're stopping, not each one individually
-							// Using a short 2 second timeout to speed up the process
-							await execPromise(`docker stop --time=2 ${containerName} 2>/dev/null || true`);
+							console.log(`Stopping container ${containerName}`);
+							await execPromise(`docker stop --time=2 ${containerName}`);
 						} catch (containerError) {
 							console.error(`Error stopping container ${containerName}:`, containerError);
 						}
@@ -310,8 +393,8 @@ export async function cleanupAllContainers(): Promise<boolean> {
 				await Promise.all(
 					containerNames.map(async (containerName) => {
 						try {
-							// Only indicate overall process, not individual containers
-							await execPromise(`docker rm -f ${containerName} 2>/dev/null || true`);
+							console.log(`Removing container ${containerName}`);
+							await execPromise(`docker rm -f ${containerName}`);
 						} catch (containerError) {
 							console.error(`Error removing container ${containerName}:`, containerError);
 						}
@@ -322,10 +405,36 @@ export async function cleanupAllContainers(): Promise<boolean> {
 			console.error('Error listing containers for cleanup:', listError);
 		}
 
+		// Final verification: Are there still any containers left?
+		try {
+			console.log('Final verification of container cleanup');
+			const {stdout: finalCheck} = await execPromise("docker ps -a --filter 'name=magi-' --format '{{.Names}}'");
+			
+			if (finalCheck.trim()) {
+				console.log(`WARNING: After all cleanup attempts, still found containers: ${finalCheck.trim()}`);
+				// One last desperate attempt with force
+				console.log('Performing final force cleanup');
+				await execPromise("docker ps -a --filter 'name=magi-' -q | xargs -r docker rm -f");
+			} else {
+				console.log('All containers successfully removed');
+			}
+		} catch (finalError) {
+			console.error('Error in final verification:', finalError);
+		}
+
 		return true;
 	} catch (error) {
 		console.error('Error in cleanupAllContainers:', error);
 		// Still return true to allow the shutdown process to continue
+		
+		// Even in case of error, try one last time to clean up
+		try {
+			console.log('Emergency cleanup after error');
+			await execPromise("docker ps -a --filter 'name=magi-' -q | xargs -r docker rm -f 2>/dev/null || true");
+		} catch (e) {
+			// Ignore any errors in this last-ditch effort
+		}
+		
 		return true;
 	}
 }

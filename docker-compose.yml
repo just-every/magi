@@ -1,0 +1,60 @@
+# Docker Compose configuration for MAGI System
+# Updated to run controller as root for Docker socket access
+
+services:
+  # Controller service - the main web interface and container manager
+  controller:
+    container_name: magi-controller
+    build:
+      context: ./controller
+      dockerfile: docker/Dockerfile
+    ports:
+      - "3010:3010" # Expose web interface port
+      - "3011:3011" # Expose additional port
+    volumes:
+      - ./controller/src:/app/src:rw # Mount only source code for live development
+      - ./controller/nodemon.json:/app/nodemon.json:ro # Mount nodemon.json
+      - ./controller/package.json:/app/package.json:ro # Mount package.json
+      - ./controller/tsconfig.json:/app/tsconfig.json:ro # Mount tsconfig.json
+      - ./controller/webpack.config.js:/app/webpack.config.js:ro # Mount webpack config
+      - ./.env:/app/../.env:ro # Mount .env file in parent directory (where server expects it)
+      - claude_credentials:/claude_shared:rw # For Claude auth
+      - magi_output:/magi_output:rw # For output storage
+      - /var/run/docker.sock:/var/run/docker.sock # Allow Docker-in-Docker
+    environment:
+      - PORT=3010
+      - HOST_HOSTNAME=controller # Use service name for internal communication
+      - NODE_ENV=development # Set environment to development
+    networks:
+      - magi-network
+    stop_signal: SIGINT
+    stop_grace_period: 15s
+    restart: unless-stopped
+
+  # Base service configuration for magi containers
+  # This is not started directly but is extended by created containers
+  magi-base:
+    image: magi-system:latest
+    build:
+      context: ./magi
+      dockerfile: docker/Dockerfile
+    volumes:
+      - claude_credentials:/claude_shared:rw
+      - magi_output:/magi_output:rw
+    env_file:
+      - ./.env
+    environment:
+      - HOST_HOSTNAME=controller # Use service name instead of host.docker.internal
+      - CONTROLLER_PORT=3010
+    networks:
+      - magi-network
+    profiles:
+      - "donotstart" # Prevents this service from starting automatically
+
+networks:
+  magi-network:
+    driver: bridge
+
+volumes:
+  claude_credentials:
+  magi_output:

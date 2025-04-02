@@ -22,19 +22,6 @@ import {ServerManager} from './managers/server_manager';
 import {initColorManager} from './managers/color_manager';
 
 /**
- * Check if FFmpeg is installed
- */
-async function checkFFmpeg(): Promise<boolean> {
-	const execAsync = promisify(exec);
-	try {
-		await execAsync('ffplay -version');
-		return true;
-	} catch (error) {
-		return false;
-	}
-}
-
-/**
  * Initialize and start the MAGI System server
  */
 async function main(): Promise<void> {
@@ -42,13 +29,6 @@ async function main(): Promise<void> {
 	// Check OpenAI API key
 	if (!process.env.OPENAI_API_KEY) {
 		console.warn('\n⚠ OPENAI_API_KEY not set. Voice disabled.\n');
-	}
-	else {
-		// Check for FFmpeg installation
-		const ffmpegInstalled = await checkFFmpeg();
-		if (!ffmpegInstalled) {
-			console.warn('\n⚠ FFmpeg (ffplay) not found. Voice disabled. Please install FFmpeg to enable voice features.\n');
-		}
 	}
 	// Initialize color manager
 	initColorManager();

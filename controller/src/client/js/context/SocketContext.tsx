@@ -11,6 +11,7 @@ import {
 	CostInfoEvent,
 	CostData
 } from '@types';
+import { handleAudioMessage } from '../utils/AudioUtils';
 
 // Define the type for the Socket.io socket
 // Using a basic interface for Socket.io instance
@@ -148,7 +149,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 
 			setServerVersion(data.version);
 		});
-		
+
 		// Handle cost information updates
 		socketInstance.on('cost:info', (event: CostInfoEvent) => {
 			setCostData(event.cost);
@@ -219,6 +220,10 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 
 		// Handle structured messages from containers via the dedicated channel
 		socketInstance.on('process:message', (event: ProcessMessageEvent) => {
+			if(event.message && (!event.message.event.type || event.message.event.type !== 'message_delta')) {
+				console.log(`process:message`, event.id, event.message.event || event.message);
+			}
+
 			setProcesses(prevProcesses => {
 				const newProcesses = new Map(prevProcesses);
 				const process = newProcesses.get(event.id);
@@ -297,7 +302,11 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 				}
 
 				// Handle different event types
-				if (eventType === 'command_start' || eventType === 'connected') {
+				if (eventType === 'audio_stream') {
+					// Process audio data event for browser playback
+					handleAudioMessage(data);
+					return newProcesses; // No need to update the process state
+				} else if (eventType === 'command_start' || eventType === 'connected') {
 					// User message - already handled in process:create but good as a fallback
 					if ('command' in streamingEvent) {
 						const content = streamingEvent.command || '';

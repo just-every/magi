@@ -11,7 +11,7 @@ import {
 	ProcessLogsEvent,
 	ProcessUpdateEvent
 } from '@types';
-import {execPromiseFallback} from '../utils/docker_commands';
+import {execPromise} from '../utils/docker_commands';
 import {generateProcessColors} from './color_manager';
 import {
 	isDockerAvailable,
@@ -332,7 +332,7 @@ export class ProcessManager {
 		const checkInterval = setInterval(async () => {
 			try {
 				// Query container status using Docker inspect
-				const {stdout} = await execPromiseFallback(
+				const {stdout} = await execPromise(
 					`docker inspect --format={{.State.Status}} ${containerName}`
 				);
 				const status = stdout.trim();
@@ -342,7 +342,7 @@ export class ProcessManager {
 					console.log(`Container ${containerName} has exited, checking exit code`);
 
 					// Get the container's exit code
-					const {stdout: exitCodeStdout} = await execPromiseFallback(
+					const {stdout: exitCodeStdout} = await execPromise(
 						`docker inspect --format={{.State.ExitCode}} ${containerName}`
 					);
 					const exitCode = parseInt(exitCodeStdout.trim(), 10);
@@ -574,15 +574,61 @@ export class ProcessManager {
 			}
 		}
 
-		// Step 2: Stop all running processes that we know about
+		// Step 2: Get ALL containers with "magi-AI" name prefix, not just the ones we're tracking
+		// This ensures we also catch containers that might have been created but not fully tracked
+		try {
+			const {stdout} = await execPromise("docker ps -a --filter 'name=magi-AI' --format '{{.Names}}'");
+			
+			if (stdout.trim()) {
+				const containerNames = stdout.trim().split('\n');
+				const containerIds = containerNames.map(name => name.replace('magi-', ''));
+				
+				console.log(`Found ${containerNames.length} MAGI containers to clean up: ${containerIds.join(', ')}`);
+				
+				// Stop all containers in parallel
+				await Promise.all(
+					containerNames.map(async (containerName) => {
+						try {
+							console.log(`Stopping container ${containerName}`);
+							await execPromise(`docker stop --time=2 ${containerName}`);
+						} catch (error) {
+							console.error(`Error stopping container ${containerName}:`, error);
+						}
+					})
+				);
+				
+				// Mark all related processes as terminated
+				for (const containerName of containerNames) {
+					const processId = containerName.replace('magi-', '');
+					if (this.processes[processId]) {
+						this.processes[processId].status = 'terminated';
+						
+						// Notify clients about termination
+						this.io.emit('process:update', {
+							id: processId,
+							status: 'terminated'
+						} as ProcessUpdateEvent);
+						
+						// Add termination message to logs
+						this.updateProcess(processId, 'Process terminated by system shutdown');
+					}
+				}
+			} else {
+				console.log('No running MAGI containers found to clean up');
+			}
+		} catch (error) {
+			console.error('Error finding containers to clean up:', error);
+		}
+
+		// Step 3: Also run our regular cleanup for tracked processes as a fallback
 		const runningProcesses = Object.entries(this.processes)
 			.filter(([, data]) => data.status === 'running' && data.containerId)
 			.map(([id]) => id);
 
 		if (runningProcesses.length > 0) {
-			console.log(`Stopping ${runningProcesses.length} running processes in parallel: ${runningProcesses.join(', ')}`);
+			console.log(`Stopping ${runningProcesses.length} tracked processes in parallel: ${runningProcesses.join(', ')}`);
 
-			// Stop all containers in parallel
+			// Stop all tracked containers in parallel
 			try {
 				await Promise.all(
 					runningProcesses.map(async (processId) => {
@@ -594,7 +640,6 @@ export class ProcessManager {
 							}
 						} catch (error: unknown) {
 							console.error(`Error stopping container for process ${processId}:`, error);
-							// We continue despite errors for any individual container
 						}
 						return processId;
 					})
@@ -616,6 +661,19 @@ export class ProcessManager {
 			} catch (error: unknown) {
 				console.error('Error during parallel process termination:', error);
 			}
+		}
+		
+		// Step 4: Final check to make sure ALL containers are really gone
+		try {
+			const {stdout} = await execPromise("docker ps --filter 'name=magi-AI' -q");
+			if (stdout.trim()) {
+				console.log(`Found ${stdout.trim().split('\n').length} containers still running, forcing removal...`);
+				await execPromise("docker ps --filter 'name=magi-AI' -q | xargs -r docker rm -f");
+			} else {
+				console.log('All MAGI containers have been successfully stopped');
+			}
+		} catch (error) {
+			console.error('Error during final container cleanup check:', error);
 		}
 	}
 

@@ -18,9 +18,11 @@ import {
 	updateServerVersion
 } from './env_store';
 import {ProcessManager} from './process_manager';
+import {execPromise} from '../utils/docker_commands';
 import {cleanupAllContainers} from './container_manager';
 import {saveUsedColors} from './color_manager';
 import {CommunicationManager} from './communication_manager';
+import {setCommunicationManager} from '../utils/talk';
 
 const docker = new Docker();
 
@@ -39,6 +41,9 @@ export class ServerManager {
 
 		// Initialize the communication manager before setting up WebSockets
 		this.communicationManager = new CommunicationManager(this.server, this.processManager);
+
+		// Initialize the talk module with the communication manager
+		setCommunicationManager(this.communicationManager);
 
 		this.setupWebSockets();
 		this.setupSignalHandlers();
@@ -450,6 +455,29 @@ export class ServerManager {
 		// Register cleanup handlers for various termination signals
 		process.on('SIGINT', this.handleTerminationSignal.bind(this));
 		process.on('SIGTERM', this.handleTerminationSignal.bind(this));
+
+		// Also handle uncaught exceptions and unhandled promise rejections
+		process.on('uncaughtException', (err) => {
+			console.error('Uncaught exception:', err);
+			this.handleTerminationSignal().catch(error => {
+				console.error('Error during cleanup after uncaught exception:', error);
+				process.exit(1);
+			});
+		});
+
+		process.on('unhandledRejection', (reason, promise) => {
+			console.error('Unhandled promise rejection:', reason);
+			// Don't exit the process, just log the error
+		});
+
+		// Handle nodemon restarts by cleaning up containers
+		if (process.env.NODE_ENV === 'development') {
+			process.on('SIGUSR2', async () => {
+				console.log('Received SIGUSR2 (nodemon restart)');
+				// Don't do a full cleanup since we're just restarting
+				// But make sure containers keep running
+			});
+		}
 	}
 
 	/**
@@ -668,22 +696,26 @@ export class ServerManager {
 		}
 
 		this.cleanupInProgress = true;
-		console.log('Received termination signal');
+		console.log('Received termination signal - beginning graceful shutdown');
 
-		// Set a maximum time for cleanup (5 seconds) to prevent hanging
-		const MAX_CLEANUP_TIME = 5000; // 5 seconds
+		// Set a maximum time for cleanup to prevent hanging
+		const MAX_CLEANUP_TIME = 10000; // 10 seconds (increased for Docker)
 		let cleanupTimedOut = false;
 
 		const cleanupTimeout = setTimeout(() => {
 			console.log('Cleanup taking too long, forcing exit...');
 			cleanupTimedOut = true;
-			process.exit(0);
+			// Force cleanup containers before exiting
+			cleanupAllContainers().finally(() => {
+				process.exit(0);
+			});
 		}, MAX_CLEANUP_TIME);
 
 		try {
 			await this.cleanup();
 			// Cleanup completed normally, clear the timeout
 			clearTimeout(cleanupTimeout);
+			console.log('Cleanup completed successfully');
 		} catch (error) {
 			console.error('Error during cleanup:', error);
 			// Make sure we still clear the timeout on error
@@ -692,7 +724,11 @@ export class ServerManager {
 
 		// If we haven't timed out, exit with a short delay for final messages
 		if (!cleanupTimedOut) {
-			setTimeout(() => process.exit(0), 100);
+			console.log('Shutting down gracefully...');
+			setTimeout(() => {
+				console.log('Goodbye!');
+				process.exit(0);
+			}, 500);
 		}
 	}
 
@@ -702,24 +738,90 @@ export class ServerManager {
 	private async cleanup(): Promise<void> {
 		console.log('MAGI System shutting down - cleaning up resources...');
 
-		// Step 1: Close all WebSocket connections
+		// Step 1: Try to gracefully stop all processes first by sending stop command
+		// This gives them a chance to clean up properly
 		try {
+			const processIds = Object.keys(this.processManager.getAllProcesses());
+			console.log(`Attempting to gracefully stop ${processIds.length} processes...`);
+
+			// Send stop commands to all processes first
+			await Promise.all(
+				processIds.map(async (processId) => {
+					try {
+						console.log(`Sending stop command to process ${processId}...`);
+						return this.communicationManager.stopProcess(processId);
+					} catch (err) {
+						console.error(`Error sending stop command to ${processId}:`, err);
+						return false;
+					}
+				})
+			);
+
+			// Give processes a moment to handle the stop command
+			console.log('Waiting for processes to handle stop commands...');
+			await new Promise(resolve => setTimeout(resolve, 1000));
+		} catch (error) {
+			console.error('Error during graceful process stop phase:', error);
+		}
+
+		// Step 2: Close all WebSocket connections
+		try {
+			console.log('Closing all WebSocket connections...');
 			this.communicationManager.closeAllConnections();
 		} catch (error: unknown) {
 			console.error('Error closing WebSocket connections:', error);
 		}
 
-		// Step 2: Clean up processes
-		await this.processManager.cleanup();
-
-		// Step 3: Additional cleanup for any containers that might have been missed
+		// Step 3: Force clean up all processes
 		try {
-			await cleanupAllContainers();
+			console.log('Force stopping all processes...');
+			await this.processManager.cleanup();
 		} catch (error: unknown) {
-			console.error('Error during final container cleanup:', error);
+			console.error('Error during process cleanup:', error);
 		}
 
-		// Step 4: Save used colors to persist across restarts
+		// Step 4: Additional cleanup for any containers that might have been missed
+		try {
+			console.log('Running final container cleanup...');
+			await cleanupAllContainers();
+
+			// Double-check AI process containers
+			const {stdout: aiStdout} = await execPromise("docker ps --filter 'name=magi-AI' --format '{{.Names}}'");
+			if (aiStdout.trim()) {
+				console.log(`WARNING: Found ${aiStdout.trim().split('\n').length} AI containers still RUNNING: ${aiStdout}`);
+				console.log('Forcing removal of all AI containers...');
+				await execPromise("docker ps --filter 'name=magi-AI' -q | xargs -r docker rm -f");
+			}
+
+			// Also check for controller child containers (excluding file-server)
+			const {stdout: childStdout} = await execPromise("docker ps --filter 'name=magi-' --format '{{.Names}}' | grep -v controller | grep -v file-server");
+			if (childStdout.trim()) {
+				console.log(`WARNING: Found ${childStdout.trim().split('\n').length} MAGI containers still RUNNING: ${childStdout}`);
+				console.log('Forcing removal of all child containers...');
+				await execPromise("docker ps --filter 'name=magi-' -q | grep -v controller | grep -v file-server | xargs -r docker rm -f");
+			}
+
+			// Final check - are there ANY magi containers left?
+			const {stdout: finalStdout} = await execPromise("docker ps -a --filter 'name=magi-AI' --format '{{.Names}}'");
+			if (finalStdout.trim()) {
+				console.log(`FINAL WARNING: Still found containers after all cleanup attempts: ${finalStdout}`);
+				console.log('Executing desperate final cleanup...');
+				await execPromise("docker kill $(docker ps -q --filter 'name=magi-AI') 2>/dev/null || true");
+				await execPromise("docker ps -a -q --filter 'name=magi-AI' | xargs -r docker rm -f");
+			} else {
+				console.log('All MAGI containers have been successfully stopped and removed');
+			}
+		} catch (error: unknown) {
+			console.error('Error during final container cleanup:', error);
+			// Even if we have an error, try one last command
+			try {
+				await execPromise("docker ps -a -q --filter 'name=magi-' | grep -v file-server | xargs -r docker rm -f 2>/dev/null || true");
+			} catch (e) {
+				// Ignore any errors in this last attempt
+			}
+		}
+
+		// Step 5: Save used colors to persist across restarts
 		try {
 			saveUsedColors();
 		} catch (error: unknown) {
@@ -787,37 +889,6 @@ export class ServerManager {
 		const randomPort = 8000 + Math.floor(Math.random() * 1000);
 		console.log(`Could not find available port in range ${startPort}-${maxPort}, using random port ${randomPort}`);
 		return randomPort;
-	}
-
-	/**
-	 * Opens the user's default browser to a URL
-	 *
-	 * @param url - The URL to open in the browser
-	 */
-	private openBrowser(url: string): void {
-		const platform = process.platform;
-
-		let command: string;
-		// Select command based on operating system
-		switch (platform) {
-			case 'darwin': // macOS
-				command = `open ${url}`;
-				break;
-			case 'win32': // Windows
-				command = `start ${url}`;
-				break;
-			default: // Linux and others
-				command = `xdg-open ${url}`;
-				break;
-		}
-
-		// Execute the command to open the browser
-		exec(command, (err: Error | null) => {
-			if (err) {
-				console.error('Failed to open browser:', err);
-				console.log(`Please manually open your browser to: ${url}`);
-			}
-		});
 	}
 
 	/**
@@ -911,10 +982,6 @@ export class ServerManager {
 └────────────────────────────────────────────────┘
         `);
 
-				// Only open browser on first start, not on nodemon restarts
-				if (!isNodemonRestart) {
-					this.openBrowser(url);
-				}
 			});
 		} catch (error: unknown) {
 			console.error('Failed to start server:', error);

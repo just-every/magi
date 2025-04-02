@@ -79,9 +79,10 @@ export class CommunicationManager {
 		}
 
 		// Using Docker container service discovery
-		// Controller is reachable at host.docker.internal
+		// Get HOST_HOSTNAME from environment variable, fallback to host.docker.internal
+		const hostName = process.env.HOST_HOSTNAME || 'host.docker.internal';
 		// Use stored controllerPort (which may be updated during reconnection)
-		const url = `ws://host.docker.internal:${this.controllerPort}/ws/magi/${this.processId}`;
+		const url = `ws://${hostName}:${this.controllerPort}/ws/magi/${this.processId}`;
 
 		if (this.ws) {
 			this.ws.terminate();

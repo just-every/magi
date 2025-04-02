@@ -326,10 +326,10 @@ export class CommunicationManager {
 
 						if(toolCall.function.name.startsWith('Talk_to_')) {
 							const toolParams: Record<string, unknown> = JSON.parse(toolCall.function.arguments);
-							if (toolParams.message && typeof toolParams.message === 'string') {
+							if (toolParams.message && typeof toolParams.message === 'string' && typeof toolParams.affect === 'string') {
 
 								// Call talk, but don't await it.
-								const talkPromise = talk(toolParams.message);
+								const talkPromise = talk(toolParams.message, toolParams.affect, processId);
 
 								talkPromise.catch(error => {
 									console.error('Error calling talk:', error);
@@ -455,6 +455,21 @@ export class CommunicationManager {
 		} catch (err) {
 			console.error(`Error sending message to process ${processId}:`, err);
 			return false;
+		}
+	}
+
+	/**
+	 * Broadcast a message to all Socket.io clients for a specific process
+	 */
+	broadcastProcessMessage(processId: string, message: MagiMessage): void {
+		try {
+			// Send to Socket.io clients
+			this.processManager.io.emit('process:message', {
+				id: processId,
+				message
+			});
+		} catch (err) {
+			console.error(`Error broadcasting message for process ${processId}:`, err);
 		}
 	}
 

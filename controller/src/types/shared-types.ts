@@ -17,6 +17,7 @@ export type StreamEventType =
     | 'talk_start'
 	| 'talk_delta'
 	| 'talk_complete'
+	| 'audio_stream'
     | 'tool_start'
     | 'tool_delta'
     | 'tool_done'
@@ -80,6 +81,19 @@ export interface MessageEvent extends StreamEvent {
 /**
  * Message streaming event
  */
+export interface AudioEvent extends StreamEvent {
+	type: 'audio_stream';
+	timestamp: string;
+	chunkIndex?: number;
+	isFinalChunk?: boolean;
+	data?: string;
+	format?: string;
+	pcmParameters?: any;
+}
+
+/**
+ * Message streaming event
+ */
 export interface TalkEvent extends StreamEvent {
 	type: 'talk_start' | 'talk_delta' | 'talk_complete';
 	content: string;
@@ -114,7 +128,7 @@ export interface ErrorEvent extends StreamEvent {
 }
 
 // Union type for all streaming events
-export type StreamingEvent = ConnectedEvent | CommandEvent | AgentEvent | MessageEvent | TalkEvent | ToolEvent | CostUpdateEvent | ErrorEvent;
+export type StreamingEvent = ConnectedEvent | CommandEvent | AgentEvent | MessageEvent | TalkEvent | AudioEvent | ToolEvent | CostUpdateEvent | ErrorEvent;
 
 /**
  * MagiMessage format for communication between containers and controller

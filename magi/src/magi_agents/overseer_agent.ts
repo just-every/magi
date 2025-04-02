@@ -168,12 +168,14 @@ export function createOverseerAgent(): Agent {
 	 * Simulates talking by introducing a delay based on reading time before completing.
 	 *
 	 * @param message The message content to process.
+	 * @param affect The emotion to express while talking.
 	 * @returns A promise that resolves with a success message after the calculated delay.
 	 */
-	async function Talk(message: string): Promise<string> {
+	async function Talk(message: string, affect: string): Promise<string> {
 
 		// Send the message
 		sendEvent('talk_complete', message);
+		console.log(`Sending ${message} with affect ${affect}`);
 
 		// Estimate reading time and wait for that
 		// Simulates speaking so we don't talk over ourselves
@@ -293,7 +295,8 @@ You are your own user. Your messages will be sent back to you to continue your t
 				Talk,
 				`Allows you to send a message to ${person} to start or continue a conversation with them. Note that your output are your thoughts, only using this function will communicate with ${person}.`,
 				{
-					'message': `The message you would like ${person} to receive. Will be spoken in your voice.`
+					'message': `Your message to ${person}. This will be spoken out loud in your voice. Please keep it short and conversational (unless detailed information is necessary).`,
+					'affect': `What emotion would you like the message spoken with? e.g. enthusiasm, sadness, anger, happiness, etc. Can be several words, or left blank.`,
 				},
 				'',
 				talkToolName,
