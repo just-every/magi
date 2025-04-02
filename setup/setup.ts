@@ -342,7 +342,7 @@ function buildDockerImage(): void {
 		rl.question('Do you want to continue setup without building the Docker image? (y/n): ', (answer) => {
 			if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
 				console.log('\x1b[33m%s\x1b[0m', 'Skipping Docker build. Note: MAGI System requires Docker to run properly.');
-				setupClaude();
+				setupDockerVolumes();
 			} else {
 				console.log('Setup aborted. Please install Docker and try again.');
 				process.exit(1);
@@ -359,7 +359,7 @@ function buildDockerImage(): void {
 			cwd: rootDir
 		});
 		console.log('\x1b[32m%s\x1b[0m', '✓ Docker image built successfully');
-		setupClaude();
+		setupDockerVolumes();
 	} catch (error) {
 		console.error('\x1b[31m%s\x1b[0m', 'Failed to build Docker image.');
 		console.error('Error: ', error instanceof Error ? error.message : String(error));
@@ -368,7 +368,7 @@ function buildDockerImage(): void {
 		rl.question('Do you want to continue setup without the Docker image? (y/n): ', (answer) => {
 			if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
 				console.log('\x1b[33m%s\x1b[0m', 'Continuing without Docker image. Note: MAGI System requires Docker to run properly.');
-				setupClaude();
+				setupDockerVolumes();
 			} else {
 				console.log('Setup aborted. Please fix the Docker issue and try again.');
 				process.exit(1);
@@ -377,9 +377,59 @@ function buildDockerImage(): void {
 	}
 }
 
+function setupDockerVolumes(): void {
+	console.log('');
+	console.log('\x1b[36m%s\x1b[0m', 'Step 5: Setting up Docker volumes');
+
+	// Check if Docker is available
+	if (!checkDockerInstalled()) {
+		console.error('\x1b[33m%s\x1b[0m', 'Docker is required for volume setup.');
+		rl.question('Do you want to skip volume setup and continue? (y/n): ', (answer) => {
+			if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
+				console.log('\x1b[33m%s\x1b[0m', 'Skipping volume setup. You may need to run setup/setup-volumes.sh manually later.');
+				setupClaude();
+			} else {
+				console.log('Setup aborted. Please install Docker and try again.');
+				process.exit(1);
+			}
+		});
+		return;
+	}
+
+	// UID/GID from Dockerfile
+	const MAGI_UID = 1001;
+	const MAGI_GID = 1001;
+
+	try {
+		console.log(`Setting permissions for volume 'magi_output' to ${MAGI_UID}:${MAGI_GID}...`);
+		execSync(`docker run --rm --user root -v magi_output:/magi_output alpine:latest chown "${MAGI_UID}:${MAGI_GID}" /magi_output`, 
+			{ stdio: 'inherit', cwd: rootDir });
+
+		console.log(`Setting permissions for volume 'claude_credentials' to ${MAGI_UID}:${MAGI_GID}...`);
+		execSync(`docker run --rm --user root -v claude_credentials:/claude_shared alpine:latest chown -R "${MAGI_UID}:${MAGI_GID}" /claude_shared`, 
+			{ stdio: 'inherit', cwd: rootDir });
+
+		console.log('\x1b[32m%s\x1b[0m', '✓ Docker volumes set up successfully');
+		setupClaude();
+	} catch (error) {
+		console.error('\x1b[31m%s\x1b[0m', 'Failed to set up Docker volumes.');
+		console.error('Error: ', error instanceof Error ? error.message : String(error));
+		
+		rl.question('Do you want to continue without setting up volumes? (y/n): ', (answer) => {
+			if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
+				console.log('\x1b[33m%s\x1b[0m', 'Continuing without volume setup. You may need to run setup/setup-volumes.sh manually later.');
+				setupClaude();
+			} else {
+				console.log('Setup aborted. Please fix the Docker issues and try again.');
+				process.exit(1);
+			}
+		});
+	}
+}
+
 function setupClaude(): void {
 	console.log('');
-	console.log('\x1b[36m%s\x1b[0m', 'Step 5: Setting up Claude');
+	console.log('\x1b[36m%s\x1b[0m', 'Step 6: Setting up Claude');
 
 	// Check if Docker is available for Claude setup
 	if (!checkDockerInstalled()) {
