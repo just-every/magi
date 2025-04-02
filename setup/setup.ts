@@ -446,28 +446,39 @@ function setupClaude(): void {
 		return;
 	}
 
-	try {
-		console.log('Running npm run setup-claude...');
-		console.log('\x1b[33m%s\x1b[0m', 'Follow the prompts to authenticate with Claude when they appear.');
-		console.log('\x1b[33m%s\x1b[0m', 'When complete, press Ctrl+C to continue with the setup.');
+	// Ask user if they want to set up Claude Code
+	console.log('\x1b[90m%s\x1b[0m', 'Claude Code requires separate authentication from the Anthropic API key.');
+	console.log('\x1b[90m%s\x1b[0m', 'It\'s highly recommended as part of our coding toolset.');
+	rl.question('Do you want to set up Claude Code? (y/n): ', (answer) => {
+		if (answer.toLowerCase() === 'n' || answer.toLowerCase() === 'no') {
+			console.log('\x1b[33m%s\x1b[0m', 'Skipping Claude setup. You can run "npm run setup-claude" later if needed.');
+			setupComplete();
+			return;
+		}
 
-		execSync('npm run setup-claude', {stdio: 'inherit', cwd: rootDir});
-		console.log('\x1b[32m%s\x1b[0m', '✓ Claude setup completed successfully');
-		setupComplete();
-	} catch (error) {
-		console.error('\x1b[31m%s\x1b[0m', 'Failed to set up Claude.');
-		console.error('Error: ', error instanceof Error ? error.message : String(error));
+		try {
+			console.log('Running npm run setup-claude...');
+			console.log('\x1b[33m%s\x1b[0m', 'Follow the prompts to authenticate with Claude when they appear.');
+			console.log('\x1b[33m%s\x1b[0m', 'When complete, press Ctrl+C to continue with the setup.');
 
-		rl.question('Do you want to continue without Claude setup? (y/n): ', (answer) => {
-			if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
-				console.log('\x1b[33m%s\x1b[0m', 'Skipping Claude setup. You can run "npm run setup-claude" later.');
-				setupComplete();
-			} else {
-				console.log('Setup aborted. Please fix the Claude setup issue and try again.');
-				process.exit(1);
-			}
-		});
-	}
+			execSync('npm run setup-claude', {stdio: 'inherit', cwd: rootDir});
+			console.log('\x1b[32m%s\x1b[0m', '✓ Claude setup completed successfully');
+			setupComplete();
+		} catch (error) {
+			console.error('\x1b[31m%s\x1b[0m', 'Failed to set up Claude.');
+			console.error('Error: ', error instanceof Error ? error.message : String(error));
+
+			rl.question('Do you want to continue without Claude setup? (y/n): ', (answer) => {
+				if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
+					console.log('\x1b[33m%s\x1b[0m', 'Skipping Claude setup. You can run "npm run setup-claude" later.');
+					setupComplete();
+				} else {
+					console.log('Setup aborted. Please fix the Claude setup issue and try again.');
+					process.exit(1);
+				}
+			});
+		}
+	});
 }
 
 function setupComplete(): void {
