@@ -86,7 +86,7 @@ function parseEnvFile(filePath: string): Record<string, string> {
 // Core dependencies are now installed by bootstrap.js before this script runs
 
 function ensureAllEnvVars(): void {
-  console.log('\x1b[33m%s\x1b[0m', 'Step 2: Setting up environment variables');
+  console.log('\x1b[36m%s\x1b[0m', 'Step 2: Setting up environment variables');
   
   // Load example env vars as templates
   const exampleEnvVars = parseEnvFile(envExamplePath);
@@ -273,7 +273,7 @@ function saveEnvFile(): void {
 
 function installSubDependencies(): void {
 	console.log('');
-	console.log('\x1b[33m%s\x1b[0m', 'Step 3: Installing component dependencies');
+	console.log('\x1b[36m%s\x1b[0m', 'Step 3: Installing component dependencies');
 
 	try {
 		console.log('Installing controller and magi dependencies...');
@@ -307,7 +307,7 @@ function checkDockerInstalled(): boolean {
 
 function buildDockerImage(): void {
 	console.log('');
-	console.log('\x1b[33m%s\x1b[0m', 'Step 4: Building Docker image');
+	console.log('\x1b[36m%s\x1b[0m', 'Step 4: Building Docker image');
 
 	// Check if Docker is installed
 	if (!checkDockerInstalled()) {
@@ -355,7 +355,7 @@ function buildDockerImage(): void {
 
 function setupClaude(): void {
 	console.log('');
-	console.log('\x1b[33m%s\x1b[0m', 'Step 5: Setting up Claude');
+	console.log('\x1b[36m%s\x1b[0m', 'Step 5: Setting up Claude');
 
 	// Check if Docker is available for Claude setup
 	if (!checkDockerInstalled()) {
