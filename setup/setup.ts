@@ -196,15 +196,16 @@ function promptForMissingKeys(): void {
     // Add a newline before each prompt
     console.log('');
     
-    // Show description if available
+    // Show description and URL if available
     if (nextPrompt.description) {
-      console.log(`\x1b[90m${nextPrompt.description}\x1b[0m`);
-    }
-    
-    // Show info URL if available
-    if (nextPrompt.infoUrl) {
-      // Use Hyperlink escape sequences to make the URL clickable in compatible terminals
-      console.log(`Get it at: \x1b]8;;${nextPrompt.infoUrl}\x1b\\\x1b[34m${nextPrompt.infoUrl}\x1b[0m\x1b]8;;\x1b\\`);
+      if (nextPrompt.infoUrl) {
+        // If we have both description and URL, show them on the same line
+        // Use Hyperlink escape sequences to make the URL clickable in compatible terminals
+        console.log(`\x1b[90m${nextPrompt.description} (\x1b]8;;${nextPrompt.infoUrl}\x1b\\\x1b[34m${nextPrompt.infoUrl}\x1b[0m\x1b]8;;\x1b\\\x1b[90m)\x1b[0m`);
+      } else {
+        // Just show the description if no URL
+        console.log(`\x1b[90m${nextPrompt.description}\x1b[0m`);
+      }
     }
     
     rl.question(nextPrompt.prompt, (keyValue) => {
