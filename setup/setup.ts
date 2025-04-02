@@ -83,8 +83,32 @@ function parseEnvFile(filePath: string): Record<string, string> {
   }
 }
 
+function installRootDependencies(): void {
+  console.log('\x1b[33m%s\x1b[0m', 'Step 1: Installing core dependencies');
+  
+  try {
+    console.log('Running npm install...');
+    execSync('npm install', { stdio: 'inherit', cwd: rootDir });
+    console.log('\x1b[32m%s\x1b[0m', '✓ Core dependencies installed successfully');
+    ensureAllEnvVars();
+  } catch (error) {
+    console.error('\x1b[31m%s\x1b[0m', 'Failed to install core dependencies.');
+    console.error('Error: ', error instanceof Error ? error.message : String(error));
+    
+    rl.question('Do you want to continue setup without installing dependencies? (y/n): ', (answer) => {
+      if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
+        console.log('\x1b[33m%s\x1b[0m', 'Continuing without installing dependencies. This may cause issues later.');
+        ensureAllEnvVars();
+      } else {
+        console.log('Setup aborted. Please fix the installation issues and try again.');
+        process.exit(1);
+      }
+    });
+  }
+}
+
 function ensureAllEnvVars(): void {
-  console.log('\x1b[33m%s\x1b[0m', 'Step 1: Setting up environment variables');
+  console.log('\x1b[33m%s\x1b[0m', 'Step 2: Setting up environment variables');
   
   // Load example env vars as templates
   const exampleEnvVars = parseEnvFile(envExamplePath);
@@ -262,25 +286,35 @@ function saveEnvFile(): void {
     // Write to .env file
     fs.writeFileSync(envPath, envContent);
     console.log('\x1b[32m%s\x1b[0m', '✓ Environment variables saved to .env file');
-    installDependencies();
+    installSubDependencies();
   } catch (error) {
     console.error('\x1b[31m%s\x1b[0m', `Error saving .env file: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
 }
 
-function installDependencies(): void {
+function installSubDependencies(): void {
 	console.log('');
-	console.log('\x1b[33m%s\x1b[0m', 'Step 2: Installing npm dependencies');
+	console.log('\x1b[33m%s\x1b[0m', 'Step 3: Installing component dependencies');
 
 	try {
-		console.log('Running npm ci...');
-		execSync('npm ci', {stdio: 'inherit', cwd: rootDir});
-		console.log('\x1b[32m%s\x1b[0m', '✓ Dependencies installed successfully');
+		console.log('Installing controller and magi dependencies...');
+		execSync('cd controller && npm install && cd ../magi && npm install', {stdio: 'inherit', cwd: rootDir});
+		console.log('\x1b[32m%s\x1b[0m', '✓ Component dependencies installed successfully');
 		buildDockerImage();
-	} catch {
-		console.error('\x1b[31m%s\x1b[0m', 'Failed to install dependencies. Please try again.');
-		process.exit(1);
+	} catch (error) {
+		console.error('\x1b[31m%s\x1b[0m', 'Failed to install component dependencies.');
+		console.error('Error: ', error instanceof Error ? error.message : String(error));
+		
+		rl.question('Do you want to continue setup without installing all dependencies? (y/n): ', (answer) => {
+			if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
+				console.log('\x1b[33m%s\x1b[0m', 'Continuing without installing all dependencies. This may cause issues later.');
+				buildDockerImage();
+			} else {
+				console.log('Setup aborted. Please fix the installation issues and try again.');
+				process.exit(1);
+			}
+		});
 	}
 }
 
@@ -295,7 +329,7 @@ function checkDockerInstalled(): boolean {
 
 function buildDockerImage(): void {
 	console.log('');
-	console.log('\x1b[33m%s\x1b[0m', 'Step 3: Building Docker image');
+	console.log('\x1b[33m%s\x1b[0m', 'Step 4: Building Docker image');
 
 	// Check if Docker is installed
 	if (!checkDockerInstalled()) {
@@ -343,7 +377,7 @@ function buildDockerImage(): void {
 
 function setupClaude(): void {
 	console.log('');
-	console.log('\x1b[33m%s\x1b[0m', 'Step 4: Setting up Claude');
+	console.log('\x1b[33m%s\x1b[0m', 'Step 5: Setting up Claude');
 
 	// Check if Docker is available for Claude setup
 	if (!checkDockerInstalled()) {
@@ -420,4 +454,4 @@ if (args.includes('--help') || args.includes('-h')) {
 }
 
 // Start setup process
-ensureAllEnvVars();
+installRootDependencies();
