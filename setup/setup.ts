@@ -19,19 +19,29 @@ console.log('');
 // Get the directory name in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const rootDir = path.resolve(__dirname, '..');
+
+// Determine the project root
+// When running from dist/setup/setup.js, we need to go up two levels
+// Check if we're running from dist or directly from setup
+const isRunningFromDist = __dirname.includes('dist/setup');
+const rootDir = isRunningFromDist 
+  ? path.resolve(__dirname, '../..') 
+  : path.resolve(__dirname, '..');
+
 const envPath = path.join(rootDir, '.env');
 const envExamplePath = path.join(rootDir, '.env.example');
 
 // Verify paths are correct - debug info
-console.log('Root directory:', rootDir);
+console.log('Current directory:', __dirname);
+console.log('Detected running from:', isRunningFromDist ? 'dist/setup' : 'setup');
+console.log('Project root directory:', rootDir);
 console.log('.env path:', envPath);
 console.log('.env.example path:', envExamplePath);
 
-// Check if the .env.example exists
+// Verify .env.example exists
 if (!fs.existsSync(envExamplePath)) {
-  console.error('\x1b[31m%s\x1b[0m', `.env.example file not found at ${envExamplePath}`);
-  console.error('Creating a basic configuration without template...');
+  console.error('\x1b[31m%s\x1b[0m', `ERROR: .env.example file not found at ${envExamplePath}`);
+  process.exit(1);
 }
 
 // Store environment variables
@@ -76,20 +86,8 @@ function parseEnvFile(filePath: string): Record<string, string> {
 function ensureAllEnvVars(): void {
   console.log('\x1b[33m%s\x1b[0m', 'Step 1: Setting up environment variables');
   
-  // Define default template vars in case .env.example doesn't exist
-  let exampleEnvVars: Record<string, string> = {};
-  
-  // Try to load example env vars as templates
-  if (fs.existsSync(envExamplePath)) {
-    exampleEnvVars = parseEnvFile(envExamplePath);
-  } else {
-    // Create a minimal set of template vars if .env.example is missing
-    console.log('\x1b[33m%s\x1b[0m', 'Using default configuration template...');
-    ['YOUR_NAME', 'AI_NAME', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 
-     'GOOGLE_API_KEY', 'XAI_API_KEY', 'DEEPSEEK_API_KEY', 'BRAVE_API_KEY'].forEach(key => {
-      exampleEnvVars[key] = '';
-    });
-  }
+  // Load example env vars as templates
+  const exampleEnvVars = parseEnvFile(envExamplePath);
   
   // Check if .env file already exists and load existing values
   if (fs.existsSync(envPath)) {
