@@ -110,24 +110,16 @@ function ensureAllEnvVars(): void {
       return;
     }
     
-    console.log(`Found ${missingVars.length} missing environment variables:`);
-    missingVars.forEach(key => {
-      console.log(`  - ${key}`);
-    });
-    
-    rl.question('Do you want to set up missing environment variables? (y/n): ', (answer) => {
-      if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
-        promptForMissingKeys();
-      } else {
-        console.log('\x1b[32m%s\x1b[0m', '✓ Using existing environment variables');
-        installSubDependencies();
-      }
-    });
+    console.log(`\nYou'll be prompted for ${missingVars.length} environment settings.`);
+    console.log('\x1b[90mPress Enter to skip any setting you don\'t want to configure.\x1b[0m\n');
+    promptForMissingKeys();
     return;
   }
   
   // No .env file exists, create from scratch
   console.log('Creating new .env file...');
+  console.log(`\nYou'll be prompted for environment settings.`);
+  console.log('\x1b[90mPress Enter to skip any setting you don\'t want to configure.\x1b[0m\n');
   envVars = {};
   promptForMissingKeys();
 }
@@ -137,51 +129,51 @@ function promptForMissingKeys(): void {
   const configPrompts = [
     { 
       key: 'YOUR_NAME', 
-      question: 'Do you want to set your name? (y/n): ',
-      prompt: 'Enter your name (default: Human): ',
-      defaultValue: 'Human'
+      prompt: 'Enter your name (press Enter for default "Human" or to skip): ',
+      defaultValue: 'Human',
+      description: 'Your name - identifies you in primary commands'
     },
     { 
       key: 'AI_NAME', 
-      question: 'Do you want to set AI name? (y/n): ',
-      prompt: 'Enter AI name (default: Magi): ',
-      defaultValue: 'Magi'
+      prompt: 'Enter AI name (press Enter for default "Magi" or to skip): ',
+      defaultValue: 'Magi',
+      description: 'AI name - identifies the AI in thought processes'
     },
     { 
       key: 'OPENAI_API_KEY', 
-      question: 'Do you want to set up OpenAI API key? (y/n): ',
-      prompt: 'Enter your OpenAI API Key: ',
-      infoUrl: 'https://platform.openai.com/api-keys'
+      prompt: 'Enter your OpenAI API Key (press Enter to skip): ',
+      infoUrl: 'https://platform.openai.com/api-keys',
+      description: 'OpenAI API key for GPT models'
     },
     { 
       key: 'ANTHROPIC_API_KEY', 
-      question: 'Do you want to set up Anthropic API key for Claude models? (y/n): ',
-      prompt: 'Enter your Anthropic API Key: '
+      prompt: 'Enter your Anthropic API Key (press Enter to skip): ',
+      description: 'Anthropic API key for Claude models'
     },
     { 
       key: 'ANTHROPIC_ORG_ID', 
-      question: 'Do you want to set up Anthropic Organization ID? (y/n): ',
-      prompt: 'Enter your Anthropic Organization ID: '
+      prompt: 'Enter your Anthropic Organization ID (press Enter to skip): ',
+      description: 'Anthropic Organization ID if applicable'
     },
     { 
       key: 'GOOGLE_API_KEY', 
-      question: 'Do you want to set up Google API key for Gemini models? (y/n): ',
-      prompt: 'Enter your Google API Key: '
+      prompt: 'Enter your Google API Key (press Enter to skip): ',
+      description: 'Google API key for Gemini models'
     },
     { 
       key: 'XAI_API_KEY', 
-      question: 'Do you want to set up X.AI API key for Grok models? (y/n): ',
-      prompt: 'Enter your X.AI API Key: '
+      prompt: 'Enter your X.AI API Key (press Enter to skip): ',
+      description: 'X.AI API key for Grok models'
     },
     { 
       key: 'DEEPSEEK_API_KEY', 
-      question: 'Do you want to set up DeepSeek API key? (y/n): ',
-      prompt: 'Enter your DeepSeek API Key: '
+      prompt: 'Enter your DeepSeek API Key (press Enter to skip): ',
+      description: 'DeepSeek API key'
     },
     { 
       key: 'BRAVE_API_KEY', 
-      question: 'Do you want to set up Brave API key for web search? (y/n): ',
-      prompt: 'Enter your Brave API Key: '
+      prompt: 'Enter your Brave API Key (press Enter to skip): ',
+      description: 'Brave API key for web search'
     }
   ];
   
@@ -194,33 +186,36 @@ function promptForMissingKeys(): void {
       promptForMissingKeys();
       return;
     }
+
+    // Show description if available
+    if (nextPrompt.description) {
+      console.log(`\x1b[90m${nextPrompt.description}\x1b[0m`);
+    }
     
-    rl.question(nextPrompt.question, (answer) => {
-      if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
-        // Show info URL if available
-        if (nextPrompt.infoUrl) {
-          console.log(`Get your ${nextPrompt.key} at: \x1b[34m${nextPrompt.infoUrl}\x1b[0m`);
-        }
+    // Show info URL if available
+    if (nextPrompt.infoUrl) {
+      console.log(`Get it at: \x1b[34m${nextPrompt.infoUrl}\x1b[0m`);
+    }
+    
+    rl.question(nextPrompt.prompt, (keyValue) => {
+      if (keyValue && keyValue.trim() !== '') {
+        // User entered a value
+        envVars[nextPrompt.key] = keyValue.trim();
         
-        rl.question(nextPrompt.prompt, (keyValue) => {
-          if (keyValue && keyValue.trim() !== '') {
-            envVars[nextPrompt.key] = keyValue.trim();
-            
-            // Update openaiApiKey if we're setting that value
-            if (nextPrompt.key === 'OPENAI_API_KEY') {
-              openaiApiKey = keyValue.trim();
-            }
-          } else if (nextPrompt.defaultValue) {
-            // Use default value if available and user input is empty
-            envVars[nextPrompt.key] = nextPrompt.defaultValue;
-          }
-          promptForMissingKeys();
-        });
+        // Update openaiApiKey if we're setting that value
+        if (nextPrompt.key === 'OPENAI_API_KEY') {
+          openaiApiKey = keyValue.trim();
+        }
+      } else if (nextPrompt.defaultValue) {
+        // Use default value if available and user input is empty
+        envVars[nextPrompt.key] = nextPrompt.defaultValue;
+        console.log(`Using default: "${nextPrompt.defaultValue}"`);
       } else {
-        // Mark as processed by setting to empty string
+        // Mark as skipped by setting to empty string
         envVars[nextPrompt.key] = '';
-        promptForMissingKeys();
+        console.log('Skipped.');
       }
+      promptForMissingKeys();
     });
     return;
   }
