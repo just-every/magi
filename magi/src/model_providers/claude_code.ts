@@ -156,7 +156,7 @@ export class ClaudeCodeProvider implements ModelProvider {
 
 			yield {
 				type: 'error',
-				error: 'Claude code error: '+(error?.message || String(error))
+				error: 'Claude code error: '+(error instanceof Error ? error.stack : String(error))
 			};
 		}
 	}

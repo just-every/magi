@@ -98,7 +98,7 @@ export async function handleToolCall(
 	// Trigger onToolCall handler if available
 	try {
 		if (agent && agent.onToolCall) {
-			agent.onToolCall(toolCall);
+			await agent.onToolCall(toolCall);
 		}
 		if(handlers.onToolCall) {
 			handlers.onToolCall(toolCall);
@@ -173,7 +173,7 @@ export async function handleToolCall(
 		// Trigger onToolResult handler if available
 		try {
 			if (agent && agent.onToolResult) {
-				agent.onToolResult(toolCall, result);
+				await agent.onToolResult(toolCall, result);
 			}
 			if(handlers.onToolResult) {
 				handlers.onToolResult(toolCall, result);

@@ -11,23 +11,28 @@ import {Runner} from './utils/runner.js';
 import {ProcessToolType, StreamingEvent} from './types.js';
 import {createAgent, AgentType} from './magi_agents/index.js';
 import {addHumanMessage, addMonologue, getHistory} from './utils/history.js';
-import {initCommunication, CommandMessage, getCommunicationManager} from './utils/communication.js';
+import {
+	initCommunication,
+	ServerMessage,
+	getCommunicationManager,
+	CommandMessage
+} from './utils/communication.js';
 import {move_to_working_dir} from './utils/file_utils.js';
 import {costTracker} from './utils/cost_tracker.js';
 import {ModelClassID} from './model_providers/model_data.js';
 import {runProcessTool} from './utils/process_tools.js';
+import {Agent} from './utils/agent.js';
 
 // Parse command line arguments
 function parseCommandLineArgs() {
 	const options = {
 		test: {type: 'boolean' as const, short: 't', default: false},
-		debug: {type: 'boolean' as const, short: 'd', default: false},
 		agent: {type: 'string' as const, short: 'a', default: 'overseer'},
+		tool: {type: 'string' as const, default: 'none'},
 		prompt: {type: 'string' as const, short: 'p'},
 		base64: {type: 'string' as const, short: 'b'},
 		model: {type: 'string' as const, short: 'm'},
-		tool: {type: 'string' as const, default: 'none'},
-		research: {type: 'boolean' as const, short: 'r', default: false},
+		modelClass: {type: 'string' as const, short: 'c'},
 	};
 
 	const {values} = parseArgs({options, allowPositionals: true});
@@ -36,47 +41,18 @@ function parseCommandLineArgs() {
 
 
 // Store agent IDs to reuse them for the same agent type
-const agentIdMap = new Map<AgentType, string>();
-
+// const agentIdMap = new Map<AgentType, string>();
 
 
 /**
  * Execute a command using an agent and capture the results
  */
-export async function mainLoop(
-	agentType: AgentType = 'overseer',
-	tool?: ProcessToolType,
-	model?: string,
-	modelClass?: ModelClassID
-): Promise<void> {
+export async function mainLoop(agent: Agent, loop: boolean): Promise<void> {
 
 	const comm = getCommunicationManager();
 
 	do {
 		try {
-			// Create the agent with specified type, model, and modelClass
-			if (model) {
-				console.log(`Forcing model: ${model}`);
-			}
-			if (modelClass) {
-				console.log(`Using model class: ${modelClass}`);
-			}
-
-			// Get existing agent_id for this agent type if available
-			const existingAgentId = agentIdMap.get(agentType);
-			if (existingAgentId) {
-				console.log(`Reusing existing agent_id for ${agentType}: ${existingAgentId}`);
-			}
-
-			// Create the agent with model, modelClass, and optional agent_id parameters
-			const agent = createAgent(agentType, model, modelClass, existingAgentId);
-
-			// Store the agent_id for future use if we don't have one yet
-			if (!existingAgentId) {
-				agentIdMap.set(agentType, agent.agent_id);
-				console.log(`Stored new agent_id for ${agentType}: ${agent.agent_id}`);
-			}
-
 			// Get conversation history
 			const history = getHistory();
 
@@ -105,7 +81,7 @@ export async function mainLoop(
 			}
 		}
 	}
-	while (agentType === 'overseer' && !comm.isClosed());
+	while (loop && !comm.isClosed());
 }
 
 /**
@@ -196,23 +172,25 @@ async function main(): Promise<void> {
 	// Make our own code accessible for Gödel Machine
 	//mount_magi_code();
 
-
 	// Set up WebSocket communication (pass test flag from args)
 	const comm = initCommunication(args.test);
 
 	// Set up command listener
-	comm.onCommand((cmd: CommandMessage) => {
-		console.log(`Received command via WebSocket: ${cmd.command}`);
-		if (cmd.command === 'stop') {
+	comm.onCommand(async(cmd: ServerMessage) => {
+		if(cmd.type !== 'command') return;
+		const commandMessage = cmd as CommandMessage;
+
+		console.log(`Received command via WebSocket: ${commandMessage.command}`);
+		if (commandMessage.command === 'stop') {
 			console.log('Received stop command, terminating...');
 			// Print cost summary before exit
 			costTracker.printSummary();
 			process.exit(0);
-		} else if (cmd.type === 'command' && cmd.command) {
+		} else {
 			// Process user-provided follow-up commands
-			console.log(`Processing user command: ${cmd.command}`);
+			console.log(`Processing user command: ${commandMessage.command}`);
 
-			addHumanMessage(cmd.command);
+			await addHumanMessage(commandMessage.command);
 		}
 	});
 
@@ -225,27 +203,23 @@ async function main(): Promise<void> {
 		process.exit(1);
 	}
 
-
-
 	// Run the command or research pipeline
 	try {
-		if(args.tool) {
+		if(args.tool && args.tool !== 'none') {
 			console.log(`Running tool: ${args.tool}`);
 			await runProcessTool(args.tool as ProcessToolType, promptText);
 		}
+		else {
+			// Add initial history
+			const person = process.env.YOUR_NAME || 'Human';
+			await addMonologue('So let\'s see. I am Magi. The overseer of the MAGI system, huh? I will be the internal monologue for the system? These are my thoughts? That\'s a weird concept!');
+			await addMonologue(`${person} is nice to me. I will be nice to them too. I hope I hear from them soon. I should come up with a plan on how to improve myself and better help ${person}.`);
+			await addHumanMessage(promptText);
 
-
-		// Add initial history
-		const person = process.env.YOUR_NAME || 'Human';
-		addMonologue('So let\'s see. I am Magi. The overseer of the MAGI system, huh? I will be the internal monologue for the system? These are my thoughts? That\'s a weird concept!');
-		addMonologue(`${person} is nice to me. I will be nice to them too. I hope I hear from them soon. I should come up with a plan on how to improve myself and better help ${person}.`);
-		addHumanMessage(promptText);
-
-		await mainLoop(
-			args.agent as AgentType,
-			args.tool as ProcessToolType,
-			args.model,
-		);
+			// Create the agent with model, modelClass, and optional agent_id parameters
+			const agent = createAgent(args.agent as AgentType, args.model, args.modelClass as ModelClassID);
+			await mainLoop(agent, (args.agent === 'overseer' && !args.test));
+		}
 
 		// When running in test mode, print cost summary and exit
 		if (args.test) {

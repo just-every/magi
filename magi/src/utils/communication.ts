@@ -9,6 +9,7 @@ import path from 'path';
 import {StreamingEvent} from '../types.js';
 import {v4 as uuidv4} from 'uuid';
 import {get_output_dir} from './file_utils.js';
+import {processTracker} from './process_tracker.js';
 
 // Event types
 export interface MagiMessage {
@@ -16,13 +17,23 @@ export interface MagiMessage {
 	event: StreamingEvent;
 }
 
-export interface CommandMessage {
+export interface ServerMessage {
+	type: 'command' | 'connect' | 'process_event';
+}
+
+export interface CommandMessage extends ServerMessage {
 	type: 'command' | 'connect';
 	command: string;
 	args?: {
 		sourceProcessId?: string; // Added for process-to-process communication
 		[key: string]: any;
 	};
+}
+
+export interface ProcessEventMessage extends ServerMessage {
+	type: 'process_event';
+	processId: string;
+	event: StreamingEvent;
 }
 
 export class CommunicationManager {
@@ -34,7 +45,7 @@ export class CommunicationManager {
 	private historyFile: string;
 	private reconnectInterval = 3000; // milliseconds
 	private reconnectTimer: NodeJS.Timeout | null = null;
-	private commandListeners: ((command: CommandMessage) => void)[] = [];
+	private commandListeners: ((command: ServerMessage) => Promise<void>)[] = [];
 	private testMode: boolean;
 
 	constructor(processId: string, testMode: boolean = false) {
@@ -89,15 +100,16 @@ export class CommunicationManager {
 			});
 		});
 
-		this.ws.on('message', (data: WebSocket.RawData) => {
+		this.ws.on('message', async (data: WebSocket.RawData): Promise<void> => {
 			try {
-				const message = JSON.parse(data.toString()) as CommandMessage;
+				const message = JSON.parse(data.toString()) as ServerMessage;
 				console.log('Received command:', message);
 
 				// Check if this is a welcome message with port information
 				if (message.type === 'connect') {
-					if (message.args && message.args.controllerPort) {
-						const newPort = message.args.controllerPort;
+					const commandMessage = message as CommandMessage;
+					if (commandMessage.args && commandMessage.args.controllerPort) {
+						const newPort = commandMessage.args.controllerPort;
 
 						// If port has changed, update our stored port for future reconnections
 						if (newPort !== this.controllerPort) {
@@ -107,15 +119,23 @@ export class CommunicationManager {
 					}
 					return;
 				}
+				else if (message.type === 'process_event') {
+					const eventMessage = message as ProcessEventMessage;
+					await processTracker.handleEvent(eventMessage);
+					return;
+				}
 
-				// Notify all command listeners
-				this.commandListeners.forEach(listener => {
+				// Notify all command listeners SEQUENTIALLY
+				for (const listener of this.commandListeners) { // Use for...of
 					try {
-						listener(message);
+						// Await the listener execution. This catches BOTH sync and async errors
+						// from the listener promise.
+						await listener(message);
 					} catch (err: unknown) {
 						console.error('Error in command listener:', err);
+						// Decide if one listener failing should stop processing others
 					}
-				});
+				}
 			} catch (err: unknown) {
 				console.error('Error parsing message:', err);
 			}
@@ -143,7 +163,7 @@ export class CommunicationManager {
 	/**
 	 * Register a listener for incoming commands
 	 */
-	onCommand(listener: (command: CommandMessage) => void): void {
+	onCommand(listener: (command: ServerMessage) => Promise<void>): void {
 		this.commandListeners.push(listener);
 	}
 
@@ -151,8 +171,8 @@ export class CommunicationManager {
 	 * Send a message to the controller
 	 */
 	sendMessage(message: MagiMessage): void {
-		// Always add to history (except in test mode)
-		if (!this.testMode) {
+		// Always add to history (except in test mode and delta)
+		if (!this.testMode && message.event.type !== 'message_delta') {
 			this.messageHistory.push(message);
 			this.saveHistoryToFile();
 		}
@@ -162,10 +182,12 @@ export class CommunicationManager {
 			return this.testModeMessage(message);
 		}
 
-		// Log to console for Docker logs for debugging purposes only
-		// but ensure it's clearly marked as a JSON message so we don't try to parse it
-		// from the Docker logs in the controller
-		console.log(`[JSON_MESSAGE] ${JSON.stringify(message)}`);
+		if(message.event.type !== 'message_delta') {
+			// Log to console for Docker logs for debugging purposes only
+			// but ensure it's clearly marked as a JSON message so we don't try to parse it
+			// from the Docker logs in the controller
+			console.log(`[JSON_MESSAGE] ${JSON.stringify(message)}`);
+		}
 
 		if (this.connected && this.ws) {
 			try {

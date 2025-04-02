@@ -9,7 +9,7 @@ import {Agent} from '../../utils/agent.js';
 import {getFileTools} from '../../utils/file_utils.js';
 import {getBrowserTools} from '../../utils/browser_utils.js';
 import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT} from '../constants.js';
-import {createBrowserAgent} from '../task_force/browser_agent.js';
+import {createBrowserAgent} from '../common_agents/browser_agent.js';
 
 const content_extraction_agent_prompt = `
 [Context & Role]

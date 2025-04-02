@@ -11,6 +11,9 @@ import {
 	ResponseOutputMessage
 } from '../types.js';
 
+const COMPACT_TOKENS_AT = 8000;
+
+
 // History structure
 interface History {
 	messages: ResponseInput;
@@ -21,11 +24,32 @@ const history: History = {
 	messages: [],
 };
 
+async function compactHistory(): Promise<void> {
+	const approxTokens = (JSON.stringify(history.messages).length / 4);
+	if(approxTokens > COMPACT_TOKENS_AT) {
+		// Compact the history to save space
+
+		let split = Math.ceil(history.messages.length * 0.3);
+		if(split > (history.messages.length - 4)) {
+			split = history.messages.length - 4;
+		}
+
+		// const compactMessages = history.messages.slice(0, split);
+		history.messages = history.messages.slice(split);
+
+		// @todo use AI to summarize compactMessages and add back as a single message
+
+
+	}
+	history.messages = history.messages.slice(history.messages.length * 0.3);
+}
+
 /**
  * Add a message to history
  */
-export function addHistory(message: ResponseInputMessage | ResponseOutputMessage | ResponseInputFunctionCall | ResponseInputFunctionCallOutput): void {
+export async function addHistory(message: ResponseInputMessage | ResponseOutputMessage | ResponseInputFunctionCall | ResponseInputFunctionCallOutput): Promise<void> {
 	history.messages.push(message);
+	await compactHistory();
 }
 
 function escapeRegex(str:string) {
@@ -39,8 +63,8 @@ const monologue_regex = new RegExp(`^\\s*${escapeRegex(monologue_prefix)}`);
 /**
  * Add a message to history
  */
-export function addMonologue(content: string): void {
-	history.messages.push({
+export async function addMonologue(content: string): Promise<void> {
+	return addHistory({
 		role: 'user',
 		content: monologue_prefix+content.replace(monologue_regex, ''),
 	});
@@ -49,11 +73,21 @@ export function addMonologue(content: string): void {
 /**
  * Add a message to history
  */
-export function addHumanMessage(content: string): void {
+export async function addHumanMessage(content: string): Promise<void> {
 	const person = process.env.YOUR_NAME || 'Human';
-	history.messages.push({
+	return addHistory({
 		role: 'developer',
 		content: `${person} said: ${content}`
+	});
+}
+
+/**
+ * Add a message to history
+ */
+export async function addSystemMessage(content: string): Promise<void> {
+	return addHistory({
+		role: 'developer',
+		content: `System update: ${content}`
 	});
 }
 

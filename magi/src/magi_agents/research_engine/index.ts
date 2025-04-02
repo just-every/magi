@@ -7,13 +7,15 @@
  */
 
 import {Runner} from '../../utils/runner.js';
-import {RunResult} from '../../types.js';
+import {RunnerConfig} from '../../types.js';
 import {createTaskDecompositionAgent} from './task_decomposition_agent.js';
 import {createWebSearchAgent} from './web_search_agent.js';
 import {createContentExtractionAgent} from './content_extraction_agent.js';
 import {createSynthesisAgent} from './synthesis_agent.js';
 import {createCodeGenerationAgent} from './code_generation_agent.js';
 import {createValidationAgent} from './validation_agent.js';
+// import {createPlanningAgent} from '../task_force/planning_agent.js';
+import {createExecutionAgent} from '../task_force/execution_agent.js';
 
 export {
   createTaskDecompositionAgent,
@@ -72,23 +74,50 @@ export function createUnderstandingEngine(query: string) {
   };
 }
 
+
+/**
+ * Task Force sequence configuration
+ */
+const researchEngine: RunnerConfig = {
+  ['task_decomposition']: {
+    agent: ()=> createTaskDecompositionAgent(),
+    next: (): string => 'web_search',
+  },
+  ['web_search']: {
+    agent: ()=> createExecutionAgent(), // createWebSearchAgent
+    next: (): string => 'content_extraction',
+  },
+  ['content_extraction']: {
+    agent: ()=> createExecutionAgent(), //createContentExtractionAgent
+    next: (): string => 'synthesis',
+  },
+  ['synthesis']: {
+    agent: ()=> createExecutionAgent(), // createSynthesisAgent
+    next: (): string => 'code_generation',
+  },
+  ['code_generation']: {
+    agent: ()=> createExecutionAgent(), //createCodeGenerationAgent
+    next: (): string => 'web_search',
+  },
+  ['validation']: {
+    agent: ()=> createExecutionAgent(), //createValidationAgent
+    next: (): null => null,
+  },
+};
+
 /**
  * Run the Research Engine sequence with the given query
  * @param query The research query or question
  * @returns Results from all stages of the sequence
  */
 export async function runResearchEngine(
-  query: string
-): Promise<Record<string, RunResult>> {
-  // Create the Research Engine agents
-  const understandingEngine = createUnderstandingEngine(query);
+    input: string
+): Promise<void> {
 
-  // Run the sequence starting with the task decomposition stage
-  return await Runner.runSequential(
-    understandingEngine,
-    UnderstandingStage.TASK_DECOMPOSITION, // Start with the task decomposition stage
-	query, // Initial input is the research query
-    3, // Max retries per stage
-    10 // Max total retries
+  await Runner.runSequential(
+      researchEngine,
+      input,
+      5, // Max retries per stage
+      30 // Max total retries
   );
 }

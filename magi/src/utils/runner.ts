@@ -12,7 +12,7 @@ import {
 	ToolCall,
 	ResponseInput,
 	ToolCallHandler,
-	RunnerConfig,
+	RunnerConfig, ResponseInputItem, ResponseInputFunctionCall, ResponseInputFunctionCallOutput,
 } from '../types.js';
 import {Agent} from './agent.js';
 import {getModelProvider} from '../model_providers/model_provider.js';
@@ -52,7 +52,11 @@ export class Runner {
 		try {
 			// Allow the agent to modify the messages before sending
 			if(agent.onRequest) {
-				[messages, selectedModel] = agent.onRequest(messages, selectedModel);
+				let delay:number;
+				[messages, selectedModel, delay] = await agent.onRequest(messages, selectedModel);
+				if(delay) {
+					await new Promise(resolve => setTimeout(resolve, delay * 1000));
+				}
 			}
 
 			agent.model = selectedModel;
@@ -416,7 +420,7 @@ export class Runner {
 
 			// Allow the agent to process the final response before returning
 			if(agent.onResponse) {
-				fullResponse = agent.onResponse(fullResponse);
+				fullResponse = await agent.onResponse(fullResponse);
 			}
 			agent.model = undefined; // Allow a new model to be selected for the next run
 
@@ -447,6 +451,7 @@ export class Runner {
 
 		const history: ResponseInput = [{role: 'user', content: input}];
 		const lastOutput: Record<string, string> = {};
+		let agent_id: string = '';
 
 		let currentStage = Object.keys(agentSequence)[0]; // Start with the first stage
 		let totalRetries = 0;
@@ -454,14 +459,29 @@ export class Runner {
 
 		const comm = getCommunicationManager();
 
+		comm.send({
+			type: 'process_running',
+			history,
+		});
+
 		function addOutput(stage: string, output: string) {
+			// Record in the history
 			history.push({
 				type: 'message',
 				role: 'assistant',
 				status: 'completed',
 				content: `${capitalize(stage)} Output:\n${output}`,
 			});
+
+			// Record in the last for this stage
 			lastOutput[stage] = output;
+
+			// Send update to parent process
+			comm.send({
+				type: 'process_updated',
+				output: `${capitalize(stage)} Output:\n${output}`,
+				history,
+			});
 		}
 
 		// Process the sequence of agents
@@ -472,9 +492,19 @@ export class Runner {
 			stageRetries[currentStage] = stageRetries[currentStage] || 0;
 
 			try {
+				const agent = agentSequence[currentStage].agent();
+				if(!agent_id) {
+					// Save agent_id for future runs
+					agent_id = agent.agent_id;
+				}
+				else {
+					// If we have an agent_id, make sure we use the same one
+					agent.agent_id = agent_id;
+				}
+
 				// Run the agent with the current input
 				const response = await this.runStreamedWithTools(
-					agentSequence[currentStage].agent(),
+					agent,
 					undefined,
 					[...(agentSequence[currentStage].input?.(history, lastOutput) || history)],
 					{
@@ -539,7 +569,7 @@ export class Runner {
 		});
 
 		comm.send({
-			type: 'run_done',
+			type: 'process_done',
 			output,
 			history,
 		});
@@ -547,97 +577,111 @@ export class Runner {
 		return output;
 	}
 
+
 	/**
-	 * Reorders messages to ensure that tool result messages (`function_call_output`)
-	 * immediately follow the corresponding assistant message containing the tool calls (`function_call`).
-	 * Any messages originally between the call and its result are moved after the result.
+	 * Reorders messages iteratively to ensure that every 'function_call' message
+	 * is immediately followed by its corresponding 'function_call_output' message.
 	 *
-	 * @param messages The array of messages to reorder.
-	 * @returns A new array with messages potentially reordered.
+	 * If a matching 'function_call_output' is found later in the array, it's moved.
+	 * If no matching 'function_call_output' is found for a 'function_call',
+	 * an artificial error 'function_call_output' is inserted.
+	 *
+	 * The process repeats until the array is stable (no changes made in a full pass).
+	 *
+	 * @param messages The array of ResponseInputItem messages to reorder.
+	 * @returns A new array with messages correctly ordered (ResponseInput).
 	 */
-	private static ensureToolResultSequence(messages: ResponseInput): ResponseInput {
-		let lastToolCallBlockStartIndex = -1;
-		const toolCallIdsInBlock: string[] = [];
+	public static ensureToolResultSequence(messages: ResponseInput): ResponseInput {
+		// Work on a mutable copy
+		const currentMessages: ResponseInput = [...messages]; // Use the specific type
+		let changedInPass: boolean;
 
-		// Find the start index of the last block of consecutive 'function_call' messages
-		for (let i = messages.length - 1; i >= 0; i--) {
-			const currentMsg = messages[i];
-			if (currentMsg.type === 'function_call') {
-				// Found a tool call, now find the start of this block
-				lastToolCallBlockStartIndex = i;
-				toolCallIdsInBlock.push(currentMsg.call_id); // Safe: type is 'function_call'
-				while (lastToolCallBlockStartIndex > 0) {
-					const prevMsg = messages[lastToolCallBlockStartIndex - 1];
-					if (prevMsg.type === 'function_call') {
-						lastToolCallBlockStartIndex--;
-						toolCallIdsInBlock.push(prevMsg.call_id); // Safe: type is 'function_call'
+		console.debug('[Runner] Starting tool result sequence check...');
+
+		do {
+			changedInPass = false;
+			// No need for numMessages if using while loop with dynamic length check
+			let i = 0; // Use a while loop or manual index management due to potential splices
+
+			while (i < currentMessages.length /* Recalculate length each time */ ) {
+				const currentMsg: ResponseInputItem = currentMessages[i]; // Use the specific type
+
+				if (currentMsg.type && currentMsg.type === 'function_call') {
+					// Assert type now that we've checked it
+					const functionCallMsg = currentMsg as ResponseInputFunctionCall;
+					const targetCallId = functionCallMsg.call_id;
+					const nextMsgIndex = i + 1;
+					const nextMsg: ResponseInputItem | null = nextMsgIndex < currentMessages.length ? currentMessages[nextMsgIndex] : null;
+
+					// Check if the next message is the corresponding output
+					const isNextMsgCorrectOutput = nextMsg &&
+						nextMsg.type && nextMsg.type === 'function_call_output' &&
+						(nextMsg as ResponseInputFunctionCallOutput).call_id === targetCallId;
+
+					if (isNextMsgCorrectOutput) {
+						// Correct pair found, move past both
+						console.debug(`[Runner] Correct sequence found for call_id ${targetCallId} at index ${i}.`);
+						i += 2; // Skip the call and its output
+						continue; // Continue the while loop
 					} else {
-						break; // Stop if the previous message is not a function call
+						// Incorrect sequence or function_call is the last message.
+						// We need to find the output or insert an error.
+						console.debug(`[Runner] Mismatch or missing output for call_id ${targetCallId} at index ${i}. Searching...`);
+						changedInPass = true; // Signal that a change is needed/made in this pass
+						let foundOutputIndex = -1;
+
+						// Search *after* the current function_call for the matching output
+						for (let j = i + 1; j < currentMessages.length; j++) {
+							const potentialOutput = currentMessages[j];
+							// Check type and call_id
+							if (
+								potentialOutput.type &&
+								potentialOutput.type === 'function_call_output' &&
+								(potentialOutput as ResponseInputFunctionCallOutput).call_id === targetCallId
+							) {
+								foundOutputIndex = j;
+								break;
+							}
+						}
+
+						if (foundOutputIndex !== -1) {
+							// Found the output later in the array. Move it.
+							console.debug(`[Runner] Found matching output for ${targetCallId} at index ${foundOutputIndex}. Moving it to index ${i + 1}.`);
+							// Remove the found output (which is ResponseInputFunctionCallOutput)
+							const [outputMessage] = currentMessages.splice(foundOutputIndex, 1);
+							// Insert it right after the function call
+							currentMessages.splice(i + 1, 0, outputMessage);
+
+						} else {
+							// Output not found anywhere in the array. Create and insert an error output.
+							console.warn(`[Runner] No matching output found for call_id ${targetCallId}. Inserting error message.`);
+							// Create an object conforming to ResponseInputFunctionCallOutput
+							const errorOutput: ResponseInputFunctionCallOutput = {
+								type: 'function_call_output',
+								call_id: targetCallId,
+								// Use the name from the original function call
+								name: functionCallMsg.name,
+								// Output must be a string according to the interface
+								output: JSON.stringify({ error: 'Error: Tool call did not complete or output was missing.' }),
+								// Add optional fields if necessary, or leave them undefined
+								// status: 'incomplete',
+							};
+							// Insert the error message right after the function call
+							currentMessages.splice(i + 1, 0, errorOutput);
+						}
+
+						// Crucial: Restart check from the beginning in the next pass
+						break; // Exit the inner `while` loop
 					}
-				}
-				// Reverse IDs to match original order (though order doesn't strictly matter for matching)
-				toolCallIdsInBlock.reverse();
-				break; // Found the last block
-			}
-		}
-
-		// If no tool calls found, return original messages
-		if (lastToolCallBlockStartIndex === -1) {
-			return messages;
-		}
-
-		const numToolCallsInBlock = toolCallIdsInBlock.length;
-		console.debug(`[Runner] Found last tool call block starting at index ${lastToolCallBlockStartIndex} with ${numToolCallsInBlock} calls (IDs: ${toolCallIdsInBlock.join(', ')})`);
-
-		const lastToolCallBlockEndIndex = lastToolCallBlockStartIndex + numToolCallsInBlock - 1;
-
-		// Slice the array into three parts: before the calls, the calls themselves, and everything after.
-		const messagesBeforeBlock = messages.slice(0, lastToolCallBlockStartIndex);
-		const toolCallBlock = messages.slice(lastToolCallBlockStartIndex, lastToolCallBlockEndIndex + 1);
-		const messagesOriginallyAfterBlock = messages.slice(lastToolCallBlockEndIndex + 1);
-
-		// Separate the messagesOriginallyAfterBlock into the results we need and the rest
-		const foundResults: ResponseInput = [];
-		const otherMessagesAfterBlock: ResponseInput = [];
-		const foundResultIds = new Set<string>();
-
-		for (const msg of messagesOriginallyAfterBlock) {
-			if (msg.type === 'function_call_output' && toolCallIdsInBlock.includes(msg.call_id)) {
-				// This is a result corresponding to one of our calls
-				if (!foundResultIds.has(msg.call_id)) { // Avoid adding duplicate results if they somehow exist
-					foundResults.push(msg);
-					foundResultIds.add(msg.call_id);
 				} else {
-					console.warn(`[Runner] Duplicate tool result found for call_id ${msg.call_id}. Skipping.`);
+					// Not a function call, just move to the next message
+					i++;
 				}
-			} else {
-				// This message is not one of the results we're looking for
-				otherMessagesAfterBlock.push(msg);
-			}
-		}
+			} // End of inner while loop
 
-		// Verify we found all results
-		if (foundResults.length !== numToolCallsInBlock) {
-			const missingResultIds = toolCallIdsInBlock.filter(id => !foundResultIds.has(id));
-			console.warn(`[Runner] Mismatch: Found ${foundResults.length} results for ${numToolCallsInBlock} tool calls. Missing results for IDs: ${missingResultIds.join(', ')}`);
-			// Proceeding with potentially incomplete results, API will likely fail.
-		} else {
-			console.debug(`[Runner] Found ${foundResults.length} corresponding tool results.`);
-		}
+		} while (changedInPass); // Repeat if any changes were made in the last pass
 
-		// Assemble the reordered list: Before Calls + Calls + Found Results + Other Messages After
-		const finalMessages = [
-			...messagesBeforeBlock,
-			...toolCallBlock,
-			...foundResults, // Place results immediately after calls
-			...otherMessagesAfterBlock // Place the rest afterwards
-		];
-
-		console.debug('[Runner] Messages potentially reordered for API call sequence compliance.');
-		// Optional: Log the final sequence for debugging
-		// console.log("[Runner] Reordered Messages:", JSON.stringify(finalMessages.map(m => ({ type: m.type, role: m.role, call_id: m.call_id, name: m.name })), null, 2));
-
-
-		return finalMessages;
+		console.debug('[Runner] Final message sequence ensured.');
+		return currentMessages;
 	}
 }

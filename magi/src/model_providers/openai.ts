@@ -366,7 +366,7 @@ export class OpenAIProvider implements ModelProvider {
 			console.error('Error in OpenAI streaming response:', error);
 			yield {
 				type: 'error',
-				error: 'OpenAI streaming error: '+String(error)
+				error: 'OpenAI streaming error: '+(error instanceof Error ? error.stack : String(error))
 			};
 		}
 	}

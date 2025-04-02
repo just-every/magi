@@ -574,6 +574,10 @@ header {
     background-color: #2ca1e5;
     color: white;
     border-bottom-right-radius: 2px;
+
+    a {
+        color: white;
+    }
 }
 
 /* Assistant message styling */
@@ -581,6 +585,10 @@ header {
     background-color: #fff;
     color: #000;
     border-bottom-left-radius: 2px;
+
+    a {
+        color: #000;
+    }
 
     &.streaming {
         position: relative;

@@ -88,11 +88,11 @@ NEXT: web_search
 /**
  * Create the task decomposition agent
  */
-export function createTaskDecompositionAgent(research_query: string): Agent {
+export function createTaskDecompositionAgent(research_query?: string): Agent {
   return new Agent({
     name: 'TaskDecompositionAgent',
     description: 'Analyzes the research query and produces a detailed research plan',
-    instructions: task_decomposition_agent_prompt.replace('{{research_query}}', research_query),
+    instructions: task_decomposition_agent_prompt.replace('{{research_query}}', research_query || ''),
     tools: [
       ...getFileTools()
     ],

@@ -46,9 +46,10 @@ type ClaudeMessage = { role: 'user' | 'assistant' | 'system'; content: any; } | 
  * @returns A Claude message object or null if conversion is not applicable (e.g., system message, empty content).
  */
 function convertToClaudeMessage(role: string, content: string, msg: ResponseInputItem): ClaudeMessage {
+	if(!msg) return null;
 
 	// --- Handle Tool Use (Function Call) ---
-	if (msg.type === 'function_call') {
+	if (msg.type && msg.type === 'function_call') {
 		let inputArgs: Record<string, unknown> = {};
 		try {
 			// Claude expects 'input' as an object
@@ -66,7 +67,7 @@ function convertToClaudeMessage(role: string, content: string, msg: ResponseInpu
 		};
 
 		return {role: 'assistant', content: [toolUseBlock]};
-	} else if (msg.type === 'function_call_output') {
+	} else if (msg.type && msg.type === 'function_call_output') {
 		const toolResultBlock = {
 			type: 'tool_result',
 			tool_use_id: msg.call_id, // ID must match the corresponding tool_use block
@@ -130,7 +131,7 @@ export class ClaudeProvider implements ModelProvider {
 			const settings: ModelSettings | undefined = agent?.modelSettings;
 			const modelClass: ModelClassID | undefined = agent?.modelClass;
 
-			let thinking = undefined;
+			const thinking = undefined;
 			let max_tokens = settings?.max_tokens || 64000; // Default max tokens if not specified
 			switch (modelClass) {
 				case 'monologue':
@@ -138,10 +139,10 @@ export class ClaudeProvider implements ModelProvider {
 				case 'code':
 					if(model === 'claude-3-7-sonnet-latest') {
 						// Extended thinking
-						thinking = {
+						/*thinking = {
 							type: 'enabled',
 							budget_tokens: 32000
-						};
+						};*/
 						max_tokens = Math.min(max_tokens, 64000);
 					}
 					else {
@@ -199,6 +200,7 @@ export class ClaudeProvider implements ModelProvider {
 			try {
 				// @ts-expect-error - Claude's stream is AsyncIterable but TypeScript might not recognize it properly
 				for await (const event of stream) {
+
 					// Handle content block delta
 					if (event.type === 'content_block_delta' && event.delta.text) {
 						// Emit delta event for streaming UI updates with incrementing order
@@ -214,7 +216,7 @@ export class ClaudeProvider implements ModelProvider {
 					}
 					// Handle content block start for text
 					else if (event.type === 'content_block_start' &&
-						event.content_block.type === 'text') {
+						event.content_block?.type === 'text') {
 						if (event.content_block.text) {
 							// Emit delta event with incrementing order
 							yield {
@@ -230,7 +232,7 @@ export class ClaudeProvider implements ModelProvider {
 					}
 					// Handle content block stop for text
 					else if (event.type === 'content_block_stop' &&
-						event.content_block.type === 'text') {
+						event.content_block?.type === 'text') {
 						if (event.content_block.text) {
 							// For non-streaming responses, add as delta too with incrementing order
 							yield {
@@ -246,7 +248,7 @@ export class ClaudeProvider implements ModelProvider {
 					}
 					// Handle tool use start
 					else if (event.type === 'content_block_start' &&
-						event.content_block.type === 'tool_use') {
+						event.content_block?.type === 'tool_use') {
 						// Start building the tool call
 						const toolUse = event.content_block.tool_use;
 						currentToolCall = {
@@ -262,7 +264,7 @@ export class ClaudeProvider implements ModelProvider {
 					}
 					// Handle tool use delta (for streaming arguments)
 					else if (event.type === 'content_block_delta' &&
-						event.delta.type === 'tool_use' &&
+						event.delta?.type === 'tool_use' &&
 						currentToolCall) {
 						// Update the tool call with more argument data
 						if (event.delta.tool_use && event.delta.tool_use.input) {
@@ -282,7 +284,7 @@ export class ClaudeProvider implements ModelProvider {
 					}
 					// Handle tool use stop
 					else if (event.type === 'content_block_stop' &&
-						event.content_block.type === 'tool_use' &&
+						event.content_block?.type === 'tool_use' &&
 						currentToolCall) {
 						// Finalize the tool call and emit it
 						if (event.content_block.tool_use && event.content_block.tool_use.input) {
@@ -368,7 +370,7 @@ export class ClaudeProvider implements ModelProvider {
 			console.error('Error in Claude streaming completion:', error);
 			yield {
 				type: 'error',
-				error: 'Claude streaming error: '+String(error)
+				error: 'Claude streaming error: '+ (error instanceof Error ? error.stack : String(error))
 			};
 		}
 	}

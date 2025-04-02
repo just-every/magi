@@ -320,7 +320,7 @@ export class GeminiProvider implements ModelProvider {
 			// Handle errors during API call or stream iteration
 			streamError = error instanceof Error ? error : new Error(String(error));
 			console.error('Error during Gemini stream processing:', streamError);
-			yield { type: 'error', error: 'Gemini stream error: '+streamError.message };
+			yield { type: 'error', error: 'Gemini stream error: '+(error instanceof Error ? error.stack : String(error)) };
 			// Yield accumulated text even on error
 			yield { type: 'message_complete', content: contentBuffer, message_id: messageId };
 		}

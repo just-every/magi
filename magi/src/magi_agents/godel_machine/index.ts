@@ -6,12 +6,13 @@
  */
 
 import {Runner} from '../../utils/runner.js';
-import {RunResult} from '../../types.js';
+import {RunnerConfig} from '../../types.js';
 import {createPlanningAgent} from './planning_agent.js';
 import {createWritingAgent} from './writing_agent.js';
 import {createTestingAgent} from './testing_agent.js';
 import {createPRSubmissionAgent} from './pr_submission_agent.js';
 import {createPRReviewAgent} from './pr_review_agent.js';
+// import {createExecutionAgent} from '../task_force/execution_agent.js';
 
 export {
 	createPlanningAgent,
@@ -54,6 +55,34 @@ export function createGodelMachine(input: string) {
 	};
 }
 
+
+
+/**
+ * Godel Machine sequence configuration
+ */
+const godelMachine: RunnerConfig = {
+	['planning']: {
+		agent: ()=> createPlanningAgent(''),
+		next: (): string => 'writing',
+	},
+	['writing']: {
+		agent: ()=> createWritingAgent(''),
+		next: (): string => 'testing',
+	},
+	['testing']: {
+		agent: ()=> createTestingAgent(), //createContentExtractionAgent
+		next: (): string => 'pr_submission',
+	},
+	['pr_submission']: {
+		agent: ()=> createPRSubmissionAgent(''), // createSynthesisAgent
+		next: (): string => 'pr_review',
+	},
+	['pr_review']: {
+		agent: ()=> createPRReviewAgent('',''), //createValidationAgent
+		next: (): null => null,
+	},
+};
+
 /**
  * Run the Gödel Machine sequence with the given input
  * @param input The issue or feature request description
@@ -62,16 +91,12 @@ export function createGodelMachine(input: string) {
  */
 export async function runGodelMachine(
 	input: string
-): Promise<Record<string, RunResult>> {
-	// Create the Gödel Machine agents
-	const godelMachine = createGodelMachine(input);
+): Promise<void> {
 
-	// Run the sequence starting with the planning stage
-	return await Runner.runSequential(
+	await Runner.runSequential(
 		godelMachine,
-		GodelStage.PLANNING, // Start with the planning stage
-		input, // Initial input is the issue description
-		3, // Max retries per stage
-		10 // Max total retries
+		input,
+		5, // Max retries per stage
+		30 // Max total retries
 	);
 }

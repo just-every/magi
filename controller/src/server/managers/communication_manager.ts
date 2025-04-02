@@ -255,9 +255,15 @@ export class CommunicationManager {
 
 				// Process tool results for image paths
 				if (message.event.type === 'process_start' && message.event.agentProcess && typeof message.event.agentProcess === 'object') {
-
 					const processEvent = message.event as any as ProcessEvent;
 					this.processManager.createProcess(processEvent.agentProcess.processId, processEvent.agentProcess.command, processEvent.agentProcess);
+				}
+				else if (message.event.type === 'process_running' || message.event.type === 'process_updated' || message.event.type === 'process_done') {
+					this.sendMessage(this.processManager.coreProcessId, JSON.stringify({
+						type: 'process_event',
+						processId,
+						event: message.event,
+					}));
 				}
 
 				// Check if this is a talk output
@@ -348,17 +354,12 @@ export class CommunicationManager {
 		}
 	}
 
+
+
 	/**
 	 * Send a command to a specific container
 	 */
 	async sendCommand(processId: string, command: string, args?: any, sourceId?: string): Promise<boolean> {
-		const connection = this.connections.get(processId);
-
-		if (!connection) {
-			console.error(`No active connection for process ${processId}`);
-			return false;
-		}
-
 		try {
 			const commandMessage: CommandMessage = {
 				type: 'command',
@@ -370,10 +371,30 @@ export class CommunicationManager {
 				}
 			};
 
-			connection.send(JSON.stringify(commandMessage));
-			return true;
+			return this.sendMessage(processId, JSON.stringify(commandMessage));
 		} catch (err) {
 			console.error(`Error sending command to process ${processId}:`, err);
+			return false;
+		}
+	}
+
+
+	/**
+	 * Send a message to a specific container
+	 */
+	async sendMessage(processId: string, message: string): Promise<boolean> {
+		const connection = this.connections.get(processId);
+
+		if (!connection) {
+			console.error(`No active connection for process ${processId}`);
+			return false;
+		}
+
+		try {
+			connection.send(message);
+			return true;
+		} catch (err) {
+			console.error(`Error sending message to process ${processId}:`, err);
 			return false;
 		}
 	}

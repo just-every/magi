@@ -23,7 +23,7 @@ export async function execute_command(command: string): Promise<string> {
 	try {
 		// Check for potentially dangerous commands
 		const dangerousCommands = [
-			'rm -rf', 'mkfs', 'dd', 'sudo', 'su', 'chmod 777'
+			'rm -rf'
 		];
 
 		for (const dangerous of dangerousCommands) {

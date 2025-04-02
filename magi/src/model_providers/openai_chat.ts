@@ -344,7 +344,7 @@ export class OpenAIChat implements ModelProvider {
 				// Check if it's an OpenAI API error for better formatting
 				error: `API Error (${this.provider}): `+((error instanceof OpenAI.APIError)
 					? `${error.status} ${error.name} ${error.message}`
-					: String(error))
+					: (error instanceof Error ? error.stack : String(error)))
 			};
 		}
 	}

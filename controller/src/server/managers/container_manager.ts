@@ -169,41 +169,6 @@ export async function stopDockerContainer(processId: string): Promise<boolean> {
 }
 
 /**
- * Send a command to a running MAGI System Docker container
- * Note: This method is kept for backward compatibility
- * The preferred way to communicate with containers is via the CommunicationManager
- *
- * @param processId The process ID of the container
- * @param command The command to send
- * @returns Promise resolving to true if successful, false otherwise
- */
-export async function sendCommandToContainer(processId: string, command: string): Promise<boolean> {
-	try {
-		if (!command || typeof command !== 'string') {
-			throw new Error('Invalid command');
-		}
-
-		const containerName = validateContainerName(`magi-${processId}`);
-
-		// Use base64 encoding to avoid escaping issues entirely
-		const base64Command = Buffer.from(command).toString('base64');
-
-		// Use "BASE64:" prefix to indicate this is a base64-encoded command
-		// Note: This method is legacy and uses FIFO files.
-		// New containers should use WebSockets via the CommunicationManager
-		await execPromise(
-			`docker exec ${containerName} python -c "import os; open('/tmp/command.fifo', 'w').write('BASE64:${base64Command}\\n');"`
-		);
-
-		console.log(`Command sent to ${processId} successfully via legacy FIFO method`);
-		return true;
-	} catch (error) {
-		console.error(`Error sending command to container: ${error}`);
-		return false;
-	}
-}
-
-/**
  * Start monitoring logs from a MAGI System Docker container
  * Note: This is a fallback method for containers that do not use WebSockets
  * The preferred way to get logs is via the CommunicationManager

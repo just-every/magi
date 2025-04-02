@@ -40,12 +40,12 @@ export class Agent implements AgentInterface {
 	maxToolCalls: number;
 
 	// Event handlers for tool calls and results
-	onToolCall?: (toolCall: ToolCall) => void;
-	onToolResult?: (toolCall: ToolCall, result: string) => void;
+	onToolCall?: (toolCall: ToolCall) => Promise<void>;
+	onToolResult?: (toolCall: ToolCall, result: string) => Promise<void>;
 
 	// Event handlers for request and response
-	onRequest?: (messages: ResponseInput, model: string) => [ResponseInput, string];
-	onResponse?: (response: string) => string;
+	onRequest?: (messages: ResponseInput, model: string) => Promise<[ResponseInput, string, number]>;
+	onResponse?: (response: string) => Promise<string>;
 
 	constructor(definition: AgentDefinition, modelSettings?: ModelSettings) {
 

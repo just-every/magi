@@ -173,7 +173,7 @@ async function reset_session(): Promise<string> {
 		page = null;
 		context = null;
 		currentIdMap.clear();
-		return `Error resetting session: ${error?.message || String(error)}`;
+		return `Error resetting session: ${(error instanceof Error ? error.stack : String(error))}`;
 	}
 }
 

@@ -221,15 +221,20 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 				const timestamp = streamingEvent.timestamp || new Date().toISOString();
 				const eventType = streamingEvent.type;
 
-				function updateAgent(values: Record<string, unknown>, agent_id?: string, agent?: AgentData): AgentData {
-					agent_id = agent_id || streamingEvent.agent.agent_id;
+				function updateAgent(values: Record<string, unknown>, agent_id?: string, agent?: AgentData): AgentData | undefined {
+					agent_id = agent_id || streamingEvent.agent?.agent_id;
+					if(!agent_id) return;
+
 					const updatedAgent = agent || process.agent;
 					if (updatedAgent.agent_id === agent_id) {
 						Object.assign(updatedAgent, values);
 					} else if (updatedAgent.workers) {
 						const updatedWorkers = new Map();
 						updatedAgent.workers.forEach((worker, workerId) => {
-							updatedWorkers.set(workerId, updateAgent(values, agent_id, worker));
+							const updatedAgent = updateAgent(values, agent_id, worker);
+							if(updatedAgent) {
+								updatedWorkers.set(workerId, updatedAgent);
+							}
 						});
 						updatedAgent.workers = updatedWorkers;
 					}
@@ -239,8 +244,10 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 					return updatedAgent;
 				}
 
-				function addMessage(message: ClientMessage, agent_id?: string, agent?: AgentData): AgentData {
-					agent_id = agent_id || streamingEvent.agent.agent_id;
+				function addMessage(message: ClientMessage, agent_id?: string, agent?: AgentData): AgentData | undefined {
+					agent_id = agent_id || streamingEvent.agent?.agent_id;
+					if(!agent_id) return agent;
+
 					const updatedAgent = agent || process.agent;
 					if (updatedAgent.agent_id === agent_id) {
 						if(!message.agent) {
@@ -250,7 +257,10 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 					} else if (updatedAgent.workers) {
 						const updatedWorkers = new Map();
 						updatedAgent.workers.forEach((worker, workerId) => {
-							updatedWorkers.set(workerId, addMessage(message, agent_id, worker));
+							const newMessage = addMessage(message, agent_id, worker);
+							if(newMessage) {
+								updatedWorkers.set(workerId, newMessage);
+							}
 						});
 						updatedAgent.workers = updatedWorkers;
 					}
@@ -272,7 +282,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 					} as ClientMessage;
 				}
 
-				function addPartialMessage(message: PartialClientMessage): AgentData {
+				function addPartialMessage(message: PartialClientMessage): AgentData | undefined {
 					return addMessage(completeMessage(message));
 				}
 

@@ -50,7 +50,7 @@ function isProviderKeyValid(provider: ModelProviderID): boolean {
 		case 'xai':
 			return !!process.env.XAI_API_KEY && process.env.XAI_API_KEY.startsWith('xai-');
 		case 'deepseek':
-			return !!process.env.DEEPSEEK_API_KEY && process.env.DEEPSEEK_API_KEY.startsWith('sk-');
+			return false; //!!process.env.DEEPSEEK_API_KEY && process.env.DEEPSEEK_API_KEY.startsWith('sk-');
 		default:
 			return false;
 	}

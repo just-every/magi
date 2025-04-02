@@ -43,11 +43,12 @@ export interface AgentInterface {
 export interface AgentProcess {
 	processId: string;
 	started: Date;
-	status: 'started' | 'running' | 'waiting' | 'terminated';
+	status: 'started' | 'running' | 'waiting' | 'completed' | 'terminated';
 	tool: ProcessToolType;
 	command: string;
 	name: string;
-	agent?: AgentInterface;
+	output?: string;
+	history?: ResponseInput;
 }
 
 export type ToolParameterType = 'string' | 'number' | 'boolean' | 'object' | 'array' | 'null';
@@ -113,10 +114,10 @@ export interface AgentDefinition {
 	modelClass?: ModelClassID;
 	maxToolCalls?: number;
 
-	onToolCall?: (toolCall: ToolCall) => void;
-	onToolResult?: (toolCall: ToolCall, result: string) => void;
-	onRequest?: (messages: ResponseInput, model: string) => [ResponseInput, string];
-	onResponse?: (response: string) => string;
+	onToolCall?: (toolCall: ToolCall) => Promise<void>;
+	onToolResult?: (toolCall: ToolCall, result: string) => Promise<void>;
+	onRequest?: (messages: ResponseInput, model: string) => Promise<[ResponseInput, string, number]>;
+	onResponse?: (response: string) => Promise<string>;
 }
 
 /**
@@ -268,11 +269,11 @@ export type StreamEventType =
 	'connected'
 	| 'command_start'
 	| 'command_done'
-	| 'run_start'
-	| 'run_done'
 	| 'process_start'
+	| 'process_running'
 	| 'process_updated'
 	| 'process_done'
+	| 'process_terminated'
 	| 'agent_start'
 	| 'agent_updated'
 	| 'agent_done'
@@ -322,17 +323,10 @@ export type ProcessToolType = 'research_engine' | 'godel_machine' | 'task_force'
  * Agent updated streaming event
  */
 export interface ProcessEvent extends StreamEvent {
-	type: 'process_start' | 'process_updated' | 'process_done';
-	agentProcess: AgentProcess;
-}
-
-/**
- * Agent updated streaming event
- */
-export interface RunEvent extends StreamEvent {
-	type: 'run_start' | 'run_done';
+	type: 'process_start' | 'process_running' | 'process_updated' | 'process_done' | 'process_terminated';
+	agentProcess?: AgentProcess;
 	output?: string;
-	history: ResponseInput;
+	history?: ResponseInput;
 }
 
 /**
@@ -396,7 +390,7 @@ export interface ErrorEvent extends StreamEvent {
 /**
  * Union type for all streaming events
  */
-export type StreamingEvent = ConnectedEvent | CommandEvent | ProcessEvent | RunEvent | AgentEvent | MessageEvent | FileEvent | TalkEvent | ToolEvent | ErrorEvent;
+export type StreamingEvent = ConnectedEvent | CommandEvent | ProcessEvent | AgentEvent | MessageEvent | FileEvent | TalkEvent | ToolEvent | ErrorEvent;
 
 /**
  * Status of a sequential agent run
