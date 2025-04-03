@@ -480,7 +480,7 @@ export class ServerManager {
 		if (process.env.NODE_ENV === 'development') {
 			process.on('SIGUSR2', async () => {
 				console.log('Received SIGUSR2 (nodemon restart)');
-				
+
 				if (typeof closeTelegramBot === 'function') {
 					try {
 						console.log('Closing Telegram bot before nodemon restart...');
@@ -602,7 +602,7 @@ export class ServerManager {
 		if (this.communicationManager.hasActiveConnection(processId)) {
 			// Try graceful shutdown via WebSocket first
 			console.log(`Attempting graceful termination of ${processId} via WebSocket`);
-			const wsSuccess = await this.communicationManager.stopProcess(processId);
+			const wsSuccess = this.communicationManager.stopProcess(processId);
 
 			if (wsSuccess) {
 				console.log(`Process ${processId} gracefully terminating via WebSocket`);
@@ -661,7 +661,7 @@ export class ServerManager {
 		// Try WebSocket communication first
 		let success = false;
 		if (this.communicationManager.hasActiveConnection(processId)) {
-			success = await this.communicationManager.sendCommand(
+			success = this.communicationManager.sendCommand(
 				processId,
 				command,
 				{},

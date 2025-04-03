@@ -63,6 +63,20 @@ function convertToGeminiTools(tools: ToolFunction[]): ToolListUnion {
 				type,
 				description: param.description,
 			};
+
+			if(type === Type.ARRAY) {
+				properties[name].items = {
+					type: Type.STRING,
+				};
+				if(param.enum) {
+					properties[name].items.format = 'enum';
+					properties[name].items.enum = param.enum;
+				}
+			}
+			else if(param.enum) {
+				properties[name].format = 'enum';
+				properties[name].enum = param.enum;
+			}
 		}
 
 		const parameters: Schema = {

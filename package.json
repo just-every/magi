@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "postinstall": "cd controller && npm install && cd ../magi && npm install",
-    "build": "docker-compose build",
-    "dev": "docker-compose up --build",
+    "build": "docker compose build controller magi-base",
+    "dev": "npm run build && docker compose up",
     "lint": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts' 'setup/**/*.ts'",
     "lint:fix": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts' 'setup/**/*.ts' --fix",
     "setup": "node setup/bootstrap.js",

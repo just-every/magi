@@ -233,7 +233,8 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
 		];
 
 		// Mount projects on code process
-		const projects = (process.env.PROJECT_REPOSITORIES || '').toLowerCase().split(',');
+		const projects = (process.env.PROJECT_REPOSITORIES || '').split(',');
+		let workingDir:string;
 
 		// Get PROJECT_REPOSITORIES directories and add them as volume mounts
 		if (process.env.PROJECT_PARENT_PATH && options.coreProcessId && options.coreProcessId === processId && projects.length > 0) {
@@ -247,6 +248,9 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
 				if (fs.existsSync(hostPath)) {
 					// Add to volume mounts array - mount as read-only for safety
 					volumeMounts.push(`-v "${externalPath}:${hostPath}:ro"`);
+					if(!workingDir) {
+						workingDir = '/external/host';
+					}
 				} else {
 					console.warn(`Skipping mount for non-existent PROJECT_REPOSITORIES directory: ${hostPath}`);
 				}
@@ -268,7 +272,9 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
 			}
 		}
 
-		const workingDir = gitProjects.length > 0 ? path.join('/magi_output', processId, 'projects', (gitProjects.length > 1 ? undefined : gitProjects[0])) : '';
+		if(!workingDir) {
+			workingDir = gitProjects.length > 0 ? path.join('/magi_output', processId, 'projects', (gitProjects.length > 1 ? undefined : gitProjects[0])) : '';
+		}
 
 		const dockerRunCommand = `docker run -d --rm --name ${containerName} \
       -e PROCESS_ID=${processId} \

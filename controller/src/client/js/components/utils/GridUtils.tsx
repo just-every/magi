@@ -247,19 +247,6 @@ export const calculateBoxPositions = (
                 let xOffset = (placementIndex % 2 === 0 ? 0 : 1) * (Math.round(workerWidth * WORKER_SCALE) + (GRID_PADDING / 2));
                 let yOffset = (Math.floor(placementIndex / 2) === 0 ? 0 : 1) * (Math.round(workerHeight * WORKER_SCALE) + (GRID_PADDING / 2));
 
-                // Move boxes closer to the parent side only
-                if (isRight) {
-                    xOffset -= (GRID_PADDING / 2); // Move left (toward parent)
-                } else if (isLeft) {
-                    xOffset += (GRID_PADDING / 2); // Move right (toward parent)
-                }
-
-                if (isBelow) {
-                    yOffset -= (GRID_PADDING / 2); // Move up (toward parent)
-                } else if (isAbove) {
-                    yOffset += (GRID_PADDING / 2); // Move down (toward parent)
-                }
-
                 xOffset -= Math.round(workerWidth * WORKER_SCALE * WORKER_SCALE);
                 yOffset -= Math.round(workerHeight * WORKER_SCALE * WORKER_SCALE);
 

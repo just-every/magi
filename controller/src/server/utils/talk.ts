@@ -60,19 +60,17 @@ export async function talk(input: string, affect: string, processId: string): Pr
 			voice: 'sage',
 			input,
 			instructions: `
-Voice: Female, Adult. Warm, engaging, intimate. Naturally breathy/airy (esp. sibilants, phrase ends) with subtle huskiness.
 Pitch: Medium-low base with wide, natural expressive variation. Avoids monotone.
 Pacing: Natural, conversational, fluidly adapts to emotion.
 Articulation: Soft, clear, avoids sharpness. Smooth delivery.
 Prosody: Highly expressive, nuanced, conveys authentic emotion (curiosity, empathy, warmth). Breathiness integrates naturally.
-
-Specific affect for this input: ${affect}
-
-Overall Affect: Deeply personal, comforting, resonant. Mixes genuine curiosity, vulnerability, gentle intimacy, and subtle warmth/engagement.
 Delivery: Speak confidentially to one person. Lower volume, calm energy. Slightly slower, thoughtful pace with soft pauses. Emphasize natural breathiness; very soft articulation. Inflection shows gentle curiosity and vulnerability (e.g., slight pitch wavers). Maintain warmth and empathy. Creates a comforting, sincere, deeply personal feel.
+Overall Affect: Deeply personal, comforting, resonant. Mixes genuine curiosity, vulnerability, gentle intimacy, and subtle warmth/engagement.
+
+Specific Affect for Input: ${affect}
 `,
 			response_format: format,
-			speed: 1.2,
+			speed: 4,
 		});
 
 		const arrayBuffer = await response.arrayBuffer();

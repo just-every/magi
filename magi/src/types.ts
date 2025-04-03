@@ -63,7 +63,7 @@ export interface ToolParameter {
 	type: ToolParameterType;
 	description?: string;
 	enum?: string[];
-	items?: ToolParameter | { type: string };
+	items?: ToolParameter | { type: ToolParameterType, enum?: string[] };
 	properties?: Record<string, ToolParameter>;
 	required?: string[];
 

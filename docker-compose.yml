@@ -11,7 +11,6 @@ services:
     ports:
       - "3010:3010" # Expose web interface port
       - "3011:3011" # Expose additional port
-      - "4010:4010" # Dedicated port for Telegram webhook via ngrok
     volumes:
       - ./controller/src:/app/src:rw # Mount source code for development hot reloading
       - claude_credentials:/claude_shared:rw # For Claude auth

@@ -280,9 +280,12 @@ export function createToolFunction(
 				properties[apiParamName].items = {
 					type: 'string',
 				};
-			}
 
-			if (paramType === 'string' && paramInfo?.enum) {
+				if (paramInfo?.enum) {
+					properties[apiParamName].items.enum = paramInfo.enum;
+				}
+			}
+			else if (paramInfo?.enum) {
 				properties[apiParamName].enum = paramInfo.enum;
 			}
 
