@@ -18,6 +18,7 @@ The MAGI System (pronounced “MAH-jeye”) is designed for complex AI automatio
 - **Persistent Memory**: Conversations and context maintained between sessions
 - **Interactive Sessions**: Send follow-up commands to ongoing processes
 - **Real-Time Updates**: Stream results as they become available
+- **Telegram Integration**: Two-way communication with Telegram for remote interaction
 
 ## System Architecture
 
@@ -78,44 +79,49 @@ git clone https://github.com/has-context/magi-system.git
 cd magi-system
 ```
 
-### 2. Installation Options
+### 2. Setup and Running
 
-#### Automated Setup (Recommended)
+#### Docker Setup (Recommended)
 
 ```bash
-npm run setup
+# Run setup (one time only)
+./setup.sh
+
+# Start the system
+./start.sh
+
+# Stop the system
+./stop.sh
 ```
 
-This script will:
-- Prompt for your OpenAI API key
-- Install Node.js dependencies
-- Build the Docker image
+The setup script will:
+- Prompt for your API keys (OpenAI, Anthropic, etc.)
+- Configure directory access
+- Build the Docker images
 - Set up Claude CLI integration
 
 #### Manual Setup
 
-```bash
-
-# Install dependencies
-npm ci
-
-# Build Docker image
-docker build -t magi-system:latest -f magi/docker/Dockerfile .
-
-# Set up Claude integration (if available)
-npm run setup-claude
-```
-
-### 3. Starting MAGI System
+If you prefer to run Docker commands directly:
 
 ```bash
-npm run dev
+# Build and run setup
+docker-compose build setup
+docker-compose run --rm setup
+
+# Start the system
+docker-compose up
+
+# Start in detached mode
+docker-compose up -d
+
+# Stop the system
+docker-compose down
 ```
 
 The server will:
-1. Start on port 3001 (or the next available port)
-2. Open your browser to the web interface automatically
-3. Build the Docker image if it doesn't exist
+1. Start on port 3010 for the web interface
+2. Create Docker containers for AI processes as needed
 
 ## Usage
 
@@ -185,53 +191,98 @@ MAGI_ENABLE_SELF_OPTIMIZATION=false test/magi-docker.sh -p "your prompt here"
 ### Development Workflow
 
 1. Make changes to the code
-2. Lint code with `npm run lint`
-3. Run server with `npm run dev`
-4. Test functionality
+2. Start the system with `./start.sh`
+3. Test your changes (code changes to the controller's src directory will hot reload)
+4. For changes to Docker configuration:
+   - Stop the system with `./stop.sh`
+   - Rebuild with `docker-compose build`
+   - Start again with `./start.sh`
 5. Fix any errors
 6. Repeat until everything works correctly
 
-## Docker Mode
+## Docker Configuration
 
-For improved cross-platform compatibility (especially on Windows), you can run the entire MAGI system in Docker:
+The MAGI System runs entirely in Docker containers for improved cross-platform compatibility:
 
-### Option 1: Docker Compose (Recommended)
+### Docker Structure
 
-Run the full system in Docker containers:
+- `docker/controller/`: Docker configuration for the controller service
+- `docker/magi/`: Docker configuration for the AI agent service
+- `docker/setup/`: Docker configuration for the setup service
 
-```bash
-# Windows
-start-docker-windows.bat
+The system is orchestrated by Docker Compose and includes these main components:
 
-# macOS/Linux
-./start-docker.sh
-```
+1. **Controller Service**: Handles web UI and Docker container orchestration
+2. **MAGI Containers**: Dynamically created for each AI process
+3. **Setup Service**: Only used during initial setup
 
-### Option 2: Hybrid Mode (Best for Windows)
+### Docker Volumes
 
-Run controller locally, but agents in Docker (solves common Windows issues):
+- `claude_credentials`: For storing Claude CLI authentication
+- `magi_output`: For storing AI-generated files
 
-```bash
-# Windows
-run-local.bat
+For detailed Docker information, see [DOCKER.md](DOCKER.md) and [docker/README.md](docker/README.md).
 
-# macOS/Linux
-./run-local.sh
-```
+## Telegram Integration
 
-### Option 3: Host Network Mode
+MAGI System supports two-way integration with Telegram for remote interaction:
 
-Alternative approach for tricky networking environments:
+### Setup Steps
 
-```bash
-# Windows
-use-host-network.bat
+1. **Create a Telegram Bot**:
+   - Chat with [@BotFather](https://t.me/botfather) on Telegram
+   - Use `/newbot` command to create a new bot
+   - Copy the API token provided by BotFather
+   - Use `/setprivacy` command and select your bot, then choose "Disable" to allow the bot to see all messages in groups
 
-# macOS/Linux
-./use-host-network.sh
-```
+2. **Configure Environment Variables**:
+   - Add to your `.env` file:
+   ```
+   TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+   TELEGRAM_ALLOWED_CHAT_IDS=123456789,987654321
+   ```
+   - To get your chat ID, send a message to [@userinfobot](https://t.me/userinfobot)
 
-These containerized approaches solve host networking issues between containers. For detailed instructions and troubleshooting, see [DOCKER.md](DOCKER.md).
+3. **Test the Integration**:
+   - Run the test script: `./test/telegram-test.sh "Hello from MAGI!"`
+   - You should receive a message on Telegram
+
+### Usage
+
+- Send messages to your bot on Telegram to forward commands to MAGI
+- MAGI will send generated responses back to Telegram
+- Messages from MAGI's talk functionality are automatically forwarded to Telegram
+
+### Troubleshooting Telegram Integration
+
+If you're having issues with Telegram integration, follow these troubleshooting steps:
+
+1. **Verify your bot token**:
+   ```bash
+   curl "https://api.telegram.org/bot<YOUR_TOKEN>/getMe"
+   ```
+   This should return information about your bot if the token is valid.
+
+2. **Check chat permissions**:
+   - Make sure you've started a conversation with your bot first
+   - You must send a message to the bot before it can message you
+
+3. **Verify your chat ID**:
+   - Send a message to [@userinfobot](https://t.me/userinfobot) to get your ID
+   - Ensure this ID is in your `TELEGRAM_ALLOWED_CHAT_IDS` env variable
+
+4. **Test sending a message directly**:
+   ```bash
+   ./test/telegram-test.sh "Hello world"
+   ```
+
+5. **For group chats**:
+   - Add the bot to the group
+   - Make sure the group ID (not your personal ID) is in `TELEGRAM_ALLOWED_CHAT_IDS`
+   - Group IDs are usually negative numbers
+
+6. **Check logs for more details**:
+   - Run the system with `npm run dev` and look for `[Telegram]` log messages
 
 ## Troubleshooting
 
@@ -240,6 +291,7 @@ These containerized approaches solve host networking issues between containers. 
 - **API Key Problems**: Verify your OpenAI API key is valid
 - **Port Conflicts**: If port 3001 is in use, the system will try alternative ports
 - **Windows Docker Network Issues**: Use Docker mode with `start-docker-windows.bat`
+- **Telegram Connection Issues**: Verify your bot token and allowed chat IDs
 
 ## License
 

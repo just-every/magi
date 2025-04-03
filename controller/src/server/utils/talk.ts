@@ -1,11 +1,9 @@
 import OpenAI from 'openai';
 import { CommunicationManager } from '../managers/communication_manager';
+import { sendTelegramMessage } from './telegram_bot';
 
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({apiKey: process.env.OPENAI_API_KEY}) : null;
 let communicationManager: CommunicationManager | null = null;
-
-// Helper function for small delays (optional, might help flow control)
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
  * Set the communication manager instance for audio streaming
@@ -16,14 +14,20 @@ export function setCommunicationManager(manager: CommunicationManager): void {
 
 /**
  * Output text to speech using OpenAI's TTS model, streaming chunks to the client.
+ * Also sends the message to Telegram if integration is enabled.
  */
 export async function talk(input: string, affect: string, processId: string): Promise<void> {
+	// Send to Telegram in parallel (don't await here to not block audio streaming)
+	sendTelegramMessage(input, affect, processId).catch(error => {
+		console.error(`[Telegram] Error sending message: ${error}`);
+	});
+
 	if (!openai) {
-		console.error("OpenAI API key not configured.");
+		console.error('OpenAI API key not configured.');
 		return;
 	}
 	if (!communicationManager) {
-		console.error("CommunicationManager not set.");
+		console.error('CommunicationManager not set.');
 		return;
 	}
 
@@ -52,8 +56,8 @@ export async function talk(input: string, affect: string, processId: string): Pr
 
 	try {
 		const response = await openai.audio.speech.create({
-			model: "gpt-4o-mini-tts",
-			voice: "sage",
+			model: 'gpt-4o-mini-tts',
+			voice: 'sage',
 			input,
 			instructions: `
 Voice: Female, Adult. Warm, engaging, intimate. Naturally breathy/airy (esp. sibilants, phrase ends) with subtle huskiness.
@@ -76,7 +80,7 @@ Delivery: Speak confidentially to one person. Lower volume, calm energy. Slightl
 
 		if (arrayBuffer.byteLength === 0) { return; }
 		if (arrayBuffer.byteLength % 2 !== 0) {
-			console.warn("[Server] PCM data length is not even, might indicate issues as samples are 16-bit (2 bytes).");
+			console.warn('[Server] PCM data length is not even, might indicate issues as samples are 16-bit (2 bytes).');
 		}
 
 		const totalChunks = Math.ceil(arrayBuffer.byteLength / CHUNK_SIZE);

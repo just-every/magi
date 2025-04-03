@@ -89,7 +89,18 @@ export class ProcessManager {
 	 * @param command - Command to execute
 	 * @returns The created process data
 	 */
-	createProcess(processId: string, command: string, agentProcess?: AgentProcess): ProcessData {
+	async createAgentProcess(agentProcess: AgentProcess): Promise<ProcessData> {
+		return this.createProcess(agentProcess.processId, agentProcess.command, agentProcess);
+	}
+
+	/**
+	 * Create a new process
+	 *
+	 * @param processId - Unique ID for the process
+	 * @param command - Command to execute
+	 * @returns The created process data
+	 */
+	async createProcess(processId: string, command: string, agentProcess?: AgentProcess): Promise<ProcessData> {
 		// Generate colors for the process
 		const colors = generateProcessColors();
 
@@ -126,7 +137,7 @@ export class ProcessManager {
 		} as ProcessCreateEvent);
 
 		// Start Docker container and command execution
-		this.spawnDockerProcess(processId, command, agentProcess?.tool);
+		await this.spawnDockerProcess(processId, command, agentProcess?.tool, agentProcess);
 
 		return processData;
 	}
@@ -225,7 +236,7 @@ export class ProcessManager {
 	 * @param command - The MAGI command to execute
 	 * @returns Promise that resolves when setup is complete (not when the command finishes)
 	 */
-	async spawnDockerProcess(processId: string, command: string, tool?: ProcessToolType): Promise<void> {
+	async spawnDockerProcess(processId: string, command: string, tool?: ProcessToolType, agentProcess?: AgentProcess): Promise<void> {
 		try {
 			// Step 1: Verify Docker is available on the system
 			const dockerAvailable = await isDockerAvailable();
@@ -258,7 +269,9 @@ export class ProcessManager {
 			const containerId = await runDockerContainer({
 				processId,
 				command,
-				tool
+				tool,
+				coreProcessId: this.coreProcessId,
+				project: agentProcess?.project
 			});
 
 			// Handle container start failure
@@ -578,13 +591,13 @@ export class ProcessManager {
 		// This ensures we also catch containers that might have been created but not fully tracked
 		try {
 			const {stdout} = await execPromise("docker ps -a --filter 'name=magi-AI' --format '{{.Names}}'");
-			
+
 			if (stdout.trim()) {
 				const containerNames = stdout.trim().split('\n');
 				const containerIds = containerNames.map(name => name.replace('magi-', ''));
-				
+
 				console.log(`Found ${containerNames.length} MAGI containers to clean up: ${containerIds.join(', ')}`);
-				
+
 				// Stop all containers in parallel
 				await Promise.all(
 					containerNames.map(async (containerName) => {
@@ -596,19 +609,19 @@ export class ProcessManager {
 						}
 					})
 				);
-				
+
 				// Mark all related processes as terminated
 				for (const containerName of containerNames) {
 					const processId = containerName.replace('magi-', '');
 					if (this.processes[processId]) {
 						this.processes[processId].status = 'terminated';
-						
+
 						// Notify clients about termination
 						this.io.emit('process:update', {
 							id: processId,
 							status: 'terminated'
 						} as ProcessUpdateEvent);
-						
+
 						// Add termination message to logs
 						this.updateProcess(processId, 'Process terminated by system shutdown');
 					}
@@ -662,7 +675,7 @@ export class ProcessManager {
 				console.error('Error during parallel process termination:', error);
 			}
 		}
-		
+
 		// Step 4: Final check to make sure ALL containers are really gone
 		try {
 			const {stdout} = await execPromise("docker ps --filter 'name=magi-AI' -q");

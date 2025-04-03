@@ -5,14 +5,12 @@
   "type": "module",
   "scripts": {
     "postinstall": "cd controller && npm install && cd ../magi && npm install",
-    "build": "cd controller && npm run build && cd ../magi && npm run build",
-    "build:docker": "docker build -t magi-system:latest -f magi/docker/Dockerfile .",
-    "dev": "npm run build:docker && cd controller && npm run cleanup && npx nodemon",
-    "lint": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts'",
-    "lint:fix": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts' --fix",
-    "lint:ui": "eslint controller/src/client/js/ui/",
+    "build": "docker-compose build",
+    "dev": "docker-compose up --build",
+    "lint": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts' 'setup/**/*.ts'",
+    "lint:fix": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts' 'setup/**/*.ts' --fix",
     "setup": "node setup/bootstrap.js",
-    "setup-claude": "npx tsc -p setup && node dist/setup/claude_setup.js"
+    "setup:claude": "npx tsc -p setup && node dist/setup/claude_setup.js"
   },
   "repository": {
     "type": "git",

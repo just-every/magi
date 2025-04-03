@@ -3,6 +3,24 @@
  * Used by both client and server
  */
 
+declare global {
+	namespace NodeJS {
+		interface ProcessEnv {
+			NODE_ENV: 'development' | 'production';
+			PROCESS_ID: string;
+			CONTROLLER_PORT: string;
+			HOST_HOSTNAME: string;
+			OPENAI_API_KEY?: string;
+			ANTHROPIC_API_KEY?: string;
+			GOOGLE_API_KEY?: string;
+			XAI_API_KEY?: string;
+			DEEPSEEK_API_KEY?: string;
+			BRAVE_API_KEY?: string;
+			PROJECT_PARENT_PATH?: string;
+			PROJECT_REPOSITORIES?: string;
+		}
+	}
+}
 // Define types for communication with magi containers
 export type StreamEventType =
     'connected'

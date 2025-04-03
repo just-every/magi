@@ -15,8 +15,8 @@ RUN apt-get update && \
 WORKDIR /build
 
 # Copy package.json and package-lock.json
-COPY magi/package.json .
-COPY magi/package-lock.json .
+COPY package.json .
+COPY package-lock.json .
 
 # Install ALL dependencies using npm ci based on lock file
 # Native modules are compiled here for the build architecture
@@ -39,10 +39,11 @@ ARG GROUP_NAME=magi_user
 RUN npm install -g npm
 
 # Global installs needed at runtime
-RUN npm install -g @anthropic-ai/claude-code
+RUN npm install -g @anthropic-ai/claude-code@latest
 
 # Install system dependencies required by Playwright at runtime
 RUN apt-get update && \
+    apt-get install -y git && \
     npx playwright install-deps chromium && \
     rm -rf /var/lib/apt/lists/*
 
@@ -71,12 +72,12 @@ RUN npx playwright install --only-shell chromium
 USER root
 
 # Copy the entrypoint script (adjust source path as needed)
-COPY magi/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Copy the application source code
 # Changes here will invalidate cache from this point onwards
-COPY --chown=magi_user:magi_user magi/. ./
+COPY --chown=magi_user:magi_user . ./
 
 # Build the application (runs as root)
 RUN npm run build

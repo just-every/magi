@@ -9,7 +9,7 @@ import {createCodeAgent} from '../common_agents/code_agent.js';
 import {createBrowserAgent} from '../common_agents/browser_agent.js';
 import {createSearchAgent} from '../common_agents/search_agent.js';
 import {createShellAgent} from '../common_agents/shell_agent.js';
-import {AGENT_DESCRIPTIONS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT} from '../constants.js';
+import {AGENT_DESCRIPTIONS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
 import {getFileTools} from '../../utils/file_utils.js';
 
 /**
@@ -35,6 +35,8 @@ You should run multiple agents at once if requested and follow any dependencies 
 Synthesize the results from all your agents into a output as requested in the plan.
 
 ${DOCKER_ENV_TEXT}
+
+${FILE_TOOLS_TEXT}
 
 ${SELF_SUFFICIENCY_TEXT}
 Take however long you need to complete a task. Don't give up!`,

@@ -1,12 +1,12 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "CommonJS",
-    "moduleResolution": "node",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "esModuleInterop": true,
     "strict": true,
     "jsx": "react",
-    "outDir": "./controller/dist",
+    "outDir": "./dist",
     "rootDir": "./",
     "sourceMap": true,
     "declaration": true,

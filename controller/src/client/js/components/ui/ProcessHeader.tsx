@@ -7,6 +7,7 @@ import { ProcessStatus } from '@types';
 import { getStatusClass } from '../utils/ProcessBoxUtils';
 
 interface ProcessHeaderProps {
+    processName?: string;
     agentName?: string;
     status?: ProcessStatus;
     colors: {
@@ -19,18 +20,20 @@ interface ProcessHeaderProps {
 }
 
 const ProcessHeader: React.FC<ProcessHeaderProps> = ({
+    processName,
     agentName,
     status,
     colors,
     onTerminate,
     onViewLogs
 }) => {
+    agentName = (agentName || '').replace(/Agent$/, '')
     return (
         <div className="card-header d-flex justify-content-between align-items-center border-0 py-2">
             <div className="d-flex align-items-center">
                 {/* Process name/ID */}
                 <span className="process-id fw-bold" style={{color: colors.textColor}}>
-                    {agentName ? agentName : ''}
+                    {processName || agentName} {agentName && processName && agentName != processName ? ` (${agentName})` : ''}
                 </span>
             </div>
             {status && <div className="d-flex align-items-center gap-2">

@@ -7,7 +7,7 @@
 import {Agent} from '../../utils/agent.js';
 import {createBrowserAgent} from '../common_agents/browser_agent.js';
 import {createSearchAgent} from '../common_agents/search_agent.js';
-import {AGENT_DESCRIPTIONS, SIMPLE_SELF_SUFFICIENCY_TEXT, DOCKER_ENV_TEXT} from '../constants.js';
+import {AGENT_DESCRIPTIONS, SIMPLE_SELF_SUFFICIENCY_TEXT, DOCKER_ENV_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
 import {getFileTools} from '../../utils/file_utils.js';
 
 /**
@@ -34,6 +34,8 @@ The execution agent can run multiple agents at once and follow any complex plan 
 - If the validation agent finds that the task has not been completed correctly, the task will be sent back to you for another attempt.
 
 ${DOCKER_ENV_TEXT}
+
+${FILE_TOOLS_TEXT}
 
 ${SIMPLE_SELF_SUFFICIENCY_TEXT}
 Keep going until you can't go any further. Don't give up! The system will stop you if you run for too many attempts.

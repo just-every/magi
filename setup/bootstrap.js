@@ -2,7 +2,7 @@
 
 /**
  * MAGI System Bootstrap
- * 
+ *
  * This script handles the initial setup process before Node.js packages are installed.
  * It displays the welcome message and then runs npm install before proceeding with the
  * TypeScript-based setup.
@@ -32,13 +32,13 @@ try {
   console.log('Running npm install...');
   execSync('npm install', { stdio: 'inherit', cwd: rootDir });
   console.log('\x1b[32m%s\x1b[0m', '✓ Core dependencies installed successfully');
-  
+
   // Now compile and run the TypeScript setup
   console.log('Compiling setup script...');
   execSync('npx tsc -p setup', { stdio: 'inherit', cwd: rootDir });
-  
+
   console.log('Running setup...');
-  execSync('node dist/setup/setup.js', { stdio: 'inherit', cwd: rootDir });
+  execSync('node setup/dist/setup.js', { stdio: 'inherit', cwd: rootDir });
 } catch (error) {
   console.error('\x1b[31m%s\x1b[0m', 'Failed to complete setup:');
   console.error(error instanceof Error ? error.message : String(error));

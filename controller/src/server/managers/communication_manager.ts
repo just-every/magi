@@ -7,6 +7,9 @@
 import {Server as WebSocketServer, WebSocket} from 'ws';
 import {Server as HttpServer} from 'http';
 import {ProcessManager} from './process_manager';
+import {
+	createNewProject
+} from './container_manager';
 import fs from 'fs';
 import path from 'path';
 import {talk} from '../utils/talk';
@@ -58,6 +61,7 @@ export interface AgentProcess {
 	command: string;
 	name: string;
 	output?: string;
+	project?: string[]; // List of git repositories to mount
 }
 
 export interface ProcessEvent {
@@ -160,7 +164,7 @@ export class CommunicationManager {
 				}
 
 				// Handle incoming messages
-				ws.on('message', (data) => {
+				ws.on('message', async (data) => {
 					try {
 						const message = JSON.parse(data.toString()) as MagiMessage;
 
@@ -184,7 +188,7 @@ export class CommunicationManager {
 						}
 
 						// Process the message based on type
-						this.processContainerMessage(processId, message);
+						await this.processContainerMessage(processId, message);
 					} catch (err) {
 						console.error('Error processing WebSocket message:', err);
 					}
@@ -278,7 +282,7 @@ export class CommunicationManager {
 	/**
 	 * Process messages received from containers
 	 */
-	private processContainerMessage(processId: string, message: MagiMessage): void {
+	private async processContainerMessage(processId: string, message: MagiMessage): Promise<void> {
 		try {
 			// First, check if this is the new format with 'event' property
 			if (message.event) {
@@ -310,7 +314,16 @@ export class CommunicationManager {
 				// Process tool results for image paths
 				if (message.event.type === 'process_start' && message.event.agentProcess && typeof message.event.agentProcess === 'object') {
 					const processEvent = message.event as any as ProcessEvent;
-					this.processManager.createProcess(processEvent.agentProcess.processId, processEvent.agentProcess.command, processEvent.agentProcess);
+					await this.processManager.createAgentProcess(processEvent.agentProcess);
+				}
+				else if (message.event.type === 'project_create' && message.event.project && typeof message.event.project === 'string') {
+					const newProject = createNewProject(message.event.project);
+					if(newProject) {
+						this.sendMessage(this.processManager.coreProcessId, JSON.stringify({
+							type: 'project_ready',
+							project: newProject,
+						}));
+					}
 				}
 				else if (message.event.type === 'process_running' || message.event.type === 'process_updated' || message.event.type === 'process_done') {
 					this.sendMessage(this.processManager.coreProcessId, JSON.stringify({
@@ -333,6 +346,24 @@ export class CommunicationManager {
 
 								talkPromise.catch(error => {
 									console.error('Error calling talk:', error);
+								});
+							}
+						}
+
+						// Handle Telegram specific tool calls
+						if(toolCall.function.name === 'Telegram_send_message') {
+							const toolParams: Record<string, unknown> = JSON.parse(toolCall.function.arguments);
+							if (toolParams.message && typeof toolParams.message === 'string') {
+								// Affect parameter is optional, default to 'neutral'
+								const affect = toolParams.affect && typeof toolParams.affect === 'string'
+									? toolParams.affect
+									: 'neutral';
+
+								// Call talk, which will also send to Telegram
+								const talkPromise = talk(toolParams.message as string, affect, processId);
+
+								talkPromise.catch(error => {
+									console.error('Error calling Telegram send:', error);
 								});
 							}
 						}
@@ -418,7 +449,7 @@ export class CommunicationManager {
 	/**
 	 * Send a command to a specific container
 	 */
-	async sendCommand(processId: string, command: string, args?: any, sourceId?: string): Promise<boolean> {
+	sendCommand(processId: string, command: string, args?: any, sourceId?: string): boolean {
 		try {
 			const commandMessage: CommandMessage = {
 				type: 'command',
@@ -441,7 +472,7 @@ export class CommunicationManager {
 	/**
 	 * Send a message to a specific container
 	 */
-	async sendMessage(processId: string, message: string): Promise<boolean> {
+	sendMessage(processId: string, message: string): boolean {
 		const connection = this.connections.get(processId);
 
 		if (!connection) {
@@ -541,7 +572,7 @@ export class CommunicationManager {
 	/**
 	 * Stop a process by sending a stop command
 	 */
-	async stopProcess(processId: string): Promise<boolean> {
+	stopProcess(processId: string): boolean {
 		return this.sendCommand(processId, 'stop');
 	}
 

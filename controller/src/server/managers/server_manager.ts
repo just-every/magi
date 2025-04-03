@@ -23,6 +23,7 @@ import {cleanupAllContainers} from './container_manager';
 import {saveUsedColors} from './color_manager';
 import {CommunicationManager} from './communication_manager';
 import {setCommunicationManager} from '../utils/talk';
+import {initTelegramBot, closeTelegramBot} from '../utils/telegram_bot';
 
 const docker = new Docker();
 
@@ -44,6 +45,11 @@ export class ServerManager {
 
 		// Initialize the talk module with the communication manager
 		setCommunicationManager(this.communicationManager);
+
+		// Initialize the Telegram bot
+		initTelegramBot(this.communicationManager, this.processManager).catch(error => {
+			console.error('Failed to initialize Telegram bot:', error);
+		});
 
 		this.setupWebSockets();
 		this.setupSignalHandlers();
@@ -465,7 +471,7 @@ export class ServerManager {
 			});
 		});
 
-		process.on('unhandledRejection', (reason, promise) => {
+		process.on('unhandledRejection', (reason) => {
 			console.error('Unhandled promise rejection:', reason);
 			// Don't exit the process, just log the error
 		});
@@ -474,6 +480,15 @@ export class ServerManager {
 		if (process.env.NODE_ENV === 'development') {
 			process.on('SIGUSR2', async () => {
 				console.log('Received SIGUSR2 (nodemon restart)');
+				
+				if (typeof closeTelegramBot === 'function') {
+					try {
+						console.log('Closing Telegram bot before nodemon restart...');
+						closeTelegramBot().catch(e => console.error('Error during Telegram shutdown:', e));
+					} catch (error) {
+						console.error('Error closing Telegram bot during nodemon restart:', error);
+					}
+				}
 				// Don't do a full cleanup since we're just restarting
 				// But make sure containers keep running
 			});
@@ -551,7 +566,7 @@ export class ServerManager {
 	 *
 	 * @param command - The command to run
 	 */
-	handleCommandRun(command: string): void {
+	async handleCommandRun(command: string): Promise<void> {
 		// Validate command string
 		if (!command || typeof command !== 'string' || !command.trim()) {
 			console.error('Invalid command received:', command);
@@ -562,7 +577,7 @@ export class ServerManager {
 		const processId = `AI-${Math.random().toString(36).substring(2, 8)}`;
 
 		// Create a new process
-		this.processManager.createProcess(processId, command);
+		await this.processManager.createProcess(processId, command);
 	}
 
 	/**
@@ -737,6 +752,14 @@ export class ServerManager {
 	 */
 	private async cleanup(): Promise<void> {
 		console.log('MAGI System shutting down - cleaning up resources...');
+
+		// Step 0: Close Telegram bot connection
+		try {
+			console.log('Closing Telegram bot...');
+			await closeTelegramBot();
+		} catch (error) {
+			console.error('Error closing Telegram bot:', error);
+		}
 
 		// Step 1: Try to gracefully stop all processes first by sending stop command
 		// This gives them a chance to clean up properly

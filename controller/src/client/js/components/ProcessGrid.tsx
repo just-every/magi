@@ -10,9 +10,7 @@ import {useSocket} from '../context/SocketContext';
 import {BoxPosition} from '@types';
 import {
     calculateBoxPositions,
-    calculateBoundingBox,
     calculateZoomToFit,
-    GRID_PADDING,
 } from './utils/GridUtils';
 import {TRANSITION_EASE, TRANSITION_TIME} from "../utils/constants";
 
@@ -322,6 +320,7 @@ const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
                 <div key={id} style={style} className={"process-wrapper"+ (isCoreProcess ? ' core-process' : '')}>
                     <ProcessBox
                         id={id}
+                        name={process.name}
                         command={process.command}
                         status={process.status}
                         colors={colors}

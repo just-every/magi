@@ -11,6 +11,7 @@ import ProcessHeader from './ui/ProcessHeader';
 
 interface ProcessBoxProps {
     id: string;
+    name: string;
     command: string;
     status: ProcessStatus;
     colors: {
@@ -30,6 +31,7 @@ interface ProcessBoxProps {
  */
 const ProcessBox: React.FC<ProcessBoxProps> = ({
     id,
+    name,
     status,
     colors,
     logs,
@@ -111,6 +113,7 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
             onClick={handleBoxClick}>
             <div className="process-box-bg" style={{backgroundColor: colors.bgColor}}>
                 <ProcessHeader
+                    processName={name}
                     agentName={agentName}
                     status={status}
                     colors={colors}

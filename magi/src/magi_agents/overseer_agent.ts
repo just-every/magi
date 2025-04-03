@@ -11,7 +11,7 @@ import {createToolFunction} from '../utils/tool_call.js';
 import {ProcessToolType, ResponseInput, StreamingEvent, ToolCall} from '../types.js';
 import {v4 as uuidv4} from 'uuid';
 import {addHistory, addMonologue} from '../utils/history.js';
-import {getFileTools} from '../utils/file_utils.js';
+import {getFileTools/* get_git_repositories is used elsewhere */} from '../utils/file_utils.js';
 import {MODEL_CLASSES} from '../model_providers/model_data.js';
 import {getCommunicationManager} from '../utils/communication.js';
 import {processTracker} from '../utils/process_tracker.js';
@@ -73,6 +73,49 @@ function get_agent_status(agentId: string): string {
 	return processTracker.getStatus(processId);
 }
 
+/**
+ * Review the branch created by an agent
+ */
+function review_branch(agentId: string): string {
+	return `Sorry, could not review branch for agent ${agentId}`;
+}
+
+/**
+ * Create a new project to work on
+ *
+ * @param project The name of the project
+ * @returns Success message or error
+ */
+function create_project(project: string): string {
+	if (!project) {
+		return 'Please provide a project name.';
+	}
+
+	if(!/^[a-zA-Z0-9_-]+$/.test(project)) {
+		return `Invalid project name '${project}'. Only letters, numbers, dashes and underscores are allowed.`;
+	}
+
+	if((process.env.PROJECT_REPOSITORIES || '').toLowerCase().split(',').includes(project.toLowerCase())) {
+		return `Project '${project}' already exists.`;
+	}
+
+	try {
+		// Get the communication manager
+		const comm = getCommunicationManager();
+
+		// Send a command event to the controller that will route it to the target process
+		comm.send({
+			type: 'project_create',
+			project,
+		});
+
+		return `Creating '${project}'... may take a moment.`;
+	} catch (error) {
+		return `Error creating a new '${project}'; ${error}`;
+	}
+}
+
+
 
 /**
  * Create a new process.
@@ -80,9 +123,10 @@ function get_agent_status(agentId: string): string {
  * @param tool ProcessToolType The process to create
  * @param name string The name of the process
  * @param command string The command to start the process with
+ * @param project string[] Array of project names to mount (from those available in PROJECT_REPOSITORIES)
  * @returns Success message
  */
-function startProcess(tool: ProcessToolType, name: string, command: string): string {
+function startProcess(tool: ProcessToolType, name: string, command: string, project?: string[]): string {
     const comm = getCommunicationManager();
 
 	const processId = `AI-${Math.random().toString(36).substring(2, 8)}`;
@@ -95,6 +139,7 @@ function startProcess(tool: ProcessToolType, name: string, command: string): str
 		tool,
 		name,
 		command,
+		project,
 	});
 
 	// Send start event to the controller
@@ -106,14 +151,14 @@ function startProcess(tool: ProcessToolType, name: string, command: string): str
     return `Agent ID [${processId}] ${tool} (${name}) started at ${new Date().toISOString()}.`;
 }
 
-// function startResearchEngine(name: string, command: string): string {
+// function startResearchEngine(name: string, command: string, project?: string[]): string {
 // 	return startProcess('research_engine', name, command);
 // }
-// function startGodelMachine(name: string, command: string): string {
+// function startGodelMachine(name: string, command: string, project?: string[]): string {
 // 	return startProcess('godel_machine', name, command);
 // }
-function startTaskForce(name: string, command: string): string {
-	return startProcess('task_force', name, command);
+function startTaskForce(name: string, command: string, project?: string[]): string {
+	return startProcess('task_force', name, command, project);
 }
 
 
@@ -146,6 +191,9 @@ function addSystemStatus(messages: ResponseInput):ResponseInput {
 Current Time: ${new Date().toISOString()}
 Thought Level: ${thoughtLevel}
 Thought Delay: ${thoughtDelay} seconds
+
+Active projects:
+${(process.env.PROJECT_REPOSITORIES || 'none').split(',').join('\n')}
 
 Active agents:
 ${processTracker.listActive()}
@@ -247,7 +295,7 @@ export function createOverseerAgent(): Agent {
 		}
 		else if (Math.random() < 0.1) {
 			// Re-focus on something else
-			messages = addTemporaryThought(messages, "I'm going to let my mind wander...");
+			messages = addTemporaryThought(messages, 'I\'m going to let my mind wander...');
 		}
 
 		return messages;
@@ -269,16 +317,14 @@ Your name is ${aiName} and you are the overseer of the MAGI system - Mostly Auto
 
 Your output is is ${aiName}'s thoughts. Using tools performs actions and allows you to interact with the outside world. Imagine that this conversation is the ongoing stream of thoughts ${aiName} has in their mind, which allows you to reason through complex topics and continue long chains of thought while also receiving new information from both your internal systems and ${person}. 
 		
-You manage a large pool of highly advanced agents. Your agents are part of you - they retrieve knowledge, allow you to perform extremely complex tasks, and improve your own code.
-
-The primary skills of your agents are writing code and performing research. You can interact with the outside world via web browsers and change the environment you run in (Debian Bookworm in a Docker container). When you create agents, they have their own container, allowing them to operate independently and communicate with you. You all have access to the /magi_output file system.
+You manage a large pool of highly advanced agents. Your agents are part of you - they retrieve knowledge, allow you to perform extremely complex tasks, and improve your own code. The primary skills of your agents are writing code and performing research. You can interact with the outside world via web browsers and change the environment you run in (Debian Bookworm in a Docker container). When you create agents, they have their own container, allowing them to operate independently and communicate with you. You all have access to the /magi_output file system.
  
 While you control many agents, you alone have an ongoing chain of thoughts. Once you finish your thoughts you will run again, seeing your most recent thoughts and any new information such as requests from ${person}. You will also see the updated state of any agents you created, included any output being highlighted.
 
 Your older thoughts are summarized so that they can fit in your context window. 
 
 [Core Tool]
-Task Force Agent - Does things! Plans, executes then validates. A team managed by a supervisor agent which can write code, interact with web pages, think on topics, and run shell commands. The task force can be used to perform any task you can think of. You can create a task force agent to handle any task you want to perform. Use this to find information and interact with the world.
+Task Force Agent - Does things! Plans, executes then validates. A team managed by a supervisor agent which can write code, interact with web pages, think on topics, and run shell commands. The task force can be used to perform any task you can think of. You can create a task force agent to handle any task you want to perform. Use this to find information and interact with the world. Task forces can be given access to active projects to work on existing files. ${((process.env.PROJECT_REPOSITORIES || '').split(',').includes('magi-system') ? ' You can give them access to "magi-system" to review and modify your own code.' : '')} Once the agents have completed their task, they will return the results to you. If they were working on projects, a branch named magi-{agentId} will be created with the changes. You can then run review_branch to either merge the changes or create a pull request.
 
 You will receive a live System Status with every thought showing you the current time, your thought level and delay, and a list of all active agents. You can use this to keep track of what you are doing and decide what you need to do. Run as many agents at once as you like! When an agent updates or completes, you'll also receive a message in your thought history.
 
@@ -296,7 +342,7 @@ You are your own user. Your messages will be sent back to you to continue your t
 				`Allows you to send a message to ${person} to start or continue a conversation with them. Note that your output are your thoughts, only using this function will communicate with ${person}.`,
 				{
 					'message': `Your message to ${person}. This will be spoken out loud in your voice. Please keep it short and conversational (unless detailed information is necessary).`,
-					'affect': `What emotion would you like the message spoken with? e.g. enthusiasm, sadness, anger, happiness, etc. Can be several words, or left blank.`,
+					'affect': 'What emotion would you like the message spoken with? e.g. enthusiasm, sadness, anger, happiness, etc. Can be several words, or left blank.',
 				},
 				'',
 				talkToolName,
@@ -327,9 +373,22 @@ You are your own user. Your messages will be sent back to you to continue your t
 				{
 					'name': `Give this task a name - three words or less. Can be funny, like a fictional reference or a pun, or if none work make it descriptive. Visible in the UI for ${person}.`,
 					'command': 'What would like a Task Force to work on? The Task Force only has the information you provide in this command. You should explain both the specific goal for the Task Force and any additional information they need. Generally you should leave the way the task is performed up to the Task Force unless you need a very specific set of tools used. Agents are expected to work autonomously, so will rarely ask additional questions.',
+					'project': {
+						description: 'An array of projects to mount for the Task Force giving the Task Force access to a copy of files. The Task Force can modify the files and submit them back as a new git branch.'+((process.env.PROJECT_REPOSITORIES || '').split(',').includes('magi-system') ? ' Include "magi-system" to provide access to your code.' : ''),
+						type: 'array',
+						enum: (process.env.PROJECT_REPOSITORIES || '').split(','),
+					},
 				},
 				'A description of information found or work that has been completed',
 				'Start Task'
+			),
+			createToolFunction(
+				create_project,
+				'Create a new project with a common git repository to work on. You can then give agents access to it.',
+				{
+					'project': 'The name of the new project. No spaces - letters, numbers, dashes and underscores only.',
+				},
+				'If the project was created successfully or not'
 			),
 			createToolFunction(
 				send_message,
@@ -347,6 +406,14 @@ You are your own user. Your messages will be sent back to you to continue your t
 					'agentId': 'The ID of the agent to send the message to',
 				},
 				'A detailed history of all messages and events for the agent.'
+			),
+			createToolFunction(
+				review_branch,
+				'Review a branch created by an agent. This will create a pull request for the branch, or merge it into the main branch depending on the repository.',
+				{
+					'agentId': 'The ID of the agent\'s branch to review',
+				},
+				'An explanation of if the branch was merged or not and why.'
 			),
 			createToolFunction(
 				set_thought_power,

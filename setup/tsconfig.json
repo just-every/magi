@@ -4,7 +4,7 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "esModuleInterop": true,
-    "outDir": "../dist/setup",
+    "outDir": "dist",
     "strict": true,
     "skipLibCheck": true
   },

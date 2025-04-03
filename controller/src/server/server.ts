@@ -7,17 +7,6 @@
  * - Manages Docker containers that run the MAGI Python backend
  * - Streams logs and command results to the client
  */
-
-
-// Import dotenv to load environment variables
-import * as dotenv from 'dotenv';
-import * as path from 'path';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-
-// Configure dotenv with the specific path relative to this file
-dotenv.config({ path: path.join(__dirname, '../../../.env') });
-
 import {ServerManager} from './managers/server_manager';
 import {initColorManager} from './managers/color_manager';
 

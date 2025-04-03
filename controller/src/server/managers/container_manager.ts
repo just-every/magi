@@ -3,12 +3,13 @@
  *
  * Higher-level container management functionality for MAGI System.
  */
-import {spawn} from 'child_process';
+import {spawn, execSync} from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import {
 	validateContainerName,
-	execPromise
+	execPromise,
+	execPromiseFallback,
 } from '../utils/docker_commands';
 import {ProcessToolType} from './communication_manager';
 
@@ -22,6 +23,8 @@ export interface DockerRunOptions {
 	processId: string;
 	command: string;
 	tool?: ProcessToolType;
+	coreProcessId?: string;
+	project?: string[]; // Array of git repositories to clone and mount
 }
 
 /**
@@ -80,6 +83,117 @@ export async function buildDockerImage(options: DockerBuildOptions = {}): Promis
 }
 
 /**
+ * Prepare a git repository for use by a container
+ *
+ * @param processId The process ID
+ * @param repo The repository options
+ * @returns Object with temporary directory and mount path
+ */
+async function prepareGitRepository(
+	processId: string,
+	project: string
+): Promise<{ hostPath: string, outputPath: string } | null> {
+
+	// Where the git repository is located on the host
+	const hostPath = path.join('/external/host', project);
+
+	// Create a temporary directory for the git repo in the magi_output volume
+	const outputPath = path.join('/magi_output', processId, 'projects', project);
+
+	try {
+		// Skip if the path doesn't exist on the host
+		if (!fs.existsSync(hostPath)) {
+			console.error(`Skipping git repository at ${hostPath} - directory does not exist`);
+			return null;
+		}
+
+		// Check if it's a git repository
+		try {
+			await execPromise(`git -C "${hostPath}" rev-parse --is-inside-work-tree`);
+		} catch (error) {
+			console.error(`Can not access git at ${hostPath}`);
+			return null;
+		}
+
+		// Remove the directory if it exists
+		if (fs.existsSync(outputPath)) {
+			fs.rmSync(outputPath, { recursive: true, force: true });
+		}
+
+		// Create the output directory
+		fs.mkdirSync(outputPath, { recursive: true });
+
+		// Clone the repository to the temp directory
+		await execPromise(`git clone "${hostPath}" "${outputPath}"`);
+
+		// Create or checkout the branch
+		const branchName = `magi-${processId}`;
+
+		// Check if branch exists
+		const branchExists = await execPromiseFallback(`git -C "${outputPath}" show-ref --verify --quiet refs/heads/${branchName}`);
+
+		if (branchExists.stderr) {
+			// Branch doesn't exist, create it
+			await execPromise(`git -C "${outputPath}" checkout -b ${branchName}`);
+		} else {
+			// Branch exists, checkout
+			await execPromise(`git -C "${outputPath}" checkout ${branchName}`);
+		}
+
+		// Set git config for commits
+		await execPromise(`git -C "${outputPath}" config user.name "MAGI System"`);
+		await execPromise(`git -C "${outputPath}" config user.email "magi-system@hascontext.com"`);
+
+		return {
+			hostPath,
+			outputPath
+		};
+	} catch (error) {
+		console.error(`Error preparing git repository ${outputPath}:`, error);
+		return null;
+	}
+}
+
+/**
+ * Create a new project in /external/host with a git repository
+ *
+ * @param project The repository options
+ * @returns The project name (make be changed if already exists)
+ */
+export function createNewProject(
+	project: string,
+): string {
+
+	if(!/^[a-zA-Z0-9_-]+$/.test(project)) {
+		throw new Error(`Invalid project name '${project}'. Only letters, numbers, dashes and underscores are allowed.`);
+	}
+
+	// Make sure we have a unique project name
+	let i = 0;
+	let finalProjectName = project;
+	while(fs.existsSync(path.join('/external/host', finalProjectName))) {
+		finalProjectName = 'magi-'+project+(i > 0 ? `-${i}` : '');
+		i++;
+	}
+
+	// Create a temporary directory for the git repo in the magi_output volume
+	const projectPath = path.join('/external/host', finalProjectName);
+	fs.mkdirSync(projectPath, { recursive: true });
+
+	try {
+		execSync(`git -C "${projectPath}" init`);
+
+		process.env.PROJECT_REPOSITORIES = (process.env.PROJECT_REPOSITORIES+',' || '')+finalProjectName;
+
+		return finalProjectName;
+	} catch (error) {
+		console.error(`Error preparing git repository ${projectPath}:`, error);
+		return '';
+	}
+}
+
+
+/**
  * Run a MAGI System Docker container
  * @param options Run options
  * @returns Promise resolving to container ID if successful, empty string if failed
@@ -111,18 +225,64 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
 		// Create the docker run command using base64 encoded command
 		// Get HOST_HOSTNAME from environment variable, fallback to docker service name
 		const hostName = process.env.HOST_HOSTNAME || 'controller';
-		
+
+		// Initialize volume mounts array with default volumes
+		const volumeMounts = [
+			'-v claude_credentials:/claude_shared:rw',
+			'-v magi_output:/magi_output:rw'
+		];
+
+		// Mount projects on code process
+		const projects = (process.env.PROJECT_REPOSITORIES || '').toLowerCase().split(',');
+
+		// Get PROJECT_REPOSITORIES directories and add them as volume mounts
+		if (process.env.PROJECT_PARENT_PATH && options.coreProcessId && options.coreProcessId === processId && projects.length > 0) {
+			for (const project of projects) {
+
+				// Ensure path is absolute
+				const externalPath = path.resolve(process.env.PROJECT_PARENT_PATH, project);
+				const hostPath = path.resolve('/external/host', project);
+
+				// Validate the host directory exists
+				if (fs.existsSync(hostPath)) {
+					// Add to volume mounts array - mount as read-only for safety
+					volumeMounts.push(`-v "${externalPath}:${hostPath}:ro"`);
+				} else {
+					console.warn(`Skipping mount for non-existent PROJECT_REPOSITORIES directory: ${hostPath}`);
+				}
+			}
+		}
+
+		// Mount git repositories if specified
+		const gitProjects = (options.project || []).filter(project => projects.includes(project));
+		if (gitProjects.length > 0) {
+			// Process each repo
+			const projectPromises = gitProjects.map(project => prepareGitRepository(processId, project));
+			const projectResults = await Promise.all(projectPromises);
+
+			// Add volume mounts for successful repos
+			for (const result of projectResults) {
+				if (result) {
+					volumeMounts.push(`-v "${result.hostPath}:${result.outputPath}:rw"`);
+				}
+			}
+		}
+
+		const workingDir = gitProjects.length > 0 ? path.join('/magi_output', processId, 'projects', (gitProjects.length > 1 ? undefined : gitProjects[0])) : '';
+
 		const dockerRunCommand = `docker run -d --rm --name ${containerName} \
       -e PROCESS_ID=${processId} \
       -e HOST_HOSTNAME=${hostName} \
       -e CONTROLLER_PORT=${serverPort} \
       --env-file ${path.resolve(projectRoot, '../.env')} \
-      -v claude_credentials:/claude_shared:rw \
-      -v magi_output:/magi_output:rw \
+      ${volumeMounts.join(' ')} \
       --network magi-system_magi-network \
       magi-system:latest \
       --tool ${options.tool || 'none'} \
+      --working "${workingDir}" \
       --base64 "${base64Command}"`;
+
+		console.log('dockerRunCommand', dockerRunCommand);
 
 		// Execute the command and get the container ID
 		const result = await execPromise(dockerRunCommand);
@@ -133,26 +293,71 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
 	}
 }
 
+
 /**
- * Send a command to a running MAGI System Docker container through FIFO
- * @param processId The process ID of the container to send the command to
- * @param command The command to send
+ * Commit changes in a git repository and push the branch back to the original repo
+ *
+ * @param processId The process ID of the container
+ * @param project The name of the repository (as mounted in the container)
+ * @param message The commit message
  * @returns Promise resolving to true if successful, false otherwise
  */
-export async function sendCommandToContainer(processId: string, command: string): Promise<boolean> {
+export async function commitGitChanges(processId: string, project: string, message: string): Promise<boolean> {
 	try {
-		const containerName = validateContainerName(`magi-${processId}`);
-		
-		// Base64 encode the command to avoid shell escaping issues
-		const base64Command = Buffer.from(command).toString('base64');
-		
-		// Execute the docker exec command to write the base64 command to the container's FIFO
-		const execCmd = `docker exec ${containerName} sh -c "echo '${base64Command}' > /magi_output/${processId}/fifo"`;
-		
-		await execPromise(execCmd);
+
+		const outputPath = path.join('/magi_output', processId, 'projects', project);
+
+		if (!fs.existsSync(outputPath)) {
+			throw new Error(`Git repository ${project} not found for process ${processId}`);
+		}
+
+		// Get the current branch
+		const { stdout: branchOutput } = await execPromise(`git -C "${outputPath}" rev-parse --abbrev-ref HEAD`);
+		const currentBranch = branchOutput.trim();
+
+		// Check for changes
+		const { stdout: statusOutput } = await execPromise(`git -C "${outputPath}" status --porcelain`);
+		if (!statusOutput.trim()) {
+			console.log(`No changes to commit in ${project}`);
+			return true;
+		}
+
+		// Add all changes
+		await execPromise(`git -C "${outputPath}" add -A`);
+
+		// Commit changes
+		await execPromise(`git -C "${outputPath}" commit -m "${message}"`);
+
+		// Find the original repository location from the remote
+		const { stdout: remoteUrl } = await execPromise(`git -C "${outputPath}" config --get remote.origin.url`);
+
+		// If this is a local repo path, push changes back to the original
+		if (remoteUrl.trim() && !remoteUrl.includes('://') && fs.existsSync(remoteUrl.trim())) {
+			const originalRepo = remoteUrl.trim();
+
+			try {
+				// Push changes back to original repository
+				await execPromise(`git -C "${outputPath}" push origin ${currentBranch}`);
+				console.log(`Changes pushed to branch ${currentBranch} in ${originalRepo}`);
+			} catch (pushError) {
+				// If push fails, the branch might not exist remotely yet
+				console.error(`Error pushing to origin: ${pushError}`);
+				console.log('Trying to push with --set-upstream');
+
+				try {
+					await execPromise(`git -C "${outputPath}" push --set-upstream origin ${currentBranch}`);
+					console.log(`Changes pushed to new branch ${currentBranch} in ${originalRepo}`);
+				} catch (upstreamError) {
+					console.error(`Error pushing with --set-upstream: ${upstreamError}`);
+					return false;
+				}
+			}
+		}
+
+		console.log(`Changes committed to ${project} on branch ${currentBranch}`);
 		return true;
 	} catch (error) {
-		console.error(`Error sending command to container ${processId}:`, error);
+		console.error('Error committing changes to git repository:', error);
 		return false;
 	}
 }
@@ -340,11 +545,11 @@ export async function cleanupAllContainers(): Promise<boolean> {
 			console.log('Attempt 3: Explicit container cleanup by name');
 			// First, get both running and stopped containers with magi-AI prefix
 			const {stdout: aiContainerStdout} = await execPromise("docker ps -a --filter 'name=magi-AI' --format '{{.Names}}'");
-			
+
 			if (aiContainerStdout.trim()) {
 				const aiContainerNames = aiContainerStdout.trim().split('\n');
 				console.log(`Found ${aiContainerNames.length} AI containers to clean up: ${aiContainerNames.join(', ')}`);
-				
+
 				// First stop all AI containers in parallel
 				await Promise.all(
 					aiContainerNames.map(async (containerName) => {
@@ -356,7 +561,7 @@ export async function cleanupAllContainers(): Promise<boolean> {
 						}
 					})
 				);
-				
+
 				// Then remove all AI containers in parallel
 				await Promise.all(
 					aiContainerNames.map(async (containerName) => {
@@ -369,7 +574,7 @@ export async function cleanupAllContainers(): Promise<boolean> {
 					})
 				);
 			}
-			
+
 			// Next, get all other magi containers
 			const {stdout} = await execPromise("docker ps -a --filter 'name=magi-' --format '{{.Names}}'");
 
@@ -409,7 +614,7 @@ export async function cleanupAllContainers(): Promise<boolean> {
 		try {
 			console.log('Final verification of container cleanup');
 			const {stdout: finalCheck} = await execPromise("docker ps -a --filter 'name=magi-' --format '{{.Names}}'");
-			
+
 			if (finalCheck.trim()) {
 				console.log(`WARNING: After all cleanup attempts, still found containers: ${finalCheck.trim()}`);
 				// One last desperate attempt with force
@@ -426,7 +631,7 @@ export async function cleanupAllContainers(): Promise<boolean> {
 	} catch (error) {
 		console.error('Error in cleanupAllContainers:', error);
 		// Still return true to allow the shutdown process to continue
-		
+
 		// Even in case of error, try one last time to clean up
 		try {
 			console.log('Emergency cleanup after error');
@@ -434,7 +639,7 @@ export async function cleanupAllContainers(): Promise<boolean> {
 		} catch (e) {
 			// Ignore any errors in this last-ditch effort
 		}
-		
+
 		return true;
 	}
 }

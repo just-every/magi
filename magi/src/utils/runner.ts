@@ -652,7 +652,7 @@ SUMMARY:`;
 		const currentMessages: ResponseInput = [...messages]; // Use the specific type
 		let changedInPass: boolean;
 
-		console.debug('[Runner] Starting tool result sequence check...');
+		console.debug('[Runner] Starting tool result sequence check...', messages);
 
 		do {
 			changedInPass = false;

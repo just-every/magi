@@ -34,6 +34,7 @@ function parseCommandLineArgs() {
 		base64: {type: 'string' as const, short: 'b'},
 		model: {type: 'string' as const, short: 'm'},
 		modelClass: {type: 'string' as const, short: 'c'},
+		working: {type: 'string' as const, short: 'w'},
 	};
 
 	const {values} = parseArgs({options, allowPositionals: true});
@@ -120,7 +121,7 @@ function checkModelProviderApiKeys(): boolean {
 function sendCostData() {
 	const totalCost = costTracker.getTotalCost();
 	const modelCosts = costTracker.getCostsByModel();
-	
+
 	// Create cost update event
 	const costEvent: StreamingEvent = {
 		type: 'cost_update',
@@ -130,7 +131,7 @@ function sendCostData() {
 		thoughtLevel: process.env.THOUGHT_LEVEL ? parseInt(process.env.THOUGHT_LEVEL) : undefined,
 		delay: process.env.DELAY_MS ? parseInt(process.env.DELAY_MS) : undefined
 	};
-	
+
 	// Send the cost data
 	sendStreamEvent(costEvent);
 }
@@ -191,7 +192,7 @@ async function main(): Promise<void> {
 	}
 
 	// Move to working directory in /magi_output
-	move_to_working_dir();
+	move_to_working_dir(args.working);
 
 	// Make our own code accessible for Gödel Machine
 	//mount_magi_code();
@@ -255,7 +256,7 @@ async function main(): Promise<void> {
 			// For normal execution, print cost summary when done but don't exit
 			costTracker.printSummary();
 			sendCostData();
-			
+
 			// Set up a periodic cost update (every 30 seconds)
 			setInterval(() => {
 				sendCostData();

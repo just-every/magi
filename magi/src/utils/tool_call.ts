@@ -275,6 +275,13 @@ export function createToolFunction(
 				description,
 			};
 
+			if(paramType === 'array') {
+				// If the parameter is an array, set the items type
+				properties[apiParamName].items = {
+					type: 'string',
+				};
+			}
+
 			if (paramType === 'string' && paramInfo?.enum) {
 				properties[apiParamName].enum = paramInfo.enum;
 			}

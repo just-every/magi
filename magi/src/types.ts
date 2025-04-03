@@ -17,6 +17,7 @@ declare global {
 			XAI_API_KEY?: string;
 			DEEPSEEK_API_KEY?: string;
 			BRAVE_API_KEY?: string;
+			PROJECT_REPOSITORIES?: string;
 		}
 	}
 }
@@ -49,6 +50,7 @@ export interface AgentProcess {
 	name: string;
 	output?: string;
 	history?: ResponseInput;
+	project?: string[]; // List of git repositories to mount
 }
 
 export type ToolParameterType = 'string' | 'number' | 'boolean' | 'object' | 'array' | 'null';
@@ -269,6 +271,8 @@ export type StreamEventType =
 	'connected'
 	| 'command_start'
 	| 'command_done'
+	| 'project_create'
+	| 'project_ready'
 	| 'process_start'
 	| 'process_running'
 	| 'process_updated'
@@ -315,6 +319,14 @@ export interface CommandEvent extends StreamEvent {
 	type: 'command_start' | 'command_done';
 	processId: string;
 	command: string;
+}
+
+/**
+ * Project updated streaming event
+ */
+export interface ProjectEvent extends StreamEvent {
+	type: 'project_create' | 'project_ready';
+	project: string;
 }
 
 
@@ -403,7 +415,7 @@ export interface CostUpdateEvent extends StreamEvent {
 /**
  * Union type for all streaming events
  */
-export type StreamingEvent = ConnectedEvent | CommandEvent | ProcessEvent | AgentEvent | MessageEvent | FileEvent | TalkEvent | ToolEvent | ErrorEvent | CostUpdateEvent;
+export type StreamingEvent = ConnectedEvent | CommandEvent | ProjectEvent | ProcessEvent | AgentEvent | MessageEvent | FileEvent | TalkEvent | ToolEvent | ErrorEvent | CostUpdateEvent;
 
 /**
  * Status of a sequential agent run

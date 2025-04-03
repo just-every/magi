@@ -7,7 +7,7 @@
 import {Agent} from '../../utils/agent.js';
 import {createBrowserAgent} from '../common_agents/browser_agent.js';
 import {createSearchAgent} from '../common_agents/search_agent.js';
-import {SIMPLE_SELF_SUFFICIENCY_TEXT, DOCKER_ENV_TEXT} from '../constants.js';
+import {SIMPLE_SELF_SUFFICIENCY_TEXT, DOCKER_ENV_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
 import {getFileTools} from '../../utils/file_utils.js';
 import {getShellTools} from '../../utils/shell_utils.js';
 
@@ -26,6 +26,8 @@ Please understand the intent of the task, then use your tools to validate the ou
 You may need to write code, run shell commands, or search the web to validate the output.
 
 ${DOCKER_ENV_TEXT}
+
+${FILE_TOOLS_TEXT}
 
 ${SIMPLE_SELF_SUFFICIENCY_TEXT}
 

@@ -1,12 +1,3 @@
-# Ignore everything by default
-*
-
-# Only required directories
-!controller/
-!magi/
-!setup/
-!docker/
-
 # Ignore unnecessary files in the included directories
 **/__pycache__/
 **/*.pyc

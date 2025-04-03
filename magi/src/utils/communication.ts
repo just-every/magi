@@ -2,7 +2,7 @@
  * Communication module for MAGI client
  *
  * Handles WebSocket communication with the controller
- * 
+ *
  * Provides functions for:
  * - Initializing WebSocket connection
  * - Sending and receiving messages
@@ -15,6 +15,7 @@ import {StreamingEvent} from '../types.js';
 import {v4 as uuidv4} from 'uuid';
 import {get_output_dir} from './file_utils.js';
 import {processTracker} from './process_tracker.js';
+import {addSystemMessage} from './history.js';
 
 // Event types
 export interface MagiMessage {
@@ -23,7 +24,7 @@ export interface MagiMessage {
 }
 
 export interface ServerMessage {
-	type: 'command' | 'connect' | 'process_event';
+	type: 'command' | 'connect' | 'process_event' | 'project_ready';
 }
 
 export interface CommandMessage extends ServerMessage {
@@ -39,6 +40,11 @@ export interface ProcessEventMessage extends ServerMessage {
 	type: 'process_event';
 	processId: string;
 	event: StreamingEvent;
+}
+
+export interface ProjectMessage extends ServerMessage {
+	type: 'project_ready';
+	project: string;
 }
 
 export class CommunicationManager {
@@ -128,6 +134,12 @@ export class CommunicationManager {
 				else if (message.type === 'process_event') {
 					const eventMessage = message as ProcessEventMessage;
 					await processTracker.handleEvent(eventMessage);
+					return;
+				}
+				else if (message.type === 'project_ready') {
+					const projectMessage = message as ProjectMessage;
+					process.env.PROJECT_REPOSITORIES = (process.env.PROJECT_REPOSITORIES+',' || '')+projectMessage.project;
+					await addSystemMessage(`A new project "${projectMessage.project}" has been successfully created!`);
 					return;
 				}
 
@@ -352,7 +364,7 @@ export function sendStreamEvent(event: StreamingEvent): void {
 		processId: process.env.PROCESS_ID || `magi-${Date.now()}`,
 		event: event
 	};
-	
+
 	if (communicationManager) {
 		communicationManager.sendMessage(message);
 	} else {

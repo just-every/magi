@@ -47,4 +47,7 @@ Return your final outcome and include any educated guesses you had to make.`;
 // File tools text
 export const FILE_TOOLS_TEXT = `FILE TOOLS:
 - read_file: Read files from the file system (provide absolute path)
-- write_file: Write content to files (provide absolute path and content)`;
+- write_file: Write content to files (provide absolute path and content)
+- get_git_repositories: Get a list of all git repositories available
+- use_git_repository: Use a git repository for editing with optional branch creation
+- commit_git_changes: Commit changes to a git repository`;

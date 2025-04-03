@@ -94,6 +94,7 @@ export interface AgentData {
 // Define the process data structure
 export interface ProcessData {
 	id: string;
+	name: string;
 	command: string;
 	status: ProcessStatus;
 	colors: {
@@ -174,6 +175,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 					status: event.status,
 					colors: event.colors,
 					logs: '',
+					name: event.name,
 					agent: {
 						name: event.name,
 						messages: [initialMessage],

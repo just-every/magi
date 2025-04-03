@@ -12,7 +12,7 @@ WORKDIR /build
 
 # Copy package files for controller
 COPY package.json package-lock.json ./
-  
+
 # Install ALL dependencies (including dev dependencies)
 RUN npm ci
 
@@ -49,6 +49,8 @@ RUN mkdir -p /magi_output /claude_shared
 # Copy node_modules from builder stage
 # This provides all dependencies separate from the mounted code
 COPY --from=builder --chown=magi_user:magi_user /build/node_modules ./node_modules
+
+COPY nodemon.json package.json tsconfig.json webpack.config.js ./
 
 # Expose the ports
 EXPOSE 3010

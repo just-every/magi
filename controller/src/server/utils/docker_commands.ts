@@ -6,6 +6,9 @@
 import {exec} from 'child_process';
 import {promisify} from 'util';
 import Docker from 'dockerode';
+// These imports are used elsewhere in code imported from this file
+import path from 'path'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import fs from 'fs'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 // Initialize Docker client
 export const docker = new Docker();
