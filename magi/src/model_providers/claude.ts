@@ -251,14 +251,26 @@ export class ClaudeProvider implements ModelProvider {
 						event.content_block?.type === 'tool_use') {
 						// Start building the tool call
 						const toolUse = event.content_block.tool_use;
+						
+						// Guard against undefined toolUse or properties
+						if (!toolUse) {
+							console.error('Received tool_use content block with undefined tool_use object:', event);
+							continue; // Skip this event and move to the next one
+						}
+						
+						// Generate safe defaults for any missing properties
+						const toolId = toolUse.id || `call_${Date.now()}`;
+						const toolName = toolUse.name || 'unknown_function';
+						const toolInput = toolUse.input !== undefined ? toolUse.input : {};
+						
 						currentToolCall = {
-							id: toolUse.id || `call_${Date.now()}`,
+							id: toolId,
 							type: 'function',
 							function: {
-								name: toolUse.name,
-								arguments: typeof toolUse.input === 'string'
-									? toolUse.input
-									: JSON.stringify(toolUse.input)
+								name: toolName,
+								arguments: typeof toolInput === 'string'
+									? toolInput
+									: JSON.stringify(toolInput)
 							}
 						};
 					}
@@ -266,40 +278,58 @@ export class ClaudeProvider implements ModelProvider {
 					else if (event.type === 'content_block_delta' &&
 						event.delta?.type === 'tool_use' &&
 						currentToolCall) {
-						// Update the tool call with more argument data
-						if (event.delta.tool_use && event.delta.tool_use.input) {
-							if (typeof event.delta.tool_use.input === 'string') {
-								currentToolCall.function.arguments += event.delta.tool_use.input;
-							} else {
-								// For object inputs, replace the entire arguments with the updated version
-								currentToolCall.function.arguments = JSON.stringify(event.delta.tool_use.input);
+						try {
+							// Update the tool call with more argument data
+							if (event.delta.tool_use && event.delta.tool_use.input !== undefined) {
+								if (typeof event.delta.tool_use.input === 'string') {
+									currentToolCall.function.arguments += event.delta.tool_use.input;
+								} else {
+									// For object inputs, replace the entire arguments with the updated version
+									currentToolCall.function.arguments = JSON.stringify(event.delta.tool_use.input);
+								}
 							}
-						}
 
-						// Emit the tool_start event with current partial state for streaming UI
-						yield {
-							type: 'tool_start',
-							tool_calls: [currentToolCall as ToolCall]
-						};
+							// Emit the tool_start event with current partial state for streaming UI
+							yield {
+								type: 'tool_start',
+								tool_calls: [currentToolCall as ToolCall]
+							};
+						} catch (err) {
+							console.error('Error processing tool_use delta:', err, event);
+							// Continue processing the stream despite this error
+						}
 					}
 					// Handle tool use stop
 					else if (event.type === 'content_block_stop' &&
 						event.content_block?.type === 'tool_use' &&
 						currentToolCall) {
-						// Finalize the tool call and emit it
-						if (event.content_block.tool_use && event.content_block.tool_use.input) {
-							// Use the complete input if available
-							currentToolCall.function.arguments = typeof event.content_block.tool_use.input === 'string'
-								? event.content_block.tool_use.input
-								: JSON.stringify(event.content_block.tool_use.input);
+						try {
+							// Finalize the tool call and emit it
+							if (event.content_block.tool_use && event.content_block.tool_use.input !== undefined) {
+								// Use the complete input if available
+								currentToolCall.function.arguments = typeof event.content_block.tool_use.input === 'string'
+									? event.content_block.tool_use.input
+									: JSON.stringify(event.content_block.tool_use.input);
+							}
+
+							yield {
+								type: 'tool_start',
+								tool_calls: [currentToolCall as ToolCall]
+							};
+						} catch (err) {
+							console.error('Error finalizing tool call:', err, event);
+							// Try to emit the tool call anyway if we can
+							try {
+								yield {
+									type: 'tool_start',
+									tool_calls: [currentToolCall as ToolCall]
+								};
+							} catch (emitErr) {
+								console.error('Failed to emit tool call after error:', emitErr);
+							}
+						} finally {
+							currentToolCall = null;
 						}
-
-						yield {
-							type: 'tool_start',
-							tool_calls: [currentToolCall as ToolCall]
-						};
-
-						currentToolCall = null;
 					}
 					// Handle message stop
 					else if (event.type === 'message_stop') {
