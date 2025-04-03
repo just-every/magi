@@ -163,17 +163,41 @@ export const calculateBoxPositions = (
         // Mark this position as occupied and update cache
         occupiedGrid.set(getGridKey(gridPos.row, gridPos.col), id);
         gridCache.set(id, gridPos);
+        
+        // If this is the core process, also mark adjacent grid cells as occupied (2x2 grid)
+        if (isCoreProcess) {
+            // Mark right cell
+            occupiedGrid.set(getGridKey(gridPos.row, gridPos.col + 1), id);
+            // Mark bottom cell
+            occupiedGrid.set(getGridKey(gridPos.row + 1, gridPos.col), id);
+            // Mark bottom-right cell
+            occupiedGrid.set(getGridKey(gridPos.row + 1, gridPos.col + 1), id);
+        }
 
         // Convert to screen coordinates
         const { x, y } = gridToScreenCoords(gridPos.row, gridPos.col);
 
+        // Get the core process ID
+        // Here we can't directly access the coreProcessId from useSocket() since we're in a utility function
+        // We need to determine it from the processes data
+        const coreProcessIds = Array.from(processes.entries())
+            .filter(([pId, _]) => {
+                // In ProcessGrid.tsx, the core process is marked with process.id === coreProcessId
+                // Since we can't access coreProcessId directly, we'll check if this is the first process
+                // This is a heuristic approach - in a real solution, consider adding a coreProcess flag to ProcessData
+                return pId === Array.from(processes.keys())[0];
+            })
+            .map(([pId, _]) => pId);
+        
+        const isCoreProcess = coreProcessIds.includes(id);
+        
         // Set position in the result map
         positionsMap.set(id, {
             x,
             y,
-            width: squareWidth,
-            height: squareHeight,
-            scale: 1
+            width: isCoreProcess ? squareWidth * 2 : squareWidth,
+            height: isCoreProcess ? squareHeight * 2 : squareHeight,
+            scale: isCoreProcess ? 2 : 1
         });
 
         if (!process.agent?.workers || process.agent.workers.size === 0) continue;
