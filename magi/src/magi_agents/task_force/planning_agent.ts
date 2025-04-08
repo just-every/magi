@@ -9,6 +9,7 @@ import {createBrowserAgent} from '../common_agents/browser_agent.js';
 import {createSearchAgent} from '../common_agents/search_agent.js';
 import {AGENT_DESCRIPTIONS, SIMPLE_SELF_SUFFICIENCY_TEXT, DOCKER_ENV_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
 import {getFileTools} from '../../utils/file_utils.js';
+import {taskForceContext} from './index.js';
 
 /**
  * Create the planning agent
@@ -55,6 +56,7 @@ At the end of this plan, please describe what format the output of the execution
 			createSearchAgent,
 			createBrowserAgent,
 		],
-		modelClass: 'reasoning'
+		modelClass: 'reasoning',
+		onRequest: taskForceContext,
 	});
 }

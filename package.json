@@ -10,7 +10,10 @@
     "lint": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts' 'setup/**/*.ts'",
     "lint:fix": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts' 'setup/**/*.ts' --fix",
     "setup": "node setup/bootstrap.js",
-    "setup:claude": "npx tsc -p setup && node dist/setup/claude_setup.js"
+    "setup:claude": "npx tsc -p setup && node dist/setup/claude_setup.js",
+    "test": "cd test/playwright && npx playwright test",
+    "test:ui": "cd test/playwright && npx playwright test --ui",
+    "test:install": "cd test/playwright && npm install && npx playwright install"
   },
   "repository": {
     "type": "git",

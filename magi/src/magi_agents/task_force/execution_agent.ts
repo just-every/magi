@@ -11,6 +11,7 @@ import {createSearchAgent} from '../common_agents/search_agent.js';
 import {createShellAgent} from '../common_agents/shell_agent.js';
 import {AGENT_DESCRIPTIONS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
 import {getFileTools} from '../../utils/file_utils.js';
+import {taskForceContext} from './index.js';
 
 /**
  * Create the ExecutionAgent
@@ -49,6 +50,7 @@ Take however long you need to complete a task. Don't give up!`,
 			createCodeAgent,
 			createShellAgent
 		],
-		modelClass: 'standard'
+		modelClass: 'standard',
+		onRequest: taskForceContext,
 	});
 }

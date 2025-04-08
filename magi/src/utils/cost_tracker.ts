@@ -2,10 +2,13 @@
  * Cost tracking module for the MAGI system.
  *
  * Tracks costs across all model providers and provides reporting functions.
+ * Integrates with quota management to track usage against free tiers and rate limits.
  */
 import {findModel, ModelUsage, TieredPrice, TimeBasedPrice} from '../model_providers/model_data.js';
 import {CostUpdateEvent} from '../types.js';
 import {sendStreamEvent} from './communication.js';
+import {quotaManager} from './quota_manager.js';
+import {getProviderFromModel} from '../model_providers/model_provider.js';
 
 /**
  * Singleton class to track costs across all model providers
@@ -172,6 +175,35 @@ class CostTracker {
 			// Calculate cost if not already set
 			usage = this.calculateCost({...usage});
 			usage.timestamp = new Date();
+			
+			// Track quota usage with the quota manager
+			try {
+				const provider = getProviderFromModel(usage.model);
+				const inputTokens = usage.input_tokens || 0;
+				const outputTokens = usage.output_tokens || 0;
+				
+				// Track this usage against provider quotas
+				quotaManager.trackUsage(provider, usage.model, inputTokens, outputTokens);
+				
+				// Track credit usage for paid providers
+				if (usage.cost && usage.cost > 0) {
+					quotaManager.trackCreditUsage(provider, usage.cost);
+				}
+				
+				// Include quota information in cost update event
+				const quotaSummary = quotaManager.getSummary();
+				if (quotaSummary[provider]) {
+					if (!usage.metadata) {
+						usage.metadata = {};
+					}
+					usage.metadata.quota = quotaSummary[provider];
+				}
+				
+			} catch (quotaError) {
+				console.error('Error tracking quota usage:', quotaError);
+			}
+			
+			// Add to entries list
 			this.entries.push(usage);
 
 			// Send the cost data
@@ -235,6 +267,37 @@ class CostTracker {
 		// For each model within the provider
 		for (const [model, modelData] of Object.entries(costsByModel)) {
 			console.log(`\t${model}:\t$${modelData.cost.toFixed(6)} (${modelData.calls} calls)`);
+		}
+		
+		// Print quota information
+		console.log('\nQuota Summary:');
+		const quotaSummary = quotaManager.getSummary();
+		
+		// Google/Gemini
+		if (quotaSummary.google) {
+			console.log('\tGoogle/Gemini:');
+			console.log(`\t  • Daily Usage: ${quotaSummary.google.dailyUsed} / ${quotaSummary.google.dailyLimit} (${((quotaSummary.google.dailyUsed / quotaSummary.google.dailyLimit) * 100).toFixed(1)}%)`);
+			console.log(`\t  • Last Reset: ${quotaSummary.google.lastReset?.toISOString().split('T')[0] || 'N/A'}`);
+		}
+		
+		// OpenAI
+		if (quotaSummary.openai) {
+			console.log('\tOpenAI:');
+			if (quotaSummary.openai.creditBalance !== undefined) {
+				console.log(`\t  • Credit Balance: $${quotaSummary.openai.creditBalance.toFixed(2)} / $${quotaSummary.openai.creditLimit.toFixed(2)}`);
+			}
+			
+			// Free tier details
+			if (quotaSummary.openai.freeTier) {
+				console.log(`\t  • Free Tier GPT-4/4o Family: ${quotaSummary.openai.freeTier.gpt4Family.used.toLocaleString()} / ${quotaSummary.openai.freeTier.gpt4Family.limit.toLocaleString()} tokens (${quotaSummary.openai.freeTier.gpt4Family.percent.toFixed(1)}%)`);
+				console.log(`\t  • Free Tier Mini Family: ${quotaSummary.openai.freeTier.gptMiniFamily.used.toLocaleString()} / ${quotaSummary.openai.freeTier.gptMiniFamily.limit.toLocaleString()} tokens (${quotaSummary.openai.freeTier.gptMiniFamily.percent.toFixed(1)}%)`);
+			}
+		}
+		
+		// X.AI/Grok
+		if (quotaSummary.xai && quotaSummary.xai.creditBalance !== undefined) {
+			console.log('\tX.AI/Grok:');
+			console.log(`\t  • Credit Balance: $${quotaSummary.xai.creditBalance.toFixed(2)} / $${quotaSummary.xai.creditLimit.toFixed(2)}`);
 		}
 
         this.reset();

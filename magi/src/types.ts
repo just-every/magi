@@ -307,6 +307,7 @@ export type StreamEventType =
 	| 'file_delta'
 	| 'file_complete'
 	| 'cost_update'
+	| 'quota_update'
 	| 'error';
 
 /**
@@ -463,9 +464,17 @@ export interface CostUpdateEvent extends StreamEvent {
 }
 
 /**
+ * Quota update streaming event
+ */
+export interface QuotaUpdateEvent extends StreamEvent {
+	type: 'quota_update';
+	quotas: Record<string, any>;
+}
+
+/**
  * Union type for all streaming events
  */
-export type StreamingEvent = ConnectedEvent | CommandEvent | ProjectEvent | BranchReviewEvent | PullRequestEvent | ProcessEvent | AgentEvent | MessageEvent | FileEvent | TalkEvent | ToolEvent | ErrorEvent | CostUpdateEvent;
+export type StreamingEvent = ConnectedEvent | CommandEvent | ProjectEvent | BranchReviewEvent | PullRequestEvent | ProcessEvent | AgentEvent | MessageEvent | FileEvent | TalkEvent | ToolEvent | ErrorEvent | CostUpdateEvent | QuotaUpdateEvent;
 
 /**
  * Status of a sequential agent run

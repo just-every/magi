@@ -9,6 +9,8 @@ import {ResponseInput, ResponseInputMessage, RunnerConfig} from '../../types.js'
 import {createExecutionAgent} from './execution_agent.js';
 import {createPlanningAgent} from './planning_agent.js';
 import {createValidationAgent} from './validation_agent.js';
+import {addFileStatus} from '../../utils/file_utils.js';
+import {dateFormat} from '../../utils/date_tools.js';
 
 function parseValidation(output: string): string | null {
 	// Normalize the output: trim whitespace and convert to lowercase for case-insensitive matching
@@ -36,6 +38,14 @@ function parseValidation(output: string): string | null {
 	// If no clear indication, assume format error and end sequence
 	console.error('Repeating validation. Invalid validation output format:', output);
 	return 'validation';
+}
+
+export async function taskForceContext(messages: ResponseInput):Promise<ResponseInput> {
+	messages.push({
+		role: 'developer',
+		content: `Current Time: ${dateFormat()}`,
+	});
+	return addFileStatus(messages);
 }
 
 /**

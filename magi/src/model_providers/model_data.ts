@@ -77,6 +77,7 @@ export type ModelProviderID =
 	| 'google'
 	| 'xai'
 	| 'deepseek'
+	| 'test'
 	;
 
 // Available model classes
@@ -104,6 +105,7 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 			'claude-3-7-sonnet-latest', // Anthropic
 			'grok-2',               	// X.AI
 			'deepseek-chat',        	// DeepSeek
+			'test-standard',            // Test provider
 		],
 		random: true,
 	},
@@ -114,6 +116,7 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 			'gpt-4o-mini',             	// OpenAI
 			'claude-3-5-haiku-latest',  // Anthropic
 			'gemini-2.0-flash-lite',		// Google
+			'test-mini',                // Test provider
 		],
 		random: true,
 	},
@@ -126,6 +129,7 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 			'claude-3-7-sonnet-latest', // Anthropic
 			'grok-2',                   // X.AI
 			'deepseek-reasoner',       	// DeepSeek
+			'test-reasoning',           // Test provider
 		],
 		random: true,
 	},
@@ -137,6 +141,7 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 			'o3-mini',                  // OpenAI
 			'claude-3-7-sonnet-latest', // Anthropic
 			'deepseek-reasoner',       	// DeepSeek
+			'test-monologue',           // Test provider
 		],
 		random: true,
 	},
@@ -148,6 +153,7 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 			'claude-code',              // Anthropic
 			'claude-3-7-sonnet',        // Anthropic
 			'o3-mini',                  // OpenAI
+			'test-code',                // Test provider
 		],
 	},
 
@@ -158,6 +164,7 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 			'gpt-4o',              		// OpenAI
 			'gemini-2.0-flash',    		// Google
 			'grok-2-vision',            // X.AI
+			'test-vision',              // Test provider
 		],
 	},
 
@@ -167,21 +174,147 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 			'gpt-4o',					// OpenAI
 			'deepseek-reasoner',       	// DeepSeek
 			'gemini-2.5-pro-exp-03-25', // Google
+			'test-search',              // Test provider
 		],
 		random: true,
 	},
 
 	'image_generation': {
-		models: ['imagen-3'], // Example
+		models: ['imagen-3', 'test-image-gen'], // Including test model
 	},
 
 	'embedding': {
-		models: ['text-embedding-004'], // Example
+		models: ['text-embedding-004', 'test-embedding'], // Including test model
 	}
 };
 
 // Main model registry with all supported models
 export const MODEL_REGISTRY: ModelEntry[] = [
+	//
+	// Test provider models (add at the beginning for better visibility during tests)
+	{
+		id: 'test-standard',
+		provider: 'test',
+		cost: {
+			input_per_million: 0,
+			output_per_million: 0,
+			notes: ['Free test model for standard capabilities.']
+		},
+		class: 'standard',
+		description: 'Test model with standard capabilities',
+		context_length: 16000
+	},
+	{
+		id: 'test-mini',
+		provider: 'test',
+		cost: {
+			input_per_million: 0,
+			output_per_million: 0,
+			notes: ['Free test model for mini capabilities.']
+		},
+		class: 'mini',
+		description: 'Test model with mini capabilities',
+		context_length: 8000
+	},
+	{
+		id: 'test-reasoning',
+		provider: 'test',
+		cost: {
+			input_per_million: 0,
+			output_per_million: 0,
+			notes: ['Free test model for reasoning capabilities.']
+		},
+		class: 'reasoning',
+		description: 'Test model with reasoning capabilities',
+		context_length: 32000
+	},
+	{
+		id: 'test-monologue',
+		provider: 'test',
+		cost: {
+			input_per_million: 0,
+			output_per_million: 0,
+			notes: ['Free test model for monologue generation.']
+		},
+		class: 'monologue',
+		description: 'Test model with monologue capabilities',
+		context_length: 32000
+	},
+	{
+		id: 'test-code',
+		provider: 'test',
+		cost: {
+			input_per_million: 0,
+			output_per_million: 0,
+			notes: ['Free test model for code generation.']
+		},
+		class: 'code',
+		description: 'Test model with code capabilities',
+		context_length: 32000
+	},
+	{
+		id: 'test-vision',
+		provider: 'test',
+		cost: {
+			input_per_million: 0,
+			output_per_million: 0,
+			notes: ['Free test model for vision capabilities.']
+		},
+		class: 'vision',
+		description: 'Test model with vision capabilities',
+		context_length: 32000
+	},
+	{
+		id: 'test-search',
+		provider: 'test',
+		cost: {
+			input_per_million: 0,
+			output_per_million: 0,
+			notes: ['Free test model for search capabilities.']
+		},
+		class: 'search',
+		description: 'Test model with search capabilities',
+		context_length: 32000
+	},
+	{
+		id: 'test-image-gen',
+		provider: 'test',
+		cost: {
+			per_image: 0,
+			notes: ['Free test model for image generation.']
+		},
+		class: 'image_generation',
+		description: 'Test model for image generation'
+	},
+	{
+		id: 'test-embedding',
+		provider: 'test',
+		cost: {
+			input_per_million: 0,
+			notes: ['Free test model for embeddings.']
+		},
+		class: 'embedding',
+		description: 'Test model for text embeddings'
+	},
+	{
+		id: 'test-error',
+		provider: 'test',
+		cost: {
+			input_per_million: 0,
+			output_per_million: 0
+		},
+		description: 'Test model that always produces errors'
+	},
+	{
+		id: 'test-rate-limit',
+		provider: 'test',
+		cost: {
+			input_per_million: 0,
+			output_per_million: 0
+		},
+		description: 'Test model that always produces rate limit errors'
+	},
+	
 	//
 	// OpenAI models
 	//

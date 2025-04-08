@@ -178,7 +178,7 @@ export class OpenAIChat implements ModelProvider {
 					if (callData && typeof callData === 'object') { // Basic check
 						// Create valid tool call object with sensible defaults
 						const toolCall: ToolCall = {
-							id: `sim_${uuidv4()}`, // Generate unique ID for each call
+							id: callData.id || `sim_${uuidv4()}`, // Use provided ID or generate unique ID
 							type: 'function',
 							function: {
 								name: '',

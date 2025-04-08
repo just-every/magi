@@ -12,7 +12,7 @@ import {
 	ToolCall,
 	ResponseInput,
 	ToolCallHandler,
-	RunnerConfig, ResponseInputItem, ResponseInputFunctionCall, ResponseInputFunctionCallOutput,
+	RunnerConfig, ResponseInputItem, ResponseInputFunctionCall, ResponseInputFunctionCallOutput, ResponseInputMessage,
 } from '../types.js';
 import {Agent} from './agent.js';
 import {getModelProvider} from '../model_providers/model_provider.js';
@@ -173,8 +173,28 @@ SUMMARY:`;
 
 	/**
 	 * Helper function to get the next fallback model, avoiding already tried ones.
+	 * Special handling for rate-limited models to try paid alternatives.
 	 */
-	private static getNextFallbackModel(agent: Agent, triedModels: Set<string>): string | undefined {
+	private static getNextFallbackModel(agent: Agent, triedModels: Set<string>, errorMessage?: string): string | undefined {
+		// Check for special case rate-limit fallbacks first
+		const lastTriedModel = agent.model;
+		
+		// If the error was a rate limit (HTTP 429) on the Gemini experimental model
+		if (errorMessage && 
+			(errorMessage.includes('429') || errorMessage.includes('Too Many Requests')) && 
+			lastTriedModel === 'gemini-2.5-pro-exp-03-25') {
+			
+			// Try the paid Gemini model
+			const paidModel = 'gemini-2.5-pro-preview-03-25';
+			console.log('Detected rate limit on experimental Gemini model, fallback to paid version:', paidModel);
+			
+			// Check if we already tried the paid model
+			if (!triedModels.has(paidModel)) {
+				return paidModel;
+			}
+		}
+		
+		// Standard fallback logic for other cases
 		// The model that just failed or was initially selected
 		let modelsToConsider: string[] = [];
 
@@ -210,7 +230,7 @@ SUMMARY:`;
 		conversationHistory: ResponseInput = []
 	): AsyncGenerator<StreamingEvent> {
 		// Get initial model selection
-		let selectedModel: string | undefined = agent.model || getModelFromClass(agent.modelClass || 'standard');
+		let selectedModel: string | undefined = agent.model || await getModelFromClass(agent.modelClass || 'standard');
 		let attempt = 1;
 		const triedModels = new Set<string>(); // Keep track of models attempted in this run
 
@@ -316,7 +336,9 @@ SUMMARY:`;
 
 				// --- Fallback Logic ---
 				attempt++;
-				selectedModel = this.getNextFallbackModel(agent, triedModels); // Find the next model to try
+				// Pass the error message to help with detecting rate limits and special cases
+				const errorMsg = error instanceof Error ? error.message : String(error);
+				selectedModel = this.getNextFallbackModel(agent, triedModels, errorMsg); // Find the next model to try
 
 				if (!selectedModel) {
 					console.error('[Runner] All models tried or no fallbacks available. Run failed.');
@@ -759,6 +781,9 @@ SUMMARY:`;
 	 * If a matching 'function_call_output' is found later in the array, it's moved.
 	 * If no matching 'function_call_output' is found for a 'function_call',
 	 * an artificial error 'function_call_output' is inserted.
+	 * 
+	 * For orphaned 'function_call_output' messages (without a preceding 'function_call'),
+	 * they are converted to regular messages.
 	 *
 	 * The process repeats until the array is stable (no changes made in a full pass).
 	 *
@@ -768,10 +793,42 @@ SUMMARY:`;
 	public static ensureToolResultSequence(messages: ResponseInput): ResponseInput {
 		// Work on a mutable copy
 		const currentMessages: ResponseInput = [...messages]; // Use the specific type
-		let changedInPass: boolean;
+		let changedInPass = false;
 
-		//console.debug('[Runner] Starting tool result sequence check...', messages);
+		// First, collect all function_call IDs to identify orphaned outputs later
+		const functionCallIds = new Set<string>();
+		for (const msg of currentMessages) {
+			if (msg.type === 'function_call') {
+				functionCallIds.add((msg as ResponseInputFunctionCall).call_id);
+			}
+		}
 
+		// Check for orphaned function_call_output messages and convert them to regular messages
+		for (let i = 0; i < currentMessages.length; i++) {
+			const msg = currentMessages[i];
+			if (msg.type === 'function_call_output') {
+				const funcOutput = msg as ResponseInputFunctionCallOutput;
+				
+				// Check if this is an orphaned output (no matching function_call)
+				if (!functionCallIds.has(funcOutput.call_id)) {
+					console.warn(`[Runner] Found orphaned function_call_output with call_id ${funcOutput.call_id}. Converting to regular message.`);
+					
+					// Create a regular message with the function name and output as content
+					const regularMessage: ResponseInputMessage = {
+						role: 'user',
+						type: 'message',
+						content: `Tool result (${funcOutput.name}): ${funcOutput.output}`,
+						status: 'completed'
+					};
+					
+					// Replace the orphaned output with the regular message
+					currentMessages[i] = regularMessage;
+					changedInPass = true;
+				}
+			}
+		}
+
+		// Now do the regular pairing of function calls and outputs
 		do {
 			changedInPass = false;
 			// No need for numMessages if using while loop with dynamic length check
@@ -838,7 +895,7 @@ SUMMARY:`;
 								// Output must be a string according to the interface
 								output: JSON.stringify({ error: 'Error: Tool call did not complete or output was missing.' }),
 								// Add optional fields if necessary, or leave them undefined
-								// status: 'incomplete',
+								status: 'incomplete',
 							};
 							// Insert the error message right after the function call
 							currentMessages.splice(i + 1, 0, errorOutput);

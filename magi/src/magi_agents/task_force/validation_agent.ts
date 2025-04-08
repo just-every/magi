@@ -10,6 +10,7 @@ import {createSearchAgent} from '../common_agents/search_agent.js';
 import {SIMPLE_SELF_SUFFICIENCY_TEXT, DOCKER_ENV_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
 import {getFileTools} from '../../utils/file_utils.js';
 import {getShellTools} from '../../utils/shell_utils.js';
+import {taskForceContext} from './index.js';
 
 /**
  * Create the ValidationAgent
@@ -58,6 +59,7 @@ Start your final output with "RESULT: " and start the explanation on the next li
 			createSearchAgent,
 			createBrowserAgent,
 		],
-		modelClass: 'reasoning'
+		modelClass: 'reasoning',
+		onRequest: taskForceContext,
 	});
 }

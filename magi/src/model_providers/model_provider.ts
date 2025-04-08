@@ -12,6 +12,7 @@ import {claudeProvider} from './claude.js';
 import {geminiProvider} from './gemini.js';
 import {grokProvider} from './grok.js';
 import {deepSeekProvider} from './deepseek.js';
+import {testProvider} from './test_provider.js';
 import {MODEL_CLASSES, ModelClassID, ModelProviderID} from './model_data.js';
 
 // Provider mapping by model prefix
@@ -33,6 +34,9 @@ const MODEL_PROVIDER_MAP: Record<string, ModelProvider> = {
 
 	// DeepSeek models
 	'deepseek-': deepSeekProvider,
+	
+	// Test provider for testing
+	'test-': testProvider,
 };
 
 /**
@@ -51,6 +55,8 @@ function isProviderKeyValid(provider: ModelProviderID): boolean {
 			return !!process.env.XAI_API_KEY && process.env.XAI_API_KEY.startsWith('xai-');
 		case 'deepseek':
 			return false; //!!process.env.DEEPSEEK_API_KEY && process.env.DEEPSEEK_API_KEY.startsWith('sk-');
+		case 'test':
+			return true; // Test provider is always valid
 		default:
 			return false;
 	}
@@ -70,6 +76,8 @@ export function getProviderFromModel(model: string): ModelProviderID {
 		return 'xai';
 	} else if (model.startsWith('deepseek-')) {
 		return 'deepseek';
+	} else if (model.startsWith('test-')) {
+		return 'test';
 	}
 	throw new Error(`Unknown model prefix: ${model}`);
 }
@@ -77,11 +85,16 @@ export function getProviderFromModel(model: string): ModelProviderID {
 /**
  * Get a suitable model from a model class, with fallback
  */
-export function getModelFromClass(modelClass?: ModelClassID): string {
+export async function getModelFromClass(modelClass?: ModelClassID): Promise<string> {
+	// Import via dynamic import to avoid circular dependencies
+	// Using dynamic import instead of require to comply with ESM standards
+	const QuotaModule = await import('../utils/quota_manager.js');
+	const quotaManager = QuotaModule.quotaManager;
+	
 	// Default to standard class if none specified
 	const modelGroup = modelClass && MODEL_CLASSES[modelClass] ? modelClass : 'standard';
 
-	// Try each model in the group until we find one with a valid API key
+	// Try each model in the group until we find one with a valid API key and quota
 	if (MODEL_CLASSES[modelGroup]) {
 		let models = [...MODEL_CLASSES[modelGroup].models];
 
@@ -89,9 +102,23 @@ export function getModelFromClass(modelClass?: ModelClassID): string {
 			models = models.sort(() => Math.random() - 0.5);
 		}
 
+		// First pass: Try all models checking both API key and quota
+		for (const model of models) {
+			const provider = getProviderFromModel(model);
+			
+			// Check if we have a valid API key and available quota
+			if (isProviderKeyValid(provider) && quotaManager.hasQuota(provider, model)) {
+				console.log(`Using model ${model} from class ${modelGroup} (has API key and quota)`);
+				return model;
+			}
+		}
+		
+		// Second pass: If we couldn't find a model with quota, just check for API key
+		// (This allows exceeding quota when necessary)
 		for (const model of models) {
 			const provider = getProviderFromModel(model);
 			if (isProviderKeyValid(provider)) {
+				console.log(`Using model ${model} from class ${modelGroup} (has API key but may exceed quota)`);
 				return model;
 			}
 		}
@@ -99,9 +126,20 @@ export function getModelFromClass(modelClass?: ModelClassID): string {
 
 	// If we couldn't find a valid model in the specified class, try the standard class
 	if (modelGroup !== 'standard' && MODEL_CLASSES['standard']) {
+		// First check for models with both API key and quota
+		for (const model of MODEL_CLASSES['standard'].models) {
+			const provider = getProviderFromModel(model);
+			if (isProviderKeyValid(provider) && quotaManager.hasQuota(provider, model)) {
+				console.log(`Falling back to standard class model ${model} (has API key and quota)`);
+				return model;
+			}
+		}
+		
+		// Then just check for API key
 		for (const model of MODEL_CLASSES['standard'].models) {
 			const provider = getProviderFromModel(model);
 			if (isProviderKeyValid(provider)) {
+				console.log(`Falling back to standard class model ${model} (has API key but may exceed quota)`);
 				return model;
 			}
 		}

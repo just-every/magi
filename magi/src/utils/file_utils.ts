@@ -4,7 +4,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import {ToolFunction} from '../types.js';
+import {ResponseInput, ToolFunction} from '../types.js';
 import {createToolFunction} from './tool_call.js';
 import {ModelProviderID} from '../model_providers/model_data.js';
 // Child process utilities are used via dynamic imports in functions below
@@ -205,6 +205,25 @@ export async function commit_git_changes(repoName: string, message: string): Pro
 		console.error(`Error committing changes to repository '${repoName}': ${error}`);
 		throw error;
 	}
+}
+
+
+export function addFileStatus(messages: ResponseInput):ResponseInput {
+	// Add system status to the messages
+	let content = `You are currently running in the ${process.cwd()} directory.`;
+
+	const gitRepos = get_git_repositories();
+	const projects = Object.values(gitRepos);
+	if(projects.length > 0) {
+		content += `\n\nYou have access to the following projects (and git repositories):\n- ${projects.join('\n- ')}`;
+	}
+
+	messages.push({
+		role: 'developer',
+		content,
+	});
+
+	return messages;
 }
 
 /**
