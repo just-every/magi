@@ -159,8 +159,8 @@ export class ClaudeProvider implements ModelProvider {
 					if(model === 'claude-3-7-sonnet-latest') {
 						// Extended thinking
 						thinking = {
-						   type: 'enabled',
-						   budget_tokens: 16000
+									type: 'enabled',
+									budget_tokens: 16000
 						};
 						max_tokens = Math.min(max_tokens, 64000);
 					}
