@@ -22,7 +22,101 @@ import {processToolCall} from './tool_call.js';
 import {capitalize} from './llm_utils.js';
 import {getCommunicationManager} from './communication.js';
 
-const EVENT_TIMEOUT_MS = 20000; // 20 seconds timeout
+const EVENT_TIMEOUT_MS = 300000; // 5 min timeout for events
+
+// Define a specific error type for clarity
+class TimeoutError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'TimeoutError';
+	}
+}
+
+
+/**
+ * Wraps an async generator stream to add inactivity timeout detection.
+ * If no event is received within timeoutMs, it throws a TimeoutError.
+ *
+ * @param originalStream The stream to wrap.
+ * @param timeoutMs The inactivity timeout duration in milliseconds.
+ * @param identifier A string identifier for logging purposes (e.g., agent/model name).
+ * @returns An async generator that yields events from the originalStream or throws on timeout.
+ */
+async function* createTimeoutProxyStream<T>(
+	originalStream: AsyncGenerator<T>,
+	timeoutMs: number,
+	identifier: string // For logging context
+): AsyncGenerator<T> {
+	const iterator = originalStream[Symbol.asyncIterator]();
+	let timeoutId: NodeJS.Timeout | null = null;
+
+	// Function to create a promise that rejects after the timeout duration
+	const createTimeoutPromise = (): Promise<never> => {
+		return new Promise((_, reject) => {
+			// Clear any existing timer before setting a new one
+			if (timeoutId) clearTimeout(timeoutId);
+
+			timeoutId = setTimeout(() => {
+				const timeoutError = new TimeoutError(`[${identifier}] Stream timeout: No event received for ${timeoutMs / 1000} seconds`);
+				console.error(`[TimeoutProxy] ${timeoutError.message}`);
+				timeoutId = null; // Clear the timer ID as it has fired
+				reject(timeoutError); // Reject the promise, signaling the timeout
+			}, timeoutMs);
+		});
+	};
+
+	try {
+		while (true) {
+			const timeoutPromise = createTimeoutPromise(); // Arm timeout for the next event/completion
+			let result: IteratorResult<T>;
+
+			try {
+				// Wait for either the next stream event or the timeout promise to reject
+				result = await Promise.race([
+					iterator.next(),
+					timeoutPromise
+				]);
+
+				// If iterator.next() resolved, it means we received an event OR the stream ended.
+				// We need to clear the timeout timer because the race was won by iterator.next().
+				if (timeoutId) clearTimeout(timeoutId);
+				timeoutId = null; // Ensure timer ID is cleared
+
+			} catch (error) {
+				// This catch block handles rejection from EITHER iterator.next() OR timeoutPromise.
+				if (timeoutId) clearTimeout(timeoutId); // Clean up timer if it exists
+				timeoutId = null;
+
+				// Re-throw the error (could be a stream error or our TimeoutError)
+				// This will be caught by the try/catch in the calling function (runStreamed)
+				throw error;
+			}
+
+			// Check if the stream iteration is done
+			if (result.done) {
+				// Stream finished normally, exit the loop. Cleanup already happened.
+				break;
+			} else {
+				// Yield the event we received from the stream
+				yield result.value;
+				// Loop continues, createTimeoutPromise() will be called again to re-arm the timeout.
+			}
+		}
+	} finally {
+		// Final cleanup when the loop exits (normally or via error)
+		if (timeoutId) {
+			clearTimeout(timeoutId);
+		}
+		// Ensure the original stream iterator is properly closed if it supports it.
+		if (typeof iterator.return === 'function') {
+			try {
+				await iterator.return(undefined);
+			} catch(cleanupError) {
+				console.error(`[TimeoutProxy] Error during iterator cleanup: ${cleanupError}`);
+			}
+		}
+	}
+}
 
 /**
  * Agent runner class for executing agents with tools
@@ -76,247 +170,173 @@ SUMMARY:`;
 			return `Failed to generate summary: ${error}`;
 		}
 	}
+
 	/**
-	 * Run an agent with streaming responses
+	 * Helper function to get the next fallback model, avoiding already tried ones.
+	 */
+	private static getNextFallbackModel(agent: Agent, triedModels: Set<string>): string | undefined {
+		// The model that just failed or was initially selected
+		let modelsToConsider: string[] = [];
+
+		// 1. Consider models from the specified class (if any)
+		const agentModelClass = agent.modelClass as keyof typeof MODEL_CLASSES;
+		if (agent.modelClass && MODEL_CLASSES[agentModelClass]) {
+			modelsToConsider = [...(MODEL_CLASSES[agentModelClass].models || [])];
+		}
+
+		// 2. Always add standard models as ultimate fallbacks (ensure no duplicates)
+		const standardModels = MODEL_CLASSES['standard']?.models || [];
+		standardModels.forEach(sm => {
+			if (!modelsToConsider.includes(sm)) {
+				modelsToConsider.push(sm);
+			}
+		});
+
+		// 3. Filter out any already tried models
+		// Note: We don't filter out `currentModel` here because it's added to triedModels *before* calling this
+		const availableFallbacks = modelsToConsider.filter(model => !triedModels.has(model));
+
+		// 4. Return the first available fallback, or undefined if none left
+		return availableFallbacks.length > 0 ? availableFallbacks[0] : undefined;
+	}
+
+
+	/**
+	 * Run an agent with streaming responses, including timeout handling and model fallbacks.
 	 */
 	static async* runStreamed(
 		agent: Agent,
 		input?: string,
 		conversationHistory: ResponseInput = []
 	): AsyncGenerator<StreamingEvent> {
-		// Get our selected model for this run
-		const selectedModel = agent.model || getModelFromClass(agent.modelClass || 'standard');
+		// Get initial model selection
+		let selectedModel: string | undefined = agent.model || getModelFromClass(agent.modelClass || 'standard');
+		let attempt = 1;
+		const triedModels = new Set<string>(); // Keep track of models attempted in this run
 
-		// Prepare messages with conversation history and the current input
+		// Prepare initial messages
 		let messages: ResponseInput = [
-			// Add a system message with instructions
 			{role: 'developer', content: agent.instructions},
-			// Add conversation history
 			...conversationHistory,
 		];
 		if(input) {
-			// Add the user input message
 			messages.push({role: 'user', content: input});
 		}
 
-		try {
-			// Allow the agent to modify the messages before sending
-			if(agent.onRequest) {
+		// Allow agent onRequest hook
+		if(agent.onRequest) {
+			try {
 				messages = await agent.onRequest(messages);
+			} catch(hookError) {
+				console.error(`[Runner] Error in agent.onRequest hook: ${hookError}`);
+				yield {
+					type: 'error',
+					agent: agent.export(),
+					error: `Error in onRequest hook: ${hookError instanceof Error ? hookError.message : hookError}`
+				};
+				return; // Stop processing if hook fails
+			}
+		}
+
+		// --- Main loop for trying initial model and fallbacks ---
+		while(selectedModel) {
+			if (triedModels.has(selectedModel!)) {
+				console.warn(`[Runner] Logic error: Attempting to re-try model ${selectedModel}. Skipping.`);
+				// This shouldn't happen with the current logic, but safeguards are good.
+				selectedModel = this.getNextFallbackModel(agent, triedModels);
+				continue;
 			}
 
-			agent.model = selectedModel;
+			console.log(`[Runner] Attempt ${attempt}: Trying model ${selectedModel}`);
+			triedModels.add(selectedModel); // Mark this model as tried *before* the attempt
+			agent.model = selectedModel; // Update agent's current model for this attempt
+
+			// Yield agent_start (first attempt) or agent_updated (fallback attempts)
 			yield {
-				type: 'agent_start',
+				type: attempt === 1 ? 'agent_start' : 'agent_updated',
 				agent: agent.export(),
-				input,
+				...(attempt === 1 && input ? { input } : {})
 			};
-
-			// Get the model provider based on the selected model
-			const provider = getModelProvider(selectedModel);
-
-			// Ensure correct message sequence before sending to the provider
-			const sequencedMessages = this.ensureToolResultSequence(messages);
-
-			// Create a streaming generator
-			const stream = provider.createResponseStream(
-				selectedModel,
-				sequencedMessages, // Use the sequenced messages
-				agent
-			);
-
-			// Set up timeout detection
-			let lastEventTime = Date.now();
-			let timeoutId: NodeJS.Timeout | null = null;
-
-			// Create a timeout checker function
-			const checkTimeout = () => {
-				const elapsed = Date.now() - lastEventTime;
-				if (elapsed >= EVENT_TIMEOUT_MS) {
-					console.error(`[Runner] Stream timeout after ${EVENT_TIMEOUT_MS}ms of inactivity`);
-					// Clear the timeout to prevent further checks
-					if (timeoutId) clearTimeout(timeoutId);
-					// Create a timeout error event
-					const timeoutErrorMessage = `Stream timeout: No response received for ${EVENT_TIMEOUT_MS/1000} seconds`;
-					console.error(`[Runner] ${timeoutErrorMessage}`);
-
-					// Create an error that can be caught and handled by the fallback mechanism
-					const error = new Error(timeoutErrorMessage);
-					// Add the event property to the error so we can yield it if needed
-					(error as any).event = {
-						type: 'error',
-						agent: agent.export(),
-						error: timeoutErrorMessage
-					};
-					// This will be caught by the try/catch and handled appropriately
-					throw error;
-				} else {
-					// Schedule next check
-					timeoutId = setTimeout(checkTimeout, 1000);
-				}
-			};
-
-			// Start timeout checking
-			timeoutId = setTimeout(checkTimeout, 1000);
 
 			try {
-				// Forward all events from the stream
-				for await (const event of stream) {
-					// Update last event time whenever we receive something
-					lastEventTime = Date.now();
+				// Get the model provider
+				const provider = getModelProvider(selectedModel);
 
-					// Update the model in events to show the actually used model
+				// Ensure correct message sequence before sending
+				const sequencedMessages = this.ensureToolResultSequence(messages);
+
+				// Create the original stream from the provider
+				const originalStream = provider.createResponseStream(
+					selectedModel,
+					sequencedMessages,
+					agent
+				);
+
+				// Wrap the stream with our timeout proxy
+				const streamWithTimeout = createTimeoutProxyStream(
+					originalStream,
+					EVENT_TIMEOUT_MS, // Use the existing constant
+					`${agent.name || 'Agent'}:${selectedModel}` // Identifier for logs
+				);
+
+				// Process events from the proxied stream
+				for await (const event of streamWithTimeout) {
+					// Ensure the event reflects the currently used model
 					event.agent = event.agent ? event.agent : agent.export();
 					if (!event.agent.model) event.agent.model = selectedModel;
 					yield event;
 
+					// Check for errors explicitly yielded *by the stream content*
 					if(event.type === 'error') {
-						// Make sure we try a different model instead
-						throw event;
+						console.error(`[Runner] Stream yielded error event for model ${selectedModel}: ${event.error}`);
+						// Treat yielded errors like other failures: throw to trigger fallback.
+						throw new Error(event.error || 'Stream yielded an unspecified error');
 					}
 				}
-			} finally {
-				// Always clear the timeout when we're done or if there's an error
-				if (timeoutId) clearTimeout(timeoutId);
-			}
-		} catch (error) {
-			// If the model fails, try to find an alternative in the same class
-			console.error(`[Runner] Error with model ${selectedModel}: ${error}`);
 
-			// If the error has an event property (from our timeout handler), yield it
-			if (error && (error as any).event) {
-				yield (error as any).event;
-			}
+				// If the for await loop completes without error, this model succeeded.
+				console.log(`[Runner] Model ${selectedModel} completed successfully.`);
+				return; // Success: exit the generator function normally.
 
+			} catch (error) {
+				// --- Catch block for the current model attempt ---
+				// This catches:
+				// 1. TimeoutError thrown by createTimeoutProxyStream
+				// 2. Errors thrown explicitly from the stream (e.g., event.type === 'error')
+				// 3. Errors during provider.createResponseStream() or stream iteration itself.
 
-			// Try fallback strategies:
-			// 1. If a model was explicitly specified but failed, try standard models
-			// 2. If a model class was used, try other models in the class
-			// 3. If all else fails, try the standard class
+				console.error(`[Runner] Attempt ${attempt} with model ${selectedModel} failed: ${error}`);
 
-			console.log('[Runner] Attempting fallback to another model');
+				// Yield an error event specific to this failed attempt
+				yield {
+					type: 'error',
+					agent: agent.export(), // Agent state with the model that failed
+					error: error instanceof Error ? error.message : String(error)
+				};
 
-			// Get a list of models to try (combine explicitly requested model's class and standard)
-			let modelsToTry: string[];
+				// --- Fallback Logic ---
+				attempt++;
+				selectedModel = this.getNextFallbackModel(agent, triedModels); // Find the next model to try
 
-			// Always include standard models for fallback
-			modelsToTry = [...MODEL_CLASSES['standard'].models];
-
-			// If using a non-standard model class, add models from that class too
-			if (agent.modelClass && agent.modelClass !== 'standard') {
-				const classModels = MODEL_CLASSES[agent.modelClass as keyof typeof MODEL_CLASSES].models || [];
-				if(classModels) {
-					modelsToTry = [...classModels];
-				}
-			}
-
-			// Make sure we don't try the same model that just failed
-			modelsToTry = modelsToTry.filter(model => model !== selectedModel);
-
-			// Try each potential fallback model
-			for (const alternativeModel of modelsToTry) {
-				try {
-					console.log(`[Runner] Trying alternative model: ${alternativeModel}`);
-					const alternativeProvider = getModelProvider(alternativeModel);
-
-					// Update the agent's model
-					agent.model = alternativeModel;
-					yield {
-						type: 'agent_updated',
-						agent: agent.export()
-					};
-
-					// Ensure correct message sequence before sending to the alternative provider
-					const sequencedFallbackMessages = this.ensureToolResultSequence(messages);
-
-					// Try with the alternative model
-					const alternativeStream = alternativeProvider.createResponseStream(
-						alternativeModel,
-						sequencedFallbackMessages, // Use the sequenced messages
-						agent,
-					);
-
-					// Set up timeout detection for alternative model
-					let altLastEventTime = Date.now();
-					let altTimeoutId: NodeJS.Timeout | null = null;
-
-					// Create a timeout checker function
-					const altCheckTimeout = () => {
-						const elapsed = Date.now() - altLastEventTime;
-						if (elapsed >= EVENT_TIMEOUT_MS) {
-							console.error(`[Runner] Alternative stream timeout after ${EVENT_TIMEOUT_MS}ms of inactivity`);
-							// Clear the timeout to prevent further checks
-							if (altTimeoutId) clearTimeout(altTimeoutId);
-							// Create a timeout error event
-							const timeoutErrorMessage = `Alternative stream timeout: No response received for ${EVENT_TIMEOUT_MS/1000} seconds`;
-							console.error(`[Runner] ${timeoutErrorMessage}`);
-
-							// Create an error that can be caught and handled by the fallback mechanism
-							const error = new Error(timeoutErrorMessage);
-							// Add the event property to the error so we can yield it if needed
-							(error as any).event = {
-								type: 'error',
-								agent: agent.export(),
-								error: timeoutErrorMessage
-							};
-							// This will be caught by the try/catch and handled appropriately
-							throw error;
-						} else {
-							// Schedule next check
-							altTimeoutId = setTimeout(altCheckTimeout, 1000);
-						}
-					};
-
-					// Start timeout checking
-					altTimeoutId = setTimeout(altCheckTimeout, 1000);
-
-					try {
-						// Forward all events from the alternative stream
-						for await (const event of alternativeStream) {
-							// Update last event time whenever we receive something
-							altLastEventTime = Date.now();
-
-							// Update the model in events to show the actually used model
-							event.agent = event.agent ? event.agent : agent.export();
-							if (!event.agent.model) event.agent.model = alternativeModel;
-							yield event;
-
-							if(event.type === 'error') {
-								// Make sure we try a different model instead
-								throw event;
-							}
-						}
-					} finally {
-						// Always clear the timeout when we're done or if there's an error
-						if (altTimeoutId) clearTimeout(altTimeoutId);
-					}
-
-					// If we got here, the alternative model worked, so exit the loop
-					console.log(`[Runner] Successfully switched to model: ${alternativeModel}`);
+				if (!selectedModel) {
+					console.error('[Runner] All models tried or no fallbacks available. Run failed.');
+					// No more models left. The generator will implicitly finish here.
 					return;
-				} catch (alternativeError) {
-					console.error(`[Runner] Alternative model ${alternativeModel} also failed: ${alternativeError}`);
-
-					// If the error has an event property (from our timeout handler), yield it
-					if (alternativeError && (alternativeError as any).event) {
-						yield (alternativeError as any).event;
-					}
-
-					// Continue to the next model
+				} else {
+					console.log('[Runner] Attempting fallback to next model:', selectedModel);
+					// The while loop will continue with the new selectedModel
 				}
 			}
+		} // End of while(selectedModel) loop
 
-			// If we got here, all fallback models failed
-			console.error('[Runner] All fallback models failed');
-
-			// Re-throw the original error if we couldn't recover
-			yield {
-				type: 'error',
-				agent: agent.export(),
-				error: `Error using model ${selectedModel} and all fallbacks failed: ${error}`
-			};
-		}
-	}
+		// This point should only be reached if the initial model selection failed (selectedModel was null/undefined initially)
+		console.error('[Runner] No suitable model found to even start the run.');
+		yield {
+			type: 'error',
+			agent: agent.export(), // Agent state before attempting models
+			error: 'No suitable initial model found for the specified criteria.'
+		};
+	} // End of runStreamed
 
 	/**
 	 * Unified function to run an agent with streaming and handle all events including tool calls
@@ -339,8 +359,10 @@ SUMMARY:`;
 
 			const stream = this.runStreamed(agent, input, conversationHistory);
 
+			const comm = getCommunicationManager();
 			for await (const event of stream) {
 				// Call the event handler if provided
+				comm.send(event);
 				if (handlers.onEvent) {
 					handlers.onEvent(event);
 				}
@@ -449,6 +471,12 @@ SUMMARY:`;
 								}
 							}
 
+							comm.send({
+								agent: event.agent,
+								type: 'tool_done',
+								tool_calls: toolEvent.tool_calls,
+								results: resultsById,
+							});
 							handlers.onEvent({
 								agent: event.agent,
 								type: 'tool_done',
@@ -658,13 +686,7 @@ SUMMARY:`;
 				const response = await this.runStreamedWithTools(
 					agent,
 					undefined,
-					[...(agentSequence[currentStage].input?.(history, lastOutput) || history)],
-					{
-						// Forward all events to the communication channel
-						onEvent: (event: StreamingEvent) => {
-							comm.send(event);
-						},
-					}
+					[...(agentSequence[currentStage].input?.(history, lastOutput) || history)]
 				);
 
 				addOutput(currentStage, response);

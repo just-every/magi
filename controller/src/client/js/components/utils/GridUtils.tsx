@@ -201,8 +201,8 @@ export const calculateBoundingBox = (positions: Map<string, BoxPosition>): {
     if (positions.size === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 
     for (const pos of positions.values()) {
-        let visualWidth = pos.width * pos.scale;
-        let visualHeight = pos.height * pos.scale;
+        const visualWidth = pos.width * pos.scale;
+        const visualHeight = pos.height * pos.scale;
 
         const boxMinX = pos.x;
         const boxMinY = pos.y;

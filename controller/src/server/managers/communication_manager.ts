@@ -513,7 +513,7 @@ export class CommunicationManager {
 		else if (event.type === 'tool_start' && event.tool_calls && Array.isArray(event.tool_calls)) {
 			for (const toolCall of event.tool_calls) {
 
-				if(toolCall.function.name.startsWith('Talk_to_')) {
+				if(toolCall.function.name.startsWith('talk_to_')) {
 					const toolParams: Record<string, unknown> = JSON.parse(toolCall.function.arguments);
 					if (toolParams.message && typeof toolParams.message === 'string' && typeof toolParams.affect === 'string') {
 

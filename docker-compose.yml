@@ -61,5 +61,7 @@ networks:
 volumes:
   claude_credentials:
     name: claude_credentials
+    external: true
   magi_output:
     name: magi_output
+    external: true

@@ -115,7 +115,7 @@ async function prepareGitRepository(
 
 		// Remove the directory if it exists
 		if (fs.existsSync(outputPath)) {
-			fs.rmSync(outputPath, { recursive: true, force: true });
+			fs.rmSync(outputPath, {recursive: true, force: true});
 		}
 
 		// Clone the repository to the temp directory
@@ -158,7 +158,7 @@ export function createNewProject(
 	project: string,
 ): string {
 
-	if(!/^[a-zA-Z0-9_-]+$/.test(project)) {
+	if (!/^[a-zA-Z0-9_-]+$/.test(project)) {
 		throw new Error(`Invalid project name '${project}'. Only letters, numbers, dashes and underscores are allowed.`);
 	}
 
@@ -171,15 +171,15 @@ export function createNewProject(
 	// Make sure we have a unique project name
 	let i = 0;
 	let finalProjectName = project;
-	while(fs.existsSync(path.join(parentDir, finalProjectName))) {
-		finalProjectName = 'magi-'+project+(i > 0 ? `-${i}` : '');
+	while (fs.existsSync(path.join(parentDir, finalProjectName))) {
+		finalProjectName = 'magi-' + project + (i > 0 ? `-${i}` : '');
 		i++;
 	}
 
 	// Create a directory for the git repo
 	const projectPath = path.join(parentDir, finalProjectName);
 	try {
-		fs.mkdirSync(projectPath, { recursive: true });
+		fs.mkdirSync(projectPath, {recursive: true});
 	} catch (mkdirError) {
 		throw new Error(`Error creating directory ${projectPath}: ${mkdirError}`);
 	}
@@ -200,7 +200,7 @@ export function createNewProject(
 
 		// Clean up the created directory on error
 		try {
-			fs.rmSync(projectPath, { recursive: true, force: true });
+			fs.rmSync(projectPath, {recursive: true, force: true});
 		} catch (cleanupError) {
 			throw new Error(`Error cleaning up directory ${projectPath}: ${cleanupError}`);
 		}
@@ -256,13 +256,17 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
 		}
 
 		// Mount projects on code process
-		const workingDir:string  = gitProjects.length > 0 ? path.join('/magi_output', processId, 'projects', (gitProjects.length > 1 ? '' : gitProjects[0])) : '';
+		const workingDir: string = gitProjects.length > 0 ? path.join('/magi_output', processId, 'projects', (gitProjects.length > 1 ? '' : gitProjects[0])) : '';
 
 		// Simply use the environment's TZ variable or empty string
 // The dateFormat function will handle conversion and fallbacks
-const hostTimezone = process.env.TZ || '';
+		const hostTimezone = process.env.TZ || '';
 
-const dockerRunCommand = `docker run -d --rm --name ${containerName} \
+		// Check if we should attach stdout instead of running in detached mode
+			const attachStdout = process.env.ATTACH_CONTAINER_STDOUT === 'true';
+			
+			// Create the docker run command, removing -d if we want to attach stdout
+			const dockerRunCommand = `docker run ${attachStdout ? '' : '-d'} --rm --name ${containerName} \
       -e PROCESS_ID=${processId} \
       -e HOST_HOSTNAME=${hostName} \
       -e CONTROLLER_PORT=${serverPort} \
@@ -279,8 +283,19 @@ const dockerRunCommand = `docker run -d --rm --name ${containerName} \
       --base64 "${base64Command}"`;
 
 		// Execute the command and get the container ID
-		const result = await execPromise(dockerRunCommand);
-		return result.stdout.trim();
+		// If we're attaching stdout, we'll use spawn instead of execPromise
+		if (attachStdout) {
+			// We already have spawn imported at the top of the file
+			spawn('sh', ['-c', dockerRunCommand], {
+				stdio: 'inherit'
+			});
+			
+			// Return a placeholder ID since we're attached to the process
+			return `attached-${containerName}`;
+		} else {
+			const result = await execPromise(dockerRunCommand);
+			return result.stdout.trim();
+		}
 	} catch (error) {
 		throw new Error(`Error starting Docker container: ${error}`);
 	}
@@ -305,11 +320,11 @@ export async function commitGitChanges(processId: string, project: string, messa
 		}
 
 		// Get the current branch
-		const { stdout: branchOutput } = await execPromise(`git -C "${outputPath}" rev-parse --abbrev-ref HEAD`);
+		const {stdout: branchOutput} = await execPromise(`git -C "${outputPath}" rev-parse --abbrev-ref HEAD`);
 		const currentBranch = branchOutput.trim();
 
 		// Check for changes
-		const { stdout: statusOutput } = await execPromise(`git -C "${outputPath}" status --porcelain`);
+		const {stdout: statusOutput} = await execPromise(`git -C "${outputPath}" status --porcelain`);
 		if (!statusOutput.trim()) {
 			console.log(`No changes to commit in ${project}`);
 			return true;
@@ -322,7 +337,7 @@ export async function commitGitChanges(processId: string, project: string, messa
 		await execPromise(`git -C "${outputPath}" commit -m "${message}"`);
 
 		// Find the original repository location from the remote
-		const { stdout: remoteUrl } = await execPromise(`git -C "${outputPath}" config --get remote.origin.url`);
+		const {stdout: remoteUrl} = await execPromise(`git -C "${outputPath}" config --get remote.origin.url`);
 
 		// If this is a local repo path, push changes back to the original
 		if (remoteUrl.trim() && !remoteUrl.includes('://') && fs.existsSync(remoteUrl.trim())) {

@@ -257,7 +257,7 @@ const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
         setFocusedProcess(processId);
 
         // Add the focused process (or agent)
-        let focusOnBoxes: Map<string, BoxPosition> = new Map();
+        const focusOnBoxes: Map<string, BoxPosition> = new Map();
         focusOnBoxes.set(processId, boxPositions.get(processId));
 
         // Process and its child agents
@@ -338,7 +338,7 @@ const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
             if (process.agent.workers && process.agent.workers.size > 0) {
                 for (const [workerId, agent] of process.agent.workers.entries()) {
                     // Get position for this sub-agent
-                    let agentPosition = boxPositions.get(workerId);
+                    const agentPosition = boxPositions.get(workerId);
                     if (!agentPosition) continue;
 
                     // Style for agent box

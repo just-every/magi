@@ -165,6 +165,16 @@ MAGI_ENABLE_SELF_OPTIMIZATION=false test/magi-docker.sh -p "your prompt here"
 
 ## Development
 
+### Container Output in Terminal
+
+To see the output of Docker containers directly in your terminal when running the development server, set the `ATTACH_CONTAINER_STDOUT` environment variable to `true`:
+
+```bash
+ATTACH_CONTAINER_STDOUT=true npm run dev
+```
+
+This will show the real-time output of each container in the terminal where the dev server is running, which is useful for debugging.
+
 ### Key Directories
 
 - `/magi/`: Python backend and agent implementation
@@ -283,6 +293,27 @@ If you're having issues with Telegram integration, follow these troubleshooting 
 
 6. **Check logs for more details**:
    - Run the system with `npm run dev` and look for `[Telegram]` log messages
+
+## Output Management
+
+The MAGI System stores outputs in a Docker volume named `magi_output`. We provide utility scripts to manage this volume:
+
+### Output Management Scripts
+
+- **List Process Output**: View all processes and their sizes
+  ```bash
+  ./scripts/list-output.sh
+  ```
+
+- **Clear Specific Process**: Remove output for a specific process ID
+  ```bash
+  ./scripts/clear-process-output.sh AI-12345
+  ```
+
+- **Clear All Output**: Remove all data from the `magi_output` volume
+  ```bash
+  ./scripts/clear-output.sh
+  ```
 
 ## Troubleshooting
 

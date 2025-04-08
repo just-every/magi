@@ -69,7 +69,7 @@ const renderTypingIndicator = (isTyping: boolean, textColor: string) => {
  * Render a message based on its type
  */
 const renderMessage = (message: ClientMessage, rgb: string, filteredMessages: ClientMessage[], index: number) => {
-    let lastMessage: ClientMessage | undefined = (filteredMessages[index - 1] || undefined);
+    const lastMessage: ClientMessage | undefined = (filteredMessages[index - 1] || undefined);
     switch (message.type) {
         case 'user':
             return <UserMessage key={message.id} message={message} />;

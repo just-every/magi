@@ -140,7 +140,7 @@ export class AudioPlayer {
 		}
 
 		// Calculate total bytes queued
-		let totalBytes = this.pcmDataQueue.reduce((sum, buffer) => sum + buffer.byteLength, 0);
+		const totalBytes = this.pcmDataQueue.reduce((sum, buffer) => sum + buffer.byteLength, 0);
 		const requiredBytes = this.pcmParameters.sampleRate * this.pcmParameters.channels * this.bytesPerSample * this.bufferDurationTarget;
 
 		// Check if enough data OR if it's the final chunk and there's *any* data left

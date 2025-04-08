@@ -8,7 +8,7 @@
 
 import {parseArgs} from 'node:util';
 import {Runner} from './utils/runner.js';
-import {ProcessToolType, StreamingEvent} from './types.js';
+import {ProcessToolType} from './types.js';
 import {createAgent} from './magi_agents/index.js';
 import {addHumanMessage, addMonologue, getHistory} from './utils/history.js';
 import {
@@ -85,18 +85,10 @@ export async function mainLoop(agent: Agent, loop: boolean, model?: string): Pro
 			// Get conversation history
 			const history = getHistory();
 
-			// Set up event handlers
-			const handlers = {
-				// Forward all events to the communication channel
-				onEvent: (event: StreamingEvent) => {
-					comm.send(event);
-				},
-			};
-
 			agent.model = model || Runner.rotateModel(agent);
 
 			// Run the command with unified tool handling
-			const response = await Runner.runStreamedWithTools(agent, '', history, handlers);
+			const response = await Runner.runStreamedWithTools(agent, '', history);
 
 			console.log('[MONOLOGUE] ', response);
 
@@ -153,10 +145,18 @@ function checkModelProviderApiKeys(): boolean {
 
 
 // Add exit handlers to print cost summary and send cost data
-process.on('exit', () => endProcess(-1));
-process.on('SIGINT', () => endProcess(0));
-process.on('SIGTERM', () => endProcess(0));
-process.on('unhandledRejection', () => endProcess(-1, 'Unhandled Rejection.'));
+process.on('exit', (code) => endProcess(-1, `Process exited with code ${code}`));
+process.on('SIGINT', (signal) => endProcess(0, `Received SIGINT ${signal}, terminating...`));
+process.on('SIGTERM', (signal) => endProcess(0, `Received SIGTERM ${signal}, terminating...`));
+process.on('unhandledRejection', (reason) => endProcess(-1, `Unhandled Rejection reason ${reason}`));
+process.on('uncaughtException', (err, origin) => endProcess(-1, `Unhandled Exception ${err} Origin: ${origin}`));
+process.on('uncaughtExceptionMonitor', (err, origin) => endProcess(-1, `Unhandled Exception Monitor ${err} Origin: ${origin}`));
+
+process.on('warning', (warning) => {
+	console.warn(warning.name);    // Print the warning name
+	console.warn(warning.message); // Print the warning message
+	console.warn(warning.stack);   // Print the stack trace
+});
 
 /**
  * Main function - entry point for the application
@@ -225,8 +225,7 @@ async function main(): Promise<void> {
 		if(args.tool && args.tool !== 'none') {
 			console.log(`Running tool: ${args.tool}`);
 			await runProcessTool(args.tool as ProcessToolType, promptText);
-			// For tool runs, we terminate after tool completes - @todo does that make sense?
-			return endProcess(0);
+			return endProcess(0, 'Tool execution completed.');
 		}
 		else {
 			// Add initial history
@@ -241,13 +240,8 @@ async function main(): Promise<void> {
 
 			if (args.test) {
 				// For tests we terminate after the first run
-				return endProcess(0);
+				return endProcess(0, 'Test run completed.');
 			}
-
-			// Wait for additional commands
-			comm.send({
-				type: 'process_terminated',
-			});
 		}
 
 	} catch (error) {

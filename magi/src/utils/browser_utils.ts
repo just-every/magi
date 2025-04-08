@@ -999,7 +999,7 @@ process.on('SIGTERM', async () => { // Termination signal
 process.on('uncaughtException', async (error, origin) => {
 	console.error(`Uncaught exception at: ${origin}`, error);
 	await cleanup();
-	process.exit(1); // Exit after cleanup on fatal error
+	//process.exit(1); // Exit after cleanup on fatal error
 });
 
 process.on('unhandledRejection', async (reason, promise) => {

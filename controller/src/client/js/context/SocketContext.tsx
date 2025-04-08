@@ -535,8 +535,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 				}
 
 				// Turn off typing indicator for any response
-				if (eventType === 'message_delta' || eventType === 'message_complete' ||
-					eventType === 'tool_start' || eventType === 'tool_done') {
+				if (eventType === 'message_complete' || eventType === 'tool_done') {
 					updateAgent({isTyping: false});
 				}
 

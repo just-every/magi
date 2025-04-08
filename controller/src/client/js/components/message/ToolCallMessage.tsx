@@ -13,7 +13,7 @@ interface ToolCallMessageProps {
 }
 
 const ToolCallMessage: React.FC<ToolCallMessageProps> = ({ message, rgb, complete }) => {
-    if(message.toolName.startsWith('Talk_to_')) {
+    if(message.toolName.startsWith('talk_to_')) {
         return (
             <div className="message-group assistant-message" key={message.message_id || message.id}>
                 <div className={"message-bubble assistant-bubble talk-bubble"}

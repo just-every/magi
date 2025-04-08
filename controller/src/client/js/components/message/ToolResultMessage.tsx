@@ -12,7 +12,7 @@ interface ToolResultMessageProps {
 }
 
 const ToolResultMessage: React.FC<ToolResultMessageProps> = ({ message, followsCall }) => {
-    if(message.toolName.startsWith('Talk_to_')) {
+    if(message.toolName.startsWith('talk_to_')) {
         // Don't show talk results
         return null;
     }

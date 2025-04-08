@@ -99,21 +99,47 @@ export class DeepSeekProvider extends OpenAIChat {
 				return message;
 			});
 
-			// --- Message Merging ---
-			const mergedMessages: MessageParam[] = transformedMessages.reduce((acc: MessageParam[], message) => {
+			// --- Message Merging (FIXED) ---
+			// Reduces messages by merging consecutive messages of the same role with string content.
+			// This specifically addresses the issue where a 'tool' message transformed into 'user'
+			// might follow an existing 'user' message.
+			const mergedMessages: MessageParam[] = transformedMessages.reduce((acc: MessageParam[], currentMessage) => {
 				const lastMessage = acc.length > 0 ? acc[acc.length - 1] : null;
-				if (lastMessage && message.role === lastMessage.role) {
-					if (typeof lastMessage.content === 'string' && typeof message.content === 'string') {
-						lastMessage.content = `${lastMessage.content}\n${message.content}`;
+
+				// Check if the last message exists and has the same role as the current one.
+				if (lastMessage && lastMessage.role === currentMessage.role) {
+					// Roles match. Now, ensure we can merge content meaningfully.
+					// We prioritize merging if the current message has string content,
+					// as the 'tool'->'user' transformation ensures this.
+					const currentContent = currentMessage.content;
+
+					if (typeof currentContent === 'string') {
+						// Current content is a string, proceed with merge.
+						// Treat null/undefined previous content as an empty string for concatenation.
+						const lastContent = lastMessage.content ?? '';
+
+						// Warn if the previous content wasn't a string or null, as merging might simplify complex data.
+						if (typeof lastMessage.content !== 'string' && lastMessage.content !== null) {
+							console.warn(`(${this.provider}) Merging string content from role '${currentMessage.role}' onto previous message whose content was not string/null (Type: ${typeof lastMessage.content}). Potential data structure loss.`);
+						}
+
+						// Perform the merge by appending to the last message's content.
+						lastMessage.content = `${lastContent}\n${currentContent}`;
+
 					} else {
-						console.warn(`(${this.provider}) Cannot merge messages with incompatible content types or null content for role ${message.role}. Appending as separate message.`);
-						acc.push({...message});
+						// Current content isn't a string (unexpected for tool->user or typical user/assistant messages).
+						// Log a warning and append the current message separately to avoid errors/data loss.
+						console.warn(`(${this.provider}) Cannot merge message for role '${currentMessage.role}' because its own content is not a string (Type: ${typeof currentContent}). Appending separately.`);
+						acc.push({...currentMessage}); // Add a copy of the current message
 					}
 				} else {
-					acc.push({...message});
+					// Roles don't match, or it's the first message in the accumulator.
+					// Add a copy of the current message separately.
+					acc.push({...currentMessage});
 				}
+				// Return the accumulator for the next iteration.
 				return acc;
-			}, []);
+			}, []); // Start with an empty accumulator array
 
 			// --- System Message Consolidation & Tool Injection ---
 			const systemContents: string[] = [];

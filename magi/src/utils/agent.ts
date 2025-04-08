@@ -18,7 +18,7 @@ import {
 } from '../types.js';
 
 import {v4 as uuid} from 'uuid';
-import {getCommunicationManager} from './communication.js';
+// Import removed to fix lint error
 import {Runner} from './runner.js';
 import {ModelClassID} from '../model_providers/model_data.js';
 
@@ -145,7 +145,6 @@ async function runAgentTool(
 	const toolCalls: any[] = [];
 
 	try {
-		const comm = getCommunicationManager();
 		console.log(`runAgentTool using Runner.runStreamedWithTools for ${agent.name}`, prompt);
 
 		// Set up handlers for the unified streaming function
@@ -171,7 +170,6 @@ async function runAgentTool(
 				}
 			},
 			onEvent: (event: StreamingEvent) => {
-				comm.send(event);
 
 				// Capture tool results from tool_done events
 				if (event.type === 'tool_done') {
