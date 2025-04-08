@@ -24,7 +24,7 @@ export interface MagiMessage {
 }
 
 export interface ServerMessage {
-	type: 'command' | 'connect' | 'process_event' | 'project_ready';
+	type: 'command' | 'connect' | 'process_event' | 'project_ready' | 'system_message';
 }
 
 export interface CommandMessage extends ServerMessage {
@@ -46,6 +46,13 @@ export interface ProjectMessage extends ServerMessage {
 	type: 'project_ready';
 	project: string;
 }
+
+export interface SystemMessage extends ServerMessage {
+	type: 'system_message';
+	message: string;
+}
+
+let lastEventLogged = '';
 
 export class CommunicationManager {
 	private ws: WebSocket | null = null;
@@ -142,6 +149,11 @@ export class CommunicationManager {
 					await addSystemMessage(`A new project "${projectMessage.project}" has been successfully created!`);
 					return;
 				}
+				else if (message.type === 'system_message') {
+					const systemMessage = message as SystemMessage;
+					await addSystemMessage(systemMessage.message);
+					return;
+				}
 
 				// Notify all command listeners SEQUENTIALLY
 				for (const listener of this.commandListeners) { // Use for...of
@@ -190,7 +202,7 @@ export class CommunicationManager {
 	 */
 	sendMessage(message: MagiMessage): void {
 		// Always add to history (except in test mode and delta)
-		if (!this.testMode && message.event.type !== 'message_delta') {
+		if (!this.testMode && message.event.type !== 'message_delta' && message.event.type !== 'tool_delta') {
 			this.messageHistory.push(message);
 			this.saveHistoryToFile();
 		}
@@ -200,7 +212,7 @@ export class CommunicationManager {
 			return this.testModeMessage(message);
 		}
 
-		if(message.event.type !== 'message_delta') {
+		if(message.event.type !== 'message_delta' && message.event.type !== 'tool_delta') {
 			// Log to console for Docker logs for debugging purposes only
 			// but ensure it's clearly marked as a JSON message so we don't try to parse it
 			// from the Docker logs in the controller
@@ -224,9 +236,29 @@ export class CommunicationManager {
 	 * Format a message for console output in test mode
 	 */
 	private testModeMessage(message: MagiMessage): void {
-		if(message.event.type === 'message_delta') {
-			return; // Don't log deltas in test mode
+		if(message.event.type === 'tool_delta') {
+			// Not sure how to display this one cleanly?
+			return;
 		}
+		if(message.event.type === 'message_delta') {
+			// Don't log deltas in test mode, just output the content to screen
+			if(message.event.thinking_content) {
+				if(lastEventLogged !== 'message_thinking_delta') {
+					process.stdout.write('\n');
+					lastEventLogged = 'message_thinking_delta';
+				}
+				process.stdout.write(message.event.thinking_content);
+			}
+			if(message.event.content) {
+				if(lastEventLogged !== 'message_delta') {
+					process.stdout.write('\n');
+					lastEventLogged = 'message_delta';
+				}
+				process.stdout.write(message.event.content);
+			}
+			return;
+		}
+		lastEventLogged = message.event?.type;
 
 		const timestamp = new Date().toISOString().substring(11, 19); // HH:MM:SS
 		console.log(`[${timestamp}]`);
@@ -377,4 +409,8 @@ export function getCommunicationManager(): CommunicationManager {
 		throw new Error('Communication manager not initialized');
 	}
 	return communicationManager;
+}
+
+export function hasCommunicationManager(): boolean {
+	return !!communicationManager;
 }

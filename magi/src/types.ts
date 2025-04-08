@@ -2,7 +2,7 @@
  * Common type definitions for the MAGI system.
  */
 import {Agent} from './utils/agent.js';
-import {ModelClassID} from './model_providers/model_data.js';
+import {ModelClassID, ModelUsage} from './model_providers/model_data.js';
 
 declare global {
 	namespace NodeJS {
@@ -49,6 +49,7 @@ export interface AgentProcess {
 	command: string;
 	name: string;
 	output?: string;
+	error?: string;
 	history?: ResponseInput;
 	project?: string[]; // List of git repositories to mount
 }
@@ -118,7 +119,7 @@ export interface AgentDefinition {
 
 	onToolCall?: (toolCall: ToolCall) => Promise<void>;
 	onToolResult?: (toolCall: ToolCall, result: string) => Promise<void>;
-	onRequest?: (messages: ResponseInput, model: string) => Promise<[ResponseInput, string, number]>;
+	onRequest?: (messages: ResponseInput) => Promise<ResponseInput>;
 	onResponse?: (response: string) => Promise<string>;
 }
 
@@ -139,7 +140,9 @@ export interface AgentExportDefinition {
 export interface ModelSettings {
 	temperature?: number;
 	top_p?: number;
+	top_k?: number;
 	max_tokens?: number;
+	stop_sequence?: string;
 	seed?: number;
 	response_format?: { type: string };
 	tool_choice?: 'auto' | 'none' | 'required' | { type: string; function: { name: string } };
@@ -161,11 +164,7 @@ export interface ToolCallHandler {
 	onToolCall?: (toolCall: ToolCall) => void,
 	onToolResult?: (toolCall: ToolCall, result: string) => void,
 	onEvent?: (event: StreamingEvent) => void,
-	onResponse?: (content: string) => void,
-	onComplete?: () => void
 }
-
-
 
 
 export interface ResponseContentText {
@@ -197,7 +196,7 @@ export type ResponseContent = string | Array<ResponseContentText | ResponseConte
  * ResponseInput
  */
 export type ResponseInput = Array<ResponseInputItem>;
-export type ResponseInputItem = ResponseInputMessage | ResponseOutputMessage | ResponseInputFunctionCall | ResponseInputFunctionCallOutput;
+export type ResponseInputItem = ResponseInputMessage | ResponseThinkingMessage | ResponseOutputMessage | ResponseInputFunctionCall | ResponseInputFunctionCallOutput;
 
 
 /**
@@ -212,7 +211,18 @@ export interface ResponseInputMessage {
 }
 
 /**
- * ResponseInputMessage
+ * ResponseThinkingMessage
+ */
+export interface ResponseThinkingMessage {
+	type: 'thinking',
+	content: ResponseContent,
+	signature?: ResponseContent,
+	role: 'assistant',
+	status?: 'in_progress' | 'completed' | 'incomplete',
+}
+
+/**
+ * ResponseOutputMessage
  */
 export interface ResponseOutputMessage {
 	type: 'message',
@@ -273,10 +283,13 @@ export type StreamEventType =
 	| 'command_done'
 	| 'project_create'
 	| 'project_ready'
+	| 'branch_review'
+	| 'pull_request'
 	| 'process_start'
 	| 'process_running'
 	| 'process_updated'
 	| 'process_done'
+	| 'process_waiting'
 	| 'process_terminated'
 	| 'agent_start'
 	| 'agent_updated'
@@ -329,6 +342,25 @@ export interface ProjectEvent extends StreamEvent {
 	project: string;
 }
 
+/**
+ * Branch review streaming event
+ */
+export interface BranchReviewEvent extends StreamEvent {
+	type: 'branch_review';
+	project: string;
+	branch: string;
+}
+
+/**
+ * Pull request streaming event
+ */
+export interface PullRequestEvent extends StreamEvent {
+	type: 'pull_request';
+	project: string;
+	from_branch: string;
+	to_branch: string;
+}
+
 
 export type ProcessToolType = 'research_engine' | 'godel_machine' | 'task_force';
 
@@ -336,9 +368,10 @@ export type ProcessToolType = 'research_engine' | 'godel_machine' | 'task_force'
  * Agent updated streaming event
  */
 export interface ProcessEvent extends StreamEvent {
-	type: 'process_start' | 'process_running' | 'process_updated' | 'process_done' | 'process_terminated';
+	type: 'process_start' | 'process_running' | 'process_updated' | 'process_done' | 'process_waiting' | 'process_terminated';
 	agentProcess?: AgentProcess;
 	output?: string;
+	error?: string;
 	history?: ResponseInput;
 }
 
@@ -355,17 +388,19 @@ export interface AgentEvent extends StreamEvent {
  * Message streaming event
  */
 export interface MessageEvent extends StreamEvent {
-	type: 'message_start' | 'message_delta' | 'message_complete'; // Changed 'message_done' to 'message_complete'
+	type: 'message_start' | 'message_delta' | 'message_complete';
 	content: string;
 	message_id: string; // Added message_id for tracking deltas and completes
 	order?: number; // Optional order property for message sorting
+	thinking_content?: string;
+	thinking_signature?: string;
 }
 
 /**
  * Message streaming event
  */
 export interface FileEvent extends StreamEvent {
-	type: 'file_start' | 'file_delta' | 'file_complete'; // Changed 'message_done' to 'message_complete'
+	type: 'file_start' | 'file_delta' | 'file_complete';
 	message_id: string; // Added message_id for tracking deltas and completes
 	mime_type?: string;
 	data_format: 'base64';
@@ -400,22 +435,37 @@ export interface ErrorEvent extends StreamEvent {
 	error: string;
 }
 
+// New interface for the core cost data structure
+export interface CostUpdateData {
+	time: {
+		start: string;
+		now: string;
+	};
+	cost: {
+		total: number; // Total cost accumulated
+		last_min: number; // Cost accumulated in the last minute
+	};
+	tokens: {
+		input: number; // Total input tokens accumulated
+		output: number; // Total output tokens accumulated
+	};
+	models: Record<string, { cost: number; calls: number; }>; // Per-model cost and call count
+}
+
+
 /**
  * Cost update streaming event
  */
 export interface CostUpdateEvent extends StreamEvent {
 	type: 'cost_update';
-	totalCost: number;
-	modelCosts: Record<string, { cost: number; calls: number; }>;
-	timestamp: string;
-	thoughtLevel?: number;
-	delay?: number;
+	usage: ModelUsage;
+	thought_delay?: number;
 }
 
 /**
  * Union type for all streaming events
  */
-export type StreamingEvent = ConnectedEvent | CommandEvent | ProjectEvent | ProcessEvent | AgentEvent | MessageEvent | FileEvent | TalkEvent | ToolEvent | ErrorEvent | CostUpdateEvent;
+export type StreamingEvent = ConnectedEvent | CommandEvent | ProjectEvent | BranchReviewEvent | PullRequestEvent | ProcessEvent | AgentEvent | MessageEvent | FileEvent | TalkEvent | ToolEvent | ErrorEvent | CostUpdateEvent;
 
 /**
  * Status of a sequential agent run

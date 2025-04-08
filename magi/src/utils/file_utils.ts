@@ -11,6 +11,11 @@ import {ModelProviderID} from '../model_providers/model_data.js';
 
 // Global directory path for this process
 let processDirectory: string | null = null;
+let testMode = false;
+
+export function set_file_test_mode(mode: boolean): void {
+	testMode = mode;
+}
 
 /**
  * Create or get the directory in /magi_output for the current process and a given subdirectory
@@ -51,32 +56,6 @@ export function move_to_working_dir(working?:string): void {
 }
 
 /**
- * Get a list of all directories mounted in /external/host
- *
- * @returns Object mapping directory names to full paths
- */
-export function get_mounted_directories(): Record<string, string> {
-	const inputDir = '/external/host';
-	const result: Record<string, string> = {};
-
-	try {
-		if (fs.existsSync(inputDir)) {
-			const dirs = fs.readdirSync(inputDir);
-			for (const dir of dirs) {
-				const fullPath = path.join(inputDir, dir);
-				if (fs.statSync(fullPath).isDirectory()) {
-					result[dir] = fullPath;
-				}
-			}
-		}
-	} catch (error) {
-		console.error(`Error reading mounted directories: ${error}`);
-	}
-
-	return result;
-}
-
-/**
  * Get a list of all git projects
  *
  * @returns Object mapping repository names to full paths
@@ -103,29 +82,6 @@ export function get_git_repositories(): Record<string, string> {
 
 	return result;
 }
-
-/**
- * Mount one of the available directories from /external/host to the working directory
- *
- * @param dirName - Name of the directory in /external/host to mount
- * @param mountPoint - Optional name for the mounted directory (defaults to dirName)
- * @returns Path to the mounted directory or error message
- */
-export function mount_input_directory(dirName: string, mountPoint?: string): string {
-	const inputDir = '/external/host';
-	const sourcePath = path.join(inputDir, dirName);
-
-	try {
-		if (!fs.existsSync(sourcePath)) {
-			throw new Error(`Directory ${dirName} not found in /external/host`);
-		}
-
-		return mount_directory(sourcePath, mountPoint);
-	} catch (error) {
-		throw new Error(`Error mounting input directory ${dirName}: ${error}`);
-	}
-}
-
 
 /**
  * Read a file from the file system
@@ -210,80 +166,6 @@ export function write_unique_file(filePath: string, content: string | ArrayBuffe
 	}
 }
 
-
-/**
- * Mount a directory to the working directory
- *
- * @param sourcePath - The absolute path to the directory to mount
- * @param destName - Optional name for the mounted directory (defaults to basename of sourcePath)
- * @returns Success message or error
- */
-export function mount_directory(sourcePath: string, destName?: string): string {
-	// Validate source path
-	if (!fs.existsSync(sourcePath)) {
-		throw new Error(`Error: Source directory ${sourcePath} does not exist`);
-	}
-
-	// Determine destination name (use basename of source if not provided)
-	const targetName = destName || path.basename(sourcePath);
-	const targetPath = path.join(get_working_dir(), targetName);
-
-	// Create target directory if it doesn't exist
-	if (!fs.existsSync(targetPath)) {
-		fs.mkdirSync(targetPath, { recursive: true });
-	}
-
-	fs.cpSync(sourcePath, targetPath, {recursive: true});
-
-	return targetPath;
-}
-
-/**
- * Work with git repositories that have been mounted
- *
- * @param repoName - Name of the git repository
- * @param workingBranch - Optional: Create/checkout this branch (default: current branch)
- * @returns Path where the git repository is mounted
- */
-export async function use_git_repository(repoName: string, workingBranch?: string): Promise<string> {
-	const gitRepos = get_git_repositories();
-
-	if (!gitRepos[repoName]) {
-		throw new Error(`Git repository '${repoName}' not found. Available repositories: ${Object.keys(gitRepos).join(', ')}`);
-	}
-
-	const repoPath = gitRepos[repoName];
-
-	if (workingBranch) {
-		try {
-			// Check if branch exists
-			try {
-				// Run git command to check if the branch exists
-				const { execSync } = await import('child_process');
-				const result = execSync(`git -C "${repoPath}" show-ref --verify --quiet refs/heads/${workingBranch} || echo "branch-not-found"`).toString().trim();
-
-				if (result === 'branch-not-found') {
-					// Branch doesn't exist, create it
-					execSync(`git -C "${repoPath}" checkout -b ${workingBranch}`);
-					console.log(`Created and checked out new branch '${workingBranch}' in repository '${repoName}'`);
-				} else {
-					// Branch exists, check it out
-					execSync(`git -C "${repoPath}" checkout ${workingBranch}`);
-					console.log(`Checked out existing branch '${workingBranch}' in repository '${repoName}'`);
-				}
-			} catch (error) {
-				console.error(`Error checking/creating branch '${workingBranch}': ${error}`);
-				throw error;
-			}
-		} catch (error) {
-			console.error(`Error working with branch '${workingBranch}' in repository '${repoName}': ${error}`);
-			throw error;
-		}
-	}
-
-	return repoPath;
-}
-
 /**
  * Commit changes to a git repository
  *
@@ -342,36 +224,6 @@ export function getFileTools(): ToolFunction[] {
 			{'filePath': 'Path to write the file to', 'content': 'Content to write to the file'},
 			'Success message with the path'
 		),
-		/*createToolFunction(
-			get_mounted_directories,
-			'Get a list of all directories mounted from the host',
-			{},
-			'Object mapping directory names to full paths'
-		),
-		createToolFunction(
-			mount_input_directory,
-			'Mount a directory from /external/host to the working directory',
-			{'dirName': 'Name of the directory in /external/host to mount', 'mountPoint': 'Optional name for the mounted directory'},
-			'Path to the mounted directory'
-		),
-		createToolFunction(
-			get_git_repositories,
-			'Get a list of all git repositories available for editing',
-			{},
-			'Object mapping repository names to full paths'
-		),
-		createToolFunction(
-			use_git_repository,
-			'Use a git repository for editing with optional branch creation',
-			{'repoName': 'Name of the git repository', 'workingBranch': 'Optional: Create/checkout this branch (default: current branch)'},
-			'Path where the git repository is mounted'
-		),
-		createToolFunction(
-			commit_git_changes,
-			'Commit changes to a git repository',
-			{'repoName': 'Name of the git repository', 'message': 'Commit message'},
-			'Success message'
-		),*/
 	];
 }
 
@@ -385,6 +237,15 @@ export function getFileTools(): ToolFunction[] {
  */
 export function log_llm_request(providerName: ModelProviderID, model: string, requestData: any, timestamp: Date = new Date()): string {
 	try {
+		if(testMode) {
+			console.log(`[${providerName} - ${timestamp.toISOString().substring(11, 19)}]`);
+			console.dir({
+				model,
+				request: requestData
+			}, {depth: 10, colors: true});
+			return '';
+		}
+
 		// Create logs directory if needed
 		const logsDir = get_output_dir('logs/llm');
 

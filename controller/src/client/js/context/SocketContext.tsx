@@ -8,8 +8,7 @@ import {
 	ProcessCommandEvent,
 	ProcessMessageEvent,
 	ProcessStatus,
-	CostInfoEvent,
-	CostData
+	GlobalCostData,
 } from '@types';
 import { handleAudioMessage } from '../utils/AudioUtils';
 
@@ -29,12 +28,14 @@ export interface PartialClientMessage {
 	processId?: string; // Process ID this message belongs to
 	type?: 'user' | 'assistant' | 'system' | 'tool_call' | 'tool_result' | 'error';
 	content?: string;
+	thinking_content?: string;
 	timestamp?: string;
 	rawEvent?: unknown; // Store the raw event data for debugging
 	message_id?: string; // Original message_id from the LLM for delta/complete pairs
 	isDelta?: boolean; // Flag to indicate if this is a delta message that will be replaced by a complete
 	order?: number; // Order position for delta messages
 	deltaChunks?: { [order: number]: string }; // Storage for message delta chunks
+	deltaThinkingChunks?: { [order: number]: string }; // Storage for message delta chunks
 }
 
 // Define message interfaces for the chat UI
@@ -44,12 +45,14 @@ export interface ClientMessage {
 	processId: string; // Process ID this message belongs to
 	type: 'user' | 'assistant' | 'system' | 'tool_call' | 'tool_result' | 'error';
 	content: string;
+	thinking_content?: string;
 	timestamp: string;
 	rawEvent?: unknown; // Store the raw event data for debugging
 	message_id?: string; // Original message_id from the LLM for delta/complete pairs
 	isDelta?: boolean; // Flag to indicate if this is a delta message that will be replaced by a complete
 	order?: number; // Order position for delta messages
 	deltaChunks?: { [order: number]: string }; // Storage for message delta chunks
+	deltaThinkingChunks?: { [order: number]: string }; // Storage for message delta chunks
 }
 
 export interface ToolCallMessage extends ClientMessage {
@@ -77,7 +80,7 @@ interface SocketContextInterface {
 	processes: Map<string, ProcessData>;
 	serverVersion: string | null;
 	coreProcessId: string | null;
-	costData: CostData | null;
+	costData: GlobalCostData | null;
 }
 
 export interface AgentData {
@@ -130,7 +133,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 	const [processes, setProcesses] = useState<Map<string, ProcessData>>(new Map());
 	const [serverVersion, setServerVersion] = useState<string | null>(null);
 	const [coreProcessId, setCoreProcessId] = useState<string | null>(null);
-	const [costData, setCostData] = useState<CostData | null>(null);
+	const [costData, setCostData] = useState<GlobalCostData | null>(null);
 
 	// Initialize socket connection
 	useEffect(() => {
@@ -152,8 +155,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 		});
 
 		// Handle cost information updates
-		socketInstance.on('cost:info', (event: CostInfoEvent) => {
-			setCostData(event.cost);
+		socketInstance.on('cost:info', (costData: GlobalCostData) => {
+			console.log('***Received cost:info', costData);
+			setCostData(costData);
 		});
 
 		socketInstance.on('process:create', (event: ProcessCreateEvent) => {
@@ -293,6 +297,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 						processId: event.id,
 						type: message.type || 'system',
 						content: message.content || '',
+						thinking_content: message.thinking_content || '',
 						timestamp: message.timestamp || timestamp,
 						rawEvent: message.rawEvent || data,
 						...message
@@ -383,6 +388,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 					// Assistant message
 					if ('content' in streamingEvent && 'message_id' in streamingEvent) {
 						const content = streamingEvent.content || '';
+						const thinking_content = streamingEvent.thinking_content || '';
 						const message_id = streamingEvent.message_id || '';
 
 						if (content && message_id) {
@@ -404,8 +410,10 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 							const updatedMessage: PartialClientMessage = {
 								type: 'assistant',
 								content: content,
+								thinking_content: thinking_content,
 								message_id: message_id,
 								deltaChunks: {},
+								deltaThinkingChunks: {},
 								...existingMessage
 							};
 
@@ -413,7 +421,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 							if (eventType === 'message_delta') {
 								// Get order if available, otherwise default to 0
 								const order = 'order' in streamingEvent ? Number(streamingEvent.order) : 0;
-								updatedMessage.deltaChunks[order] = content;
+								if(content) updatedMessage.deltaChunks[order] = content;
+								if(thinking_content) updatedMessage.deltaThinkingChunks[order] = thinking_content;
 								updatedMessage.isDelta = true;
 
 								if (existingMessage) {
@@ -426,10 +435,20 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 									updatedMessage.content = orderedKeys
 										.map(key => updatedMessage.deltaChunks![key])
 										.join('');
+
+									const orderedThinkingKeys = Object.keys(updatedMessage.deltaThinkingChunks)
+										.map(Number)
+										.sort((a, b) => a - b);
+
+									// Update the displayed thinking_content
+									updatedMessage.thinking_content = orderedThinkingKeys
+										.map(key => updatedMessage.deltaThinkingChunks![key])
+										.join('');
 								}
 							} else if ((eventType === 'message_complete' || eventType === 'talk_complete') && existingMessage) {
 								// Update the existing message in place
 								updatedMessage.content = content;
+								updatedMessage.thinking_content = thinking_content;
 								updatedMessage.isDelta = false;
 								updatedMessage.rawEvent = data;
 							}

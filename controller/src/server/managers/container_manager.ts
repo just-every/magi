@@ -92,7 +92,7 @@ export async function buildDockerImage(options: DockerBuildOptions = {}): Promis
 async function prepareGitRepository(
 	processId: string,
 	project: string
-): Promise<{ hostPath: string, outputPath: string } | null> {
+): Promise<{ hostPath: string, outputPath: string }> {
 
 	// Where the git repository is located on the host
 	const hostPath = path.join('/external/host', project);
@@ -103,25 +103,20 @@ async function prepareGitRepository(
 	try {
 		// Skip if the path doesn't exist on the host
 		if (!fs.existsSync(hostPath)) {
-			console.error(`Skipping git repository at ${hostPath} - directory does not exist`);
-			return null;
+			throw new Error(`Skipping git repository at ${hostPath} - directory does not exist`);
 		}
 
 		// Check if it's a git repository
 		try {
 			await execPromise(`git -C "${hostPath}" rev-parse --is-inside-work-tree`);
 		} catch (error) {
-			console.error(`Can not access git at ${hostPath}`);
-			return null;
+			throw new Error(`Can not access git at ${hostPath}`);
 		}
 
 		// Remove the directory if it exists
 		if (fs.existsSync(outputPath)) {
 			fs.rmSync(outputPath, { recursive: true, force: true });
 		}
-
-		// Create the output directory
-		fs.mkdirSync(outputPath, { recursive: true });
 
 		// Clone the repository to the temp directory
 		await execPromise(`git clone "${hostPath}" "${outputPath}"`);
@@ -142,15 +137,14 @@ async function prepareGitRepository(
 
 		// Set git config for commits
 		await execPromise(`git -C "${outputPath}" config user.name "MAGI System"`);
-		await execPromise(`git -C "${outputPath}" config user.email "magi-system@hascontext.com"`);
+		await execPromise(`git -C "${outputPath}" config user.email "magi+${processId}@withmagi.com"`);
 
 		return {
 			hostPath,
 			outputPath
 		};
 	} catch (error) {
-		console.error(`Error preparing git repository ${outputPath}:`, error);
-		return null;
+		throw new Error(`Error preparing git repository ${outputPath}: ${error}`);
 	}
 }
 
@@ -158,7 +152,7 @@ async function prepareGitRepository(
  * Create a new project in /external/host with a git repository
  *
  * @param project The repository options
- * @returns The project name (make be changed if already exists)
+ * @returns The project name if successful, null if it fails
  */
 export function createNewProject(
 	project: string,
@@ -168,27 +162,50 @@ export function createNewProject(
 		throw new Error(`Invalid project name '${project}'. Only letters, numbers, dashes and underscores are allowed.`);
 	}
 
+	// Check if parent directory exists
+	const parentDir = '/external/host';
+	if (!fs.existsSync(parentDir)) {
+		throw new Error(`Parent directory ${parentDir} does not exist`);
+	}
+
 	// Make sure we have a unique project name
 	let i = 0;
 	let finalProjectName = project;
-	while(fs.existsSync(path.join('/external/host', finalProjectName))) {
+	while(fs.existsSync(path.join(parentDir, finalProjectName))) {
 		finalProjectName = 'magi-'+project+(i > 0 ? `-${i}` : '');
 		i++;
 	}
 
-	// Create a temporary directory for the git repo in the magi_output volume
-	const projectPath = path.join('/external/host', finalProjectName);
-	fs.mkdirSync(projectPath, { recursive: true });
+	// Create a directory for the git repo
+	const projectPath = path.join(parentDir, finalProjectName);
+	try {
+		fs.mkdirSync(projectPath, { recursive: true });
+	} catch (mkdirError) {
+		throw new Error(`Error creating directory ${projectPath}: ${mkdirError}`);
+	}
 
 	try {
+		// Initialize git repository
 		execSync(`git -C "${projectPath}" init`);
 
-		process.env.PROJECT_REPOSITORIES = (process.env.PROJECT_REPOSITORIES+',' || '')+finalProjectName;
+		// Update the environment variable with proper concatenation
+		if (process.env.PROJECT_REPOSITORIES) {
+			process.env.PROJECT_REPOSITORIES = `${process.env.PROJECT_REPOSITORIES},${finalProjectName}`;
+		} else {
+			process.env.PROJECT_REPOSITORIES = finalProjectName;
+		}
 
 		return finalProjectName;
 	} catch (error) {
-		console.error(`Error preparing git repository ${projectPath}:`, error);
-		return '';
+
+		// Clean up the created directory on error
+		try {
+			fs.rmSync(projectPath, { recursive: true, force: true });
+		} catch (cleanupError) {
+			throw new Error(`Error cleaning up directory ${projectPath}: ${cleanupError}`);
+		}
+
+		throw new Error(`Error initializing git repository ${projectPath}: ${error}`);
 	}
 }
 
@@ -220,82 +237,52 @@ export async function runDockerContainer(options: DockerRunOptions): Promise<str
 
 		// Get the current server port
 		const serverPort = process.env.PORT || '3010';
-		console.error('Start docker with CONTROLLER_PORT:', serverPort);
+		console.log('Start docker with CONTROLLER_PORT:', serverPort);
 
 		// Create the docker run command using base64 encoded command
 		// Get HOST_HOSTNAME from environment variable, fallback to docker service name
 		const hostName = process.env.HOST_HOSTNAME || 'controller';
 
-		// Initialize volume mounts array with default volumes
-		const volumeMounts = [
-			'-v claude_credentials:/claude_shared:rw',
-			'-v magi_output:/magi_output:rw'
-		];
-
-		// Mount projects on code process
-		const projects = (process.env.PROJECT_REPOSITORIES || '').split(',');
-		let workingDir:string;
-
-		// Get PROJECT_REPOSITORIES directories and add them as volume mounts
-		if (process.env.PROJECT_PARENT_PATH && options.coreProcessId && options.coreProcessId === processId && projects.length > 0) {
-			for (const project of projects) {
-
-				// Ensure path is absolute
-				const externalPath = path.resolve(process.env.PROJECT_PARENT_PATH, project);
-				const hostPath = path.resolve('/external/host', project);
-
-				// Validate the host directory exists
-				if (fs.existsSync(hostPath)) {
-					// Add to volume mounts array - mount as read-only for safety
-					volumeMounts.push(`-v "${externalPath}:${hostPath}:ro"`);
-					if(!workingDir) {
-						workingDir = '/external/host';
-					}
-				} else {
-					console.warn(`Skipping mount for non-existent PROJECT_REPOSITORIES directory: ${hostPath}`);
-				}
-			}
-		}
-
 		// Mount git repositories if specified
-		const gitProjects = (options.project || []).filter(project => projects.includes(project));
+		const projects = (process.env.PROJECT_REPOSITORIES || '').split(',');
+		const gitProjects =
+			options.coreProcessId && options.coreProcessId === processId ?
+				projects :
+				(options.project || []).filter(project => projects.includes(project));
 		if (gitProjects.length > 0) {
 			// Process each repo
 			const projectPromises = gitProjects.map(project => prepareGitRepository(processId, project));
-			const projectResults = await Promise.all(projectPromises);
-
-			// Add volume mounts for successful repos
-			for (const result of projectResults) {
-				if (result) {
-					volumeMounts.push(`-v "${result.hostPath}:${result.outputPath}:rw"`);
-				}
-			}
+			await Promise.all(projectPromises);
 		}
 
-		if(!workingDir) {
-			workingDir = gitProjects.length > 0 ? path.join('/magi_output', processId, 'projects', (gitProjects.length > 1 ? undefined : gitProjects[0])) : '';
-		}
+		// Mount projects on code process
+		const workingDir:string  = gitProjects.length > 0 ? path.join('/magi_output', processId, 'projects', (gitProjects.length > 1 ? '' : gitProjects[0])) : '';
 
-		const dockerRunCommand = `docker run -d --rm --name ${containerName} \
+		// Simply use the environment's TZ variable or empty string
+// The dateFormat function will handle conversion and fallbacks
+const hostTimezone = process.env.TZ || '';
+
+const dockerRunCommand = `docker run -d --rm --name ${containerName} \
       -e PROCESS_ID=${processId} \
       -e HOST_HOSTNAME=${hostName} \
       -e CONTROLLER_PORT=${serverPort} \
+      -e TZ=${hostTimezone} \
       --env-file ${path.resolve(projectRoot, '../.env')} \
-      ${volumeMounts.join(' ')} \
+      -v claude_credentials:/claude_shared:rw \
+      -v magi_output:/magi_output:rw \
+      -v /etc/timezone:/etc/timezone:ro \
+      -v /etc/localtime:/etc/localtime:ro \
       --network magi-system_magi-network \
       magi-system:latest \
       --tool ${options.tool || 'none'} \
       --working "${workingDir}" \
       --base64 "${base64Command}"`;
 
-		console.log('dockerRunCommand', dockerRunCommand);
-
 		// Execute the command and get the container ID
 		const result = await execPromise(dockerRunCommand);
 		return result.stdout.trim();
 	} catch (error) {
-		console.error('Error running Docker container:', error);
-		return '';
+		throw new Error(`Error starting Docker container: ${error}`);
 	}
 }
 

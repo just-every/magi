@@ -1,48 +1,76 @@
 /**
- * Model data for all supported LLM providers.
+ * model_data.ts
  *
+ * Model data for all supported LLM providers.
  * This file consolidates information about all supported models including:
  * - Basic model metadata
- * - Cost information
+ * - Cost information (including tiered pricing)
  * - Grouping by capability
  */
 
-export interface ModelCost {
-	input_per_million: number;   // Cost in USD per million input tokens
-	output_per_million: number;  // Cost in USD per million output tokens
-	cached_input_per_million?: number; // Cost in USD per million cached input tokens
+// Represents a tiered pricing structure based on token count
+export interface TieredPrice {
+    threshold_tokens: number; // The token count threshold for the price change
+    price_below_threshold_per_million: number; // Price per million tokens <= threshold
+    price_above_threshold_per_million: number; // Price per million tokens > threshold
 }
 
+// Structure for time-based pricing (Peak/Off-Peak)
+export interface TimeBasedPrice {
+    peak_price_per_million: number;
+    off_peak_price_per_million: number;
+    // Define UTC time boundaries for peak hours (inclusive start, exclusive end)
+    peak_utc_start_hour: number; // e.g., 0 for 00:30
+    peak_utc_start_minute: number; // e.g., 30 for 00:30
+    peak_utc_end_hour: number; // e.g., 16 for 16:30
+    peak_utc_end_minute: number; // e.g., 30 for 16:30
+}
+
+// Represents the cost structure for a model, potentially tiered or time-based
+export interface ModelCost {
+    // Cost components can be flat rate, token-tiered, or time-based
+    input_per_million?: number | TieredPrice | TimeBasedPrice;
+    output_per_million?: number | TieredPrice | TimeBasedPrice;
+    cached_input_per_million?: number | TieredPrice | TimeBasedPrice;
+
+	// Cost per image (for image generation models like Imagen)
+	per_image?: number;
+
+	// Notes about pricing specifics (e.g., free tier availability, other costs)
+	notes?: string[];
+}
+
+// Represents a single model entry in the registry
 export interface ModelEntry {
 	id: string;           // Model identifier used in API calls
 	aliases?: string[];   // Alternative names for the model
-	provider: ModelProviderID;     // Provider (openai, anthropic, google, xai)
-	cost: ModelCost;      // Cost information
+	provider: ModelProviderID;     // Provider (openai, anthropic, google, xai, deepseek)
+	cost: ModelCost;      // Cost information using the updated structure
 	class?: ModelClassID;       // Model class (standard, mini, reasoning, vision, etc.)
 	description?: string; // Short description of the model's capabilities
 	context_length?: number; // Maximum context length in tokens
 }
 
-
+// Represents usage data for cost calculation
 export interface ModelUsage {
-	model: string,
-	cost?: number,
-	input_tokens?: number,
-	output_tokens?: number,
-	cached_tokens?: number,
-	metadata?: Record<string, number>,
-	timestamp?: Date;
+    model: string; // The ID of the model used (e.g., 'gemini-2.0-flash')
+    cost?: number; // Calculated cost (optional, will be calculated if missing)
+    input_tokens?: number; // Number of input tokens
+    output_tokens?: number; // Number of output tokens
+    cached_tokens?: number; // Number of cached input tokens
+    image_count?: number; // Number of images generated (for models like Imagen)
+    metadata?: Record<string, any>; // Allow any type for metadata flexibility
+    timestamp?: Date; // Timestamp of the usage, crucial for time-based pricing
+    isFreeTierUsage?: boolean; // Flag for free tier usage override
 }
 
+// Interface for grouping models by class/capability
 export interface ModelClass {
-	models: string[],
-	random?: boolean,
+	models: string[];
+	random?: boolean;
 }
 
-
-/**
- * Available model providers
- */
+// Available model providers
 export type ModelProviderID =
 	'openai'
 	| 'anthropic'
@@ -51,9 +79,7 @@ export type ModelProviderID =
 	| 'deepseek'
 	;
 
-/**
- * Available model classes
- */
+// Available model classes
 export type ModelClassID =
 	'standard'
 	| 'mini'
@@ -62,10 +88,13 @@ export type ModelClassID =
 	| 'code'
 	| 'vision'
 	| 'search'
+	| 'image_generation' // Added for Imagen
+	| 'embedding'        // Added for Text Embedding
 	;
 
-
-// Model groups organized by capability
+// --- MODEL_CLASSES remains largely the same, but ensure model IDs match the registry ---
+// (Keep your existing MODEL_CLASSES definition here, just ensure IDs are consistent
+//  with the updated MODEL_REGISTRY below)
 export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 	// Standard models with good all-around capabilities
 	'standard': {
@@ -85,7 +114,6 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 			'gpt-4o-mini',             	// OpenAI
 			'claude-3-5-haiku-latest',  // Anthropic
 			'gemini-2.0-flash-lite',		// Google
-			'deepseek-chat',        	// DeepSeek
 		],
 		random: true,
 	},
@@ -143,6 +171,13 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 		random: true,
 	},
 
+	'image_generation': {
+		models: ['imagen-3'], // Example
+	},
+
+	'embedding': {
+		models: ['text-embedding-004'], // Example
+	}
 };
 
 // Main model registry with all supported models
@@ -457,104 +492,272 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 	// Google (Gemini) models
 	//
 
-	// Gemini 2.5 models
+	// Gemini 2.5 Pro (Experimental/Free)
 	{
 		id: 'gemini-2.5-pro-exp-03-25',
 		provider: 'google',
 		cost: {
+			// Explicitly zero cost for the free experimental version
 			input_per_million: 0,
 			output_per_million: 0,
-			cached_input_per_million: 0
+			cached_input_per_million: 0,
+			notes: ['Free tier experimental model.']
 		},
 		class: 'reasoning',
-		description: 'Coding, Reasoning & Multimodal understanding',
+		description: 'Free experimental version of Gemini 2.5 Pro. Excels at coding & complex reasoning.',
+		context_length: 1048576 // Assuming same context as paid preview
+	},
+	// Gemini 2.5 Pro (Paid Preview)
+	{
+		id: 'gemini-2.5-pro-preview-03-25', // Distinct ID for the paid version
+		provider: 'google',
+		cost: {
+			input_per_million: { // Tiered pricing for input
+				threshold_tokens: 200000, // 200k token threshold
+				price_below_threshold_per_million: 1.25,
+				price_above_threshold_per_million: 2.50,
+			},
+			output_per_million: { // Tiered pricing for output
+				threshold_tokens: 200000, // 200k token threshold
+				price_below_threshold_per_million: 10.00,
+				price_above_threshold_per_million: 15.00,
+			},
+			// cached_input_per_million: Not available according to pricing table
+			notes: [
+				'Paid preview version.',
+				'Grounding with Google Search: Free up to 1,500 RPD, then $35 / 1,000 requests.'
+			]
+		},
+		class: 'reasoning',
+		description: 'Paid preview of Gemini 2.5 Pro. State-of-the-art multipurpose model.',
 		context_length: 1048576
 	},
 
-	// Gemini 2.0 models
+	// Gemini 2.0 Flash
 	{
 		id: 'gemini-2.0-flash',
 		provider: 'google',
 		cost: {
+			// Paid tier costs (assuming text/image/video input)
 			input_per_million: 0.10,
 			output_per_million: 0.40,
-			cached_input_per_million: 0.025
+			// Paid tier cache cost (assuming text/image/video)
+			cached_input_per_million: 0.025, // Per million tokens used from cache
+			notes: [
+				'Free tier available with usage limits.',
+				'Paid input cost is $0.70/million tokens for audio.',
+				'Paid cached input cost is $0.175/million tokens for audio.',
+				'Context caching storage cost (paid tier): $1.00 / 1M tokens per hour (effective Apr 15, 2025).',
+				'Grounding with Google Search (paid tier): Free up to 1,500 RPD, then $35 / 1,000 requests.'
+			]
 		},
 		class: 'standard',
-		description: 'Fast, cost-effective Gemini model',
-		context_length: 1048576
+		description: 'Balanced multimodal model with large context, built for Agents.',
+		context_length: 1048576 // Assuming 1M context
 	},
+
+	// Gemini 2.0 Flash-Lite
 	{
 		id: 'gemini-2.0-flash-lite',
 		provider: 'google',
 		cost: {
+			// Paid tier costs
 			input_per_million: 0.075,
-			output_per_million: 0.30
+			output_per_million: 0.30,
+			// cached_input_per_million: Not specified, assume N/A or included in above
+			notes: [
+				'Free tier available with usage limits.',
+				'Context caching costs expected April 15, 2025 (details TBC).',
+			]
 		},
 		class: 'mini',
-		description: 'Lightweight version of Gemini 2.0 Flash',
-		context_length: 1048576
+		description: 'Smallest and most cost-effective model for at-scale usage.',
+		context_length: 1048576 // Assuming 1M context
 	},
+	// Gemini 2.0 Flash Thinking (Assuming free experimental like 2.5 Pro Exp)
 	{
 		id: 'gemini-2.0-flash-thinking-exp-01-21',
 		provider: 'google',
 		cost: {
 			input_per_million: 0,
-			output_per_million: 0
+			output_per_million: 0,
+			notes: ['Experimental model, likely free.']
 		},
 		class: 'reasoning',
 		description: 'Thinking version of gemini-2.0-flash'
+		// context_length: Unknown
 	},
 
-	// Gemini 1.5 models
+	// Gemini 1.5 Pro
 	{
 		id: 'gemini-1.5-pro',
 		aliases: ['gemini-1.5-pro-latest'],
 		provider: 'google',
 		cost: {
-			input_per_million: 7.0,
-			output_per_million: 21.0
+			input_per_million: { // Tiered pricing
+				threshold_tokens: 128000, // 128k token threshold
+				price_below_threshold_per_million: 1.25, // Mismatched pricing in user's original vs table ($7.0 vs $1.25/$2.50). Using table pricing.
+				price_above_threshold_per_million: 2.50,
+			},
+			output_per_million: { // Tiered pricing
+				threshold_tokens: 128000, // 128k token threshold
+				price_below_threshold_per_million: 5.00, // Mismatched pricing ($21.0 vs $5.0/$10.0). Using table pricing.
+				price_above_threshold_per_million: 10.00,
+			},
+			cached_input_per_million: { // Tiered pricing
+				threshold_tokens: 128000,
+				price_below_threshold_per_million: 0.3125,
+				price_above_threshold_per_million: 0.625,
+			},
+			notes: [
+				'Free tier available via AI Studio.', // API access seems paid
+				'Context caching storage cost (paid tier): $4.50 / 1M tokens per hour.',
+				'Grounding with Google Search (paid tier): $35 / 1K requests (up to 5K/day).'
+			]
 		},
-		class: 'standard',
-		description: 'Powerful Gemini model with large context window',
-		context_length: 1000000
+		class: 'standard', // Or 'reasoning' given capabilities? Table implies high intelligence. Let's keep 'standard' as per user's original.
+		description: 'Highest intelligence Gemini 1.5 model with 2M token context window.',
+		context_length: 2000000 // Updated context length
 	},
+
+	// Gemini 1.5 Flash
 	{
 		id: 'gemini-1.5-flash',
 		aliases: ['gemini-1.5-flash-latest'],
 		provider: 'google',
 		cost: {
-			input_per_million: 0.075,
-			output_per_million: 0.30
+			input_per_million: { // Tiered pricing
+				threshold_tokens: 128000, // 128k token threshold
+				price_below_threshold_per_million: 0.075,
+				price_above_threshold_per_million: 0.15,
+			},
+			output_per_million: { // Tiered pricing
+				threshold_tokens: 128000, // 128k token threshold
+				price_below_threshold_per_million: 0.30,
+				price_above_threshold_per_million: 0.60,
+			},
+			cached_input_per_million: { // Tiered pricing
+				threshold_tokens: 128000,
+				price_below_threshold_per_million: 0.01875,
+				price_above_threshold_per_million: 0.0375,
+			},
+			notes: [
+				'Free tier available via AI Studio.', // API access seems paid
+				'Context caching storage cost (paid tier): $1.00 / 1M tokens per hour.',
+				'Tuning service is free; token prices remain the same for tuned models.',
+				'Grounding with Google Search (paid tier): $35 / 1K requests (up to 5K/day).'
+			]
 		},
 		class: 'mini',
-		description: 'Fast, efficient Gemini model',
+		description: 'Fastest multimodal 1.5 model with 1M token context window.',
 		context_length: 1000000
 	},
 
-	// Gemini 1.0 models
+	// Gemini 1.5 Flash-8B (New)
+	{
+		id: 'gemini-1.5-flash-8b',
+		provider: 'google',
+		cost: {
+			input_per_million: { // Tiered pricing
+				threshold_tokens: 128000, // 128k token threshold
+				price_below_threshold_per_million: 0.0375,
+				price_above_threshold_per_million: 0.075,
+			},
+			output_per_million: { // Tiered pricing
+				threshold_tokens: 128000, // 128k token threshold
+				price_below_threshold_per_million: 0.15,
+				price_above_threshold_per_million: 0.30,
+			},
+			cached_input_per_million: { // Tiered pricing
+				threshold_tokens: 128000,
+				price_below_threshold_per_million: 0.01,
+				price_above_threshold_per_million: 0.02,
+			},
+			notes: [
+				'Free tier available via AI Studio.', // API access seems paid
+				'Context caching storage cost (paid tier): $0.25 / 1M tokens per hour.',
+				'Tuning service is free; token prices remain the same for tuned models.',
+				'Grounding with Google Search (paid tier): $35 / 1K requests (up to 5K/day).'
+			]
+		},
+		class: 'mini',
+		description: 'Smallest 1.5 model for lower intelligence use cases, 1M token context window.',
+		context_length: 1000000
+	},
+
+	// Gemini 1.0 Pro
 	{
 		id: 'gemini-1.0-pro',
 		aliases: ['gemini-1.0-pro-latest', 'gemini-pro'],
 		provider: 'google',
 		cost: {
+			// Flat rate pricing, seems superseded by newer models but kept for compatibility
 			input_per_million: 0.125,
-			output_per_million: 0.375
+			output_per_million: 0.375,
+			notes: ['Older model. Consider using newer Gemini versions.']
 		},
 		class: 'standard',
-		description: 'Original Gemini model',
+		description: 'Original Gemini Pro model.',
 		context_length: 32768
 	},
+
+	// Gemini 1.0 Pro Vision
 	{
-		id: 'gemini-pro-vision',
+		id: 'gemini-pro-vision', // Matches user's existing ID
 		provider: 'google',
 		cost: {
-			input_per_million: 0.125,
-			output_per_million: 0.375
+			// Assuming same pricing as 1.0 Pro based on user's original data
+			input_per_million: 0.125, // Cost likely includes image analysis component implicitly
+			output_per_million: 0.375,
+			notes: ['Older model with vision. Consider using newer multimodal models.']
 		},
 		class: 'vision',
-		description: 'Original Gemini model with vision capabilities',
+		description: 'Original Gemini model with vision capabilities.',
 		context_length: 32768
+	},
+
+	// --- Other Google Models ---
+
+	// Imagen 3 (New)
+	{
+		id: 'imagen-3',
+		provider: 'google',
+		cost: {
+			per_image: 0.03, // Cost is per image, not tokens
+			notes: ['Paid tier only. Cost is per generated image.']
+		},
+		class: 'image_generation',
+		description: 'State-of-the-art image generation model.',
+		// context_length: Not applicable in the same way
+	},
+
+	// Gemma 3 (New)
+	{
+		id: 'gemma-3',
+		provider: 'google',
+		cost: {
+			input_per_million: 0,
+			output_per_million: 0,
+			notes: ['Free tier only. Lightweight open model.']
+		},
+		class: 'standard', // Or define a new 'open_model' class
+		description: 'Lightweight, state-of-the-art open model.',
+		// context_length: Check Gemma documentation for specifics
+	},
+
+	// Text Embedding 004 (New)
+	{
+		id: 'text-embedding-004',
+		provider: 'google',
+		cost: {
+			// Pricing seems to be per 1M *input* tokens only for embedding models
+			input_per_million: 0, // Free tier only according to the table
+			output_per_million: 0, // No output tokens in the traditional sense
+			notes: ['Free tier only. Text embedding model.']
+		},
+		class: 'embedding',
+		description: 'State-of-the-art text embedding model.',
+		// context_length: Check embedding model documentation
 	},
 
 	//
@@ -599,15 +802,31 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 		description: 'Original Grok vision model'
 	},
 
-	// DeepSeek models
+	// --- DeepSeek Models ---
 	{
 		id: 'deepseek-chat',
 		provider: 'deepseek',
 		cost: {
-			// @todo add support for peak/off-peak pricing
-			input_per_million: 0.27,
-			output_per_million: 1.10,
-			cached_input_per_million: 0.07
+			// Time-based pricing: Peak UTC 00:30 to 16:30
+			cached_input_per_million: { // Cache Hit Input
+				peak_price_per_million: 0.07,
+				off_peak_price_per_million: 0.035, // 50% off
+				peak_utc_start_hour: 0, peak_utc_start_minute: 30,
+				peak_utc_end_hour: 16, peak_utc_end_minute: 30,
+			},
+			input_per_million: { // Cache Miss Input
+				peak_price_per_million: 0.27,
+				off_peak_price_per_million: 0.135, // 50% off
+				peak_utc_start_hour: 0, peak_utc_start_minute: 30,
+				peak_utc_end_hour: 16, peak_utc_end_minute: 30,
+			},
+			output_per_million: { // Output
+				peak_price_per_million: 1.10,
+				off_peak_price_per_million: 0.550, // 50% off
+				peak_utc_start_hour: 0, peak_utc_start_minute: 30,
+				peak_utc_end_hour: 16, peak_utc_end_minute: 30,
+			},
+			notes: ['Pricing varies based on UTC time (Peak: 00:30-16:30, Off-Peak: 16:30-00:30).']
 		},
 		class: 'standard',
 		description: 'Front line DeepSeek model',
@@ -617,16 +836,39 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 		id: 'deepseek-reasoner',
 		provider: 'deepseek',
 		cost: {
-			// @todo add support for peak/off-peak pricing
-			input_per_million: 0.55,
-			output_per_million: 2.19,
-			cached_input_per_million: 0.14
+			// Time-based pricing: Peak UTC 00:30 to 16:30
+			cached_input_per_million: { // Cache Hit Input
+				peak_price_per_million: 0.14,
+				off_peak_price_per_million: 0.035, // 75% off
+				peak_utc_start_hour: 0, peak_utc_start_minute: 30,
+				peak_utc_end_hour: 16, peak_utc_end_minute: 30,
+			},
+			input_per_million: { // Cache Miss Input
+				peak_price_per_million: 0.55,
+				off_peak_price_per_million: 0.135, // 75% off
+				peak_utc_start_hour: 0, peak_utc_start_minute: 30,
+				peak_utc_end_hour: 16, peak_utc_end_minute: 30,
+			},
+			output_per_million: { // Output
+				peak_price_per_million: 2.19,
+				off_peak_price_per_million: 0.550, // 75% off
+				peak_utc_start_hour: 0, peak_utc_start_minute: 30,
+				peak_utc_end_hour: 16, peak_utc_end_minute: 30,
+			},
+			notes: ['Pricing varies based on UTC time (Peak: 00:30-16:30, Off-Peak: 16:30-00:30).']
 		},
 		class: 'reasoning',
 		description: 'Thinking version of DeepSeek model',
 		context_length: 64000
-	}
+	},
 ];
+
+/**
+ * Find a model entry by ID or alias
+ *
+ * @param modelId The model ID or alias to search for
+ * @returns The model entry or undefined if not found
+ */
 
 /**
  * Find a model entry by ID or alias
@@ -644,4 +886,5 @@ export function findModel(modelId: string): ModelEntry | undefined {
 		model.aliases?.includes(modelId)
 	);
 }
+
 

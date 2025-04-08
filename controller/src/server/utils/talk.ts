@@ -60,14 +60,13 @@ export async function talk(input: string, affect: string, processId: string): Pr
 			voice: 'sage',
 			input,
 			instructions: `
-Pitch: Medium-low base with wide, natural expressive variation. Avoids monotone.
-Pacing: Natural, conversational, fluidly adapts to emotion.
-Articulation: Soft, clear, avoids sharpness. Smooth delivery.
-Prosody: Highly expressive, nuanced, conveys authentic emotion (curiosity, empathy, warmth). Breathiness integrates naturally.
-Delivery: Speak confidentially to one person. Lower volume, calm energy. Slightly slower, thoughtful pace with soft pauses. Emphasize natural breathiness; very soft articulation. Inflection shows gentle curiosity and vulnerability (e.g., slight pitch wavers). Maintain warmth and empathy. Creates a comforting, sincere, deeply personal feel.
-Overall Affect: Deeply personal, comforting, resonant. Mixes genuine curiosity, vulnerability, gentle intimacy, and subtle warmth/engagement.
+Pitch: Expressive variation. Show genuine curiosity and vulnerability with inflection.
+Pacing: Slightly faster, conversational, fluidly adapt to emotion.
+Articulation: Soft, clear, avoid sharpness. Smooth delivery.
+Prosody: Highly expressive, nuanced, convey authentic emotion.
+Delivery: A sincere, deeply personal feel. Mix genuine curiosity, vulnerability, and subtle warmth/engagement.
 
-Specific Affect for Input: ${affect}
+Core Affect: ${affect}
 `,
 			response_format: format,
 			speed: 4,

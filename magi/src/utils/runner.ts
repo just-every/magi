@@ -22,6 +22,8 @@ import {processToolCall} from './tool_call.js';
 import {capitalize} from './llm_utils.js';
 import {getCommunicationManager} from './communication.js';
 
+const EVENT_TIMEOUT_MS = 20000; // 20 seconds timeout
+
 /**
  * Agent runner class for executing agents with tools
  */
@@ -65,17 +67,9 @@ ${messagesText}
 
 SUMMARY:`;
 
-		// Define a handler to collect the output
-		let summary = '';
-		const handlers = {
-			onResponse: (content: string) => {
-				summary += content;
-			}
-		};
-
 		// Run the agent with the summarization prompt
 		try {
-			await this.runStreamedWithTools(agent, summarizationPrompt, [], handlers);
+			const summary = await this.runStreamedWithTools(agent, summarizationPrompt);
 			return summary.trim();
 		} catch (error) {
 			console.error('Error summarizing content:', error);
@@ -91,7 +85,7 @@ SUMMARY:`;
 		conversationHistory: ResponseInput = []
 	): AsyncGenerator<StreamingEvent> {
 		// Get our selected model for this run
-		let selectedModel = agent.model || getModelFromClass(agent.modelClass || 'standard');
+		const selectedModel = agent.model || getModelFromClass(agent.modelClass || 'standard');
 
 		// Prepare messages with conversation history and the current input
 		let messages: ResponseInput = [
@@ -108,11 +102,7 @@ SUMMARY:`;
 		try {
 			// Allow the agent to modify the messages before sending
 			if(agent.onRequest) {
-				let delay:number;
-				[messages, selectedModel, delay] = await agent.onRequest(messages, selectedModel);
-				if(delay) {
-					await new Promise(resolve => setTimeout(resolve, delay * 1000));
-				}
+				messages = await agent.onRequest(messages);
 			}
 
 			agent.model = selectedModel;
@@ -135,21 +125,69 @@ SUMMARY:`;
 				agent
 			);
 
-			// Forward all events from the stream
-			for await (const event of stream) {
-				// Update the model in events to show the actually used model
-				event.agent = event.agent ? event.agent : agent.export();
-				if (!event.agent.model) event.agent.model = selectedModel;
-				yield event;
+			// Set up timeout detection
+			let lastEventTime = Date.now();
+			let timeoutId: NodeJS.Timeout | null = null;
 
-				if(event.type === 'error') {
-					// Make sure we try a different model instead
-					throw event;
+			// Create a timeout checker function
+			const checkTimeout = () => {
+				const elapsed = Date.now() - lastEventTime;
+				if (elapsed >= EVENT_TIMEOUT_MS) {
+					console.error(`[Runner] Stream timeout after ${EVENT_TIMEOUT_MS}ms of inactivity`);
+					// Clear the timeout to prevent further checks
+					if (timeoutId) clearTimeout(timeoutId);
+					// Create a timeout error event
+					const timeoutErrorMessage = `Stream timeout: No response received for ${EVENT_TIMEOUT_MS/1000} seconds`;
+					console.error(`[Runner] ${timeoutErrorMessage}`);
+
+					// Create an error that can be caught and handled by the fallback mechanism
+					const error = new Error(timeoutErrorMessage);
+					// Add the event property to the error so we can yield it if needed
+					(error as any).event = {
+						type: 'error',
+						agent: agent.export(),
+						error: timeoutErrorMessage
+					};
+					// This will be caught by the try/catch and handled appropriately
+					throw error;
+				} else {
+					// Schedule next check
+					timeoutId = setTimeout(checkTimeout, 1000);
 				}
+			};
+
+			// Start timeout checking
+			timeoutId = setTimeout(checkTimeout, 1000);
+
+			try {
+				// Forward all events from the stream
+				for await (const event of stream) {
+					// Update last event time whenever we receive something
+					lastEventTime = Date.now();
+
+					// Update the model in events to show the actually used model
+					event.agent = event.agent ? event.agent : agent.export();
+					if (!event.agent.model) event.agent.model = selectedModel;
+					yield event;
+
+					if(event.type === 'error') {
+						// Make sure we try a different model instead
+						throw event;
+					}
+				}
+			} finally {
+				// Always clear the timeout when we're done or if there's an error
+				if (timeoutId) clearTimeout(timeoutId);
 			}
 		} catch (error) {
 			// If the model fails, try to find an alternative in the same class
 			console.error(`[Runner] Error with model ${selectedModel}: ${error}`);
+
+			// If the error has an event property (from our timeout handler), yield it
+			if (error && (error as any).event) {
+				yield (error as any).event;
+			}
+
 
 			// Try fallback strategies:
 			// 1. If a model was explicitly specified but failed, try standard models
@@ -198,17 +236,59 @@ SUMMARY:`;
 						agent,
 					);
 
-					// Forward all events from the alternative stream
-					for await (const event of alternativeStream) {
-						// Update the model in events to show the actually used model
-						event.agent = event.agent ? event.agent : agent.export();
-						if (!event.agent.model) event.agent.model = alternativeModel;
-						yield event;
+					// Set up timeout detection for alternative model
+					let altLastEventTime = Date.now();
+					let altTimeoutId: NodeJS.Timeout | null = null;
 
-						if(event.type === 'error') {
-							// Make sure we try a different model instead
-							throw event;
+					// Create a timeout checker function
+					const altCheckTimeout = () => {
+						const elapsed = Date.now() - altLastEventTime;
+						if (elapsed >= EVENT_TIMEOUT_MS) {
+							console.error(`[Runner] Alternative stream timeout after ${EVENT_TIMEOUT_MS}ms of inactivity`);
+							// Clear the timeout to prevent further checks
+							if (altTimeoutId) clearTimeout(altTimeoutId);
+							// Create a timeout error event
+							const timeoutErrorMessage = `Alternative stream timeout: No response received for ${EVENT_TIMEOUT_MS/1000} seconds`;
+							console.error(`[Runner] ${timeoutErrorMessage}`);
+
+							// Create an error that can be caught and handled by the fallback mechanism
+							const error = new Error(timeoutErrorMessage);
+							// Add the event property to the error so we can yield it if needed
+							(error as any).event = {
+								type: 'error',
+								agent: agent.export(),
+								error: timeoutErrorMessage
+							};
+							// This will be caught by the try/catch and handled appropriately
+							throw error;
+						} else {
+							// Schedule next check
+							altTimeoutId = setTimeout(altCheckTimeout, 1000);
 						}
+					};
+
+					// Start timeout checking
+					altTimeoutId = setTimeout(altCheckTimeout, 1000);
+
+					try {
+						// Forward all events from the alternative stream
+						for await (const event of alternativeStream) {
+							// Update last event time whenever we receive something
+							altLastEventTime = Date.now();
+
+							// Update the model in events to show the actually used model
+							event.agent = event.agent ? event.agent : agent.export();
+							if (!event.agent.model) event.agent.model = alternativeModel;
+							yield event;
+
+							if(event.type === 'error') {
+								// Make sure we try a different model instead
+								throw event;
+							}
+						}
+					} finally {
+						// Always clear the timeout when we're done or if there's an error
+						if (altTimeoutId) clearTimeout(altTimeoutId);
 					}
 
 					// If we got here, the alternative model worked, so exit the loop
@@ -216,6 +296,12 @@ SUMMARY:`;
 					return;
 				} catch (alternativeError) {
 					console.error(`[Runner] Alternative model ${alternativeModel} also failed: ${alternativeError}`);
+
+					// If the error has an event property (from our timeout handler), yield it
+					if (alternativeError && (alternativeError as any).event) {
+						yield (alternativeError as any).event;
+					}
+
 					// Continue to the next model
 				}
 			}
@@ -243,10 +329,14 @@ SUMMARY:`;
 		toolCallCount = 0 // Track the number of tool call iterations across recursive calls
 	): Promise<string> {
 		let fullResponse = '';
+		let thinkingResponse = '';
+		let thinkingSignature = '';
 		let collectedToolCalls: ToolCall[] = [];
 		const collectedToolResults: { call_id: string, output: string }[] = [];
 
 		try {
+			conversationHistory = [...conversationHistory]; // Clone so that additional messages don't affect the original
+
 			const stream = this.runStreamed(agent, input, conversationHistory);
 
 			for await (const event of stream) {
@@ -259,19 +349,19 @@ SUMMARY:`;
 				const eventType = event.type as string;
 				switch (eventType) {
 					case 'message_delta':
-					case 'message_done': // Legacy support
+						break;
+
 					case 'message_complete': {
 						// Accumulate the message content
 						const message = event as MessageEvent;
-						if (message.content && message.content.trim()) {
-							if (handlers.onResponse) {
-								handlers.onResponse(message.content);
-							}
-
-							// Handle both the new 'message_complete' and legacy 'message_done'
-							if (eventType === 'message_complete' || eventType === 'message_done') {
-								fullResponse = message.content;
-							}
+						if (message.content) {
+							fullResponse = message.content;
+						}
+						if (message.thinking_content) {
+							thinkingResponse = message.thinking_content;
+						}
+						if (message.thinking_signature) {
+							thinkingSignature = message.thinking_signature;
 						}
 						break;
 					}
@@ -378,7 +468,7 @@ SUMMARY:`;
 			}
 
 			// Process tool call results if there were any tool calls
-			if (collectedToolCalls.length > 0 && collectedToolResults.length > 0) {
+			if (agent.modelSettings?.tool_choice !== 'none' && collectedToolCalls.length > 0 && collectedToolResults.length > 0) {
 				console.log(`[Runner] Collected ${collectedToolCalls.length} tool calls, running follow-up with results`);
 
 				// Increment tool call count
@@ -407,15 +497,6 @@ SUMMARY:`;
 				// Create tool call messages for the next model request
 				let toolCallMessages: ResponseInput = [];
 
-				// Add previous history and input
-				toolCallMessages.push(...conversationHistory);
-				if(input) {
-					toolCallMessages.push({role: 'user', content: input});
-				}
-
-				// We need to create messages with the proper format for the responses API
-				// We need to convert our regular messages to the correct format
-
 				// Start with initial messages - convert standard message format to responses format
 				const messageItems: ResponseInput = [...conversationHistory];
 
@@ -428,8 +509,31 @@ SUMMARY:`;
 					});
 				}
 
+				if(thinkingResponse) {
+					// Add the assistant's thinking
+					messageItems.push({
+						type: 'thinking',
+						role: 'assistant',
+						content: thinkingResponse,
+						signature: thinkingSignature,
+						status: 'completed'
+					});
+				}
+
+				if(fullResponse) {
+					// Add the assistant's response
+					messageItems.push({
+						type: 'message',
+						role: 'assistant',
+						content: fullResponse,
+						status: 'completed'
+					});
+				}
+
 				// Add the function calls
 				for (const toolCall of collectedToolCalls) {
+					// Skip adding to messageItems if the agent has onToolCall handler
+					// The agent's onToolCall will use addHistory instead
 					messageItems.push({
 						type: 'function_call',
 						call_id: toolCall.id,
@@ -440,6 +544,8 @@ SUMMARY:`;
 					// Add the corresponding tool result
 					const result = collectedToolResults.find(r => r.call_id === toolCall.id);
 					if (result) {
+						// Skip adding to messageItems if the agent has onToolResult handler
+						// The agent's onToolResult will use addHistory instead
 						messageItems.push({
 							type: 'function_call_output',
 							call_id: toolCall.id,
@@ -467,11 +573,6 @@ SUMMARY:`;
 				if (followUpResponse) {
 					fullResponse = followUpResponse;
 				}
-			}
-
-			// If there's a response handler, call it with the final complete response
-			if (handlers.onComplete) {
-				handlers.onComplete();
 			}
 
 			// Allow the agent to process the final response before returning
@@ -514,11 +615,6 @@ SUMMARY:`;
 		const stageRetries: Record<string, number> = {};
 
 		const comm = getCommunicationManager();
-
-		comm.send({
-			type: 'process_running',
-			history,
-		});
 
 		function addOutput(stage: string, output: string) {
 			// Record in the history
@@ -652,7 +748,7 @@ SUMMARY:`;
 		const currentMessages: ResponseInput = [...messages]; // Use the specific type
 		let changedInPass: boolean;
 
-		console.debug('[Runner] Starting tool result sequence check...', messages);
+		//console.debug('[Runner] Starting tool result sequence check...', messages);
 
 		do {
 			changedInPass = false;
@@ -676,13 +772,13 @@ SUMMARY:`;
 
 					if (isNextMsgCorrectOutput) {
 						// Correct pair found, move past both
-						console.debug(`[Runner] Correct sequence found for call_id ${targetCallId} at index ${i}.`);
+						//console.debug(`[Runner] Correct sequence found for call_id ${targetCallId} at index ${i}.`);
 						i += 2; // Skip the call and its output
 						continue; // Continue the while loop
 					} else {
 						// Incorrect sequence or function_call is the last message.
 						// We need to find the output or insert an error.
-						console.debug(`[Runner] Mismatch or missing output for call_id ${targetCallId} at index ${i}. Searching...`);
+						//console.debug(`[Runner] Mismatch or missing output for call_id ${targetCallId} at index ${i}. Searching...`);
 						changedInPass = true; // Signal that a change is needed/made in this pass
 						let foundOutputIndex = -1;
 
@@ -702,7 +798,7 @@ SUMMARY:`;
 
 						if (foundOutputIndex !== -1) {
 							// Found the output later in the array. Move it.
-							console.debug(`[Runner] Found matching output for ${targetCallId} at index ${foundOutputIndex}. Moving it to index ${i + 1}.`);
+							//console.debug(`[Runner] Found matching output for ${targetCallId} at index ${foundOutputIndex}. Moving it to index ${i + 1}.`);
 							// Remove the found output (which is ResponseInputFunctionCallOutput)
 							const [outputMessage] = currentMessages.splice(foundOutputIndex, 1);
 							// Insert it right after the function call
@@ -737,7 +833,26 @@ SUMMARY:`;
 
 		} while (changedInPass); // Repeat if any changes were made in the last pass
 
-		console.debug('[Runner] Final message sequence ensured.');
+		//console.debug('[Runner] Final message sequence ensured.');
 		return currentMessages;
+	}
+
+	public static rotateModel(agent: Agent): string|undefined {
+		let model = agent.model;
+
+		if(agent.modelClass === 'monologue') {
+			let models: string[] = [...MODEL_CLASSES[agent.modelClass].models];
+			if(model) {
+				// Try to use a different model if we can
+				models = models.filter(newModel => newModel !== model);
+			}
+			if(models.length > 0) {
+				// Pick a random model from this level
+				models = models.sort(() => Math.random() - 0.5);
+				model = models[0];
+			}
+		}
+
+		return model;
 	}
 }

@@ -205,10 +205,10 @@ header {
     }
 
     position: fixed;
-    top: 30px;
+    bottom: 30px;
     right: 30px;
     z-index: 1001;
-    display: none;
+    display: block;
     opacity: 0.8;
     transition: opacity 0.3s;
     pointerEvents: auto;
@@ -266,12 +266,10 @@ header {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     transition: opacity 0.3s ease, transform 0.3s ease;
     background-color: white;
-    border-radius: 8px;
+    border-radius: 16px;
     pointer-events: auto; /* Ensure process boxes can be interacted with */
     padding: 0;
-    margin: 0 auto;
-    max-width: 1000px;
-    max-height: 1000px;
+    margin: 0;
     width: 100%;
     height: 100%;
     opacity: 0;
@@ -282,8 +280,11 @@ header {
         transform: scale(1);
     }
 
+    &.core-box {
+        border-radius: 8px; /* compensate for scale */
+    }
     &.agent-box {
-        border-radius: 16px; /* compensate for scale */
+        border-radius: 32px; /* compensate for scale */
     }
 
     /* Make process box card header sticky */
@@ -365,6 +366,8 @@ header {
     h1, h2, h3, h4, h5, h6 {
         margin-top: 1rem;
         margin-bottom: 0.5rem;
+        font-weight: 600;
+        font-size: 1rem;
     }
 
     p {
@@ -826,6 +829,7 @@ header {
     position: absolute;
     transition: all 0.5s ease-in-out;
     pointer-events: auto;
+    transform-origin: top left;
 }
 
 .agent-logs {

@@ -21,7 +21,7 @@ FROM node:23-slim
 
 # Install Docker CLI and other tools needed at runtime
 RUN apt-get update && \
-    apt-get install -y ca-certificates curl gnupg rsync && \
+    apt-get install -y ca-certificates curl gnupg rsync git && \
     install -m 0755 -d /etc/apt/keyrings && \
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
     chmod a+r /etc/apt/keyrings/docker.gpg && \
@@ -44,7 +44,8 @@ RUN groupadd -g ${GROUP_ID} magi_user && \
 WORKDIR /app
 
 # Create volume mount points
-RUN mkdir -p /magi_output /claude_shared
+RUN mkdir -p /magi_output /claude_shared /external/host && \
+	chown -R magi_user:magi_user /magi_output /claude_shared /external/host
 
 # Copy node_modules from builder stage
 # This provides all dependencies separate from the mounted code

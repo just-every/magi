@@ -77,19 +77,30 @@ function convertToClaudeMessage(role: string, content: string, msg: ResponseInpu
 
 		// Anthropic expects role: 'user' for tool_result
 		return {role: 'user', content: [toolResultBlock]};
+	} else if (msg.type && msg.type === 'thinking') {
+		if(!content || !msg.signature) {
+			return null; // Can't process thinking without content and signature
+		}
+
+		// Return a thinking message with the content and signature
+		return {role: 'assistant', content: [{
+			type: 'thinking',
+			thinking: content,
+			signature: msg.signature
+		}]};
 	} else {
 		// Skip messages with no actual text content
 		if (!content) {
 			return null; // Skip messages with no text content
 		}
 
-		const messageRole = role === 'assistant' ? 'assistant' : (role === 'developer' || role === 'system' ? 'system' : 'user');
 
 		// System messages expect string content
-		if (messageRole === 'system') {
+		if (role === 'system' || role === 'developer') {
 			// System prompts are handled separately later
 			return {role: 'system', content: content};
 		} else {
+			const messageRole = role === 'assistant' ? 'assistant' : 'user';
 			// User and Assistant messages must use the array format when tools are potentially involved.
 			// Use array format consistently for safety.
 			return {
@@ -126,12 +137,20 @@ export class ClaudeProvider implements ModelProvider {
 		messages: ResponseInput,
 		agent?: Agent,
 	): AsyncGenerator<StreamingEvent> {
+		// --- Usage Accumulators ---
+		let totalInputTokens = 0;
+		let totalOutputTokens = 0;
+		let totalCacheCreationInputTokens = 0;
+		let totalCacheReadInputTokens = 0;
+		let streamCompletedSuccessfully = false; // Flag to track successful stream completion
+		let messageCompleteYielded = false; // Flag to track if message_complete was yielded
+
 		try {
 			const tools: ToolFunction[] | undefined = agent?.tools;
 			const settings: ModelSettings | undefined = agent?.modelSettings;
 			const modelClass: ModelClassID | undefined = agent?.modelClass;
 
-			const thinking = undefined;
+			let thinking = undefined;
 			let max_tokens = settings?.max_tokens || 64000; // Default max tokens if not specified
 			switch (modelClass) {
 				case 'monologue':
@@ -139,10 +158,10 @@ export class ClaudeProvider implements ModelProvider {
 				case 'code':
 					if(model === 'claude-3-7-sonnet-latest') {
 						// Extended thinking
-						/*thinking = {
-							type: 'enabled',
-							budget_tokens: 32000
-						};*/
+						thinking = {
+						   type: 'enabled',
+						   budget_tokens: 16000
+						};
 						max_tokens = Math.min(max_tokens, 64000);
 					}
 					else {
@@ -159,12 +178,15 @@ export class ClaudeProvider implements ModelProvider {
 			// Convert messages format for Claude using the generic converter and Claude-specific map
 			const claudeMessages = convertHistoryFormat(messages, convertToClaudeMessage);
 
-			// Extract the system prompt content (assuming one system message, might need adjustment if multiple are possible)
-			const systemPromptMessages = claudeMessages.filter(m => m.role === 'system');
 			// Ensure content is a string. Handle cases where content might be structured differently or missing.
-			const systemPrompt = systemPromptMessages.length > 0 && typeof systemPromptMessages[0].content === 'string'
-				? systemPromptMessages[0].content
-				: undefined;
+			const systemPrompt = claudeMessages.reduce(
+				(acc, msg): string => {
+					if (msg.role === 'system' && msg.content && typeof msg.content === 'string') {
+						return acc + msg.content + '\n'; // Append system prompt content
+					}
+					return acc;
+				}, ''
+			);
 
 			// Format the request according to Claude API specifications
 			const requestParams: any = {
@@ -192,6 +214,8 @@ export class ClaudeProvider implements ModelProvider {
 
 			// Track current tool call info
 			let currentToolCall: any = null;
+			let accumulatedSignature = '';
+			let accumulatedThinking = '';
 			let accumulatedContent = ''; // To collect all content for final message_complete
 			const messageId = uuidv4(); // Generate a unique ID for this message
 			// Track delta positions for ordered message chunks
@@ -201,181 +225,206 @@ export class ClaudeProvider implements ModelProvider {
 				// @ts-expect-error - Claude's stream is AsyncIterable but TypeScript might not recognize it properly
 				for await (const event of stream) {
 
-					// Handle content block delta
-					if (event.type === 'content_block_delta' && event.delta.text) {
-						// Emit delta event for streaming UI updates with incrementing order
-						yield {
-							type: 'message_delta',
-							content: event.delta.text,
-							message_id: messageId,
-							order: deltaPosition++
-						};
+					// --- Accumulate Usage ---
+					// Check message_start for initial usage (often includes input tokens)
+					if (event.type === 'message_start' && event.message?.usage) {
+						const usage = event.message.usage;
+						totalInputTokens += usage.input_tokens || 0;
+						totalOutputTokens += usage.output_tokens || 0; // Sometimes initial output tokens are here
+						totalCacheCreationInputTokens += usage.cache_creation_input_tokens || 0;
+						totalCacheReadInputTokens += usage.cache_read_input_tokens || 0;
+					}
+					// Check message_delta for incremental usage (often includes output tokens)
+					else if (event.type === 'message_delta' && event.usage) {
+						const usage = event.usage;
+						// Input tokens shouldn't change mid-stream, but check just in case
+						totalInputTokens += usage.input_tokens || 0;
+						totalOutputTokens += usage.output_tokens || 0;
+						totalCacheCreationInputTokens += usage.cache_creation_input_tokens || 0;
+						totalCacheReadInputTokens += usage.cache_read_input_tokens || 0;
+					}
 
-						// Accumulate content for complete message
-						accumulatedContent += event.delta.text;
+					// --- Handle Content and Tool Events ---
+					// Handle content block delta
+					if (event.type === 'content_block_delta') {
+						// Emit delta event for streaming UI updates with incrementing order
+						if (event.delta.type === 'signature_delta' && event.delta.signature) {
+							accumulatedSignature += event.delta.signature;
+						}
+						else if (event.delta.type === 'thinking_delta' && event.delta.thinking) {
+							yield {
+								type: 'message_delta',
+								content: '',
+								thinking_content: event.delta.thinking,
+								message_id: messageId,
+								order: deltaPosition++
+							};
+							accumulatedThinking += event.delta.thinking;
+						}
+						else if (event.delta.type === 'text_delta' && event.delta.text) {
+							yield {
+								type: 'message_delta',
+								content: event.delta.text,
+								message_id: messageId,
+								order: deltaPosition++
+							};
+							accumulatedContent += event.delta.text;
+						}
+						else if (event.delta.type === 'input_json_delta' && currentToolCall && event.delta.partial_json) {
+							try {
+								// Append the partial JSON string to the arguments
+								// Note: This assumes arguments are always JSON stringified.
+								// If arguments could be simple strings, this needs adjustment.
+								// We might need a more robust way to reconstruct the JSON.
+								// For now, appending might work for many cases but could break complex JSON.
+								// A safer approach might be to accumulate the partial_json and parse at the end.
+								// Let's try accumulating first.
+								if (!currentToolCall.function._partialArguments) {
+									currentToolCall.function._partialArguments = '';
+								}
+								currentToolCall.function._partialArguments += event.delta.partial_json;
+
+								// Update the main arguments field for intermediate UI updates (best effort)
+								currentToolCall.function.arguments = currentToolCall.function._partialArguments;
+
+								// Yielding tool_start repeatedly might be noisy; consider yielding tool_delta if needed
+								yield {
+									type: 'tool_delta',
+									tool_calls: [currentToolCall as ToolCall]
+								};
+							} catch (err) {
+								console.error('Error processing tool_use delta (input_json_delta):', err, event);
+							}
+						}
+
 					}
 					// Handle content block start for text
 					else if (event.type === 'content_block_start' &&
 						event.content_block?.type === 'text') {
 						if (event.content_block.text) {
-							// Emit delta event with incrementing order
 							yield {
 								type: 'message_delta',
 								content: event.content_block.text,
 								message_id: messageId,
 								order: deltaPosition++
 							};
-
-							// Accumulate content for complete message
 							accumulatedContent += event.content_block.text;
 						}
 					}
-					// Handle content block stop for text
+					// Handle content block stop for text (less common for text deltas, but handle defensively)
 					else if (event.type === 'content_block_stop' &&
 						event.content_block?.type === 'text') {
-						if (event.content_block.text) {
-							// For non-streaming responses, add as delta too with incrementing order
-							yield {
-								type: 'message_delta',
-								content: event.content_block.text,
-								message_id: messageId,
-								order: deltaPosition++
-							};
-
-							// Accumulate content for complete message
-							accumulatedContent += event.content_block.text;
-						}
+						// No specific action needed here usually if deltas are handled,
+						// but keep the structure in case API behavior changes.
 					}
 					// Handle tool use start
 					else if (event.type === 'content_block_start' &&
 						event.content_block?.type === 'tool_use') {
-						// Start building the tool call
-						const toolUse = event.content_block.tool_use;
-						
-						// Guard against undefined toolUse or properties
-						if (!toolUse) {
-							console.error('Received tool_use content block with undefined tool_use object:', event);
-							continue; // Skip this event and move to the next one
-						}
-						
-						// Generate safe defaults for any missing properties
+						const toolUse = event.content_block;
 						const toolId = toolUse.id || `call_${Date.now()}`;
-						const toolName = toolUse.name || 'unknown_function';
+						const toolName = toolUse.name;
 						const toolInput = toolUse.input !== undefined ? toolUse.input : {};
-						
 						currentToolCall = {
 							id: toolId,
 							type: 'function',
 							function: {
 								name: toolName,
-								arguments: typeof toolInput === 'string'
-									? toolInput
-									: JSON.stringify(toolInput)
+								arguments: typeof toolInput === 'string' ? toolInput : JSON.stringify(toolInput)
 							}
 						};
-					}
-					// Handle tool use delta (for streaming arguments)
-					else if (event.type === 'content_block_delta' &&
-						event.delta?.type === 'tool_use' &&
-						currentToolCall) {
-						try {
-							// Update the tool call with more argument data
-							if (event.delta.tool_use && event.delta.tool_use.input !== undefined) {
-								if (typeof event.delta.tool_use.input === 'string') {
-									currentToolCall.function.arguments += event.delta.tool_use.input;
-								} else {
-									// For object inputs, replace the entire arguments with the updated version
-									currentToolCall.function.arguments = JSON.stringify(event.delta.tool_use.input);
-								}
-							}
-
-							// Emit the tool_start event with current partial state for streaming UI
-							yield {
-								type: 'tool_start',
-								tool_calls: [currentToolCall as ToolCall]
-							};
-						} catch (err) {
-							console.error('Error processing tool_use delta:', err, event);
-							// Continue processing the stream despite this error
-						}
 					}
 					// Handle tool use stop
 					else if (event.type === 'content_block_stop' &&
 						event.content_block?.type === 'tool_use' &&
 						currentToolCall) {
 						try {
-							// Finalize the tool call and emit it
-							if (event.content_block.tool_use && event.content_block.tool_use.input !== undefined) {
-								// Use the complete input if available
-								currentToolCall.function.arguments = typeof event.content_block.tool_use.input === 'string'
-									? event.content_block.tool_use.input
-									: JSON.stringify(event.content_block.tool_use.input);
+							// Finalize arguments if they were streamed partially
+							if (currentToolCall.function._partialArguments) {
+								currentToolCall.function.arguments = currentToolCall.function._partialArguments;
+								delete currentToolCall.function._partialArguments; // Clean up temporary field
 							}
-
 							yield {
 								type: 'tool_start',
 								tool_calls: [currentToolCall as ToolCall]
 							};
 						} catch (err) {
 							console.error('Error finalizing tool call:', err, event);
-							// Try to emit the tool call anyway if we can
-							try {
-								yield {
-									type: 'tool_start',
-									tool_calls: [currentToolCall as ToolCall]
-								};
-							} catch (emitErr) {
-								console.error('Failed to emit tool call after error:', emitErr);
-							}
 						} finally {
+							// Reset currentToolCall *after* potential final processing
 							currentToolCall = null;
 						}
 					}
 					// Handle message stop
 					else if (event.type === 'message_stop') {
-						// Complete any pending tool call
+						// Check for any final usage info (less common here, but possible)
+						// Note: The example payload doesn't show usage here, but the Anthropic SDK might add it.
+						if (event['amazon-bedrock-invocationMetrics']) { // Check for Bedrock specific metrics if applicable
+							const metrics = event['amazon-bedrock-invocationMetrics'];
+							totalInputTokens += metrics.inputTokenCount || 0;
+							totalOutputTokens += metrics.outputTokenCount || 0;
+							// Add other Bedrock metrics if needed
+						} else if (event.usage) { // Check standard usage object as a fallback
+							const usage = event.usage;
+							totalInputTokens += usage.input_tokens || 0;
+							totalOutputTokens += usage.output_tokens || 0;
+							totalCacheCreationInputTokens += usage.cache_creation_input_tokens || 0;
+							totalCacheReadInputTokens += usage.cache_read_input_tokens || 0;
+						}
+
+
+						// Complete any pending tool call (should ideally be handled by content_block_stop)
 						if (currentToolCall) {
+							// If a tool call is still active here, it means content_block_stop might not have fired correctly.
+							// Log a warning and potentially try to finalize/yield it.
+							console.warn('Tool call was still active at message_stop:', currentToolCall);
+
+							// Emit tool_start immediately when the block starts
 							yield {
 								type: 'tool_start',
 								tool_calls: [currentToolCall as ToolCall]
 							};
-							currentToolCall = null;
+							currentToolCall = null; // Reset anyway
 						}
 
-						// Always emit a message_complete at the end with the accumulated content
-						if (accumulatedContent) {
+						// Emit message_complete if there's content
+						if (accumulatedContent || accumulatedThinking) {
 							yield {
 								type: 'message_complete',
+								message_id: messageId,
 								content: accumulatedContent,
-								message_id: messageId
+								thinking_content: accumulatedThinking,
+								thinking_signature: accumulatedSignature,
 							};
+							messageCompleteYielded = true; // Mark that it was yielded here
 						}
-
-						// Track cost if available in the message_stop event
-						if (event.usage && (event.usage.input_tokens || event.usage.output_tokens)) {
-							costTracker.addUsage({
-								model,
-								input_tokens: event.usage.input_tokens || 0,
-								output_tokens: event.usage.output_tokens || 0,
-							});
-						}
+						streamCompletedSuccessfully = true; // Mark stream as complete
+						// **Cost tracking moved after the loop**
 					}
 					// Handle error event
 					else if (event.type === 'error') {
+						console.error('Claude API error event:', event.error);
 						yield {
 							type: 'error',
-							error: 'Claude API error: '+(event.error ? event.error.message : 'Unknown error')
+							error: 'Claude API error: '+(event.error ? (event.error.message || JSON.stringify(event.error)) : 'Unknown error')
 						};
+						// Don't mark as successful on API error
+						streamCompletedSuccessfully = false;
+						break; // Stop processing on error
 					}
-				}
+				} // End for await loop
 
 				// Ensure a message_complete is emitted if somehow message_stop didn't fire
-				if (accumulatedContent && !currentToolCall) {
+				// but we have content and no error occurred.
+				if (streamCompletedSuccessfully && (accumulatedContent || accumulatedThinking) && !messageCompleteYielded) {
+					console.warn('Stream finished successfully but message_stop might not have triggered message_complete emission. Emitting now.');
 					yield {
 						type: 'message_complete',
+						message_id: messageId,
 						content: accumulatedContent,
-						message_id: messageId
+						thinking_content: accumulatedThinking,
+						thinking_signature: accumulatedSignature,
 					};
+					messageCompleteYielded = true; // Mark as yielded here too
 				}
 
 			} catch (streamError) {
@@ -384,24 +433,56 @@ export class ClaudeProvider implements ModelProvider {
 					type: 'error',
 					error: 'Claude processing stream error: '+String(streamError)
 				};
+				streamCompletedSuccessfully = false; // Mark as failed
 
 				// If we have accumulated content but no message_complete was sent
-				// due to an error, still try to send it
-				if (accumulatedContent) {
-					yield {
-						type: 'message_complete',
+				// due to an error, still try to send it (optional, might be partial)
+				/* if ((accumulatedContent || accumulatedThinking) && !messageCompleteYielded) {
+				   yield {
+					  type: 'message_complete',
+						message_id: messageId,
 						content: accumulatedContent,
-						message_id: messageId
-					};
-				}
+						thinking_content: accumulatedThinking,
+						thinking_signature: accumulatedSignature,
+				   };
+				} */
 			}
 
 		} catch (error) {
-			console.error('Error in Claude streaming completion:', error);
+			console.error('Error in Claude streaming completion setup:', error);
 			yield {
 				type: 'error',
-				error: 'Claude streaming error: '+ (error instanceof Error ? error.stack : String(error))
+				error: 'Claude streaming setup error: '+ (error instanceof Error ? error.stack : String(error))
 			};
+			streamCompletedSuccessfully = false; // Mark as failed
+		} finally {
+			// --- Track Cost ---
+			// Only track cost if the stream completed (or partially completed with some usage)
+			// and we have accumulated some token counts.
+			if (totalInputTokens > 0 || totalOutputTokens > 0 || totalCacheReadInputTokens > 0 || totalCacheCreationInputTokens > 0) {
+				// Combine cache tokens as per the user's desired structure
+				const cachedTokens = totalCacheCreationInputTokens + totalCacheReadInputTokens;
+
+				costTracker.addUsage({
+					model,
+					input_tokens: totalInputTokens,
+					output_tokens: totalOutputTokens,
+					// Map accumulated Claude cache tokens to the 'cached_tokens' field
+					cached_tokens: cachedTokens,
+					metadata: {
+						// Add specific cache breakdown if needed
+						cache_creation_input_tokens: totalCacheCreationInputTokens,
+						cache_read_input_tokens: totalCacheReadInputTokens,
+						// Add other potential metadata if available/needed
+						// reasoning_tokens: 0, // Not directly available from Claude usage object
+						// tool_tokens: 0, // Not directly available from Claude usage object
+						total_tokens: totalInputTokens + totalOutputTokens, // Calculate total
+					},
+				});
+			} else if (streamCompletedSuccessfully) {
+				// Log if stream completed but no tokens were recorded (might indicate an issue)
+				console.warn(`Claude stream for model ${model} completed successfully but no token usage was recorded.`);
+			}
 		}
 	}
 }

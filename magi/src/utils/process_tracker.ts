@@ -59,7 +59,6 @@ ${JSON.stringify(agentProcess.history, null, 2)}`;
 	}
 
 
-
 	/**
 	 * Handle a process event to update process status
 	 */
@@ -91,12 +90,16 @@ ${JSON.stringify(agentProcess.history, null, 2)}`;
 			}
 			else {
 				process.status = 'running';
-				await addSystemMessage(`AgentID ${processId} is still running.\nPartial Output:\n${eventMessage.event.output}`);
+				//await addSystemMessage(`AgentID ${processId} is still running.\nPartial Output:\n${eventMessage.event.output}`);
 			}
+		}
+		else if(eventMessage.event.type === 'process_waiting') {
+			process.status = 'waiting';
+			await addSystemMessage(`AgentID ${processId} has completed and is waiting further messages.`);
 		}
 		else if(eventMessage.event.type === 'process_terminated') {
 			process.status = 'terminated';
-			await addSystemMessage(`AgentID ${processId} terminated.`);
+			await addSystemMessage(`AgentID ${processId} terminated. ${eventMessage.event.error || ''}`);
 		}
 
 		this.processes.set(processId, process);
@@ -109,17 +112,25 @@ ${JSON.stringify(agentProcess.history, null, 2)}`;
 	 */
 	listActive(): string {
 		if (this.processes.size === 0) {
-			return '- No active agents';
+			return '- No agents';
 		}
 
 		let result = '';
 		for (const [id, agentProcess] of this.processes.entries()) {
-			result += `-\tAgentID: ${id}
-\tName: ${agentProcess.name}
-\tStatus: ${agentProcess.status}
-\tCommand: ${agentProcess.command}
-\tOutput: ${agentProcess.output ? truncateString(agentProcess.output) : 'Not complete'}
+			if(agentProcess.status === 'terminated') continue;
+			result += `- AgentID: ${id}
+  Name: ${agentProcess.name}
+  Status: ${agentProcess.status}
 `;
+			if (agentProcess.project) {
+				result += `  Project: ${agentProcess.project.join(', ')}\n`;
+			}
+			if (agentProcess.command) {
+				result += `  Command: ${truncateString(agentProcess.command)}\n`;
+			}
+			if (agentProcess.output) {
+				result += `  Output: ${truncateString(agentProcess.output)}\n`;
+			}
 		}
 		return result;
 	}

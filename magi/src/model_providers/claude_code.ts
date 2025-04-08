@@ -508,14 +508,6 @@ export class ClaudeCodeProvider implements ModelProvider {
 							const apiDurationMatch = accumulatedCleanOutput.match(/Total duration \(API\)\s*:\s*([\d.]+s?)/m);
 							const wallDurationMatch = accumulatedCleanOutput.match(/Total duration \(wall\)\s*:\s*([\d.]+s?)/m);
 
-							if (costMatch && costMatch[1]) {
-								const cost = parseFloat(costMatch[1]);
-								if (!isNaN(cost)) {
-									finalCost = cost; // Store parsed cost
-									console.log(`[ClaudeCodeProvider] Extracted cost from stream: $${cost.toFixed(6)}`);
-									costTracker.addUsage({ model: model, cost }); // Log usage
-								}
-							}
 							if (apiDurationMatch && apiDurationMatch[1]) {
 								finalApiDuration = apiDurationMatch[1]; // Store parsed duration
 								console.log(`[ClaudeCodeProvider] Extracted API duration: ${finalApiDuration}`);
@@ -524,6 +516,33 @@ export class ClaudeCodeProvider implements ModelProvider {
 								finalWallDuration = wallDurationMatch[1]; // Store parsed duration
 								console.log(`[ClaudeCodeProvider] Extracted wall duration: ${finalWallDuration}`);
 							}
+
+							// Estimate tokens - we don't know the exact tokenization, but this is a vague estimate
+							const input_tokens = Math.ceil((prompt?.length || 0) / 4);
+							const output_tokens = Math.ceil(finalContent.length / 4);
+
+							//. See if we can extract the cost from the output
+							let cost = 0;
+							if (costMatch && costMatch[1]) {
+								cost = parseFloat(costMatch[1]);
+								if (isNaN(cost)) {
+									cost = 0;
+								}
+							}
+
+							finalCost = cost; // Store parsed cost
+							console.log(`[ClaudeCodeProvider] Extracted cost from stream: $${cost.toFixed(6)}`);
+							costTracker.addUsage({
+								model,
+								cost,
+								input_tokens,
+								output_tokens,
+								metadata: {
+									api_duration: parseFloat(finalApiDuration || '0') || 0,
+									wall_duration: parseFloat(finalWallDuration || '0') || 0,
+								},
+
+							}); // Log usage
 
 						} catch (metadataParseError: any) {
 							// Log if parsing fails, but don't block completion
@@ -600,10 +619,6 @@ export class ClaudeCodeProvider implements ModelProvider {
 					message_id: messageId,
 					content: finalContent // Use the content accumulated via yieldBufferedDelta
 				};
-				// Add metadata only if it contains keys
-				if (Object.keys(metadata).length > 0) {
-					completeEvent.metadata = metadata;
-				}
 
 				yield completeEvent; // Yield the final complete event
 

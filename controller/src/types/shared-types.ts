@@ -40,6 +40,18 @@ export type StreamEventType =
     | 'tool_delta'
     | 'tool_done'
     | 'cost_update'
+    | 'branch_review'
+    | 'pull_request'
+    | 'project_create'
+    | 'project_ready'
+    | 'process_start'
+    | 'process_running'
+    | 'process_updated'
+    | 'process_done'
+	| 'process_waiting'
+	| 'process_terminated'
+    | 'system_message'
+    | 'process_event'
     | 'error';
 
 // Basic agent definition for messages
@@ -93,7 +105,8 @@ export interface MessageEvent extends StreamEvent {
     content: string;
     message_id: string;
     order?: number;
-    thinking?: string;
+	thinking_content?: string;
+	thinking_signature?: string;
 }
 
 /**
@@ -117,6 +130,7 @@ export interface TalkEvent extends StreamEvent {
 	content: string;
 	message_id: string; // Added message_id for tracking deltas and completes
 	order?: number; // Optional order property for message sorting
+	thinking_content?: string;
 }
 
 // Tool event
@@ -130,13 +144,40 @@ export interface ToolEvent extends StreamEvent {
     result?: any;
 }
 
-// Cost update event
+// New interface for the core cost data structure
+export interface CostUpdateData {
+	time: {
+		start: string;
+		now: string;
+	};
+	cost: {
+		total: number; // Total cost accumulated
+		last_min: number; // Cost accumulated in the last minute
+	};
+	tokens: {
+		input: number; // Total input tokens accumulated
+		output: number; // Total output tokens accumulated
+	};
+	models: Record<string, { cost: number; calls: number; }>; // Per-model cost and call count
+}
+
+export interface ModelUsage {
+	model: string,
+	cost?: number,
+	input_tokens: number,
+	output_tokens: number,
+	cached_tokens?: number,
+	metadata?: Record<string, number>,
+	timestamp?: string;
+}
+
+/**
+ * Cost update streaming event
+ */
 export interface CostUpdateEvent extends StreamEvent {
-    type: 'cost_update';
-    totalCost: number;
-    modelCosts: Record<string, { cost: number; calls: number; }>;
-    thoughtLevel?: number;
-    delay?: number;
+	type: 'cost_update';
+	usage: ModelUsage;
+	thought_delay?: number;
 }
 
 // Error event
@@ -145,8 +186,23 @@ export interface ErrorEvent extends StreamEvent {
     error: string;
 }
 
+// Branch Review event
+export interface BranchReviewEvent extends StreamEvent {
+    type: 'branch_review';
+    project: string;
+    branch: string;
+}
+
+// Pull Request event
+export interface PullRequestEvent extends StreamEvent {
+    type: 'pull_request';
+    project: string;
+    from_branch: string;
+    to_branch: string;
+}
+
 // Union type for all streaming events
-export type StreamingEvent = ConnectedEvent | CommandEvent | AgentEvent | MessageEvent | TalkEvent | AudioEvent | ToolEvent | CostUpdateEvent | ErrorEvent;
+export type StreamingEvent = ConnectedEvent | CommandEvent | AgentEvent | MessageEvent | TalkEvent | AudioEvent | ToolEvent | CostUpdateEvent | ErrorEvent | BranchReviewEvent | PullRequestEvent;
 
 /**
  * MagiMessage format for communication between containers and controller
@@ -159,21 +215,13 @@ export interface MagiMessage {
 // Process status type
 export type ProcessStatus = 'running' | 'completed' | 'failed' | 'terminated' | 'ending';
 
-// Cost tracking interfaces
-export interface ModelCostSummary {
-	model: string;
-	cost: number;
-	calls: number;
-}
 
-export interface CostData {
-	totalCost: number;
-	costPerMinute: number;
-	modelCosts: ModelCostSummary[];
-	numProcesses: number;
-	thoughtLevel?: number;
-	delay?: number;
-	timestamp: number;
+export interface GlobalCostData {
+	usage: CostUpdateData; // The accumulated global usage data
+	costPerMinute: number; // Calculated cost per minute since system start
+	numProcesses: number; // Current number of tracked processes
+	systemStartTime: string; // ISO string timestamp of when tracking started
+	// latestThoughtDelay?: number; // Optional: could include the most recent delay
 }
 
 // Socket.io event interfaces
@@ -219,11 +267,6 @@ export interface ProcessCommandEvent {
 // Event for server information sent to clients
 export interface ServerInfoEvent {
 	version: string;      // Server version
-}
-
-// Event for cost information sent to clients
-export interface CostInfoEvent {
-	cost: CostData;       // Cost information
 }
 
 // Position for absolute positioning of boxes

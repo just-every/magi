@@ -13,12 +13,11 @@ import {
 import fs from 'fs';
 import path from 'path';
 import {talk} from '../utils/talk';
-import {CostData} from '@types';
+import {CostUpdateData, CostUpdateEvent, GlobalCostData} from '@types';
 
 // Event types for the server-client communication
 export interface MagiMessage {
 	processId: string;
-	type?: string;
 	data?: unknown;
 	event?: {
 		type: string;
@@ -38,11 +37,6 @@ export interface ProgressMessage {
 	};
 }
 
-export interface ResultMessage {
-	type: 'result';
-	processId: string;
-	data: unknown;
-}
 
 export interface CommandMessage {
 	type: 'command' | 'connect';
@@ -65,7 +59,7 @@ export interface AgentProcess {
 }
 
 export interface ProcessEvent {
-	type: 'process_start' | 'process_updated' | 'process_done';
+	type: 'process_start' | 'process_updated' | 'process_done' | 'process_waiting' | 'process_terminated';
 	agentProcess: AgentProcess;
 }
 
@@ -75,23 +69,25 @@ export interface ContainerConnection {
 	messageHistory: MagiMessage[];
 }
 
+interface ProcessState {
+	accumulatedData: CostUpdateData;
+	// Stores recent events for calculating cost in the last minute
+	recentEvents: Array<{ timestamp: number; cost: number }>; // timestamp in milliseconds
+}
+
 export class CommunicationManager {
 	private wss: WebSocketServer;
 	private processManager: ProcessManager;
 	private connections: Map<string, WebSocket> = new Map();
 	private containerData: Map<string, ContainerConnection> = new Map();
 	private storageDir: string;
-	private costData: CostData = {
-		totalCost: 0,
-		costPerMinute: 0,
-		modelCosts: [],
-		numProcesses: 0,
-		timestamp: Date.now()
-	};
 	private costStartTime: number = Date.now();
+	private processCostData: Record<string, ProcessState> = {};
+	private readonly LAST_MINUTE_WINDOW_MS = 60 * 1000;
 
 	constructor(server: HttpServer, processManager: ProcessManager) {
 		this.processManager = processManager;
+		this.processManager.setCommunicationManager(this);
 		this.storageDir = path.join(process.cwd(), 'dist/.server/magi_messages');
 
 		// Ensure storage directory exists
@@ -235,163 +231,362 @@ export class CommunicationManager {
 	}
 
 	/**
-	 * Updates cost data and emits to clients
+	 * Retrieves or initializes the ProcessState for a given processId.
+	 * @param processId The identifier for the process.
+	 * @returns The ProcessState object for the process.
 	 */
-	private updateCostData(costUpdate: any): void {
-		try {
-			if (costUpdate.totalCost !== undefined) {
-				// Calculate cost per minute
-				const elapsedMinutes = (Date.now() - this.costStartTime) / 60000;
-				const costPerMinute = elapsedMinutes > 0 ? costUpdate.totalCost / elapsedMinutes : 0;
+	private getOrCreateProcessState(processId: string): ProcessState {
+		if (!this.processCostData[processId]) {
+			// Initialize state for a new process
+			const now = new Date();
+			this.processCostData[processId] = {
+				// Initialize accumulated data
+				accumulatedData: {
+					time: {
+						start: now.toISOString(), // Process start time (first seen)
+						now: now.toISOString(), // Initialize 'now'
+					},
+					cost: { total: 0, last_min: 0 },
+					tokens: { input: 0, output: 0 },
+					models: {},
+				},
+				// Initialize recent events list
+				recentEvents: [],
+			};
+			console.log(`Initialized cost tracking for new process: ${processId}`);
+		}
+		return this.processCostData[processId];
+	}
 
-				// Update cost data
-				this.costData = {
-					totalCost: costUpdate.totalCost,
-					costPerMinute: costPerMinute,
-					modelCosts: Object.entries(costUpdate.modelCosts || {}).map(([model, data]: [string, any]) => ({
-						model,
-						cost: data.cost,
-						calls: data.calls
-					})),
-					numProcesses: Object.keys(this.processManager.getAllProcesses()).length,
-					thoughtLevel: costUpdate.thoughtLevel,
-					delay: costUpdate.delay,
-					timestamp: Date.now()
-				};
+	/**
+	 * Calculates the aggregated global cost data by summing up stats from all processes.
+	 * @returns CostUpdateData representing the global state.
+	 */
+	private calculateGlobalCostData(): CostUpdateData {
+		const globalData: CostUpdateData = {
+			time: {
+				start: new Date(this.costStartTime).toISOString(),
+				now: new Date(this.costStartTime).toISOString(),
+			},
+			cost: { total: 0, last_min: 0 }, // Initialize global last_min
+			tokens: { input: 0, output: 0 },
+			models: {},
+		};
+		let latestTime = this.costStartTime;
 
-				// Notify all connected clients
-				this.processManager.io.emit('cost:info', {
-					cost: this.costData
-				});
+		for (const processId in this.processCostData) {
+			if (Object.prototype.hasOwnProperty.call(this.processCostData, processId)) {
+				// Use the accumulatedData part of the process state
+				const processAccumulatedData = this.processCostData[processId].accumulatedData;
+
+				globalData.cost.total += processAccumulatedData.cost.total;
+				// Sum the per-process last_min values for the global last_min
+				globalData.cost.last_min += processAccumulatedData.cost.last_min;
+				globalData.tokens.input += processAccumulatedData.tokens.input;
+				globalData.tokens.output += processAccumulatedData.tokens.output;
+
+				const processUpdateTime = new Date(processAccumulatedData.time.now).getTime();
+				if (processUpdateTime > latestTime) {
+					latestTime = processUpdateTime;
+				}
+
+				for (const modelName in processAccumulatedData.models) {
+					if (Object.prototype.hasOwnProperty.call(processAccumulatedData.models, modelName)) {
+						const processModelUsage = processAccumulatedData.models[modelName];
+						if (!globalData.models[modelName]) {
+							globalData.models[modelName] = { cost: 0, calls: 0 };
+						}
+						globalData.models[modelName].cost += processModelUsage.cost;
+						globalData.models[modelName].calls += processModelUsage.calls;
+					}
+				}
 			}
+		}
+		globalData.time.now = new Date(latestTime).toISOString();
+		return globalData;
+	}
+
+	/**
+	 * Handles an incoming incremental model usage event.
+	 * Updates the specific process's accumulated state (including cost.last_min)
+	 * and triggers global recalculation/emission.
+	 * @param payload - The event payload containing processId and the single ModelUsage increment.
+	 */
+	public handleModelUsage(processId: string, event: CostUpdateEvent): void {
+		// Extract usage data from the event object
+		const { usage } = event; // Get usage from the event parameter
+
+		// Check for valid processId and usage data within the event
+		if (!processId) {
+			console.warn('handleModelUsage called without processId.');
+			return;
+		}
+		if (!usage) {
+			console.warn(`Received CostUpdateEvent without usage data for process ${processId}:`, event);
+			return;
+		}
+		if (event.type !== 'cost_update') {
+			console.warn(`Received event with incorrect type for process ${processId}:`, event);
+			return;
+		}
+
+
+		try {
+			// Get (or create) the state object for this process
+			const processState = this.getOrCreateProcessState(processId);
+			const accumulatedData = processState.accumulatedData; // Shorthand
+
+			// --- Incrementally Update Process State ---
+			const usageCost = usage.cost ?? 0;
+			const usageInputTokens = usage.input_tokens ?? 0;
+			const usageOutputTokens = usage.output_tokens ?? 0;
+
+			// Safely parse the timestamp string, default to now if invalid/missing
+			let parsedTimestamp: Date;
+			if (usage.timestamp) {
+				parsedTimestamp = new Date(usage.timestamp);
+				if (isNaN(parsedTimestamp.getTime())) { // Check if parsing failed
+					console.warn(`Invalid timestamp string received for process ${processId}: ${usage.timestamp}. Defaulting to current time.`);
+					parsedTimestamp = new Date(); // Fallback to now
+				}
+			} else {
+				parsedTimestamp = new Date(); // Default to now if timestamp is missing
+			}
+			const usageTimestampMs = parsedTimestamp.getTime();
+
+			// Update totals
+			accumulatedData.cost.total += usageCost;
+			accumulatedData.tokens.input += usageInputTokens;
+			accumulatedData.tokens.output += usageOutputTokens;
+			// Use the parsed Date object to get ISO string
+			accumulatedData.time.now = parsedTimestamp.toISOString();
+
+			// Update model usage
+			if (usage.model) {
+				if (!accumulatedData.models[usage.model]) {
+					accumulatedData.models[usage.model] = { cost: 0, calls: 0 };
+				}
+				accumulatedData.models[usage.model].cost += usageCost;
+				accumulatedData.models[usage.model].calls += 1;
+			}
+
+			// --- Calculate cost.last_min for this process ---
+			// 1. Add current event to recent history (using parsed timestamp in ms)
+			processState.recentEvents.push({ timestamp: usageTimestampMs, cost: usageCost });
+
+			// 2. Calculate the cutoff time (60 seconds ago from now)
+			const cutoffTimeMs = Date.now() - this.LAST_MINUTE_WINDOW_MS;
+			let currentLastMinCost = 0;
+
+			// 3. Filter events within the window and sum their cost
+			//    Also, prune events older than the window while iterating
+			processState.recentEvents = processState.recentEvents.filter(histEvent => { // Renamed inner variable
+				// Ensure histEvent.timestamp is valid before comparison
+				if (!isNaN(histEvent.timestamp) && histEvent.timestamp >= cutoffTimeMs) {
+					currentLastMinCost += histEvent.cost;
+					return true; // Keep event
+				}
+				return false; // Discard (prune) event
+			});
+
+			// 4. Update the accumulated last_min cost for this process
+			accumulatedData.cost.last_min = currentLastMinCost;
+
+			console.log(`Incremented usage for process: ${processId}, model: ${usage.model || 'N/A'}, cost: ${usageCost.toFixed(4)}, last_min: ${currentLastMinCost.toFixed(4)}`);
+
+			// --- Recalculate Global State & Emit ---
+			this.recalculateAndEmitGlobalState();
+
 		} catch (error) {
-			console.error('Error updating cost data:', error);
+			console.error(`Error handling model usage for process ${processId}:`, error);
 		}
 	}
 
 	/**
-	 * Handles cost events from containers
-	 * @param message The message containing cost data
+	 * Recalculates the global state and emits it. Called after any change.
 	 */
-	public handleCostEvent(message: any): void {
-		if (message && message.data) {
-			this.updateCostData(message.data);
+	private recalculateAndEmitGlobalState(): void {
+		try {
+			const aggregatedGlobalUsage = this.calculateGlobalCostData();
+			const elapsedMinutes = (Date.now() - this.costStartTime) / 60000;
+			const costPerMinute = elapsedMinutes > (1 / 60000)
+				? aggregatedGlobalUsage.cost.total / elapsedMinutes
+				: 0;
+
+			const emitPayload: GlobalCostData = {
+				usage: aggregatedGlobalUsage,
+				costPerMinute: costPerMinute,
+				numProcesses: Object.keys(this.processCostData).length,
+				systemStartTime: new Date(this.costStartTime).toISOString(),
+			};
+
+			this.processManager.io.emit('cost:info', emitPayload);
+		} catch (error) {
+			console.error('Error recalculating and emitting global state:', error);
 		}
 	}
+
+
+	/**
+	 * Retrieves the latest calculated global cost data.
+	 * @returns GlobalCostData object representing the aggregated state.
+	 */
+	public getLatestGlobalCostData(): GlobalCostData {
+		const aggregatedGlobalUsage = this.calculateGlobalCostData();
+		const elapsedMinutes = (Date.now() - this.costStartTime) / 60000;
+		const costPerMinute = elapsedMinutes > (1 / 60000)
+			? aggregatedGlobalUsage.cost.total / elapsedMinutes
+			: 0;
+
+		return {
+			usage: aggregatedGlobalUsage,
+			costPerMinute: costPerMinute,
+			numProcesses: Object.keys(this.processCostData).length,
+			systemStartTime: new Date(this.costStartTime).toISOString(),
+		};
+	}
+
+	/**
+	 * Removes cost data for a specific process, e.g., when it terminates.
+	 * Triggers recalculation and emission of the global state.
+	 * @param processId - The identifier of the process to remove.
+	 */
+	public removeProcessData(processId: string): void {
+		if (this.processCostData[processId]) {
+			console.log(`Removing cost data for process: ${processId}`);
+			delete this.processCostData[processId];
+			this.recalculateAndEmitGlobalState();
+		}
+	}
+
+	// Process any content field to fix references to /magi_output paths
+	// Helper function to process strings with magi_output paths
+	private processOutputPaths = (text: string): string => {
+		// Replace "sandbox:/magi_output/" with "/magi_output/" (sandbox prefix)
+		let processed = text.replace(/sandbox:\/magi_output\//g, '/magi_output/');
+
+		// Also handle other sandbox paths
+		processed = processed.replace(/sandbox:(\/[^\s)"']+)/g, '$1');
+
+		// Make sure URLs like /magi_output/... are correctly formatted as markdown links
+		processed = processed.replace(
+			/(\s|^)(\/magi_output\/[^\s)"']+\.(png|jpg|jpeg|gif|svg))(\s|$|[,.;])/gi,
+			(match, pre, url, ext, post) => `${pre}[${url}](${url})${post}`
+		);
+
+		return processed;
+	};
+
+	private async processContainerEvent(processId: string, event: {
+		type: string;
+		[key: string]: unknown;
+	}): Promise<void> {
+
+		if (event.type === 'command_start') {
+			this.sendCommand(processId, event.command as string);
+		}
+		else if (event.type === 'process_start') {
+			await this.processManager.createAgentProcess(event.agentProcess as AgentProcess);
+		}
+		else if (event.type === 'project_create' && processId !== this.processManager.coreProcessId) {
+			try {
+				this.sendMessage(this.processManager.coreProcessId, JSON.stringify({
+					type: 'project_ready',
+					project: createNewProject(event.project as string),
+				}));
+			}
+			catch (error) {
+				// Notify failure
+				this.sendMessage(this.processManager.coreProcessId, JSON.stringify({
+					type: 'system_message',
+					message: `Error creating "${event.project}" project: ${error}`,
+				}));
+			}
+		}
+		else if (event.type === 'process_running' || event.type === 'process_updated' || event.type === 'process_done' || event.type === 'process_waiting' || event.type === 'process_terminated' && processId !== this.processManager.coreProcessId) {
+			this.sendMessage(this.processManager.coreProcessId, JSON.stringify({
+				type: 'process_event',
+				processId,
+				event,
+			}));
+		}
+		else if (event.type === 'tool_start' && event.tool_calls && Array.isArray(event.tool_calls)) {
+			for (const toolCall of event.tool_calls) {
+
+				if(toolCall.function.name.startsWith('Talk_to_')) {
+					const toolParams: Record<string, unknown> = JSON.parse(toolCall.function.arguments);
+					if (toolParams.message && typeof toolParams.message === 'string' && typeof toolParams.affect === 'string') {
+
+						// Call talk, but don't await it.
+						const talkPromise = talk(toolParams.message, toolParams.affect, processId);
+
+						talkPromise.catch(error => {
+							console.error('Error calling talk:', error);
+						});
+					}
+				}
+
+				// Handle Telegram specific tool calls
+				if(toolCall.function.name === 'Telegram_send_message') {
+					const toolParams: Record<string, unknown> = JSON.parse(toolCall.function.arguments);
+					if (toolParams.message && typeof toolParams.message === 'string') {
+						// Affect parameter is optional, default to 'neutral'
+						const affect = toolParams.affect && typeof toolParams.affect === 'string'
+							? toolParams.affect
+							: 'neutral';
+
+						// Call talk, which will also send to Telegram
+						const talkPromise = talk(toolParams.message as string, affect, processId);
+
+						talkPromise.catch(error => {
+							console.error('Error calling Telegram send:', error);
+						});
+					}
+				}
+			}
+		}
+		else if (event.type === 'tool_done' && event.results && typeof event.results === 'object') {
+			// Process each result to fix output paths in result strings
+			const results = event.results as Record<string, any>;
+			for (const resultId in results) {
+				const result = results[resultId];
+
+				// Fix paths in string results
+				if (typeof result === 'string') {
+					results[resultId] = this.processOutputPaths(result);
+				}
+
+				// Fix paths in object results with output property
+				else if (typeof result === 'object' && result !== null && 'output' in result && typeof result.output === 'string') {
+					result.output = this.processOutputPaths(result.output);
+				}
+			}
+		}
+		else if (event.type === 'cost_update' && 'usage' in event) {
+			this.handleModelUsage(processId, event as unknown as CostUpdateEvent);
+		}
+	}
+
 
 	/**
 	 * Process messages received from containers
 	 */
-	private async processContainerMessage(processId: string, message: MagiMessage): Promise<void> {
+	public async processContainerMessage(processId: string, message: MagiMessage): Promise<void> {
 		try {
 			// First, check if this is the new format with 'event' property
 			if (message.event) {
-				const eventType = message.event.type;
-
-				// Process any content field to fix references to /magi_output paths
-				// Helper function to process strings with magi_output paths
-				const processOutputPaths = (text: string): string => {
-					// Replace "sandbox:/magi_output/" with "/magi_output/" (sandbox prefix)
-					let processed = text.replace(/sandbox:\/magi_output\//g, '/magi_output/');
-
-					// Also handle other sandbox paths
-					processed = processed.replace(/sandbox:(\/[^\s)"']+)/g, '$1');
-
-					// Make sure URLs like /magi_output/... are correctly formatted as markdown links
-					processed = processed.replace(
-						/(\s|^)(\/magi_output\/[^\s)"']+\.(png|jpg|jpeg|gif|svg))(\s|$|[,.;])/gi,
-						(match, pre, url, ext, post) => `${pre}[${url}](${url})${post}`
-					);
-
-					return processed;
-				};
 
 				// Process content field
 				if (message.event.content && typeof message.event.content === 'string') {
-					message.event.content = processOutputPaths(message.event.content);
+					message.event.content = this.processOutputPaths(message.event.content);
 				}
 
 				// Process tool results for image paths
-				if (message.event.type === 'process_start' && message.event.agentProcess && typeof message.event.agentProcess === 'object') {
-					const processEvent = message.event as any as ProcessEvent;
-					await this.processManager.createAgentProcess(processEvent.agentProcess);
-				}
-				else if (message.event.type === 'project_create' && message.event.project && typeof message.event.project === 'string') {
-					const newProject = createNewProject(message.event.project);
-					if(newProject) {
-						this.sendMessage(this.processManager.coreProcessId, JSON.stringify({
-							type: 'project_ready',
-							project: newProject,
-						}));
-					}
-				}
-				else if (message.event.type === 'process_running' || message.event.type === 'process_updated' || message.event.type === 'process_done') {
-					this.sendMessage(this.processManager.coreProcessId, JSON.stringify({
-						type: 'process_event',
-						processId,
-						event: message.event,
-					}));
-				}
+				await this.processContainerEvent(processId, message.event);
 
-				// Check if this is a talk output
-				if (message.event.type === 'tool_start' && message.event.tool_calls && Array.isArray(message.event.tool_calls)) {
-					for (const toolCall of message.event.tool_calls) {
-
-						if(toolCall.function.name.startsWith('Talk_to_')) {
-							const toolParams: Record<string, unknown> = JSON.parse(toolCall.function.arguments);
-							if (toolParams.message && typeof toolParams.message === 'string' && typeof toolParams.affect === 'string') {
-
-								// Call talk, but don't await it.
-								const talkPromise = talk(toolParams.message, toolParams.affect, processId);
-
-								talkPromise.catch(error => {
-									console.error('Error calling talk:', error);
-								});
-							}
-						}
-
-						// Handle Telegram specific tool calls
-						if(toolCall.function.name === 'Telegram_send_message') {
-							const toolParams: Record<string, unknown> = JSON.parse(toolCall.function.arguments);
-							if (toolParams.message && typeof toolParams.message === 'string') {
-								// Affect parameter is optional, default to 'neutral'
-								const affect = toolParams.affect && typeof toolParams.affect === 'string'
-									? toolParams.affect
-									: 'neutral';
-
-								// Call talk, which will also send to Telegram
-								const talkPromise = talk(toolParams.message as string, affect, processId);
-
-								talkPromise.catch(error => {
-									console.error('Error calling Telegram send:', error);
-								});
-							}
-						}
-					}
-				}
-
-				// Process tool results for image paths
-				if (message.event.type === 'tool_done' && message.event.results && typeof message.event.results === 'object') {
-					// Process each result to fix output paths in result strings
-					const results = message.event.results as Record<string, any>;
-					for (const resultId in results) {
-						const result = results[resultId];
-
-						// Fix paths in string results
-						if (typeof result === 'string') {
-							results[resultId] = processOutputPaths(result);
-						}
-
-						// Fix paths in object results with output property
-						else if (typeof result === 'object' && result !== null && 'output' in result && typeof result.output === 'string') {
-							result.output = processOutputPaths(result.output);
-						}
-					}
-				}
-
-				// Handle cost update events
-				if (eventType === 'cost_update') {
-					this.updateCostData(message.event);
+				// Also log to Docker logs for debugging purposes only
+				if(message.event.type === 'cost_update') {
+					return;
 				}
 
 				// Emit a dedicated event for structured messages directly to Socket.io clients
@@ -401,49 +596,21 @@ export class CommunicationManager {
 				});
 
 				// Also log to Docker logs for debugging purposes only
-				if(eventType !== 'message_delta') {
-					console.log(`[${processId}] ${eventType}`);
+				if(message.event.type !== 'message_delta') {
+					console.log(`[${processId}] ${message.event.type}`);
 					console.dir(message, {depth: 4, colors: true});
 				}
-				return;
-			}
 
-			// Fallback to older message format with direct 'type' property
-			if (message.type) {
-				// For backwards compatibility, also emit these as structured messages
-				this.processManager.io.emit('process:message', {
-					id: processId,
-					message: message
-				});
-
-				// Log specific types for debugging
-				switch (message.type) {
-					case 'connection':
-						console.log(`Container ${processId} connected`);
-						break;
-
-					case 'progress': {
-						const progressMsg = message as ProgressMessage;
-						console.log(`[${processId}] Progress: ${progressMsg.data.step} - ${progressMsg.data.message}`);
-						break;
-					}
-
-					case 'result': {
-						console.log(`Received final result from process ${processId}`);
-						break;
-					}
-				}
 				return;
 			}
 
 			// If we get here, the message doesn't have either format
-			console.log(`Message with invalid format from process ${processId}: ${JSON.stringify(message)}`);
+			console.error(`Message with invalid format from process ${processId}: ${JSON.stringify(message)}`);
 
 		} catch (error) {
 			console.error(`Error processing message from ${processId}:`, error);
 		}
 	}
-
 
 
 	/**

@@ -11,6 +11,7 @@ import ProcessHeader from './ui/ProcessHeader';
 
 interface ProcessBoxProps {
     id: string;
+    isCoreProcess: boolean;
     name: string;
     command: string;
     status: ProcessStatus;
@@ -31,6 +32,7 @@ interface ProcessBoxProps {
  */
 const ProcessBox: React.FC<ProcessBoxProps> = ({
     id,
+    isCoreProcess,
     name,
     status,
     colors,
@@ -109,7 +111,7 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
     };
 
     return (
-        <div className={`process-box card border-0 shadow ${focused ? 'focused' : ''} ${mounted && status !== 'terminated' ? 'mounted' : ''}`}
+        <div className={`process-box card border-0 shadow ${isCoreProcess ? 'core-box' : ''} ${focused ? 'focused' : ''} ${mounted && status !== 'terminated' ? 'mounted' : ''}`}
             onClick={handleBoxClick}>
             <div className="process-box-bg" style={{backgroundColor: colors.bgColor}}>
                 <ProcessHeader

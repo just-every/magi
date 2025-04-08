@@ -60,6 +60,10 @@ RUN mkdir -p /home/magi_user/.cache && chown -R magi_user:magi_user /home/magi_u
 # Set the working directory
 WORKDIR /app
 
+# Create volume mount points
+RUN mkdir -p /magi_output /claude_shared && \
+	chown -R magi_user:magi_user /magi_output /claude_shared
+
 # Copy node_modules (including devDependencies) from the builder stage
 # This layer depends only on package-lock.json changes via the builder stage
 COPY --from=builder --chown=magi_user:magi_user /build/node_modules ./node_modules

@@ -24,7 +24,7 @@ import {
 	monitorContainerLogs,
 	getRunningMagiContainers
 } from './container_manager';
-import {AgentProcess, ProcessToolType} from './communication_manager';
+import {AgentProcess, CommunicationManager, MagiMessage, ProcessToolType} from './communication_manager';
 
 /**
  * Process data interface
@@ -56,6 +56,7 @@ interface Processes {
 
 export class ProcessManager {
 	private processes: Processes = {};
+	private communicationManager: CommunicationManager;
 	public io: Server;
 	public coreProcessId: string | undefined;
 
@@ -70,6 +71,10 @@ export class ProcessManager {
 	 */
 	getAllProcesses(): Processes {
 		return this.processes;
+	}
+
+	setCommunicationManager(communicationManager: CommunicationManager): void {
+		this.communicationManager = communicationManager;
 	}
 
 	/**
@@ -101,45 +106,64 @@ export class ProcessManager {
 	 * @returns The created process data
 	 */
 	async createProcess(processId: string, command: string, agentProcess?: AgentProcess): Promise<ProcessData> {
-		// Generate colors for the process
-		const colors = generateProcessColors();
 
-		if(!this.coreProcessId) {
-			this.coreProcessId = processId;
+		try {
+			// Generate colors for the process
+			const colors = generateProcessColors();
+
+			if(!this.coreProcessId) {
+				this.coreProcessId = processId;
+			}
+
+			const status = 'running';
+			if(agentProcess) {
+				agentProcess.status = status;
+				agentProcess.output = 'Container started';
+			}
+
+			// Create and initialize process record
+			const processData: ProcessData = {
+				id: processId,
+				command,
+				status,
+				logs: [],
+				colors,
+				agentProcess,
+			};
+
+			// Store the process
+			this.processes[processId] = processData;
+
+			// Notify all clients about the new process
+			this.io.emit('process:create', {
+				id: processId,
+				name: agentProcess?.name || (this.coreProcessId === processId ? process.env.AI_NAME : processId),
+				command,
+				status,
+				colors,
+			} as ProcessCreateEvent);
+
+			// Start Docker container and command execution
+			await this.spawnDockerProcess(processId, command, agentProcess?.tool, agentProcess);
+
+			return processData;
+
+		} catch (error) {
+			this.updateProcessWithError(
+				processId,
+				`Failed to terminate: ${error instanceof Error ? error.message : String(error)}`
+			);
+
+			const errorMessage: MagiMessage = {
+				processId,
+				event:{
+					type: 'process_terminated',
+					error: error instanceof Error ? error.message : String(error),
+				}
+			};
+			await this.communicationManager.processContainerMessage(processId, errorMessage);
 		}
 
-		const status = 'running';
-		if(agentProcess) {
-			agentProcess.status = status;
-			agentProcess.output = 'Container started';
-		}
-
-		// Create and initialize process record
-		const processData: ProcessData = {
-			id: processId,
-			command,
-			status,
-			logs: [],
-			colors,
-			agentProcess,
-		};
-
-		// Store the process
-		this.processes[processId] = processData;
-
-		// Notify all clients about the new process
-		this.io.emit('process:create', {
-			id: processId,
-			name: agentProcess?.name || (this.coreProcessId === processId ? process.env.AI_NAME : processId),
-			command,
-			status,
-			colors,
-		} as ProcessCreateEvent);
-
-		// Start Docker container and command execution
-		await this.spawnDockerProcess(processId, command, agentProcess?.tool, agentProcess);
-
-		return processData;
 	}
 
 	/**
@@ -241,26 +265,20 @@ export class ProcessManager {
 			// Step 1: Verify Docker is available on the system
 			const dockerAvailable = await isDockerAvailable();
 			if (!dockerAvailable) {
-				this.updateProcessWithError(processId, 'Docker is not available. Cannot run command.');
-				console.error('Docker not available - commands cannot be run without Docker');
-				return;
+				throw new Error('Docker not available - commands cannot be run without Docker');
 			}
 
 			// Step 2: Check for and build the MAGI Docker image if needed
 			const imageExists = await checkDockerImageExists();
 			if (!imageExists) {
 				this.updateProcess(processId, 'Docker image not found. Building image...');
-				console.log('Building Docker image for MAGI system...');
 
 				const buildSuccess = await buildDockerImage({verbose: false});
 				if (!buildSuccess) {
-					this.updateProcessWithError(processId, 'Failed to build Docker image. Cannot run command.');
-					console.error('Docker image build failed');
-					return;
+					throw new Error('Docker image build failed');
 				}
 
 				this.updateProcess(processId, 'Docker image built successfully.');
-				console.log('Docker image built successfully');
 			}
 
 			// Get project root directory for volume mounting
@@ -276,9 +294,7 @@ export class ProcessManager {
 
 			// Handle container start failure
 			if (!containerId) {
-				this.updateProcessWithError(processId, 'Failed to start Docker container.');
-				console.error(`Container for process ${processId} failed to start`);
-				return;
+				throw new Error(`Container for process ${processId} failed to start`);
 			}
 
 			// Store container ID for future reference
@@ -295,11 +311,7 @@ export class ProcessManager {
 
 		} catch (error: unknown) {
 			// Handle any unexpected errors during the setup process
-			console.error('Error spawning Docker process:', error);
-			this.updateProcessWithError(
-				processId,
-				`Error spawning Docker process: ${error instanceof Error ? error.message : String(error)}`
-			);
+			throw new Error(`Error spawning Docker process: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
 
@@ -385,9 +397,6 @@ export class ProcessManager {
 				}
 
 			} catch (_) {
-				// Error usually means container doesn't exist anymore
-				console.log(`Container ${containerName} no longer exists or is not inspectable`);
-
 				if (this.processes[processId]) {
 					// Mark as completed if we can't determine actual status
 					this.processes[processId].status = 'completed';
@@ -406,6 +415,9 @@ export class ProcessManager {
 				if (this.processes[processId]?.monitorProcess) {
 					this.processes[processId].monitorProcess.kill();
 				}
+
+				// Error usually means container doesn't exist anymore
+				throw _;
 			}
 		}, statusCheckIntervalMs);
 

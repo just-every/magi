@@ -18,12 +18,14 @@ services:
       - ../:/external/host:rw # Mount parent directory for repo management
       - ./.env:/.env:ro # Mount .env file in parent directory (where server expects it)
       - /var/run/docker.sock:/var/run/docker.sock # Allow Docker-in-Docker
+# No need to mount timezone files, we'll handle conversion in code
     env_file:
       - ./.env
     environment:
       - PORT=3010
       - HOST_HOSTNAME=controller # Use service name for internal communication
       - NODE_ENV=development # Set environment to development
+      - TZ=$(date +%Z) # Get host timezone - conversion handled in code
     networks:
       - magi-network
     stop_signal: SIGINT
@@ -40,11 +42,13 @@ services:
     volumes:
       - claude_credentials:/claude_shared:rw
       - magi_output:/magi_output:rw
+# No need to mount timezone files, we'll handle conversion in code
     env_file:
       - ./.env
     environment:
       - HOST_HOSTNAME=controller # Use service name instead of host.docker.internal
       - CONTROLLER_PORT=3010
+      - TZ=$(date +%Z) # Get host timezone - conversion handled in code
     networks:
       - magi-network
     profiles:
@@ -56,4 +60,6 @@ networks:
 
 volumes:
   claude_credentials:
+    name: claude_credentials
   magi_output:
+    name: magi_output

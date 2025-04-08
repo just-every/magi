@@ -67,7 +67,13 @@ export type AgentType =
 /**
  * Create an agent of the specified type with optional model override and agent_id
  */
-export function createAgent(type: AgentType, model?: string, modelClass?: ModelClassID, agent_id?: string): Agent {
+export function createAgent(args: Record<string, unknown>): Agent {
+	const {agent: type, model, modelClass, agent_id} = args as {
+		agent: AgentType;
+		model?: string;
+		modelClass?: ModelClassID;
+		agent_id?: string;
+	};
 	let agent: Agent;
 
 	switch (type) {
@@ -132,6 +138,8 @@ export function createAgent(type: AgentType, model?: string, modelClass?: ModelC
 		default:
 			throw new Error(`Unknown agent type: ${type}`);
 	}
+
+	agent.args = args;
 
 	// Override agent_id if specified
 	if (agent_id) {

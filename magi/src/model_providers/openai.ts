@@ -80,6 +80,16 @@ export class OpenAIProvider implements ModelProvider {
 			// Ensure input is in the correct format for the responses API
 			// Our structure almost extactly matches the OpenAI format, except for some small changes
 			const input = messages.map(message => {
+				if (message.type === 'thinking') {
+					// Openai does not support thinking messages
+					// Convert to normal message
+					return {
+						type: 'message',
+						role: 'assistant',
+						content: message.content,
+						status: message.status || 'completed',
+					};
+				}
 				if (message.type === 'function_call_output') {
 					// Create a new object excluding the 'name' property using destructuring and rest syntax
 					// eslint-disable-next-line @typescript-eslint/no-unused-vars

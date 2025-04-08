@@ -9,20 +9,19 @@
 import {parseArgs} from 'node:util';
 import {Runner} from './utils/runner.js';
 import {ProcessToolType, StreamingEvent} from './types.js';
-import {createAgent, AgentType} from './magi_agents/index.js';
+import {createAgent} from './magi_agents/index.js';
 import {addHumanMessage, addMonologue, getHistory} from './utils/history.js';
 import {
 	initCommunication,
 	ServerMessage,
 	getCommunicationManager,
-	CommandMessage,
-	sendStreamEvent
+	CommandMessage, hasCommunicationManager,
 } from './utils/communication.js';
-import {move_to_working_dir} from './utils/file_utils.js';
+import {move_to_working_dir, set_file_test_mode} from './utils/file_utils.js';
 import {costTracker} from './utils/cost_tracker.js';
-import {ModelClassID} from './model_providers/model_data.js';
 import {runProcessTool} from './utils/process_tools.js';
 import {Agent} from './utils/agent.js';
+import {runThoughtDelay} from './utils/thought_utils.js';
 
 // Parse command line arguments
 function parseCommandLineArgs() {
@@ -42,6 +41,34 @@ function parseCommandLineArgs() {
 }
 
 
+function endProcess(exit: number, error?: string): void {
+	if(exit > 0 && !error) {
+		error = 'Exited with error';
+	}
+	if(hasCommunicationManager()) {
+		const comm = getCommunicationManager();
+		if(error) {
+			console.error(`\n**Fatal Error** ${error}`);
+			if(exit > 0) comm.send({type: 'error', error: `\n**Fatal Error** ${error}`});
+		}
+		comm.send({
+			type: 'process_terminated',
+			error,
+		});
+	}
+	else {
+		console.error('\n**endProcess() with no communication manager**');
+		if(error) {
+			console.error(`\n**Fatal Error** ${error}`);
+		}
+	}
+
+	costTracker.printSummary();
+	if(exit > -1) {
+		process.exit(exit);
+	}
+}
+
 // Store agent IDs to reuse them for the same agent type
 // const agentIdMap = new Map<AgentType, string>();
 
@@ -49,7 +76,7 @@ function parseCommandLineArgs() {
 /**
  * Execute a command using an agent and capture the results
  */
-export async function mainLoop(agent: Agent, loop: boolean): Promise<void> {
+export async function mainLoop(agent: Agent, loop: boolean, model?: string): Promise<void> {
 
 	const comm = getCommunicationManager();
 
@@ -66,10 +93,15 @@ export async function mainLoop(agent: Agent, loop: boolean): Promise<void> {
 				},
 			};
 
+			agent.model = model || Runner.rotateModel(agent);
+
 			// Run the command with unified tool handling
 			const response = await Runner.runStreamedWithTools(agent, '', history, handlers);
 
 			console.log('[MONOLOGUE] ', response);
+
+			// Wait the required delay before the next thought
+			await runThoughtDelay();
 
 		} catch (error: any) {
 			// Handle any error that occurred during agent execution
@@ -118,48 +150,13 @@ function checkModelProviderApiKeys(): boolean {
 }
 
 // Function to send cost data to the controller
-function sendCostData() {
-	const totalCost = costTracker.getTotalCost();
-	const modelCosts = costTracker.getCostsByModel();
 
-	// Create cost update event
-	const costEvent: StreamingEvent = {
-		type: 'cost_update',
-		totalCost,
-		modelCosts,
-		timestamp: new Date().toISOString(),
-		thoughtLevel: process.env.THOUGHT_LEVEL ? parseInt(process.env.THOUGHT_LEVEL) : undefined,
-		delay: process.env.DELAY_MS ? parseInt(process.env.DELAY_MS) : undefined
-	};
-
-	// Send the cost data
-	sendStreamEvent(costEvent);
-}
 
 // Add exit handlers to print cost summary and send cost data
-process.on('exit', () => {
-	costTracker.printSummary();
-	sendCostData();
-});
-
-process.on('SIGINT', () => {
-	costTracker.printSummary();
-	sendCostData();
-	process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-	costTracker.printSummary();
-	sendCostData();
-	process.exit(0);
-});
-
-// Unhandled rejection handler
-process.on('unhandledRejection', () => {
-	console.log('\nUnhandled Rejection.');
-	costTracker.printSummary();
-	sendCostData();
-});
+process.on('exit', () => endProcess(-1));
+process.on('SIGINT', () => endProcess(0));
+process.on('SIGTERM', () => endProcess(0));
+process.on('unhandledRejection', () => endProcess(-1, 'Unhandled Rejection.'));
 
 /**
  * Main function - entry point for the application
@@ -173,22 +170,23 @@ async function main(): Promise<void> {
 	process.env.PROCESS_ID = process.env.PROCESS_ID || `magi-${Date.now()}`;
 	console.log(`Initializing with process ID: ${process.env.PROCESS_ID}`);
 
+	// Setup comms early, so we can send back failure messages
+	const comm = initCommunication(args.test);
+	set_file_test_mode(args.test);
+
 	// Process prompt (either plain text or base64-encoded)
 	let promptText: string;
-
 	if (args.base64) {
 		try {
 			const buffer = Buffer.from(args.base64, 'base64');
 			promptText = buffer.toString('utf-8');
 		} catch (error) {
-			console.error(`**Error** Failed to decode base64 prompt: ${error}`);
-			process.exit(1);
+			return endProcess(1, `Failed to decode base64 prompt: ${error}`);
 		}
 	} else if (args.prompt) {
 		promptText = args.prompt;
 	} else {
-		console.error('**Error** Either --prompt or --base64 must be provided');
-		process.exit(1);
+		return endProcess(1, 'Either --prompt or --base64 must be provided');
 	}
 
 	// Move to working directory in /magi_output
@@ -197,9 +195,6 @@ async function main(): Promise<void> {
 	// Make our own code accessible for Gödel Machine
 	//mount_magi_code();
 
-	// Set up WebSocket communication (pass test flag from args)
-	const comm = initCommunication(args.test);
-
 	// Set up command listener
 	comm.onCommand(async(cmd: ServerMessage) => {
 		if(cmd.type !== 'command') return;
@@ -207,33 +202,31 @@ async function main(): Promise<void> {
 
 		console.log(`Received command via WebSocket: ${commandMessage.command}`);
 		if (commandMessage.command === 'stop') {
-			console.log('Received stop command, terminating...');
-			// Print cost summary and send cost data before exit
-			costTracker.printSummary();
-			sendCostData();
-			process.exit(0);
+			return endProcess(0, 'Received stop command, terminating...');
 		} else {
 			// Process user-provided follow-up commands
 			console.log(`Processing user command: ${commandMessage.command}`);
-
 			await addHumanMessage(commandMessage.command);
 		}
 	});
 
 	// Verify API keys for model providers
 	if (!checkModelProviderApiKeys()) {
-		console.error('**Error** No valid API keys found for any model provider');
-
-		// Send error via WebSocket
-		comm.send({type: 'error', error: 'No valid API keys found for any model provider'});
-		process.exit(1);
+		return endProcess(1, 'No valid API keys found for any model provider');
 	}
 
 	// Run the command or research pipeline
 	try {
+
+		comm.send({
+			type: 'process_running',
+		});
+
 		if(args.tool && args.tool !== 'none') {
 			console.log(`Running tool: ${args.tool}`);
 			await runProcessTool(args.tool as ProcessToolType, promptText);
+			// For tool runs, we terminate after tool completes - @todo does that make sense?
+			return endProcess(0);
 		}
 		else {
 			// Add initial history
@@ -243,28 +236,22 @@ async function main(): Promise<void> {
 			await addHumanMessage(promptText);
 
 			// Create the agent with model, modelClass, and optional agent_id parameters
-			const agent = createAgent(args.agent as AgentType, args.model, args.modelClass as ModelClassID);
-			await mainLoop(agent, (args.agent === 'overseer' && !args.test));
+			const agent = createAgent(args);
+			await mainLoop(agent, (args.agent === 'overseer' && !args.test), args.model);
+
+			if (args.test) {
+				// For tests we terminate after the first run
+				return endProcess(0);
+			}
+
+			// Wait for additional commands
+			comm.send({
+				type: 'process_terminated',
+			});
 		}
 
-		// When running in test mode, print cost summary and exit
-		if (args.test) {
-			costTracker.printSummary();
-			sendCostData();
-			process.exit(0);
-		} else {
-			// For normal execution, print cost summary when done but don't exit
-			costTracker.printSummary();
-			sendCostData();
-
-			// Set up a periodic cost update (every 30 seconds)
-			setInterval(() => {
-				sendCostData();
-			}, 30000);
-		}
 	} catch (error) {
-		console.error(`**Error** Failed to process command: ${error}`);
-		process.exit(1);
+		return endProcess(1, `Failed to process command: ${error}`);
 	}
 }
 

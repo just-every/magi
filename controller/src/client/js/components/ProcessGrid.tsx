@@ -69,6 +69,7 @@ const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
         if (!containerRef.current || containerSize.width === 0) return;
 
         const newPositions = calculateBoxPositions(
+            coreProcessId,
             processes,
             containerSize,
             boxPositions
@@ -320,6 +321,7 @@ const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
                 <div key={id} style={style} className={"process-wrapper"+ (isCoreProcess ? ' core-process' : '')}>
                     <ProcessBox
                         id={id}
+                        isCoreProcess={isCoreProcess}
                         name={process.name}
                         command={process.command}
                         status={process.status}
@@ -388,17 +390,7 @@ const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
             {processes.size > 0 && (
                 <button
                     className="reset-zoom-button btn btn-sm btn-light"
-                    onClick={resetZoom}
-                    style={{
-                        display: 'block',
-                        position: 'absolute',
-                        top: '10px',
-                        right: '10px',
-                        zIndex: 1000,
-                        pointerEvents: 'auto',
-                        opacity: 0.9
-                    }}
-                >
+                    onClick={resetZoom}>
                     Show All
                 </button>
             )}
@@ -435,7 +427,7 @@ const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
                     {renderBoxes()}
                 </div>
 
-                {/* Instructions for navigation */}
+                {/* Instructions for navigation
                 <div className={"zoom-hint"+(processes.size > 0 ? ' show' : '')}>
                     <div><span className="zoom-hint-icon">👆</span> Click to focus on a process</div>
                     <div><span className="zoom-hint-icon">👋</span> Drag to pan view</div>
@@ -444,6 +436,7 @@ const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
                         {navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? '⌘ Cmd' : 'Ctrl'} + Scroll to zoom
                     </div>
                 </div>
+                */}
             </div>
         </>
     );

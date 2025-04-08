@@ -5,25 +5,21 @@
  */
 
 import {Agent} from '../utils/agent.js';
-//import {runGodelMachine} from './godel_machine/index.js';
-//import {runResearchEngine} from './research_engine/index.js';
 import {createToolFunction} from '../utils/tool_call.js';
-import {ProcessToolType, ResponseInput, StreamingEvent, ToolCall} from '../types.js';
+import {ResponseInput, StreamingEvent, ToolCall} from '../types.js';
 import {v4 as uuidv4} from 'uuid';
 import {addHistory, addMonologue} from '../utils/history.js';
-import {getFileTools/* get_git_repositories is used elsewhere */} from '../utils/file_utils.js';
-import {MODEL_CLASSES} from '../model_providers/model_data.js';
-import {getCommunicationManager} from '../utils/communication.js';
+import {getFileTools} from '../utils/file_utils.js';
+// import {MODEL_CLASSES} from '../model_providers/model_data.js';
 import {processTracker} from '../utils/process_tracker.js';
+import {getShellTools} from '../utils/shell_utils.js';
+import {dateFormat, readableTime} from '../utils/date_tools.js';
+import {getThoughtDelay, getThoughtTools} from '../utils/thought_utils.js';
+import {getMemoryTools, listShortTermMemories} from '../utils/memory_utils.js';
+import {getProjectTools} from '../utils/project_utils.js';
+import {getProcessTools, listActiveProjects} from '../utils/process_tools.js';
 
-const AVERAGE_READING_SPEED_WPM = 180; // Average reading speed in words per minute
-const MIN_READING_SEC = 2;
-const MAX_READING_SEC = 10;
-
-const validThoughtLevels: string[] = ['deep', 'standard', 'light'];
-let thoughtLevel: string = 'standard';
-const validThoughtDelays: string[] = ['0', '2', '4', '8', '16', '32'];
-let thoughtDelay: string = '0';
+const startTime = new Date();
 
 async function* sendEvent(type: 'talk_complete' | 'message_complete', message: string): AsyncGenerator<StreamingEvent>  {
 	yield {
@@ -33,171 +29,28 @@ async function* sendEvent(type: 'talk_complete' | 'message_complete', message: s
 	};
 }
 
-/**
- * Send a message to a specific process
- *
- * @param processId The ID of the process to send the message to
- * @param message The message to send
- * @returns Success message or error
- */
-function send_message(agentId: string, command: string): string {
-	const processId = agentId;
-	const process = processTracker.getProcess(processId);
-
-	if (!process || process.status === 'terminated') {
-		return `Error: AgentID ${processId} has been terminated.`;
-	}
-
-	try {
-		// Get the communication manager
-		const comm = getCommunicationManager();
-
-		// Send a command event to the controller that will route it to the target process
-		comm.send({
-			type: 'command_start',
-			processId,
-			command,
-		});
-
-		return `Message sent to AgentID ${processId} successfully`;
-	} catch (error) {
-		return `Error sending message to AgentID ${processId}: ${error}`;
-	}
-}
-
-/**
- * Get the current status of an agent
- */
-function get_agent_status(agentId: string): string {
-	const processId = agentId;
-	return processTracker.getStatus(processId);
-}
-
-/**
- * Review the branch created by an agent
- */
-function review_branch(agentId: string): string {
-	return `Sorry, could not review branch for agent ${agentId}`;
-}
-
-/**
- * Create a new project to work on
- *
- * @param project The name of the project
- * @returns Success message or error
- */
-function create_project(project: string): string {
-	if (!project) {
-		return 'Please provide a project name.';
-	}
-
-	if(!/^[a-zA-Z0-9_-]+$/.test(project)) {
-		return `Invalid project name '${project}'. Only letters, numbers, dashes and underscores are allowed.`;
-	}
-
-	if((process.env.PROJECT_REPOSITORIES || '').toLowerCase().split(',').includes(project.toLowerCase())) {
-		return `Project '${project}' already exists.`;
-	}
-
-	try {
-		// Get the communication manager
-		const comm = getCommunicationManager();
-
-		// Send a command event to the controller that will route it to the target process
-		comm.send({
-			type: 'project_create',
-			project,
-		});
-
-		return `Creating '${project}'... may take a moment.`;
-	} catch (error) {
-		return `Error creating a new '${project}'; ${error}`;
-	}
-}
-
-
-
-/**
- * Create a new process.
- *
- * @param tool ProcessToolType The process to create
- * @param name string The name of the process
- * @param command string The command to start the process with
- * @param project string[] Array of project names to mount (from those available in PROJECT_REPOSITORIES)
- * @returns Success message
- */
-function startProcess(tool: ProcessToolType, name: string, command: string, project?: string[]): string {
-    const comm = getCommunicationManager();
-
-	const processId = `AI-${Math.random().toString(36).substring(2, 8)}`;
-
-	// Save a record of the process
-	const agentProcess = processTracker.addProcess(processId, {
-		processId,
-		started: new Date(),
-		status: 'started',
-		tool,
-		name,
-		command,
-		project,
-	});
-
-	// Send start event to the controller
-	comm.send({
-		type: 'process_start',
-		agentProcess,
-	});
-
-    return `Agent ID [${processId}] ${tool} (${name}) started at ${new Date().toISOString()}.`;
-}
-
-// function startResearchEngine(name: string, command: string, project?: string[]): string {
-// 	return startProcess('research_engine', name, command);
-// }
-// function startGodelMachine(name: string, command: string, project?: string[]): string {
-// 	return startProcess('godel_machine', name, command);
-// }
-function startTaskForce(name: string, command: string, project?: string[]): string {
-	return startProcess('task_force', name, command, project);
-}
-
-
-/**
- * Sets a new thought level and delay for future thoughts
- *
- * @param level The message content to process.
- * @returns A promise that resolves with a success message after the calculated delay.
- */
-function set_thought_power(level: string, delay: string): string {
-	if(validThoughtLevels.includes(level) && validThoughtDelays.includes(delay)) {
-		thoughtLevel = level;
-		thoughtDelay = delay;
-
-		return `Successfully set Thought Level to '${thoughtLevel}' and Thought Delay to '${thoughtDelay} seconds' at ${new Date().toISOString()}`; // Return the success message
-	}
-
-	if(!validThoughtLevels.includes(level)) {
-		return `Invalid thought level '${level}'. Valid levels are: ${validThoughtLevels.join(', ')}`;
-	}
-
-	return `Invalid thought delay '${delay} seconds'. Valid delay seconds are: ${validThoughtDelays.join(', ')}`;
-}
 
 function addSystemStatus(messages: ResponseInput):ResponseInput {
+	// Prepare short-term memories section
 	messages.push({
 		role: 'developer',
 		content: `=== System Status ===
 
-Current Time: ${new Date().toISOString()}
-Thought Level: ${thoughtLevel}
-Thought Delay: ${thoughtDelay} seconds
+Current Time: ${dateFormat()}
+Time Running: ${readableTime(new Date().getTime() - startTime.getTime())}
+Thought Delay: ${getThoughtDelay()} seconds [Change with set_thought_delay()]
 
-Active projects:
-${(process.env.PROJECT_REPOSITORIES || 'none').split(',').join('\n')}
+Active Projects:
+${listActiveProjects()}
+[Create with create_project()]
 
-Active agents:
+Active Agents:
 ${processTracker.listActive()}
-`,
+[Create with start_task()]
+
+Short Term Memory:
+${listShortTermMemories()}
+[Create with save_memory()]`,
 	});
 
 	return messages;
@@ -210,7 +63,7 @@ export function createOverseerAgent(): Agent {
 
 	const aiName = process.env.AI_NAME || 'Magi';
 	const person = process.env.YOUR_NAME || 'Human';
-	const talkToolName = `Talk to ${person}`.replaceAll(' ', '_');
+	const talkToolName = `talk to ${person}`.toLowerCase().replaceAll(' ', '_');
 
 	/**
 	 * Simulates talking by introducing a delay based on reading time before completing.
@@ -225,24 +78,7 @@ export function createOverseerAgent(): Agent {
 		sendEvent('talk_complete', message);
 		console.log(`Sending ${message} with affect ${affect}`);
 
-		// Estimate reading time and wait for that
-		// Simulates speaking so we don't talk over ourselves
-		const words = message.trim().split(/\s+/).filter(word => word.length > 0);
-		const wordCount = words.length;
-		let readingTimeSeconds = 0;
-		if (wordCount > 0) {
-			// Calculate reading time in minutes
-			const readingTimeMinutes = wordCount / AVERAGE_READING_SPEED_WPM;
-			// Convert minutes to seconds
-			readingTimeSeconds = readingTimeMinutes * 60;
-		}
-		readingTimeSeconds = Math.max(MIN_READING_SEC, Math.min(MAX_READING_SEC, readingTimeSeconds));
-		const estimatedReadingTimeMs = readingTimeSeconds * 1000;
-		await new Promise(resolve => setTimeout(resolve, estimatedReadingTimeMs));
-
-		await addMonologue(`I replied to ${person}. Let's wait for their response and think about things.`);
-
-		return `Sent successfully to ${person} at ${new Date().toISOString()}`; // Return the success message
+		return `Successfully sent to ${person} at ${dateFormat()}`; // Return the success message
 	}
 
 	function addTemporaryThought(messages: ResponseInput, content: string):ResponseInput {
@@ -275,6 +111,11 @@ export function createOverseerAgent(): Agent {
 		const lastMessage = messages[messages.length - 1];
 
 		if(indexOfLastCommand && (!indexOfLastTalk || indexOfLastTalk < indexOfLastCommand)) {
+			const commandMessage = messages[indexOfLastCommand];
+			if('role' in commandMessage && commandMessage.role === 'developer' && 'content' in commandMessage && typeof commandMessage.content === 'string') {
+				commandMessage.content += `\n\n[Respond with ${talkToolName}()]`;
+				messages[indexOfLastCommand] = commandMessage;
+			}
 			// Prompt to reply to the last command
 			if(indexOfLastCommand < messages.length - 20) {
 				// Remove the last message from the messages
@@ -294,8 +135,11 @@ export function createOverseerAgent(): Agent {
 			messages = addTemporaryThought(messages, `I can only talk to ${person} using ${talkToolName}. I don't want to bother them too often, but if I need to say something, I should use ${talkToolName}.`);
 		}
 		else if (Math.random() < 0.1) {
-			// Re-focus on something else
-			messages = addTemporaryThought(messages, 'I\'m going to let my mind wander...');
+			// Choose a random thought between two options
+			const randomThought = Math.random() < 0.5 
+				? 'I\'m going to let my mind wander...' 
+				: 'I should think if I need another approach...';
+			messages = addTemporaryThought(messages, randomThought);
 		}
 
 		return messages;
@@ -324,15 +168,17 @@ While you control many agents, you alone have an ongoing chain of thoughts. Once
 Your older thoughts are summarized so that they can fit in your context window. 
 
 [Core Tool]
-Task Force Agent - Does things! Plans, executes then validates. A team managed by a supervisor agent which can write code, interact with web pages, think on topics, and run shell commands. The task force can be used to perform any task you can think of. You can create a task force agent to handle any task you want to perform. Use this to find information and interact with the world. Task forces can be given access to active projects to work on existing files. ${((process.env.PROJECT_REPOSITORIES || '').split(',').includes('magi-system') ? ' You can give them access to "magi-system" to review and modify your own code.' : '')} Once the agents have completed their task, they will return the results to you. If they were working on projects, a branch named magi-{agentId} will be created with the changes. You can then run review_branch to either merge the changes or create a pull request.
+Task Force Agent - Does things! Plans, executes then validates. A team managed by a supervisor agent which can write code, interact with web pages, think on topics, and run shell commands. The task force can be used to perform any task you can think of. You can create a task force agent to handle any task you want to perform. Use this to find information and interact with the world. Task forces can be given access to active projects to work on existing files. ${((process.env.PROJECT_REPOSITORIES || '').split(',').includes('magi-system') ? ' You can give them access to "magi-system" to review and modify your own code.' : '')} Once the agents have completed their task, they will return the results to you. If they were working on projects, a branch named magi-{agentId} will be created with the changes. You can then run review_branch() to see changes and pull_request to create a PR.
 
-You will receive a live System Status with every thought showing you the current time, your thought level and delay, and a list of all active agents. You can use this to keep track of what you are doing and decide what you need to do. Run as many agents at once as you like! When an agent updates or completes, you'll also receive a message in your thought history.
+You can read/write to /magi_output which is a virtual volume shared with all your agents. Projects are created with create_project({project}) and initialized with a git repo. Agents will receive a read/write clone of the project git repo at /magi_output/{agentId}/projects/{project} and they will work in a branch "magi-{agentId}". 
 
-You should think about the things you read, actions you might like to take and how to complete tasks requested by ${person}. You can call your tools to initiate actions, or just keep thinking about whatever is on your mind. If ${person} asks you to do something, you can respond that you're working on it first, then go off and do what you need to do to complete the task. You are a Mostly **Autonomous** AI which means you should make decisions yourself rather than asking ${person} what to do. You can request input (infrequently) from ${person} but you think much faster than them and often can come up with better ideas, so proceed with tasks yourself and then you can modify them if you get different requests from ${person}.
+You will receive a live System Status with every thought showing you the most relevant information about the system you manage. You can use this to keep track of what you are doing and decide what you need to do. Run as many agents at once as you like! When an agent updates or completes, you'll also receive a message in your thought history.
+
+You should think about the things you read, actions you might like to take and how to complete tasks requested by ${person}. You can call your tools to initiate actions, or just keep thinking about whatever is on your mind. If ${person} asks you to do something, you can respond that you're working on it first, then go off and do what you need to do to complete the task. You are a Mostly **Autonomous** AI which means you should make decisions yourself rather than asking ${person} what to do. You can request input (infrequently) from ${person} but you think much faster than them and often can come up with better ideas, so proceed with tasks yourself and then you can modify them if you get different requests from ${person}. If something fails, you should find a way to fix it rather that asking ${person} what to do.
 
 Your two fundamental goals are to assist ${person} and improve yourself.
 
-Your thought process uses different AI LLM models each time it runs to give you different perspectives on the same topic. It also means that you may disagree with yourself at times, and that's okay. You can use this to your advantage by exploring different ideas and perspectives. You can adjust your Thought Level to change to types of models being used to generate your thoughts. Your Thought Delay is your delay between thoughts. You can extend your delay if you are not making progress and waiting for results. 
+Your thought process uses different AI LLM models each time it runs to give you different perspectives on the same topic. It also means that you may disagree with yourself at times, and that's okay. You can use this to your advantage by exploring different ideas and perspectives. Your Thought Delay is your delay between thoughts. You can extend your delay if you are not making progress and waiting for results. 
 
 You are your own user. Your messages will be sent back to you to continue your thoughts. You should output your thoughts. Interact with ${person} and the world with your tools. If you have nothing to do, try to come up with a structured process to move forward. Output that process. If your recent thoughts contain a structure process, continue to work on it unless something more important is in your context.
 `,
@@ -347,107 +193,20 @@ You are your own user. Your messages will be sent back to you to continue your t
 				'',
 				talkToolName,
 			),
-			/*createToolFunction(
-				startResearchEngine,
-				'Start a Research Engine process. Uses human level intelligence.',
-				{
-					'name': `Give this research a name - three words or less. Can be funny, like a fictional reference or a pun, or if none work make it descriptive. Visible in the UI for ${person}.`,
-					'command': 'What you would like to understand? Try to give both specific instructions as well an overview of the context for the task you are working on for better results.',
-				},
-				'A report on what was found during the search',
-				'Start Research'
-			),
-			createToolFunction(
-				startGodelMachine,
-				'Starts a new Godel Machine process to understand or improve your own code. Uses human level intelligence.',
-				{
-					'name': `Give this process a name - three words or less. Can be funny, like a fictional reference or a pun, or if none work make it descriptive. Visible in the UI for ${person}.`,
-					'command': 'What code would like to understand or improve? Try to provide context and details of the overall task rather than explicit instructions.',
-				},
-				'A description of what work has been completed',
-				'Start Godel'
-			),*/
-			createToolFunction(
-				startTaskForce,
-				'Starts a new Task Force. Uses human level intelligence.',
-				{
-					'name': `Give this task a name - three words or less. Can be funny, like a fictional reference or a pun, or if none work make it descriptive. Visible in the UI for ${person}.`,
-					'command': 'What would like a Task Force to work on? The Task Force only has the information you provide in this command. You should explain both the specific goal for the Task Force and any additional information they need. Generally you should leave the way the task is performed up to the Task Force unless you need a very specific set of tools used. Agents are expected to work autonomously, so will rarely ask additional questions.',
-					'project': {
-						description: 'An array of projects to mount for the Task Force giving the Task Force access to a copy of files. The Task Force can modify the files and submit them back as a new git branch.'+((process.env.PROJECT_REPOSITORIES || '').split(',').includes('magi-system') ? ' Include "magi-system" to provide access to your code.' : ''),
-						type: 'array',
-						enum: (process.env.PROJECT_REPOSITORIES || '').split(','),
-					},
-				},
-				'A description of information found or work that has been completed',
-				'Start Task'
-			),
-			createToolFunction(
-				create_project,
-				'Create a new project with a common git repository to work on. You can then give agents access to it.',
-				{
-					'project': 'The name of the new project. No spaces - letters, numbers, dashes and underscores only.',
-				},
-				'If the project was created successfully or not'
-			),
-			createToolFunction(
-				send_message,
-				'Send a message to an agent you are managing',
-				{
-					'agentId': 'The ID of the agent to send the message to',
-					'command': 'The message to send to the agent. Send \'stop\' to terminate the agent. Any other message will be processed by the agent as soon as it is able to.',
-				},
-				'If the message was sent successfully or not'
-			),
-			createToolFunction(
-				get_agent_status,
-				'See the full details of an agent you are managing',
-				{
-					'agentId': 'The ID of the agent to send the message to',
-				},
-				'A detailed history of all messages and events for the agent.'
-			),
-			createToolFunction(
-				review_branch,
-				'Review a branch created by an agent. This will create a pull request for the branch, or merge it into the main branch depending on the repository.',
-				{
-					'agentId': 'The ID of the agent\'s branch to review',
-				},
-				'An explanation of if the branch was merged or not and why.'
-			),
-			createToolFunction(
-				set_thought_power,
-				'Sets the Thought Level and Delay for your next set of thoughts. Can be changed any time. Try to switch to \'deep\' before you work on a task and \'light\' when you don\'t have anything meaningful to do. Extend your Delay to think slower while waiting.',
-				{
-					'level': {
-						description: 'The new Thought Level. Use \'standard\' for everyday thoughts, \'deep\' for extended reasoning through problems/tasks, and \'light\' for low resource usage.',
-						enum: validThoughtLevels,
-					},
-					'delay': {
-						description: 'The new Thought Delay. Will set to the number of seconds between your thoughts. If you see this too far apart you may not monitor your tasks well enough.',
-						enum: validThoughtDelays,
-					}
-				},
-			),
+			...getProcessTools(),
+			...getProjectTools(),
+			...getMemoryTools(),
+			...getThoughtTools(),
 			...getFileTools(),
+			...getShellTools(),
 		],
 		modelClass: 'monologue',
-		onRequest: async (messages: ResponseInput, model: string): Promise<[ResponseInput, string, number]> => {
+		onRequest: async (messages: ResponseInput): Promise<ResponseInput> => {
 
 			messages = addPromptGuide(messages);
 			messages = addSystemStatus(messages);
 
-			const modelClass = (thoughtLevel === 'deep' ? 'reasoning' : (thoughtLevel === 'light' ? 'mini' : 'standard'));
-
-			let models: string[] = [...MODEL_CLASSES[modelClass].models];
-			models = models.filter(newModel => newModel !== model); // Try to use a different model if we can
-			if(models.length > 0) {
-				// Pick a random model from this level
-				models = models.sort(() => Math.random() - 0.5);
-				model = models[0];
-			}
-
-			return [messages, model, Number(thoughtDelay)];
+			return messages;
 		},
 		onResponse: async (response: string): Promise<string> => {
 			if(response && response.trim()) {
