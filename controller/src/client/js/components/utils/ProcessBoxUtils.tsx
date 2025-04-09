@@ -115,36 +115,7 @@ export const findImagePath = (text: string): string => {
  */
 export const getDeltaMessageContent = (message: ClientMessage): string => {
     // If this is a delta message with chunks, ensure we display all concatenated content
-    let displayContent = message.thinking_content+(message.thinking_content && message.content ? '\n\n---\n\n' : '')+message.content;
-
-    // For delta messages with chunks, rebuild the content in correct order
-    if (message.isDelta && message.deltaChunks) {
-        const orderedThinkingKeys = Object.keys(message.deltaThinkingChunks)
-            .map(Number)
-            .sort((a, b) => a - b);
-        const orderedKeys = Object.keys(message.deltaChunks)
-            .map(Number)
-            .sort((a, b) => a - b);
-
-        displayContent = '';
-        if(orderedThinkingKeys.length) {
-            // Concatenate all thinking chunks in correct order
-            displayContent = orderedThinkingKeys
-                .map(key => message.deltaThinkingChunks![key])
-                .join('');
-        }
-        if(orderedThinkingKeys.length && orderedKeys.length) {
-            displayContent += '\n\n---\n\n';
-        }
-        if(orderedKeys.length) {
-            // Concatenate all chunks in correct order
-            displayContent += orderedKeys
-                .map(key => message.deltaChunks![key])
-                .join('');
-        }
-    }
-
-    return displayContent;
+    return (message.thinking_content || '')+(message.thinking_content && message.content ? '\n\n---\n\n' : '')+(message.content || '');
 };
 
 /**

@@ -52,7 +52,7 @@ const ProcessHeader: React.FC<ProcessHeaderProps> = ({
                         logs
                     </button>
                 )}
-                {status !== 'ending' && status !== 'terminated' && onTerminate && (
+                {status !== 'ending' && status !== 'terminated' && status !== 'completed' && onTerminate && (
                     <button className="process-btn btn btn-sm btn-outline"
                         style={{color: `rgba(${colors.rgb} / var(--btn-color-opacity))`, borderColor: `rgba(${colors.rgb} / var(--btn-border-opacity))`}}
                         onClick={(e) => {

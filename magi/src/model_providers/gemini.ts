@@ -16,7 +16,7 @@ import {
 	FunctionDeclaration,
 	Type,
 	Content,
-	FunctionCallingConfigMode,
+	FunctionCallingConfigMode, GenerateContentResponseUsageMetadata,
 } from '@google/genai';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -254,6 +254,8 @@ export class GeminiProvider implements ModelProvider {
 			// --- Start streaming ---
 			const response = await this.client.models.generateContentStream(requestParams);
 
+			let usageMetadata: GenerateContentResponseUsageMetadata | undefined;
+
 			// --- Process the stream chunks ---
 			for await (const chunk of response) {
 				// Handle function calls (if present)
@@ -307,26 +309,44 @@ export class GeminiProvider implements ModelProvider {
 						}
 					}
 				}
+
+				if (chunk.usageMetadata) {
+					// Always use the latest usage metadata?
+					usageMetadata = chunk.usageMetadata;
+				}
+			}
+
+			if(usageMetadata) {
+				costTracker.addUsage({
+					model,
+					input_tokens: usageMetadata.promptTokenCount || 0,
+					output_tokens: usageMetadata.candidatesTokenCount || 0,
+					cached_tokens: usageMetadata.cachedContentTokenCount || 0,
+					metadata: {
+						total_tokens: usageMetadata.totalTokenCount || 0,
+						reasoning_tokens: usageMetadata.thoughtsTokenCount || 0,
+						tool_tokens: usageMetadata.toolUsePromptTokenCount || 0,
+					},
+				});
+			}
+			else {
+				console.error('No usage metadata found in the response. This may affect token tracking.');
+				costTracker.addUsage({
+					model,
+					input_tokens: 0,  // Not provided in streaming response
+					output_tokens: 0, // Not provided in streaming response
+					cached_tokens: 0,
+					metadata: {
+						total_tokens: 0,
+						source: 'estimated'
+					},
+				});
 			}
 
 			// --- Stream Finished, Emit Final Events ---
 			if (!hasYieldedToolStart && contentBuffer) {
 				yield { type: 'message_complete', content: contentBuffer, message_id: messageId };
 			}
-
-			// --- Add Usage Data ---
-			// Note: In the current version, we may not get full usage data from streaming responses
-			// A future update could add a separate call to get this information if needed
-			costTracker.addUsage({
-				model,
-				input_tokens: 0,  // Not provided in streaming response
-				output_tokens: 0, // Not provided in streaming response
-				cached_tokens: 0,
-				metadata: {
-					total_tokens: 0,
-					source: 'estimated'
-				},
-			});
 
 		} catch (error) {
 			console.error('Error during Gemini stream processing:', error);

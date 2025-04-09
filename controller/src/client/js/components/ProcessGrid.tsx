@@ -10,7 +10,7 @@ import {useSocket} from '../context/SocketContext';
 import {BoxPosition} from '@types';
 import {
     calculateBoxPositions,
-    calculateZoomToFit,
+    calculateZoomToFit, getOrigin,
 } from './utils/GridUtils';
 import {TRANSITION_EASE, TRANSITION_TIME} from "../utils/constants";
 
@@ -80,18 +80,21 @@ const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
 
     // Update the positions whenever processes change
     useEffect(() => {
+        const {squareWidth, squareHeight, originX, originY} = getOrigin(containerSize);
+        const centerX = originX - (squareWidth / 4);
+        const centerY = originY - (squareHeight / 4);
         if (isFirstProcess && containerSize.height > 0) {
             setShowFirstProcess(true);
-            setZoomLevel(1);
-            setTranslateX(0);
-            setTranslateY(-(containerSize.height/2));
+            setZoomLevel(0.5);
+            setTranslateX(centerX);
+            setTranslateY(centerY-(containerSize.height/2));
             applyTransition(showFirstProcess ? 0 : TRANSITION_TIME);
         }
         else if (!isFirstProcess && showFirstProcess) {
             setShowFirstProcess(false);
-            setZoomLevel(1);
-            setTranslateX(0);
-            setTranslateY(0);
+            setZoomLevel(0.5);
+            setTranslateX(centerX);
+            setTranslateY(centerY);
             applyTransition();
         }
 

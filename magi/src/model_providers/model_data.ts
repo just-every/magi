@@ -49,6 +49,7 @@ export interface ModelEntry {
 	class?: ModelClassID;       // Model class (standard, mini, reasoning, vision, etc.)
 	description?: string; // Short description of the model's capabilities
 	context_length?: number; // Maximum context length in tokens
+	rate_limit_fallback?: string; // Fallback model ID in case of rate limit errors
 }
 
 // Represents usage data for cost calculation
@@ -105,7 +106,6 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 			'claude-3-7-sonnet-latest', // Anthropic
 			'grok-2',               	// X.AI
 			'deepseek-chat',        	// DeepSeek
-			'test-standard',            // Test provider
 		],
 		random: true,
 	},
@@ -116,7 +116,6 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 			'gpt-4o-mini',             	// OpenAI
 			'claude-3-5-haiku-latest',  // Anthropic
 			'gemini-2.0-flash-lite',		// Google
-			'test-mini',                // Test provider
 		],
 		random: true,
 	},
@@ -129,7 +128,6 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 			'claude-3-7-sonnet-latest', // Anthropic
 			'grok-2',                   // X.AI
 			'deepseek-reasoner',       	// DeepSeek
-			'test-reasoning',           // Test provider
 		],
 		random: true,
 	},
@@ -141,7 +139,6 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 			'o3-mini',                  // OpenAI
 			'claude-3-7-sonnet-latest', // Anthropic
 			'deepseek-reasoner',       	// DeepSeek
-			'test-monologue',           // Test provider
 		],
 		random: true,
 	},
@@ -153,7 +150,6 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 			'claude-code',              // Anthropic
 			'claude-3-7-sonnet',        // Anthropic
 			'o3-mini',                  // OpenAI
-			'test-code',                // Test provider
 		],
 	},
 
@@ -164,7 +160,6 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 			'gpt-4o',              		// OpenAI
 			'gemini-2.0-flash',    		// Google
 			'grok-2-vision',            // X.AI
-			'test-vision',              // Test provider
 		],
 	},
 
@@ -174,17 +169,16 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 			'gpt-4o',					// OpenAI
 			'deepseek-reasoner',       	// DeepSeek
 			'gemini-2.5-pro-exp-03-25', // Google
-			'test-search',              // Test provider
 		],
 		random: true,
 	},
 
 	'image_generation': {
-		models: ['imagen-3', 'test-image-gen'], // Including test model
+		models: ['imagen-3'], // Including test model
 	},
 
 	'embedding': {
-		models: ['text-embedding-004', 'test-embedding'], // Including test model
+		models: ['text-embedding-004'], // Including test model
 	}
 };
 
@@ -314,7 +308,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 		},
 		description: 'Test model that always produces rate limit errors'
 	},
-	
+
 	//
 	// OpenAI models
 	//
@@ -636,6 +630,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 			cached_input_per_million: 0,
 			notes: ['Free tier experimental model.']
 		},
+		rate_limit_fallback: 'gemini-2.5-pro-preview-03-25', // Fallback to paid version if rate limit is hit
 		class: 'reasoning',
 		description: 'Free experimental version of Gemini 2.5 Pro. Excels at coding & complex reasoning.',
 		context_length: 1048576 // Assuming same context as paid preview

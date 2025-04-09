@@ -155,7 +155,7 @@ export class OpenAIProvider implements ModelProvider {
 							model, // Ensure 'model' variable is accessible here
 							input_tokens: event.response.usage.input_tokens || 0,
 							output_tokens: event.response.usage.output_tokens || 0,
-							// cached_tokens: event.response.usage.input_tokens_details?.cached_tokens || 0, // Not in provided doc example, use cautiously
+							cached_tokens: event.response.usage.input_tokens_details?.cached_tokens || 0,
 							metadata: { reasoning_tokens: event.response.usage.output_tokens_details?.reasoning_tokens || 0 },
 						});
 						// console.log(`Response ${event.response.id} completed.`);

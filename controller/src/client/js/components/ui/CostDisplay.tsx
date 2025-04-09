@@ -68,7 +68,7 @@ const CostDisplay: React.FC = () => {
 	return (
 		// Using basic inline styles and Bootstrap classes for layout
 		<div
-			className="position-fixed bg-light border rounded shadow-sm p-2" // Added background/shadow
+			className={"position-fixed p-2 "+(expanded ? 'bg-light border rounded shadow-sm' : '')} // Added background/shadow
 			style={{
 				top: '10px',
 				right: '10px', // Adjusted position slightly
@@ -84,16 +84,13 @@ const CostDisplay: React.FC = () => {
 			title={expanded ? "Click to collapse" : "Click to expand"} // Add tooltip
 		>
 			{/* Always Visible Section */}
-			<div className="d-flex justify-content-between align-items-center mb-1">
-				<span className="fw-bold text-dark">Total Cost:</span>
-				{/* Access total cost via usage.cost.total */}
-				<span className="text-primary fw-bold">{costFormatter.format(costData.usage.cost.total)}</span>
+			<div className={"d-flex align-items-center mb-1 "+(expanded ? 'justify-content-between' : 'justify-content-end')}>
+				{expanded && <span className="fw-bold text-secondary">Total Cost:</span>}
+				<span className={"fw-bold "+(expanded ? 'text-dark' : 'text-white')}>{(costData.usage.cost.total < 0.1 ? costFormatter : costPerMinFormatter).format(costData.usage.cost.total)}</span>
 			</div>
-
-			<div className="d-flex justify-content-between align-items-center">
-				<span className="fw-bold text-dark">Per Minute:</span>
-				{/* costPerMinute is directly available */}
-				<span className="text-secondary">{costPerMinFormatter.format(costData.costPerMinute)}/min</span>
+			<div className={"d-flex align-items-center mb-1 "+(expanded ? 'justify-content-between' : 'justify-content-end')}>
+				{expanded && <span className="fw-bold text-secondary">Current Rate:</span>}
+				<span className={(expanded ? 'text-dark' : 'text-white')}>{costPerMinFormatter.format(costData.costPerMinute)}/min</span>
 			</div>
 
 			{/* Expanded Section */}

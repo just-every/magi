@@ -386,12 +386,12 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 					}
 				} else if (eventType === 'message_start' || eventType === 'message_delta' || eventType === 'message_complete' || eventType === 'talk_start' || eventType === 'talk_delta' || eventType === 'talk_complete') {
 					// Assistant message
-					if ('content' in streamingEvent && 'message_id' in streamingEvent) {
+					if ('message_id' in streamingEvent) {
 						const content = streamingEvent.content || '';
 						const thinking_content = streamingEvent.thinking_content || '';
 						const message_id = streamingEvent.message_id || '';
 
-						if (content && message_id) {
+						if ((content || thinking_content) && message_id) {
 							let existingMessage = undefined;
 							process.agent.messages.forEach(message => {
 								if (message.message_id === message_id) {
@@ -563,12 +563,12 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({children}) => {
 					});
 
 					// If process is terminated, handle sub-agents and remove after delay
-					if (event.status === 'terminated') {
+					if (event.status === 'terminated' || event.status === 'completed') {
 						// If this was the core process, we should find a new one
 						if (event.id === coreProcessId) {
 							// Find the first non-terminated process to be the new core
 							const remainingProcesses = Array.from(newProcesses.entries())
-								.filter(([id, p]) => id !== event.id && p.status !== 'terminated');
+								.filter(([id, p]) => id !== event.id && p.status !== 'terminated' && p.status !== 'completed');
 
 							if (remainingProcesses.length > 0) {
 								const newCoreId = remainingProcesses[0][0];

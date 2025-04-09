@@ -43,7 +43,14 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
     // Scroll to bottom of logs when they update
     useEffect(() => {
         if (logsRef.current) {
-            logsRef.current.scrollTop = logsRef.current.scrollHeight;
+            // Calculate how close to the bottom we are
+            const { scrollTop, scrollHeight, clientHeight } = logsRef.current;
+            const isNearBottom = scrollTop + clientHeight >= scrollHeight - 50; // Within 50px of bottom
+
+            // Only auto-scroll if already near the bottom
+            if (isNearBottom) {
+                logsRef.current.scrollTop = logsRef.current.scrollHeight;
+            }
         }
     }, [logs, messages]);
 
@@ -105,7 +112,7 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
     };
 
     return (
-        <div className={`process-box agent-box card border-0 shadow ${mounted && status !== 'terminated' ? 'mounted' : ''}`} onClick={handleBoxClick}>
+        <div className={`process-box agent-box card border-0 shadow ${mounted && status !== 'terminated' && status !== 'completed' ? 'mounted' : ''}`} onClick={handleBoxClick}>
             <div className="process-box-bg" style={{backgroundColor: colors.bgColor}}>
                 <ProcessHeader
                     agentName={agentName}

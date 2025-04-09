@@ -16,7 +16,7 @@ import {
 } from '../types.js';
 import {Agent} from './agent.js';
 import {getModelProvider} from '../model_providers/model_provider.js';
-import {MODEL_CLASSES} from '../model_providers/model_data.js';
+import {findModel, MODEL_CLASSES, ModelEntry} from '../model_providers/model_data.js';
 import {getModelFromClass} from '../model_providers/model_provider.js';
 import {processToolCall} from './tool_call.js';
 import {capitalize} from './llm_utils.js';
@@ -175,25 +175,14 @@ SUMMARY:`;
 	 * Helper function to get the next fallback model, avoiding already tried ones.
 	 * Special handling for rate-limited models to try paid alternatives.
 	 */
-	private static getNextFallbackModel(agent: Agent, triedModels: Set<string>, errorMessage?: string): string | undefined {
-		// Check for special case rate-limit fallbacks first
-		const lastTriedModel = agent.model;
-		
-		// If the error was a rate limit (HTTP 429) on the Gemini experimental model
-		if (errorMessage && 
-			(errorMessage.includes('429') || errorMessage.includes('Too Many Requests')) && 
-			lastTriedModel === 'gemini-2.5-pro-exp-03-25') {
-			
-			// Try the paid Gemini model
-			const paidModel = 'gemini-2.5-pro-preview-03-25';
-			console.log('Detected rate limit on experimental Gemini model, fallback to paid version:', paidModel);
-			
+	private static getNextFallbackModel(agent: Agent, triedModels: Set<string>, errorMessage?: string, lastModelEntry?: ModelEntry): string | undefined {
+		if (errorMessage && (errorMessage.includes('429') || errorMessage.includes('Too Many Requests')) && lastModelEntry && lastModelEntry.rate_limit_fallback) {
 			// Check if we already tried the paid model
-			if (!triedModels.has(paidModel)) {
-				return paidModel;
+			if (!triedModels.has(lastModelEntry.rate_limit_fallback)) {
+				return lastModelEntry.rate_limit_fallback;
 			}
 		}
-		
+
 		// Standard fallback logic for other cases
 		// The model that just failed or was initially selected
 		let modelsToConsider: string[] = [];
@@ -245,17 +234,7 @@ SUMMARY:`;
 
 		// Allow agent onRequest hook
 		if(agent.onRequest) {
-			try {
-				messages = await agent.onRequest(messages);
-			} catch(hookError) {
-				console.error(`[Runner] Error in agent.onRequest hook: ${hookError}`);
-				yield {
-					type: 'error',
-					agent: agent.export(),
-					error: `Error in onRequest hook: ${hookError instanceof Error ? hookError.message : hookError}`
-				};
-				return; // Stop processing if hook fails
-			}
+			messages = await agent.onRequest(messages);
 		}
 
 		// --- Main loop for trying initial model and fallbacks ---
@@ -304,13 +283,15 @@ SUMMARY:`;
 					// Ensure the event reflects the currently used model
 					event.agent = event.agent ? event.agent : agent.export();
 					if (!event.agent.model) event.agent.model = selectedModel;
-					yield event;
 
 					// Check for errors explicitly yielded *by the stream content*
 					if(event.type === 'error') {
 						console.error(`[Runner] Stream yielded error event for model ${selectedModel}: ${event.error}`);
 						// Treat yielded errors like other failures: throw to trigger fallback.
 						throw new Error(event.error || 'Stream yielded an unspecified error');
+					}
+					else {
+						yield event;
 					}
 				}
 
@@ -324,21 +305,27 @@ SUMMARY:`;
 				// 1. TimeoutError thrown by createTimeoutProxyStream
 				// 2. Errors thrown explicitly from the stream (e.g., event.type === 'error')
 				// 3. Errors during provider.createResponseStream() or stream iteration itself.
+				attempt++;
 
-				console.error(`[Runner] Attempt ${attempt} with model ${selectedModel} failed: ${error}`);
+				// Pass the error message to help with detecting rate limits and special cases
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				const lastModelEntry = findModel(selectedModel);
 
 				// Yield an error event specific to this failed attempt
-				yield {
-					type: 'error',
-					agent: agent.export(), // Agent state with the model that failed
-					error: error instanceof Error ? error.message : String(error)
-				};
+				if((errorMessage.includes('429') || errorMessage.includes('Too Many Requests')) && lastModelEntry && lastModelEntry.rate_limit_fallback) {
+					console.warn(`[Runner] Rate limted attempt ${attempt} with model ${selectedModel} failed: ${error}\nFalling back to ${lastModelEntry.rate_limit_fallback}`);
+				}
+				else {
+					console.error(`[Runner] Attempt ${attempt} with model ${selectedModel} failed: ${error}`);
+					yield {
+						type: 'error',
+						agent: agent.export(), // Agent state with the model that failed
+						error: error instanceof Error ? error.message : String(error)
+					};
+				}
 
 				// --- Fallback Logic ---
-				attempt++;
-				// Pass the error message to help with detecting rate limits and special cases
-				const errorMsg = error instanceof Error ? error.message : String(error);
-				selectedModel = this.getNextFallbackModel(agent, triedModels, errorMsg); // Find the next model to try
+				selectedModel = this.getNextFallbackModel(agent, triedModels, errorMessage, lastModelEntry); // Find the next model to try
 
 				if (!selectedModel) {
 					console.error('[Runner] All models tried or no fallbacks available. Run failed.');
@@ -781,7 +768,7 @@ SUMMARY:`;
 	 * If a matching 'function_call_output' is found later in the array, it's moved.
 	 * If no matching 'function_call_output' is found for a 'function_call',
 	 * an artificial error 'function_call_output' is inserted.
-	 * 
+	 *
 	 * For orphaned 'function_call_output' messages (without a preceding 'function_call'),
 	 * they are converted to regular messages.
 	 *
@@ -808,11 +795,11 @@ SUMMARY:`;
 			const msg = currentMessages[i];
 			if (msg.type === 'function_call_output') {
 				const funcOutput = msg as ResponseInputFunctionCallOutput;
-				
+
 				// Check if this is an orphaned output (no matching function_call)
 				if (!functionCallIds.has(funcOutput.call_id)) {
 					console.warn(`[Runner] Found orphaned function_call_output with call_id ${funcOutput.call_id}. Converting to regular message.`);
-					
+
 					// Create a regular message with the function name and output as content
 					const regularMessage: ResponseInputMessage = {
 						role: 'user',
@@ -820,7 +807,7 @@ SUMMARY:`;
 						content: `Tool result (${funcOutput.name}): ${funcOutput.output}`,
 						status: 'completed'
 					};
-					
+
 					// Replace the orphaned output with the regular message
 					currentMessages[i] = regularMessage;
 					changedInPass = true;

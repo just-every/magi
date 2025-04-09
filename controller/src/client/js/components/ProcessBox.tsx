@@ -54,7 +54,14 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
     // Scroll to bottom of logs when they update
     useEffect(() => {
         if (logsRef.current) {
-            logsRef.current.scrollTop = logsRef.current.scrollHeight;
+            // Calculate how close to the bottom we are
+            const { scrollTop, scrollHeight, clientHeight } = logsRef.current;
+            const isNearBottom = scrollTop + clientHeight >= scrollHeight - 50; // Within 50px of bottom
+
+            // Only auto-scroll if already near the bottom
+            if (isNearBottom) {
+                logsRef.current.scrollTop = logsRef.current.scrollHeight;
+            }
         }
     }, [logs, messages]);
 
@@ -111,7 +118,7 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
     };
 
     return (
-        <div className={`process-box card border-0 shadow ${isCoreProcess ? 'core-box' : ''} ${focused ? 'focused' : ''} ${mounted && status !== 'terminated' ? 'mounted' : ''}`}
+        <div className={`process-box card border-0 shadow ${isCoreProcess ? 'core-box' : ''} ${focused ? 'focused' : ''} ${mounted && status !== 'terminated' && status !== 'completed' ? 'mounted' : ''}`}
             onClick={handleBoxClick}>
             <div className="process-box-bg" style={{backgroundColor: colors.bgColor}}>
                 <ProcessHeader
@@ -125,6 +132,7 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
 
                 <div className="process-logs card-body overflow-auto" ref={logsRef}>
                     <MessageList
+                        agent={process?.agent}
                         messages={messages}
                         logs={logs}
                         isTyping={isTyping}

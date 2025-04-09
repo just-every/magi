@@ -3,7 +3,12 @@
  * Renders a list of messages with proper formatting
  */
 import * as React from 'react';
-import { ClientMessage, ToolCallMessage as ToolCallMessageType, ToolResultMessage as ToolResultMessageType } from '../../context/SocketContext';
+import {
+    AgentData,
+    ClientMessage,
+    ToolCallMessage as ToolCallMessageType,
+    ToolResultMessage as ToolResultMessageType
+} from '../../context/SocketContext';
 import { processMessages } from '../utils/ProcessBoxUtils';
 import UserMessage from './UserMessage';
 import AssistantMessage from './AssistantMessage';
@@ -13,6 +18,7 @@ import SystemMessage from './SystemMessage';
 import { parseMarkdown } from '../utils/MarkdownUtils';
 
 interface MessageListProps {
+    agent?: AgentData;
     messages: ClientMessage[];
     logs: string;
     isTyping: boolean;
@@ -24,6 +30,7 @@ interface MessageListProps {
 }
 
 const MessageList: React.FC<MessageListProps> = ({
+    agent,
     messages,
     logs,
     isTyping,
@@ -33,7 +40,7 @@ const MessageList: React.FC<MessageListProps> = ({
     if (messages.length === 0) {
         return (
             <>
-                <div className="raw-logs" dangerouslySetInnerHTML={parseMarkdown(logs)}/>
+                {agent?.model && <div className="message-header">Starting ({agent.model})...</div>}
                 {renderTypingIndicator(isTyping, colors.textColor)}
             </>
         );

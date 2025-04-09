@@ -31,6 +31,31 @@ interface GridPosition {
 /** Creates a unique string key for a grid cell */
 const getGridKey = (row: number, col: number): string => `${row},${col}`;
 
+export const getOrigin = (containerSize: { width: number, height: number }): {
+    squareWidth: number;
+    squareHeight: number;
+    originX: number;
+    originY: number;
+} => {
+    const containerWidth = X_OFFSET + containerSize.width;
+    const containerHeight = Y_OFFSET + containerSize.height;
+
+    // Calculate dynamic base dimensions for a 1x1 grid cell
+    const squareWidth = Math.min(SQUARE_MAX_WIDTH, Math.max(SQUARE_MIN_WIDTH, Math.round(containerWidth * 0.8)));
+    const squareHeight = Math.min(SQUARE_MAX_HEIGHT, (containerHeight * 0.7), Math.max(SQUARE_MIN_HEIGHT, Math.round(squareWidth * Math.max(1, (containerHeight / containerWidth)))));
+
+    // Calculate origin (top-left of the grid cell (0,0)) relative to viewport center
+    const originX = X_OFFSET + (containerSize.width / 2) - (squareWidth / 2);
+    const originY = Y_OFFSET + (containerSize.height / 2) - (squareHeight / 2);
+
+    return {
+        squareWidth,
+        squareHeight,
+        originX,
+        originY,
+    }
+};
+
 /**
  * Calculates screen coordinates for the top-left of a grid cell.
  * Rows < -1 (worker rows) are treated as half the height of standard rows.
@@ -86,16 +111,7 @@ export const calculateBoxPositions = (
     // Stores calculated grid positions for parent lookup
     const processGridPositions = new Map<string, GridPosition>();
 
-    const containerWidth = X_OFFSET + containerSize.width;
-    const containerHeight = Y_OFFSET + containerSize.height;
-
-    // Calculate dynamic base dimensions for a 1x1 grid cell
-    const squareWidth = Math.min(SQUARE_MAX_WIDTH, Math.max(SQUARE_MIN_WIDTH, Math.round(containerWidth * 0.8)));
-    const squareHeight = Math.min(SQUARE_MAX_HEIGHT, (containerHeight * 0.7), Math.max(SQUARE_MIN_HEIGHT, Math.round(squareWidth * Math.max(1, (containerHeight / containerWidth)))));
-
-    // Calculate origin (top-left of the grid cell (0,0)) relative to viewport center
-    const originX = X_OFFSET + (containerSize.width / 2) - (squareWidth / 2);
-    const originY = Y_OFFSET + (containerSize.height / 2) - (squareHeight / 2);
+    const {squareWidth, squareHeight, originX, originY} = getOrigin(containerSize);
 
     // --- 1. Place Core Process ---
     const coreProcess = processes.get(coreProcessId);

@@ -60,11 +60,14 @@ function isNoiseLine(line: string): boolean {
 	if (line.startsWith('>')) return true; // Skip prompt lines like "> Tips for getting started:"
 	if (line.includes('? for shortcuts')) return true;
 	if (line.includes('Bypassing Permissions')) return true;
+	if (line.includes('Auto-update failed')) return true;
+	if (line.includes('Try claude doctor')) return true;
+	if (line.includes('@anthropic-ai/claude-code')) return true;
 	if (line.includes('Press Ctrl-C again to exit')) return true;
 
 	// Dynamic Status/Progress Lines (specific patterns)
 	// Matches "* Brewing... (Xs · esc to interrupt)" etc.
-	if (/^\s*[*·✢✳∗✻✽⏺]\s*\w+…\s*\(\d+s\s*·\s*esc to interrupt\)$/.test(line)) return true;
+	if (/^\s*\p{S}\s*\w+…\s*\(\d+s\s*·\s*esc to interrupt\)$/u.test(line)) return true;
 	// Note: Thinking/Task/Call/Bash/Read lines are handled by isProcessingStartSignal or history dedupe
 	if (line === '⎿  Running…') return true; // Specific running message
 	if (line.match(/^⎿\s*Read \d+ lines \(ctrl\+r to expand\)$/)) return true; // Matches "Read N lines..." status
@@ -120,7 +123,7 @@ function isNoiseLine(line: string): boolean {
 function isProcessingStartSignal(line: string): boolean {
 	// NOTE: These patterns might break with future CLI updates.
 	// Add patterns that reliably appear only *after* the initial prompt/setup output
-	if (/^\s*[*·✢✳∗✻✽⏺]\s*\w+…/.test(line)) return true;
+	if (/^\s*\p{S}\s*\w+…/u.test(line)) return true;
 	if (line.startsWith('● ') || line.startsWith('╭') || line.startsWith('│') || line.startsWith('╰')) return true; // Lines starting with ● often indicate actions/tasks
 	if (line.startsWith('Task(')) return true; // Task descriptions
 	// Add other potential start signals based on observation

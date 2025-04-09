@@ -1,13 +1,19 @@
 # MAGI System
 
-<p align="center">
-<strong>M</strong>ostly<br/>
-<strong>A</strong>utonomous<br/>
-<strong>G</strong>enerative<br/>
-<strong>I</strong>ntelligence
-</p>
+> **M**ostly
+> **A**utonomous
+> **G**enerative
+> **I**ntelligence
 
-The MAGI System (pronounced "MAH-jeye") is a multi-agent AI framework designed for orchestrating specialized AI agents to work on complex tasks collaboratively.
+The MAGI System (pronounced "MAH-jeye") is an ensemble autonomous AI framework designed to solve tasks with almost no human intervention.
+
+It has a persistent chain of thought with a single AI persona Magi (pronounced "Mag-gie") which manages the system orchestration and task management. The system is designed to be modular and fault-tolerant. The core aim is not to solve problems as fast as possible, but in the best way possible by recovering from errors and failures gracefully.
+
+MAGI uses an ensemble of LLM models to provide a more robust and flexible solution. It can switch between different models based on availability, cost, and performance. For it's core chain of thoughts it interleaves models continuously, offers a unique perspective on how to approach problems and helps to resolve the 'stuck in a loop' problem autonomous systems often face.
+
+A core principal of MAGI is self-improvement. By being Open Source and using git internally for code changes, MAGI's goal is to improve itself with each task it performs and bring the best improvements back into the core code base.
+
+Think of Magi like a co-worker. She might make some mistakes, but she learns from them and improves over time. She is not perfect, but she is getting better every day.
 
 ## System Architecture
 
@@ -17,9 +23,11 @@ The system consists of two primary components:
    - TypeScript/Express backend with Socket.IO for real-time communication
    - Docker container management for running AI agents
    - Web interface for interacting with the system
+   - Provides a secure interface with host system (LLMs do not have direct access to the host)
 
 2. **MAGI Agents (TypeScript Backend)**
    - Specialized agents for different tasks (coding, browsing, searching, etc.)
+   - Runs in Docker containers for isolation and resource management
    - Modular design for easy extension
    - Supports multiple LLM providers
 
