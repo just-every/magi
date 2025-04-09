@@ -28,10 +28,10 @@ export interface TestProviderConfig {
   simulateRateLimit?: boolean;
   
   // Fixed text to respond with (overrides generated response)
-  fixedResponse?: string;
+  fixedResponse?: string | undefined;
   
   // Fixed thinking to respond with (for reasoning agent simulation)
-  fixedThinking?: string;
+  fixedThinking?: string | undefined;
   
   // Whether to simulate a tool call
   simulateToolCall?: boolean;
@@ -58,8 +58,8 @@ export const testProviderConfig: TestProviderConfig = {
   shouldError: false,
   errorMessage: 'Simulated error from test provider',
   simulateRateLimit: false,
-  fixedResponse: null,
-  fixedThinking: null,
+  fixedResponse: undefined,
+  fixedThinking: undefined,
   simulateToolCall: false, 
   toolName: 'web_search',
   toolArguments: { query: 'test query' },
@@ -78,8 +78,8 @@ export function resetTestProviderConfig() {
   testProviderConfig.shouldError = false;
   testProviderConfig.errorMessage = 'Simulated error from test provider';
   testProviderConfig.simulateRateLimit = false;
-  testProviderConfig.fixedResponse = null;
-  testProviderConfig.fixedThinking = null;
+  testProviderConfig.fixedResponse = undefined;
+  testProviderConfig.fixedThinking = undefined;
   testProviderConfig.simulateToolCall = false;
   testProviderConfig.toolName = 'web_search';
   testProviderConfig.toolArguments = { query: 'test query' };
@@ -182,7 +182,7 @@ export class TestProvider implements ModelProvider {
     }
     
     // Simulate a tool call if configured
-    if (this.config.simulateToolCall && agent?.tools?.length > 0) {
+    if (this.config.simulateToolCall && agent && agent.tools && agent.tools.length > 0) {
       // Find an actual tool to simulate calling
       const availableTool = agent.tools.find(tool => 
         this.config.toolName ? 
