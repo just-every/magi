@@ -46,12 +46,8 @@ The system consists of two primary components:
 git clone https://github.com/has-context/magi-system.git
 cd magi-system
 
-# Install dependencies
-npm install
-
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your API keys
+# Run setup
+npm run setup
 ```
 
 ## Usage
@@ -66,7 +62,7 @@ npm run dev
 This will:
 1. Build the Docker images for the controller and MAGI base
 2. Start the system with Docker Compose
-3. Make the web interface available at http://localhost:3000
+3. Make the web interface available at http://localhost:3011
 
 ### Running Tests
 
@@ -112,7 +108,8 @@ magi-system/
 │   └── docker/           # Docker configuration
 ├── test/                 # Testing infrastructure
 │   └── playwright/       # Automated tests
-└── scripts/              # Utility scripts
+├── scripts/              # Utility scripts
+└── setup/                # Setup scripts
 ```
 
 ### Development Workflow
@@ -127,36 +124,10 @@ magi-system/
    ```bash
    npm test
    ```
-4. Start the system to test manually:
+4. Start the system:
    ```bash
    npm run dev
    ```
-
-### Controller Development
-
-```bash
-# Navigate to the controller directory
-cd controller
-
-# Build the controller
-npm run build
-
-# Start the controller in development mode
-npm run dev
-```
-
-### MAGI Development
-
-```bash
-# Navigate to the magi directory
-cd magi
-
-# Build the TypeScript code
-npm run build
-
-# Run the MAGI system
-npm start
-```
 
 ## Key Features
 
