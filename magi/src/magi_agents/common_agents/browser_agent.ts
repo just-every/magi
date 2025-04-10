@@ -6,14 +6,14 @@
 
 import {Agent} from '../../utils/agent.js';
 import {getFileTools} from '../../utils/file_utils.js';
-import {getBrowserTools} from '../../utils/browser_utils.js';
+import {getBrowserTools, setupAgentBrowserTools} from '../../utils/browser_utils.js';
 import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
 
 /**
  * Create the browser agent
  */
 export function createBrowserAgent(): Agent {
-	return new Agent({
+	const agent = new Agent({
 		name: 'BrowserAgent',
 		description: 'Quickly reads and interacts with websites, fill forms and extracts data',
 		instructions: `You are a specialized browser agent with the ability to interact with websites.
@@ -41,35 +41,44 @@ ${FILE_TOOLS_TEXT}
 
 BROWSER TOOLS:
 - navigate: Navigate to a URL
-- screenshot: Take a screenshot of a webpage or element
-- get_text: Extract text content from a webpage or element
-- get_html: Extract HTML content from a webpage or element
-- click: Click on an element
-- hover: Hover over an element
-- fill: Fill in a form field
-- check: Check a checkbox or radio button
-- evaluate: Execute JavaScript code in the browser context
-- type: Type text using the keyboard
+- get_page_content: Extract content from a webpage
+- get_page_url: Get the current URL of the page
+- clickElement: Click on an element
+- fillField: Fill in a form field
+- checkElement: Check a checkbox or radio button
+- hoverElement: Hover over an element
+- focusElement: Focus on an element
+- scrollElement: Scroll an element into view
+- selectOption: Select an option from a dropdown
 - press: Press specific keys on the keyboard
-- wait: Wait for a specified amount of time
-- wait_for_selector: Wait for an element to be visible on the page
-- get_current_url: Get the current URL of the page
-- reset_session: Reset the browser session with a clean context and cookies
+- type: Type text using the keyboard
+- screenshot: Take a screenshot of a webpage or element
+- js_evaluate: Execute JavaScript code in the browser context
+- reset_session: Reset the browser tab's interaction map
+- closeAgentSession: Close the browser tab when finished
 
 ${SELF_SUFFICIENCY_TEXT}
 
 IMPORTANT:
+- Each agent gets its own browser tab, which will be closed after an extended period of inactivity
 - Wait for pages to load before interacting with them
+- Call get_page_content() after navigation and after significant page changes
 - Handle potential issues like popups, cookie consent forms, and other obstacles
 - Be patient with slow-loading websites and retry if necessary
 - Prefer stable selectors (IDs, data attributes) over volatile ones (indices, text content)
 - Report errors clearly if you cannot access a website or element
+- Use closeAgentSession when you are completely done browsing to free up resources
 
-SPECIAL INSTRUCTION: For any web request, first navigate to the URL and then use get_text to read the page content. Then respond with a summary of what you found.`,
+SPECIAL INSTRUCTION: For any web request, first navigate to the URL and then use get_page_content to read the page content. Then respond with a summary of what you found.`,
 		tools: [
 			...getFileTools(),
 			...getBrowserTools()
 		],
 		modelClass: 'standard'
 	});
+	
+	// Setup agent-specific browser tools
+	setupAgentBrowserTools(agent);
+	
+	return agent;
 }

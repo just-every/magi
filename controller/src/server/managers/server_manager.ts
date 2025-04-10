@@ -68,10 +68,25 @@ export class ServerManager {
 			res.sendFile(path.join(__dirname, '../../client.js'));
 		});
 
-		// 3. Serve static files from the dist folder
+		// 3. Serve images from the img directory
+		this.app.use('/img', express.static(path.join(__dirname, '../../client/img'), {
+			setHeaders: (res, filePath) => {
+				if (filePath.endsWith('.png')) {
+					res.setHeader('Content-Type', 'image/png');
+				} else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+					res.setHeader('Content-Type', 'image/jpeg');
+				} else if (filePath.endsWith('.gif')) {
+					res.setHeader('Content-Type', 'image/gif');
+				} else if (filePath.endsWith('.svg')) {
+					res.setHeader('Content-Type', 'image/svg+xml');
+				}
+			}
+		}));
+
+		// 4. Serve static files from the dist folder
 		this.app.use(express.static(path.join(__dirname, '../..')));
 
-		// 4. Ensure the root route returns the index.html
+		// 5. Ensure the root route returns the index.html
 		this.app.get('/', (req, res) => {
 			res.sendFile(path.join(__dirname, '../../client/html/index.html'));
 		});

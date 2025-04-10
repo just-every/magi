@@ -766,10 +766,10 @@ function setupClaude(): void {
 	// Check if Docker is available for Claude setup
 	if (!checkDockerInstalled()) {
 		console.error('\x1b[33m%s\x1b[0m', 'Docker is required for Claude setup.');
-		rl.question('Do you want to skip Claude setup and complete the installation? (y/n): ', (answer) => {
+		rl.question('Do you want to skip Claude setup and continue? (y/n): ', (answer) => {
 			if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
 				console.log('\x1b[33m%s\x1b[0m', 'Skipping Claude setup. You can run "npm run setup:claude" later when Docker is available.');
-				setupComplete();
+				setupBrowser();
 			} else {
 				console.log('Setup aborted. Please install Docker and try again.');
 				process.exit(1);
@@ -784,7 +784,7 @@ function setupClaude(): void {
 	rl.question('Do you want to set up Claude Code? (y/n): ', (answer) => {
 		if (answer.toLowerCase() === 'n' || answer.toLowerCase() === 'no') {
 			console.log('\x1b[33m%s\x1b[0m', 'Skipping Claude setup. You can run "npm run setup:claude" later if needed.');
-			setupComplete();
+			setupBrowser();
 			return;
 		}
 
@@ -795,17 +795,54 @@ function setupClaude(): void {
 
 			execSync('npm run setup:claude', {stdio: 'inherit', cwd: rootDir});
 			console.log('\x1b[32m%s\x1b[0m', '✓ Claude setup completed successfully');
-			setupComplete();
+			setupBrowser();
 		} catch (error) {
 			console.error('\x1b[31m%s\x1b[0m', 'Failed to set up Claude.');
 			console.error('Error: ', error instanceof Error ? error.message : String(error));
 
 			rl.question('Do you want to continue without Claude setup? (y/n): ', (answer) => {
 				if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
-					console.log('\x1b[33m%s\x1b[0m', 'Skipping Claude setup. You can run "npm run setup-claude" later.');
-					setupComplete();
+					console.log('\x1b[33m%s\x1b[0m', 'Skipping Claude setup. You can run "npm run setup:claude" later.');
+					setupBrowser();
 				} else {
 					console.log('Setup aborted. Please fix the Claude setup issue and try again.');
+					process.exit(1);
+				}
+			});
+		}
+	});
+}
+
+function setupBrowser(): void {
+	console.log('');
+	console.log('\x1b[36m%s\x1b[0m', 'Step 6: Setting up Browser Extension');
+
+	// Ask user if they want to set up the Browser Extension
+	console.log('\x1b[90m%s\x1b[0m', 'The Browser Extension allows MAGI to interact with Chrome.');
+	rl.question('Do you want to set up the Browser Extension? (y/n): ', (answer) => {
+		if (answer.toLowerCase() === 'n' || answer.toLowerCase() === 'no') {
+			console.log('\x1b[33m%s\x1b[0m', 'Skipping Browser Extension setup. You can run "npm run setup:browser" later if needed.');
+			setupComplete();
+			return;
+		}
+
+		try {
+			console.log('Running npm run setup:browser...');
+			console.log('\x1b[33m%s\x1b[0m', 'Follow the prompts to install the Chrome extension when they appear.');
+
+			execSync('npm run setup:browser', {stdio: 'inherit', cwd: rootDir});
+			console.log('\x1b[32m%s\x1b[0m', '✓ Browser Extension setup completed successfully');
+			setupComplete();
+		} catch (error) {
+			console.error('\x1b[31m%s\x1b[0m', 'Failed to set up Browser Extension.');
+			console.error('Error: ', error instanceof Error ? error.message : String(error));
+
+			rl.question('Do you want to continue without Browser Extension setup? (y/n): ', (answer) => {
+				if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
+					console.log('\x1b[33m%s\x1b[0m', 'Skipping Browser Extension setup. You can run "npm run setup:browser" later.');
+					setupComplete();
+				} else {
+					console.log('Setup aborted. Please fix the Browser Extension setup issue and try again.');
 					process.exit(1);
 				}
 			});

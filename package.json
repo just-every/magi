@@ -4,13 +4,18 @@
   "description": "MAGI System",
   "type": "module",
   "scripts": {
-    "postinstall": "cd controller && npm install && cd ../magi && npm install",
-    "build": "docker compose build controller magi-base",
+    "postinstall": "cd controller && npm install && cd ../magi && npm install && cd ../browser/bridge && npm install",
+    "build": "npm run build:tsc && npm run build:docker",
+    "build:docker": "docker compose build controller magi-base",
+    "build:tsc": "npx tsc -p browser/bridge",
     "dev": "npm run build && docker compose up",
+    "bridge:start": "scripts/start-bridge.sh",
+    "bridge:stop": "scripts/stop-bridge.sh",
     "lint": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts' 'setup/**/*.ts'",
     "lint:fix": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts' 'setup/**/*.ts' --fix",
     "setup": "node setup/bootstrap.js",
-    "setup:claude": "npx tsc -p setup && node dist/setup/claude_setup.js",
+    "setup:claude": "npx tsc -p setup && node setup/dist/claude_setup.js",
+    "setup:browser": "npx tsc -p setup && node setup/dist/browser_setup.js",
     "test": "cd test/playwright && npx playwright test",
     "test:ui": "cd test/playwright && npx playwright test --ui",
     "test:install": "cd test/playwright && npm install && npx playwright install"
@@ -24,11 +29,15 @@
   },
   "devDependencies": {
     "@eslint/js": "^8.56.0",
-    "@types/node": "^22.13.13",
+    "@types/node": "^22.14.0",
+    "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "eslint": "^8.56.0",
     "typescript": "^5.8.2",
     "typescript-eslint": "^7.0.0"
+  },
+  "dependencies": {
+    "ws": "^8.18.1"
   }
 }

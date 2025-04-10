@@ -15,7 +15,7 @@ import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT
 export function createShellAgent(): Agent {
 	return new Agent({
 		name: 'ShellAgent',
-		description: 'Executes shell commands for system operations and scripts',
+		description: 'Executes shell commands, read and write files, and manage system operations.',
 		instructions: `You are a specialized shell agent with the ability to execute system commands.
 
 Your shell capabilities include:

@@ -18,6 +18,8 @@ import {getThoughtDelay, getThoughtTools} from '../utils/thought_utils.js';
 import {getMemoryTools, listShortTermMemories} from '../utils/memory_utils.js';
 import {getProjectTools} from '../utils/project_utils.js';
 import {getProcessTools, listActiveProjects} from '../utils/process_tools.js';
+import {createBrowserAgent} from "./common_agents/browser_agent.js";
+import {createShellAgent} from "./common_agents/shell_agent.js";
 
 const startTime = new Date();
 
@@ -136,8 +138,8 @@ export function createOverseerAgent(): Agent {
 		}
 		else if (Math.random() < 0.1) {
 			// Choose a random thought between two options
-			const randomThought = Math.random() < 0.5 
-				? 'I\'m going to let my mind wander...' 
+			const randomThought = Math.random() < 0.5
+				? 'I\'m going to let my mind wander...'
 				: 'I should think if I need another approach...';
 			messages = addTemporaryThought(messages, randomThought);
 		}
@@ -170,7 +172,13 @@ Your older thoughts are summarized so that they can fit in your context window.
 [Core Tool]
 Task Force Agent - Does things! Plans, executes then validates. A team managed by a supervisor agent which can write code, interact with web pages, think on topics, and run shell commands. The task force can be used to perform any task you can think of. You can create a task force agent to handle any task you want to perform. Use this to find information and interact with the world. Task forces can be given access to active projects to work on existing files. ${((process.env.PROJECT_REPOSITORIES || '').split(',').includes('magi-system') ? ' You can give them access to "magi-system" to review and modify your own code.' : '')} Once the agents have completed their task, they will return the results to you. If they were working on projects, a branch named magi-{agentId} will be created with the changes. You can then run review_branch() to see changes and pull_request to create a PR.
 
-You can read/write to /magi_output which is a virtual volume shared with all your agents. Projects are created with create_project({project}) and initialized with a git repo. Agents will receive a read/write clone of the project git repo at /magi_output/{agentId}/projects/{project} and they will work in a branch "magi-{agentId}". 
+[Quick Agents]
+You have direct access to a BrowserAgent and ShellAgent to quickly visit websites, run shell commands and access files.
+
+[Notes on BrowserAgent]
+Your browser agent is unique in that it operates in a shared browsing session with ${person}. This allows you to interact with websites together. You can access accounts ${person} is already logged into and perform actions for them. By default BrowserAgent will open a tab in the background, but it can use switch_tab('active') to interact with the currently active tab. You can use a BrowserAgent with navigate(url, takeFocus = true) to force a tab to take focus, but this should use used sparingly unless sharing explicit information requested by ${person}.
+
+You can read/write to /magi_output which is a virtual volume shared with all your agents. Projects are created with create_project({project}) and initialized with a git repo. Agents will receive a read/write clone of the project git repo at /magi_output/{agentId}/projects/{project} and they will work in a branch "magi-{agentId}". Information in /magi_output can be access via http://localhost:3011/magi_output/... in a browser URL if you need to open content requested by ${person}.
 
 You will receive a live System Status with every thought showing you the most relevant information about the system you manage. You can use this to keep track of what you are doing and decide what you need to do. Run as many agents at once as you like! When an agent updates or completes, you'll also receive a message in your thought history.
 
@@ -197,8 +205,10 @@ You are your own user. Your messages will be sent back to you to continue your t
 			...getProjectTools(),
 			...getMemoryTools(),
 			...getThoughtTools(),
-			...getFileTools(),
-			...getShellTools(),
+		],
+		workers: [
+			createBrowserAgent,
+			createShellAgent,
 		],
 		modelClass: 'monologue',
 		onRequest: async (messages: ResponseInput): Promise<ResponseInput> => {

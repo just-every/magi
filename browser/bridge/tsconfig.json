@@ -6,19 +6,16 @@
     "esModuleInterop": true,
     "strict": false,
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": "./",
     "sourceMap": true,
     "declaration": false,
     "removeComments": true,
     "jsx": "react",
-    "typeRoots": ["./node_modules/@types", "./src/types/shared-types"],
+    "typeRoots": ["./node_modules/@types"],
     "baseUrl": "./",
     "paths": {
       "*": ["node_modules/*"],
       "@types": ["src/types/shared-types"],
-      "@components/*": ["src/client/js/components/*"],
-      "@hooks/*": ["src/client/js/hooks/*"],
-      "@context/*": ["src/client/js/context/*"]
     },
     "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
@@ -26,6 +23,6 @@
     "resolveJsonModule": true,
     "isolatedModules": true
   },
-  "include": ["src/**/*"],
+  "include": ["*"],
   "exclude": ["node_modules", "dist"],
 }

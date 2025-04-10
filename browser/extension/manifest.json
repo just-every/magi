@@ -1,0 +1,36 @@
+{
+	"manifest_version": 3,
+	"name": "MAGI Browser Controller",
+	"version": "1.0",
+	"description": "Allows MAGI to control your browser.",
+	"permissions": [
+		"nativeMessaging",
+		"tabs",
+		"tabGroups",
+		"scripting",
+		"debugger",
+		"storage",
+		"activeTab",
+		"alarms"
+	],
+	"host_permissions": [
+		"<all_urls>"
+	],
+	"background": {
+		"service_worker": "background.js"
+	},
+	"icons": {
+		"16": "img/icon16.png",
+		"48": "img/icon48.png",
+		"128": "img/icon128.png"
+	},
+	"action": {
+		"default_popup": "popup.html",
+		"default_icon": {
+			"16": "img/icon16.png",
+			"48": "img/icon48.png",
+			"128": "img/icon128.png"
+		}
+	}
+}
+

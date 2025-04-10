@@ -1,464 +1,280 @@
 /**
- * Browser utility functions for the MAGI system using Chrome Native Messaging.
+ * Native Messaging Host & WebSocket Bridge for MAGI Browser Control.
  *
- * This module communicates with the MAGI Chrome extension to control the browser.
+ * Changes:
+ * - Reverted logging to use console.error (stderr) instead of a file.
+ * - Kept timestamps via logError helper.
+ * - Kept correct process.exit(0) in stdin 'end' handler.
+ * - Kept global exception handlers.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
+import * as util from 'util';
 import { Writable, Readable } from 'stream';
+import WebSocket, { WebSocketServer } from 'ws';
 
-// --- Types (Simplified) ---
-interface SimplifiedElementInfo {
-	id: number;
-	description: string;
-	selector: string;
-	tagName: string;
-}
+// --- Logging Setup ---
+// Helper function for timestamped logs to STDERR
+const logError = (...args: any[]) => {
+	const timestamp = new Date().toISOString();
+	// Format message using util.inspect for better object representation on stderr
+	const message = args.map(arg =>
+		typeof arg === 'string' ? arg : util.inspect(arg, { depth: 3, colors: process.stderr.isTTY }) // Use colors only if stderr is a TTY
+	).join(' ');
+	console.error(`[${timestamp}] [BRIDGE] ${message}`); // Log to stderr
+};
 
-interface ExtensionResponse {
-	requestId: number;
-	status: 'ok' | 'error';
-	result?: any;
-	error?: string;
-	details?: string;
-}
-
-// --- Native Messaging Communication ---
-// Simple implementation using process.stdin/stdout
-
-const input = process.stdin as Readable;
-const output = process.stdout as Writable;
-let messageQueue: Buffer[] = [];
-let currentMessageLength: number | null = null;
-let requestIdCounter = 1;
-const pendingRequests = new Map<number, (response: ExtensionResponse) => void>();
-
-// Function to send a command to the extension
-function sendCommand(command: string, params: any = {}): Promise<ExtensionResponse> {
-	return new Promise((resolve, reject) => {
-		const requestId = requestIdCounter++;
-		const message = { requestId, command, params };
-		const messageJson = JSON.stringify(message);
-		const messageBuffer = Buffer.from(messageJson, 'utf8');
-		const lengthBuffer = Buffer.alloc(4);
-		lengthBuffer.writeUInt32LE(messageBuffer.length, 0);
-
-		// Store the resolver for when the response comes back
-		pendingRequests.set(requestId, (response) => {
-			if (response.status === 'ok') {
-				resolve(response);
-			} else {
-				const error = new Error(response.error || 'Unknown extension error');
-				(error as any).details = response.details; // Attach details if available
-				reject(error);
-			}
-		});
-
-		// Set a timeout for the request
-		setTimeout(() => {
-			if (pendingRequests.has(requestId)) {
-				pendingRequests.delete(requestId);
-				reject(new Error(`Request ${requestId} (${command}) timed out after 30 seconds.`));
-			}
-		}, 30000); // 30 second timeout
-
-		try {
-			// Write length prefix, then the message
-			output.write(lengthBuffer);
-			output.write(messageBuffer);
-			console.error(`[SCRIPT->EXT] ID ${requestId}: ${command}`, params); // Log outgoing message to stderr
-		} catch (error) {
-			pendingRequests.delete(requestId);
-			reject(new Error(`Failed to write to extension: ${error instanceof Error ? error.message : String(error)}`));
-		}
-	});
-}
-
-// Process incoming data from the extension
-input.on('data', (chunk: Buffer) => {
-	messageQueue.push(chunk);
-	processMessageQueue();
+// --- Global Error Handlers (Log to stderr) ---
+process.on('uncaughtException', (err, origin) => {
+	logError(`FATAL: UNCAUGHT EXCEPTION`);
+	logError(`Origin: ${origin}`);
+	logError(err?.stack || err);
+	logError(`Forcing exit with code 1 due to uncaught exception.`);
+	process.exit(1);
 });
-
-input.on('end', () => {
-	console.error('[SCRIPT] Native host input stream ended.');
-	// Reject all pending requests
-	pendingRequests.forEach((_, requestId) => {
-		const rejector = pendingRequests.get(requestId);
-		if(rejector) {
-			// Need a way to call reject here - modifying structure slightly
-			// This part is tricky without restructuring pendingRequests to store reject too
-			console.error(`Request ${requestId} aborted due to stream end.`);
-		}
-	});
-	pendingRequests.clear();
-	process.exit(0);
-});
-
-input.on('error', (err) => {
-	console.error('[SCRIPT] Native host input stream error:', err);
+process.on('unhandledRejection', (reason, promise) => {
+	logError('FATAL: UNHANDLED PROMISE REJECTION');
+	if (reason instanceof Error) { logError('Reason:', reason.stack || reason); }
+	else { logError('Reason:', util.inspect(reason, { depth: 3, colors: process.stderr.isTTY })); }
+	logError('Forcing exit with code 1 due to unhandled rejection.');
 	process.exit(1);
 });
 
-function processMessageQueue() {
+
+// --- Configuration ---
+const WEBSOCKET_PORT = 9001;
+const NATIVE_MSG_TIMEOUT = 30000;
+const WS_PING_INTERVAL = 20000;
+
+// --- Types ---
+interface ExtensionResponse { requestId: number; status: 'ok' | 'error'; result?: any; error?: string; details?: string; tabId?: string; }
+interface WebSocketCommand { wsRequestId: string; command: string; params?: any; tabId?: string; }
+interface WebSocketResponse { wsRequestId: string; status: 'ok' | 'error'; result?: any; error?: string; details?: string; tabId?: string; }
+interface PendingNativeRequest { wsClient: WebSocket; wsRequestId: string; timeoutId: NodeJS.Timeout; }
+
+// --- Native Messaging Communication ---
+logError('Evaluating bridge.js script...');
+
+const nativeInput = process.stdin as Readable;
+const nativeOutput = process.stdout as Writable;
+let nativeMessageQueue: Buffer[] = [];
+let currentNativeMessageLength: number | null = null;
+let nativeRequestIdCounter = 1;
+const pendingNativeRequests = new Map<number, PendingNativeRequest>();
+
+nativeInput.on('data', (chunk: Buffer) => {
+	nativeMessageQueue.push(chunk);
+	processNativeMessageQueue();
+});
+
+nativeInput.on('end', () => {
+	logError('Native host input stream \'end\' event received.');
+	try {
+		const serverListening = wss && !wss_closed;
+		logError(`WebSocket server status: ${serverListening ? 'Listening (or closing)' : 'Closed'}`);
+		logError(`Number of active WS clients: ${activeWsClients?.size ?? 'N/A'}`);
+	} catch (e) { logError('Error logging state during stdin end:', e); }
+	logError('Closing WebSocket connections now...');
+	if (wss && !wss_closed) { wss.close(); }
+	else { logError('WebSocket server already closed or not initialized.'); }
+	logError('Exiting process with code 0 due to stdin end.');
+	process.exit(0); // Correct exit behavior
+});
+
+nativeInput.on('error', (err) => {
+	logError('Native host input stream error:', err);
+	if (wss && !wss_closed) { wss.close(); }
+	process.exit(1);
+});
+
+// --- processNativeMessageQueue function (Uses logError -> stderr) ---
+function processNativeMessageQueue() {
 	while (true) {
-		if (currentMessageLength === null) {
-			// Need at least 4 bytes for the length prefix
-			const combinedBuffer = Buffer.concat(messageQueue);
-			if (combinedBuffer.length < 4) {
-				// Not enough data for length yet
-				messageQueue = [combinedBuffer]; // Keep the partial buffer
-				break;
-			}
-			currentMessageLength = combinedBuffer.readUInt32LE(0);
-			// Remove the length prefix from the queue
-			messageQueue = [combinedBuffer.slice(4)];
+		if (currentNativeMessageLength === null) {
+			try {
+				const combinedBuffer = Buffer.concat(nativeMessageQueue);
+				if (combinedBuffer.length < 4) { nativeMessageQueue = [combinedBuffer]; break; }
+				currentNativeMessageLength = combinedBuffer.readUInt32LE(0);
+				nativeMessageQueue = [combinedBuffer.slice(4)];
+			} catch (e) { logError('Error reading native message length:', e); nativeMessageQueue = []; currentNativeMessageLength = null; break; }
 		}
+		if (currentNativeMessageLength === null) { logError('Internal state error...'); break; }
 
-		// Now check if we have the full message
-		const combinedBuffer = Buffer.concat(messageQueue);
-		if (combinedBuffer.length < currentMessageLength) {
-			// Not enough data for the message body yet
-			messageQueue = [combinedBuffer]; // Keep the partial buffer
-			break;
-		}
+		const combinedBuffer = Buffer.concat(nativeMessageQueue);
+		if (combinedBuffer.length < currentNativeMessageLength) { nativeMessageQueue = [combinedBuffer]; break; }
 
-		// We have a complete message
-		const messageBuffer = combinedBuffer.slice(0, currentMessageLength);
-		const remainingBuffer = combinedBuffer.slice(currentMessageLength);
-		messageQueue = [remainingBuffer]; // Keep the rest for the next message
-		currentMessageLength = null; // Reset for the next message length
+		const messageBuffer = combinedBuffer.slice(0, currentNativeMessageLength);
+		const remainingBuffer = combinedBuffer.slice(currentNativeMessageLength);
+		nativeMessageQueue = [remainingBuffer];
+		const messageLength = currentNativeMessageLength;
+		currentNativeMessageLength = null;
+
+		const messageJson = messageBuffer.toString('utf8');
+		logError(`Raw message received (Length: ${messageLength}): ${messageJson}`);
 
 		try {
-			const messageJson = messageBuffer.toString('utf8');
 			const response = JSON.parse(messageJson) as ExtensionResponse;
-			console.error(`[EXT->SCRIPT] ID ${response.requestId} Status: ${response.status}`, response.result || response.error); // Log incoming to stderr
-
-			const resolver = pendingRequests.get(response.requestId);
-			if (resolver) {
-				pendingRequests.delete(response.requestId);
-				resolver(response); // Resolve or reject the promise
+			if (response.requestId === undefined || !response.status) { logError(`Invalid response format...`, response); continue; }
+			logError(`EXT->BRIDGE] Native ID ${response.requestId} Status: ${response.status}`, response.result || response.error || '');
+			const pendingRequest = pendingNativeRequests.get(response.requestId);
+			if (pendingRequest) {
+				clearTimeout(pendingRequest.timeoutId);
+				pendingNativeRequests.delete(response.requestId);
+				if (response.status === 'error') { logError(`Relaying error from extension...`); }
+				sendWebSocketResponse(pendingRequest.wsClient, {
+					wsRequestId: pendingRequest.wsRequestId,
+					status: response.status,
+					result: response.result,
+					error: response.error,
+					details: response.details,
+					tabId: response.tabId
+				});
 			} else {
-				console.error(`[SCRIPT] Received response for unknown request ID: ${response.requestId}`);
+				if (response.requestId === 0) { logError(`Received message with requestId 0...`); }
+				else { logError(`Received native response for unknown/timed-out request ID: ${response.requestId}`); }
 			}
 		} catch (error) {
-			console.error('[SCRIPT] Error processing message from extension:', error);
-			// Continue processing the queue if possible
-		}
-	}
-}
-
-// --- File Utilities (Keep or adapt as needed) ---
-function get_output_dir(subdir: string): string {
-	const baseDir = path.join(process.cwd(), 'output', subdir); // Or choose a different base path
-	if (!fs.existsSync(baseDir)) {
-		fs.mkdirSync(baseDir, { recursive: true });
-	}
-	return baseDir;
-}
-
-function write_unique_file(filePath: string, data: Buffer | string): string {
-	let finalPath = filePath;
-	let counter = 0;
-	const parsedPath = path.parse(filePath);
-	while (fs.existsSync(finalPath)) {
-		counter++;
-		finalPath = path.join(parsedPath.dir, `${parsedPath.name}_${counter}${parsedPath.ext}`);
-	}
-	fs.writeFileSync(finalPath, data);
-	console.log(`File written to ${finalPath}`);
-	return finalPath;
-}
-
-
-// --- Refactored Browser Control Functions ---
-
-// No longer need getPage, browser, context, page state management here.
-// The extension manages the active tab and its state.
-// The element map (currentIdMap) is also managed by the extension per tab.
-
-/**
- * Navigate the active tab to a URL.
- * @param url - URL to navigate to.
- * @returns Result message from the extension.
- */
-export async function navigate(url: string): Promise<string> {
-	console.log(`Requesting navigation to: ${url}`);
-	try {
-		const response = await sendCommand('navigate', { url });
-		return String(response.result || 'Navigation command sent.');
-	} catch (error: any) {
-		console.error(`Error during navigate command: ${error.message}`);
-		return `Error navigating: ${error.message}`;
-	}
-}
-
-/**
- * Gets the simplified page content (text and element map size) from the extension
- * for the active tab. The actual map is stored in the extension.
- * @returns Simplified text representation of the page.
- */
-export async function get_page_content(): Promise<string> {
-	console.log('Requesting simplified page content...');
-	try {
-		const response = await sendCommand('get_page_content');
-		if (response.result && typeof response.result.simplifiedText === 'string') {
-			console.log(`Received simplified content (${response.result.simplifiedText.length} chars), map size: ${response.result.idMapSize}. Map stored in extension.`);
-			return response.result.simplifiedText;
-		} else {
-			throw new Error('Invalid response format for get_page_content');
-		}
-	} catch (error: any) {
-		console.error(`Error getting page content: ${error.message}`);
-		return `Error getting simplified page content: ${error.message}. Interaction map may be unavailable.`;
-	}
-}
-
-/**
- * Requests a screenshot of the active tab's viewport from the extension.
- * Saves the received image data to a file.
- * @param fileName - Optional filename.
- * @returns File path where screenshot was saved or error message.
- */
-export async function screenshot(fileName?: string): Promise<string> {
-	const targetDesc = 'viewport'; // Element screenshots not implemented in this version
-	console.log(`Requesting screenshot of ${targetDesc}`);
-
-	try {
-		const response = await sendCommand('screenshot');
-		if (!response.result?.imageDataUrl) {
-			throw new Error('No image data received from extension.');
+			logError(`Error processing native message JSON...`, error);
+			logError(`Raw message JSON content that failed parsing:`, messageJson);
 		}
 
-		// Convert data URL to buffer
-		const base64Data = response.result.imageDataUrl.replace(/^data:image\/jpeg;base64,/, "");
-		const imageBuffer = Buffer.from(base64Data, 'base64');
-
-		// Generate filename
-		const timestamp = Date.now();
-		// Cannot get URL easily from script side now, simplify filename
-		const defaultFilename = `${timestamp}_viewport_screenshot.jpg`;
-		const fileSavePath = path.join(get_output_dir('screenshots'), fileName || defaultFilename);
-
-		// Save the buffer
-		const savedPath = write_unique_file(fileSavePath, imageBuffer);
-		return `Screenshot saved to ${savedPath}`;
-
-	} catch (error: any) {
-		console.error(`Error taking screenshot: ${error.message}`);
-		return `Error taking screenshot of ${targetDesc}: ${error.message}`;
+		if (remainingBuffer.length === 0) break;
 	}
 }
 
-/**
- * Requests the extension to execute JavaScript in the active tab's context.
- * @param code - JavaScript code to execute.
- * @returns Stringified result of the executed code or error message.
- */
-export async function js_evaluate(code: string): Promise<string> {
-	console.log(`Requesting JavaScript evaluation: ${code.substring(0, 100)}${code.length > 100 ? '...' : ''}`);
-	try {
-		const response = await sendCommand('js_evaluate', { code });
-		return String(response.result ?? 'JavaScript executed.'); // Result should already be stringified by extension
-	} catch (error: any) {
-		console.error(`Error evaluating JavaScript: ${error.message}`);
-		return `Error evaluating JavaScript: ${error.message}`;
-	}
+// --- WebSocket Server (Uses logError -> stderr) ---
+let wss: WebSocketServer | null = null;
+let wss_closed = false;
+const activeWsClients = new Set<WebSocket>();
+
+try {
+	logError('Starting WebSocket server on port 9001...');
+	wss = new WebSocketServer({ port: WEBSOCKET_PORT });
+	wss.on('connection', (ws: WebSocket) => {
+		logError('WebSocket client connected.');
+		activeWsClients.add(ws);
+		(ws as any).isAlive = true;
+		ws.on('pong', () => { (ws as any).isAlive = true; });
+		ws.on('message', async (message: Buffer) => {
+			logError('Received WebSocket message:', message.toString());
+			let command: WebSocketCommand;
+			try {
+				command = JSON.parse(message.toString());
+				if (!command.wsRequestId || !command.command) { throw new Error('Invalid command format: wsRequestId and command are required.'); }
+			} catch (error) {
+				logError('Failed to parse WebSocket message or invalid format:', error);
+				sendWebSocketResponse(ws, { wsRequestId: 'unknown', status: 'error', error: 'Invalid message format received by bridge.' });
+				return;
+			}
+			const nativeRequestId = nativeRequestIdCounter++;
+			const timeoutId = setTimeout(() => {
+				if (pendingNativeRequests.has(nativeRequestId)) {
+					const pending = pendingNativeRequests.get(nativeRequestId)!;
+					pendingNativeRequests.delete(nativeRequestId);
+					const errorMsg = `Request to extension timed out after ${NATIVE_MSG_TIMEOUT / 1000}s (Native ID: ${nativeRequestId}, Command: ${command.command})`;
+					logError(errorMsg);
+					sendWebSocketResponse(pending.wsClient, { wsRequestId: pending.wsRequestId, status: 'error', error: 'Request to browser extension timed out.', details: `Native Request ID: ${nativeRequestId}` });
+				}
+			}, NATIVE_MSG_TIMEOUT);
+			pendingNativeRequests.set(nativeRequestId, { wsClient: ws, wsRequestId: command.wsRequestId, timeoutId: timeoutId });
+			try {
+				const nativeMessage = { requestId: nativeRequestId, command: command.command, params: command.params, tabId: command.tabId };
+				const messageJson = JSON.stringify(nativeMessage);
+				const messageBuffer = Buffer.from(messageJson, 'utf8');
+				const lengthBuffer = Buffer.alloc(4);
+				lengthBuffer.writeUInt32LE(messageBuffer.length, 0);
+
+				if (nativeOutput.writable) {
+					nativeOutput.write(lengthBuffer);
+					nativeOutput.write(messageBuffer);
+					logError(`BRIDGE->EXT] Native ID ${nativeRequestId} (from WS ID ${command.wsRequestId}): ${command.command}`, command.params || {});
+				} else {
+					logError("Error: Native output stream is not writable when trying to send message.");
+					clearTimeout(timeoutId);
+					pendingNativeRequests.delete(nativeRequestId);
+					sendWebSocketResponse(ws, { wsRequestId: command.wsRequestId, status: 'error', error: 'Bridge failed to send command to extension: Native output stream closed.', details: `Native Request ID: ${nativeRequestId}` });
+				}
+			} catch (error) {
+				clearTimeout(timeoutId);
+				pendingNativeRequests.delete(nativeRequestId);
+				const errorMsg = `Failed to write command to extension: ${error instanceof Error ? error.message : String(error)}`;
+				logError(errorMsg);
+				sendWebSocketResponse(ws, { wsRequestId: command.wsRequestId, status: 'error', error: `Bridge failed to send command to extension: ${error instanceof Error ? error.message : String(error)}`, details: `Native Request ID: ${nativeRequestId}` });
+			}
+		});
+		ws.on('close', (code, reason) => {
+			logError(`WebSocket client disconnected. Code: ${code}, Reason: ${reason?.toString()}`);
+			activeWsClients.delete(ws);
+			const requestsToRemove: number[] = [];
+			pendingNativeRequests.forEach((pending, nativeId) => { if (pending.wsClient === ws) { clearTimeout(pending.timeoutId); requestsToRemove.push(nativeId); logError(`Clearing pending native request ${nativeId} due to WS client disconnect (WS ID: ${pending.wsRequestId}).`); } });
+			requestsToRemove.forEach(id => pendingNativeRequests.delete(id));
+		});
+		ws.on('error', (error) => {
+			logError('WebSocket client error:', error);
+			activeWsClients.delete(ws);
+			if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) { ws.close(); }
+			const requestsToRemove: number[] = [];
+			pendingNativeRequests.forEach((pending, nativeId) => { if (pending.wsClient === ws) { clearTimeout(pending.timeoutId); requestsToRemove.push(nativeId); logError(`Clearing pending native request ${nativeId} due to WS client error (WS ID: ${pending.wsRequestId}).`); } });
+			requestsToRemove.forEach(id => pendingNativeRequests.delete(id));
+		});
+	});
+	wss.on('error', (error) => { logError('WebSocket Server error:', error); try { if (!nativeInput.destroyed) nativeInput.destroy(); } catch (e) { logError('Error destroying native input on WSS error:', e) } process.exit(1); });
+	wss.on('close', () => { logError('WebSocket server closed.'); wss_closed = true; try { if (!nativeInput.destroyed) nativeInput.destroy(); } catch (e) { logError('Error destroying native input on WS close:', e) } });
+	logError(`WebSocket server listening on ws://localhost:${WEBSOCKET_PORT}`);
+} catch (e) { logError('Failed to initialize WebSocket server:', e); process.exit(1); }
+
+// --- WebSocket Heartbeat (Uses logError -> stderr) ---
+let wsHeartbeatInterval: NodeJS.Timeout | null = null;
+if (wss) {
+	wsHeartbeatInterval = setInterval(() => {
+		activeWsClients.forEach((ws: WebSocket) => {
+			if ((ws as any).isAlive === false) { logError('WebSocket client unresponsive...'); return ws.terminate(); }
+			(ws as any).isAlive = false;
+			ws.ping((err) => { if (err) { logError('Error sending ping:', err); ws.terminate(); } });
+		});
+	}, WS_PING_INTERVAL);
 }
 
-/**
- * Requests the extension to type text using the debugger API (simulates keyboard input).
- * @param text - Text to type.
- * @returns Result message from the extension.
- */
-export async function type(text: string): Promise<string> {
-	console.log(`Requesting to type text: ${text}`);
-	try {
-		const response = await sendCommand('type', { text });
-		return String(response.result || `Type command sent for: ${text}`);
-	} catch (error: any) {
-		console.error(`Error typing text: ${error.message}`);
-		return `Error typing text: ${error.message}`;
-	}
-}
-
-/**
- * Requests the extension to press specific keys using the debugger API.
- * Note: Key mapping in the extension is basic and needs expansion for complex keys/modifiers.
- * @param keys - Keys to press (e.g., "Enter", "Tab", "ArrowDown").
- * @returns Result message from the extension.
- */
-export async function press(keys: string): Promise<string> {
-	console.log(`Requesting to press keys: ${keys}`);
-	try {
-		const response = await sendCommand('press', { keys });
-		return String(response.result || `Press command sent for: ${keys}`);
-	} catch (error: any) {
-		console.error(`Error pressing keys ${keys}: ${error.message}`);
-		return `Error pressing keys ${keys}: ${error.message}`;
-	}
-}
-
-/**
- * Requests the extension to clear its state (element map) for the active tab
- * and detach the debugger if attached.
- * @returns Result message from the extension.
- */
-export async function reset_session(): Promise<string> {
-	console.log('Requesting session reset for active tab...');
-	try {
-		const response = await sendCommand('reset_session');
-		return String(response.result || 'Session reset command sent.');
-	} catch (error: any) {
-		console.error(`Error resetting session: ${error.message}`);
-		return `Error resetting session: ${error.message}`;
-	}
-}
-
-// --- Helper for Interaction Tools (Click, Fill, Select) ---
-// These tools now need to get the selector from the extension first
-async function getElementSelector(elementId: number): Promise<string> {
-	console.log(`Requesting info for element ID: ${elementId}`);
-	const response = await sendCommand('get_element_info', { elementId });
-	if (!response.result?.selector) {
-		throw new Error(`Could not get selector for element ID ${elementId}. Element info: ${JSON.stringify(response.result)}`);
-	}
-	console.log(`Got selector for ID ${elementId}: ${response.result.selector}`);
-	return response.result.selector;
-}
-
-// --- Example Interaction Tools (Require Adaptation) ---
-// These need to be adapted to use js_evaluate with the retrieved selector
-
-/**
- * Clicks an element identified by its simplified ID.
- * (Implementation uses js_evaluate)
- * @param elementId - Numerical ID of the element.
- */
-export async function clickElement(elementId: number): Promise<string> {
-	console.log(`Requesting click on element ID: ${elementId}`);
-	try {
-		const selector = await getElementSelector(elementId);
-		// Escape selector for use within JavaScript string literal
-		const escapedSelector = selector.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-		const code = `
-            const el = document.querySelector('${escapedSelector}');
-            if (el) {
-                el.click();
-                'Clicked element with selector: ${escapedSelector}';
-            } else {
-                'Element not found with selector: ${escapedSelector}';
-            }
-        `;
-		return await js_evaluate(code);
-	} catch (error: any) {
-		console.error(`Error clicking element ID ${elementId}: ${error.message}`);
-		return `Error clicking element ID ${elementId}: ${error.message}`;
-	}
-}
-
-/**
- * Fills a form field identified by its simplified ID.
- * (Implementation uses js_evaluate)
- * @param elementId - Numerical ID of the element.
- * @param value - Text value to fill.
- */
-export async function fillField(elementId: number, value: string): Promise<string> {
-	console.log(`Requesting fill element ID: ${elementId} with value: ${value}`);
-	try {
-		const selector = await getElementSelector(elementId);
-		const escapedSelector = selector.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-		const escapedValue = value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-		// Focus, set value, and dispatch input/change events for reactivity
-		const code = `
-            const el = document.querySelector('${escapedSelector}');
-            if (el) {
-                el.focus();
-                el.value = '${escapedValue}';
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-                'Filled element with selector: ${escapedSelector}';
-            } else {
-                'Element not found with selector: ${escapedSelector}';
-            }
-        `;
-		return await js_evaluate(code);
-	} catch (error: any) {
-		console.error(`Error filling element ID ${elementId}: ${error.message}`);
-		return `Error filling element ID ${elementId}: ${error.message}`;
-	}
-}
-
-// Add selectOption, etc. adapting the js_evaluate approach similarly
-
-// --- Main Execution / Example Usage ---
-async function main() {
-	console.error('[SCRIPT] Native messaging host script started.'); // Log start to stderr
-
-	try {
-		console.log("--- Starting Browser Automation via Extension ---");
-
-		const resetMsg = await reset_session();
-		console.log("Session Reset:", resetMsg);
-
-		const navMsg = await navigate("https://www.google.com/search?q=chrome+native+messaging");
-		console.log("Navigation:", navMsg);
-
-		// Allow time for page load before getting content
-		await new Promise(resolve => setTimeout(resolve, 3000));
-
-		const content = await get_page_content();
-		console.log("\n--- Simplified Page Content ---");
-		console.log(content.substring(0, 500) + (content.length > 500 ? '...' : ''));
-		console.log("-------------------------------\n");
-
-		const screenshotPath = await screenshot("google_search_results.jpg");
-		console.log("Screenshot:", screenshotPath);
-
-		// Example: Find the search input (assuming it gets ID 1 - check content output)
-		// This requires inspecting the output of get_page_content to find the correct ID
-		// Let's assume the search bar is ID 1 for this example
-		const searchInputId = 1; // *** Replace with actual ID from content output ***
+// --- sendWebSocketResponse function (Uses logError -> stderr) ---
+function sendWebSocketResponse(wsClient: WebSocket, response: WebSocketResponse) {
+	if (wsClient.readyState === WebSocket.OPEN) {
 		try {
-			const fillMsg = await fillField(searchInputId, "Playwright alternative");
-			console.log("Fill Field:", fillMsg);
-
-			// Press Enter (assuming Enter key works)
-			const pressMsg = await press("Enter");
-			console.log("Press Enter:", pressMsg);
-
-			await new Promise(resolve => setTimeout(resolve, 3000)); // Wait for results
-
-			const contentAfterSearch = await get_page_content();
-			console.log("\n--- Content After Search ---");
-			console.log(contentAfterSearch.substring(0, 500) + (contentAfterSearch.length > 500 ? '...' : ''));
-			console.log("----------------------------\n");
-
-			const screenshotAfterPath = await screenshot("google_search_results_after.jpg");
-			console.log("Screenshot After:", screenshotAfterPath);
-
-		} catch (interactionError: any) {
-			console.warn(`Could not complete interaction example (maybe element ID ${searchInputId} was wrong?): ${interactionError.message}`);
-		}
-
-
-		console.log("\n--- Automation Example Finished ---");
-
-	} catch (error: any) {
-		console.error("An error occurred during the main execution:", error.message, error.details || error.stack);
-	} finally {
-		// Signal the extension we might be done? Not strictly necessary with stdio.
-		console.error("[SCRIPT] Script execution finished. Exiting.");
-		// Ensure buffers are flushed before exiting
-		await new Promise(resolve => process.stdout.write('', resolve));
-		await new Promise(resolve => process.stderr.write('', resolve));
-		process.exit(0); // Exit cleanly
+			wsClient.send(JSON.stringify(response));
+			logError(`BRIDGE->WS] Sent response for WS ID ${response.wsRequestId}, Status: ${response.status}`);
+		} catch (error) { logError(`Failed to send WebSocket response...`, error); wsClient.terminate(); }
+	} else {
+		logError(`Cannot send WebSocket response... client state is ${wsClient.readyState}`);
+		const requestsToRemove: number[] = [];
+		pendingNativeRequests.forEach((pending, nativeId) => { if (pending.wsClient === wsClient) { clearTimeout(pending.timeoutId); requestsToRemove.push(nativeId); logError(`Clearing pending native request ${nativeId} as WS client state is not OPEN (WS ID: ${pending.wsRequestId}).`); } });
+		requestsToRemove.forEach(id => pendingNativeRequests.delete(id));
 	}
 }
 
-// Run the main function if this script is executed directly
-if (require.main === module) {
-	main();
+// --- Graceful Shutdown (Uses logError -> stderr) ---
+function gracefulShutdown(signal: string) {
+	logError(`Received ${signal}. Shutting down gracefully...`);
+	if (wsHeartbeatInterval) { clearInterval(wsHeartbeatInterval); }
+	logError(`Closing ${activeWsClients.size} active WebSocket connections...`);
+	activeWsClients.forEach(ws => { ws.close(1001, "Server shutting down"); });
+	activeWsClients.clear();
+	if (wss && !wss_closed) {
+		logError('Closing WebSocket server...');
+		wss.close(() => { logError('WebSocket server closed.'); shutdownNativeConnection(); });
+	} else {
+		logError('WebSocket server already closed or not initialized, proceeding with shutdown.');
+		shutdownNativeConnection();
+	}
+	setTimeout(() => { logError('Graceful shutdown timed out. Forcing exit.'); process.exit(1); }, 5000);
 }
+function shutdownNativeConnection() {
+	try {
+		if (!nativeInput.destroyed) { logError('Closing native input stream...'); nativeInput.destroy(); }
+	} catch (e) { logError('Error destroying native input during shutdown:', e); }
+	finally {
+		logError('Shutdown complete. Exiting process now.');
+		process.exit(0); // Correctly exit when shutdown is called
+	}
+}
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
+logError('Native messaging host script setup complete. Waiting for events.');

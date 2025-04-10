@@ -37,6 +37,7 @@ The system consists of two primary components:
 
 - Node.js (v18+ recommended)
 - Docker
+- Chrome browser (for browser extension)
 - API keys for supported LLM providers (OpenAI, Anthropic Claude, Google Gemini, etc.)
 
 ### Setup
@@ -46,23 +47,59 @@ The system consists of two primary components:
 git clone https://github.com/has-context/magi-system.git
 cd magi-system
 
-# Run setup
+# Install dependencies
+npm install
+
+# Run the automated setup
 npm run setup
+
+# This will guide you through:
+# 1. Setting up environment variables and API keys
+# 2. Building the Docker image
+# 3. Setting up Docker volumes
+# 4. Setting up Claude authentication
+# 5. Setting up the browser extension
 ```
+
+### Browser Extension Setup
+
+The browser extension allows MAGI to control your Chrome browser. If you skipped this step during the main setup, you can run it separately:
+
+```bash
+npm run setup:browser
+```
+
+This will guide you through:
+1. Installing the Chrome extension from the browser/ directory
+2. Configuring the native messaging host for Chrome to communicate with MAGI
 
 ## Usage
 
 ### Starting the System
 
 ```bash
-# Build Docker images and start the system
+# Build Docker images and start the system with browser bridge
 npm run dev
 ```
 
 This will:
-1. Build the Docker images for the controller and MAGI base
-2. Start the system with Docker Compose
-3. Make the web interface available at http://localhost:3011
+1. Start the browser bridge for Chrome extension communication
+2. Build the Docker images for the controller and MAGI base
+3. Start the system with Docker Compose
+4. Make the web interface available at http://localhost:3011
+
+#### Additional Start Options
+
+```bash
+# Start only the core system without browser integration
+npm run dev:core
+
+# Start only the browser bridge
+npm run bridge:start
+
+# Stop the browser bridge
+npm run bridge:stop
+```
 
 ### Running Tests
 
@@ -136,6 +173,7 @@ magi-system/
 - **Quota Management**: Tracks usage quotas across providers to optimize cost
 - **Streaming Responses**: Real-time streaming of LLM outputs and tool usage
 - **Tool Integration**: Agents can use tools like web search, code execution, and browser automation
+- **Browser Integration**: Chrome extension allows direct interaction with the web browser
 - **Cost Tracking**: Monitors and reports on API usage costs
 
 ## Command Line Utilities

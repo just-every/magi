@@ -1,0 +1,9 @@
+{
+	"name": "com.withmagi.magi_native_host",
+	"description": "Native host for MAGI Shared Browser",
+	"path": "./bridge_runner.sh",
+	"type": "stdio",
+	"allowed_origins": [
+		"chrome-extension://YOUR_EXTENSION_ID_HERE/"
+	]
+}

@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "cleanup": "rm -rf dist/",
-    "build": "tsc && webpack && rsync -a src/client/html dist/client/",
+    "build": "tsc && webpack && rsync -a src/client/html dist/client/ && rsync -a src/client/img dist/client/",
     "start": "node dist/server/server.js",
     "dev": "nodemon --config nodemon.json",
     "lint": "eslint --ext .ts,.tsx src/",

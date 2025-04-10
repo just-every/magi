@@ -14,7 +14,7 @@ export default [
       ecmaVersion: 2022,
       sourceType: 'module',
       parserOptions: {
-        project: ['./tsconfig.json', './controller/tsconfig.json', './magi/tsconfig.json']
+        project: ['./tsconfig.json', './controller/tsconfig.json', './magi/tsconfig.json', 'browser/bridge/tsconfig.json']
       },
     },
     plugins: {
