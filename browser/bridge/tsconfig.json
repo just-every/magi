@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": false,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "sourceMap": true,
+    "declaration": false,
+    "removeComments": true,
+    "jsx": "react",
+    "typeRoots": ["./node_modules/@types", "./src/types/shared-types"],
+    "baseUrl": "./",
+    "paths": {
+      "*": ["node_modules/*"],
+      "@types": ["src/types/shared-types"],
+      "@components/*": ["src/client/js/components/*"],
+      "@hooks/*": ["src/client/js/hooks/*"],
+      "@context/*": ["src/client/js/context/*"]
+    },
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"],
+}
