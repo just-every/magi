@@ -88,12 +88,12 @@ export async function navigate(url: string, takeFocus?: false): Promise<string> 
  *
  * @returns Simplified text representation of the page or an error message string.
  */
-export async function get_page_content(): Promise<string> {
+export async function get_page_content(allContent?: boolean): Promise<string> {
   console.log('[browser_utils] Requesting simplified page content...');
   try {
     const session = getOrCreateTabSession();
     await session.initialize(); // Ensure session is initialized
-    const simplifiedText = await session.get_page_content();
+    const simplifiedText = await session.get_page_content(allContent);
     return simplifiedText;
   } catch (error: any) {
     const errorMessage = `[browser_utils] Error getting simplified page content: ${error?.message || String(error)}`;
@@ -359,7 +359,9 @@ export function getBrowserTools(): ToolFunction[] {
     createToolFunction(
       get_page_content,
       'Get simplified text content of the current page, including interactive elements ([ID] description format) and structural landmarks (## Landmark ##). Updates the internal map for ID-based interactions. IMPORTANT: Call this AFTER navigation or actions that significantly change the page (clicks, submits).',
-      {},
+      {
+        'allContent': { type: 'boolean', description: 'Should the full text content be returned? If not, only visible interactive elements will be included. Default: false', optional: true },
+      },
       'Simplified text representation of the page, optimized for information extraction and interaction.'
     ),
     createToolFunction(

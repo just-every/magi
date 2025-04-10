@@ -210,7 +210,7 @@ export class AgentBrowserSession {
 	 */
 	constructor(tabId: string) {
 		if (!tabId) {
-			throw new Error("Tab ID cannot be empty.");
+			throw new Error('Tab ID cannot be empty.');
 		}
 		this.tabId = tabId;
 		console.log(`[browser_utils] AgentBrowserSession created for tab: ${this.tabId}`);
@@ -272,11 +272,11 @@ export class AgentBrowserSession {
 		}
 	}
 
-	async get_page_content(): Promise<string> {
+	async get_page_content(allContent?: boolean): Promise<string> {
 		await this.ensureInitialized();
 		console.log(`[browser_utils] Tab ${this.tabId}: Requesting simplified page content...`);
 		try {
-			const result = await sendWsCommand('get_page_content', this.tabId);
+			const result = await sendWsCommand('get_page_content', this.tabId, { allContent });
 			// Response should be { simplifiedText, idMapSize }
 			if (result && typeof result.simplifiedText === 'string') {
 				console.log(`[browser_utils] Tab ${this.tabId}: Received simplified content (${result.simplifiedText.length} chars), map size: ${result.idMapSize}.`);

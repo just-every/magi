@@ -1,0 +1,21 @@
+{
+  "name": "magi-browser-extension",
+  "version": "1.0.0",
+  "description": "Chrome extension for MAGI system browser control",
+  "scripts": {
+    "build": "esbuild src/background.ts --bundle --outfile=dist/background.js --platform=browser --format=esm",
+    "watch": "tsc --watch",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix"
+  },
+  "author": "MAGI",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/chrome": "^0.0.255",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3",
+    "esbuild": "^0.19.11" 
+  }
+}
