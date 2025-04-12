@@ -44,7 +44,7 @@ export interface AgentInterface {
 export interface AgentProcess {
 	processId: string;
 	started: Date;
-	status: 'started' | 'running' | 'waiting' | 'completed' | 'terminated';
+	status: 'started' | 'running' | 'waiting' | 'completed' | 'failed' | 'terminated';
 	tool: ProcessToolType;
 	command: string;
 	name: string;
@@ -116,11 +116,14 @@ export interface AgentDefinition {
 	model?: string;
 	modelClass?: ModelClassID;
 	maxToolCalls?: number;
+	jsonSchema?: object;  // JSON schema definition for structured output
+	modelSettings?: ModelSettings;
 
 	onToolCall?: (toolCall: ToolCall) => Promise<void>;
 	onToolResult?: (toolCall: ToolCall, result: string) => Promise<void>;
 	onRequest?: (messages: ResponseInput) => Promise<ResponseInput>;
 	onResponse?: (response: string) => Promise<string>;
+	tryDirectExecution?: (messages: ResponseInput) => Promise<ResponseInput | null>; // Add this line
 }
 
 /**
@@ -144,8 +147,10 @@ export interface ModelSettings {
 	max_tokens?: number;
 	stop_sequence?: string;
 	seed?: number;
-	response_format?: { type: string };
+	text?: { format: string };
 	tool_choice?: 'auto' | 'none' | 'required' | { type: string; function: { name: string } };
+	json_schema?: object;  // JSON schema for structured output
+	force_json?: boolean;  // Force JSON output even if model doesn't natively support it
 }
 
 /**
@@ -289,6 +294,7 @@ export type StreamEventType =
 	| 'process_running'
 	| 'process_updated'
 	| 'process_done'
+	| 'process_failed'
 	| 'process_waiting'
 	| 'process_terminated'
 	| 'agent_start'
@@ -363,13 +369,13 @@ export interface PullRequestEvent extends StreamEvent {
 }
 
 
-export type ProcessToolType = 'research_engine' | 'godel_machine' | 'task_force';
+export type ProcessToolType = 'research_engine' | 'godel_machine' | 'run_task';
 
 /**
  * Agent updated streaming event
  */
 export interface ProcessEvent extends StreamEvent {
-	type: 'process_start' | 'process_running' | 'process_updated' | 'process_done' | 'process_waiting' | 'process_terminated';
+	type: 'process_start' | 'process_running' | 'process_updated' | 'process_done' | 'process_failed' | 'process_waiting' | 'process_terminated';
 	agentProcess?: AgentProcess;
 	output?: string;
 	error?: string;
@@ -523,4 +529,40 @@ export interface ModelProvider {
 		messages: ResponseInput,
 		agent?: Agent,
 	): AsyncGenerator<StreamingEvent>;
+}
+
+// --- Custom Signals for Task Flow Control ---
+
+/**
+ * Custom error used as a signal to indicate successful task completion.
+ * This allows the runner to stop processing immediately when this tool is called.
+ */
+export class TaskCompleteSignal extends Error {
+	public readonly result: string;
+	public history?: ResponseInput | undefined;
+	constructor(result: string) {
+		super('Task completed successfully.');
+		this.name = 'TaskCompleteSignal';
+		this.result = result;
+		// Ensure the prototype chain is set correctly for instanceof checks
+		Object.setPrototypeOf(this, TaskCompleteSignal.prototype);
+	}
+}
+
+/**
+ * Custom error used as a signal to indicate a fatal task error.
+ * This allows the runner to stop processing immediately when this tool is called.
+ */
+export class TaskFatalErrorSignal extends Error {
+	public readonly errorDetails: string;
+	public history?: ResponseInput | undefined;
+	constructor(errorDetails: string) {
+		super('Task failed due to a fatal error.');
+		this.name = 'TaskFatalErrorSignal';
+		this.errorDetails = errorDetails;
+		// Ensure the prototype chain is set correctly for instanceof checks
+		Object.setPrototypeOf(this, TaskFatalErrorSignal.prototype);
+	}
+
+
 }

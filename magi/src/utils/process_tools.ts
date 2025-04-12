@@ -1,7 +1,7 @@
 import {ProcessToolType, ToolFunction} from '../types.js';
 import {runGodelMachine} from '../magi_agents/godel_machine/index.js';
 import {runResearchEngine} from '../magi_agents/research_engine/index.js';
-import {runTaskForce} from '../magi_agents/task_force/index.js';
+import {runTask} from '../magi_agents/task_run/index.js';
 import {getCommunicationManager} from './communication.js';
 import {processTracker} from './process_tracker.js';
 import {dateFormat} from './date_tools.js';
@@ -19,8 +19,8 @@ export async function runProcessTool(
 		case 'godel_machine':
 			await runGodelMachine(command);
 			break;
-		case 'task_force':
-			await runTaskForce(command);
+		case 'run_task':
+			await runTask(command);
 			break;
 	}
 }
@@ -30,15 +30,15 @@ export async function runProcessTool(
 /**
  * Send a message to a specific process
  *
- * @param agentId The ID of the process to send the message to
+ * @param taskId The ID of the process to send the message to
  * @param message The message to send
  * @returns Success message or error
  */
-function send_message(agentId: string, command: string): string {
-	const process = processTracker.getProcess(agentId);
+function send_message(taskId: string, command: string): string {
+	const process = processTracker.getProcess(taskId);
 
 	if (!process || process.status === 'terminated') {
-		return `Error: AgentID ${agentId} has been terminated.`;
+		return `Error: taskId ${taskId} has been terminated.`;
 	}
 
 	try {
@@ -48,22 +48,22 @@ function send_message(agentId: string, command: string): string {
 		// Send a command event to the controller that will route it to the target process
 		comm.send({
 			type: 'command_start',
-			processId: agentId,
+			processId: taskId,
 			command,
 		});
 
-		return `Message sent to AgentID ${agentId} successfully`;
+		return `Message sent to taskId ${taskId} successfully`;
 	} catch (error) {
-		return `Error sending message to AgentID ${agentId}: ${error}`;
+		return `Error sending message to taskId ${taskId}: ${error}`;
 	}
 }
 
 
 /**
- * Get the current status of an agent
+ * Get the current status of an task
  */
-function get_agent_status(agentId: string): string {
-	return processTracker.getStatus(agentId);
+function get_task_status(taskId: string): string {
+	return processTracker.getStatus(taskId);
 }
 
 
@@ -79,11 +79,11 @@ function get_agent_status(agentId: string): string {
 function startProcess(tool: ProcessToolType, name: string, command: string, project?: string[]): string {
 	const comm = getCommunicationManager();
 
-	const agentId = `AI-${Math.random().toString(36).substring(2, 8)}`;
+	const taskId = `AI-${Math.random().toString(36).substring(2, 8)}`;
 
 	// Save a record of the process
-	const agentProcess = processTracker.addProcess(agentId, {
-		processId: agentId,
+	const agentProcess = processTracker.addProcess(taskId, {
+		processId: taskId,
 		started: new Date(),
 		status: 'started',
 		tool,
@@ -98,7 +98,7 @@ function startProcess(tool: ProcessToolType, name: string, command: string, proj
 		agentProcess,
 	});
 
-	return `Agent ID [${agentId}] ${tool} (${name}) started at ${dateFormat()}.`;
+	return `taskId ${taskId} ${tool} (${name}) started at ${dateFormat()}.`;
 }
 
 // function startResearchEngine(name: string, command: string, project?: string[]): string {
@@ -107,8 +107,8 @@ function startProcess(tool: ProcessToolType, name: string, command: string, proj
 // function startGodelMachine(name: string, command: string, project?: string[]): string {
 // 	return startProcess('godel_machine', name, command);
 // }
-function startTaskForce(name: string, command: string, project?: string[]): string {
-	return startProcess('task_force', name, command, project);
+function start_task(name: string, context: string, task: string, goal: string, project?: string[]): string {
+	return startProcess('run_task', name, `Context: ${context}\n\nTask: ${task}\n\nGoal: ${goal}`, project);
 }
 
 
@@ -125,6 +125,7 @@ export function listActiveProjects(): string {
  * Get all project tools as an array of tool definitions
  */
 export function getProcessTools(): ToolFunction[] {
+	const person = process.env.YOUR_NAME || 'User';
 	return [
 		/*createToolFunction(
 				startResearchEngine,
@@ -147,36 +148,37 @@ export function getProcessTools(): ToolFunction[] {
 				'Start Godel'
 			),*/
 		createToolFunction(
-			startTaskForce,
-			'Starts a new Task Force. Uses human level intelligence.',
+			start_task,
+			'Starts a new Task. Uses human level intelligence.',
 			{
-				'name': 'Give this task a name - three words or less. Can be funny, like a fictional reference or a pun, or if none work make it descriptive.',
-				'command': 'What would like a Task Force to work on? The Task Force only has the information you provide in this command. You should explain both the specific goal for the Task Force and any additional information they need. Generally you should leave the way the task is performed up to the Task Force unless you need a very specific set of tools used. Agents are expected to work autonomously, so will rarely ask additional questions.',
+				'name': 'Give this task a name - four words or less. Can be funny, like a fictional reference or a pun, or if none work make it descriptive.',
+				'context': `If this is a request from ${person}, include the original question here. If this in response to a problem or project you're working on, provide some background on the issue/project here. The task agents only have the background information you provide, so please make it comprehensive. A couple of paragraphs is ideal.`,
+				'task': 'What task would like to work on? You should explain both the specific goal for the task and any additional information they need. Generally you should leave the way the task is performed up to the task operator unless you need a very specific set of tools used. Agents are expected to work autonomously, so will rarely ask additional questions.',
+				'goal': 'What is the final goal of this task? This is the final output or result you expect from the task. It should be a single sentence or two at most.',
 				'project': {
-					description: 'An array of projects to mount for the Task Force giving the Task Force access to a copy of files. The Task Force can modify the files and submit them back as a new git branch.'+((process.env.PROJECT_REPOSITORIES || '').split(',').includes('magi-system') ? ' Include "magi-system" to provide access to your code.' : '')+' The Task Force will have access to these files at /magi_output/{agentId}/projects/{project}. Their default branch will be "magi-{agentId}". If you provide only one project, that will be their working directory when they start (otherwise it will be /magi_output/{agentId}/working)',
+					description: 'An array of projects to mount for the task giving the task access to a copy of files. The tasl can modify the files and submit them back as a new git branch.'+((process.env.PROJECT_REPOSITORIES || '').split(',').includes('magi-system') ? ' Include "magi-system" to provide access to your code.' : '')+' The task will have access to these files at /magi_output/{taskId}/projects/{project}. Their default branch will be "magi-{taskId}". If you provide only one project, that will be their working directory when they start (otherwise it will be /magi_output/{taskId}/working)',
 					type: 'array',
 					enum: (process.env.PROJECT_REPOSITORIES || '').split(','),
 				},
 			},
 			'A description of information found or work that has been completed',
-			'start task'
 		),
 		createToolFunction(
 			send_message,
-			'Send a message to an agent you are managing',
+			'Send a message to an task you are managing',
 			{
-				'agentId': 'The ID of the agent to send the message to',
-				'command': 'The message to send to the agent. Send \'stop\' to terminate the agent. Any other message will be processed by the agent as soon as it is able to.',
+				'taskId': 'The ID of the task to send the message to',
+				'command': 'The message to send to the task. Send \'stop\' to terminate the task. Any other message will be processed by the task as soon as it is able to.',
 			},
 			'If the message was sent successfully or not'
 		),
 		createToolFunction(
-			get_agent_status,
-			'See the full details of an agent you are managing',
+			get_task_status,
+			'See the full details of an task you are managing',
 			{
-				'agentId': 'The ID of the agent to send the message to',
+				'taskId': 'The ID of the task to view',
 			},
-			'A detailed history of all messages and events for the agent.'
+			'A detailed view of the current status of the task.'
 		),
 	];
 }

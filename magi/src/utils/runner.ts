@@ -13,6 +13,8 @@ import {
 	ResponseInput,
 	ToolCallHandler,
 	RunnerConfig, ResponseInputItem, ResponseInputFunctionCall, ResponseInputFunctionCallOutput, ResponseInputMessage,
+	TaskCompleteSignal, // Import the signal
+	TaskFatalErrorSignal, // Import the signal
 } from '../types.js';
 import {Agent} from './agent.js';
 import {getModelProvider} from '../model_providers/model_provider.js';
@@ -423,11 +425,36 @@ SUMMARY:`;
 							console.log(`[Tool Call] ${call.function.name}:`, parsedArgs);
 						});
 
-						// Process all tool calls in parallel
-						const toolResult = await processToolCall(toolEvent, agent, handlers);
+						// Process all tool calls in parallel, catching signals
+						let toolResult: string | null = null; // Initialize to null
+						try {
+							toolResult = await processToolCall(toolEvent, agent, handlers);
+						} catch (error) {
+							// Check if it's one of our signals and re-throw it
+							if (error instanceof TaskCompleteSignal || error instanceof TaskFatalErrorSignal) {
+								console.log(`[Runner] Caught signal during tool processing: ${error.name}`);
+								throw error; // Re-throw to stop further processing in this function
+							}
+							// Handle other tool execution errors
+							console.error(`[Runner] Error during processToolCall: ${error}`);
+							// Create an error result to send back to the model if needed,
+							// or decide how to handle tool execution failures.
+							// For now, let's create a generic error string.
+							// We might want to make this more sophisticated later.
+							toolResult = JSON.stringify({ error: `Tool execution failed: ${error instanceof Error ? error.message : String(error)}` });
+							// Optionally, re-throw if tool errors should halt the process: throw error;
+						}
 
-						// Parse tool results for better logging
-						let parsedResults;
+
+						// Parse tool results for better logging (only if toolResult is not null)
+						let parsedResults = null;
+						if (toolResult !== null) {
+							try {
+								parsedResults = JSON.parse(toolResult);
+							} catch (e) {
+								parsedResults = toolResult; // Keep as string if not JSON
+							}
+						}
 						try {
 							parsedResults = JSON.parse(toolResult);
 						} catch (e) {
@@ -460,8 +487,9 @@ SUMMARY:`;
 							}
 						}
 
-						// Send detailed tool result via event handler
-						if (handlers.onEvent) {
+
+						// Send detailed tool result via event handler (only if results were processed)
+						if (parsedResults !== null && handlers.onEvent) {
 							// Create a resultsById object that maps tool call IDs to their results
 							const resultsById: Record<string, unknown> = {};
 
@@ -473,12 +501,13 @@ SUMMARY:`;
 										resultsById[toolEvent.tool_calls[i].id] = parsedResults[i];
 									}
 								}
-							} else {
+							} else if (parsedResults !== null) { // Check again for non-array, non-null case
 								// If parsedResults is not an array, map it to the first tool call ID
 								if (toolEvent.tool_calls.length > 0) {
 									resultsById[toolEvent.tool_calls[0].id] = parsedResults;
 								}
 							}
+
 
 							comm.send({
 								agent: event.agent,
@@ -493,8 +522,8 @@ SUMMARY:`;
 								results: resultsById,
 							});
 						}
-						break;
-					}
+						break; // End of 'tool_start' case
+					} // End of 'tool_start' case
 
 					case 'error': {
 						const errorEvent = event as any; // Type assertion for error event
@@ -504,9 +533,11 @@ SUMMARY:`;
 				}
 			}
 
-			// Process tool call results if there were any tool calls
+			// Process tool call results if there were any tool calls AND no signal was thrown
+			// The try/catch around processToolCall above would have re-thrown signals,
+			// preventing execution from reaching this point if a signal occurred.
 			if (agent.modelSettings?.tool_choice !== 'none' && collectedToolCalls.length > 0 && collectedToolResults.length > 0) {
-				console.log(`[Runner] Collected ${collectedToolCalls.length} tool calls, running follow-up with results`);
+				console.log(`[Runner] Collected ${collectedToolCalls.length} tool calls, running follow-up with results.`);
 
 				// Increment tool call count
 				toolCallCount++;
@@ -612,6 +643,49 @@ SUMMARY:`;
 				}
 			}
 
+			// Handle structured JSON output if json_schema is specified
+			if (agent.modelSettings?.json_schema) {
+				try {
+					// Try to parse the response as JSON
+					let jsonResponse;
+					try {
+						jsonResponse = JSON.parse(fullResponse.trim());
+						console.log(`[Runner] Successfully parsed JSON response for agent ${agent.name}`);
+					} catch (error) {
+						const jsonError = error as Error;
+						// If we couldn't parse it directly, try to extract JSON from text
+						const jsonMatch = fullResponse.match(/```(?:json)?\s*({[\s\S]*?})\s*```/) || 
+							fullResponse.match(/({[\s\S]*})/);
+							
+						if (jsonMatch && jsonMatch[1]) {
+							try {
+								jsonResponse = JSON.parse(jsonMatch[1].trim());
+								console.log(`[Runner] Extracted and parsed JSON from response for agent ${agent.name}`);
+							} catch (err) {
+								const extractError = err as Error;
+								throw new Error(`Failed to parse extracted JSON: ${extractError.message}`);
+							}
+						} else {
+							throw new Error(`Response is not valid JSON and no JSON block could be extracted: ${jsonError.message}`);
+						}
+					}
+					
+					// If force_json is true and parsing failed, we might want to retry
+					// But for now, just use the successfully parsed result
+					if (jsonResponse) {
+						// Replace the full response with pretty-printed JSON
+						fullResponse = JSON.stringify(jsonResponse, null, 2);
+					}
+				} catch (error) {
+					console.error(`[Runner] Error handling JSON response for agent ${agent.name}:`, error);
+					
+					// If force_json is true, we could retry here
+					if (agent.modelSettings?.force_json) {
+						console.warn('[Runner] force_json is true but couldn\'t get valid JSON. Consider implementing retry logic.');
+					}
+				}
+			}
+			
 			// Allow the agent to process the final response before returning
 			if(agent.onResponse) {
 				fullResponse = await agent.onResponse(fullResponse);
@@ -620,8 +694,16 @@ SUMMARY:`;
 
 			return fullResponse;
 		} catch (error) {
-			console.error(`Error in runStreamedWithTools: ${error}`);
-			throw error;
+			// Catch signals here as well to ensure they propagate up if they occurred
+			// outside the specific tool processing block (e.g., during stream iteration).
+			if (error instanceof TaskCompleteSignal || error instanceof TaskFatalErrorSignal) {
+				console.log(`[Runner] Propagating signal from runStreamedWithTools: ${error.name}`);
+				throw error; // Re-throw the signal
+			}
+			// Handle other errors
+			console.error(`[Runner] Error in runStreamedWithTools: ${error}`);
+			// Consider wrapping non-signal errors if needed, or just re-throw
+			throw error; // Re-throw other errors
 		}
 	}
 
@@ -691,19 +773,57 @@ SUMMARY:`;
 					agent.agent_id = agent_id;
 				}
 
-				// Run the agent with the current input
-				const response = await this.runStreamedWithTools(
-					agent,
-					undefined,
-					[...(agentSequence[currentStage].input?.(history, lastOutput) || history)]
-				);
+				// Prepare input messages for the current stage
+				const stageInputMessages = [...(agentSequence[currentStage].input?.(history, lastOutput) || history)];
 
-				addOutput(currentStage, response);
+				let stageOutput: string | null = null; // To store the result string
+				let directExecutionResult: ResponseInput | null = null; // To store the raw ResponseInput if executed directly
 
-				const nextStage = agentSequence[currentStage].next(response);
-				if(!nextStage) {
+				// Check if the agent has a direct execution hook
+				if (agent.tryDirectExecution) {
+					directExecutionResult = await agent.tryDirectExecution(stageInputMessages);
+				}
+
+				if (directExecutionResult) {
+					// Direct execution succeeded!
+					console.log(`[Runner] Stage ${currentStage} executed directly via tryDirectExecution.`);
+					// Extract the content string from the ResponseInput for logging/next stage input
+					// Check if the first item is a message-like object with content
+					if (Array.isArray(directExecutionResult) && directExecutionResult.length > 0) {
+						const firstItem = directExecutionResult[0];
+						if (firstItem && typeof firstItem === 'object' && 'content' in firstItem && firstItem.content !== undefined && firstItem.content !== null) {
+							stageOutput = typeof firstItem.content === 'string'
+								? firstItem.content
+								: JSON.stringify(firstItem.content);
+						}
+					}
+					
+					if (stageOutput === null) {
+						stageOutput = "Direct execution completed but response format was unexpected or content was empty.";
+						console.warn(`[Runner] Unexpected response format or empty content from tryDirectExecution for stage ${currentStage}:`, directExecutionResult);
+					}
+					
+					// Add the output to history and lastOutput
+					addOutput(currentStage, stageOutput);
+
+				} else {
+					// Direct execution skipped or returned null, proceed with standard LLM call
+					console.log(`[Runner] Stage ${currentStage} using standard LLM execution (runStreamedWithTools).`);
+					stageOutput = await this.runStreamedWithTools(
+						agent,
+						undefined, // Input string is handled by the stage's input function
+						stageInputMessages
+					);
+					// Add the output to history and lastOutput
+					addOutput(currentStage, stageOutput);
+				}
+
+
+				// Determine the next stage based on the output string (ensure it's not null)
+				const nextStage = agentSequence[currentStage].next(stageOutput ?? ""); // Use nullish coalescing for safety
+				if (!nextStage) {
 					console.log('[Runner] No next stage found, ending sequence.');
-					break;
+					break; // Exit the while loop
 				}
 
 				// Check that if the next stage is going backwards
@@ -727,6 +847,11 @@ SUMMARY:`;
 				currentStage = nextStage;
 
 			} catch (error) {
+				if (error instanceof TaskCompleteSignal || error instanceof TaskFatalErrorSignal) {
+					error.history = history; // Attach history to the error
+					throw error; // Re-throw to stop further processing in this function
+				}
+
 				console.error(`[Runner] Error in sequential stage ${currentStage}: ${error}`);
 
 				// Record the error as a failure

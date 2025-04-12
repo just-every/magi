@@ -4,10 +4,10 @@
   "description": "MAGI System",
   "type": "module",
   "scripts": {
-    "postinstall": "cd controller && npm install && cd ../magi && npm install && cd ../browser/bridge && npm install",
+    "postinstall": "cd controller && npm install && cd ../magi && npm install && cd ../browser/bridge && npm install && cd ../extension && npm install",
     "build": "npm run build:tsc && npm run build:docker",
     "build:docker": "docker compose build controller magi-base",
-    "build:tsc": "npx tsc -p browser/bridge",
+    "build:tsc": "npx tsc -p browser/bridge && cd browser/extension && npm run build",
     "dev": "npm run build && docker compose up",
     "bridge:start": "scripts/start-bridge.sh",
     "bridge:stop": "scripts/stop-bridge.sh",

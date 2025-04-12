@@ -7,16 +7,23 @@
 import {Agent} from '../../utils/agent.js';
 import {getFileTools} from '../../utils/file_utils.js';
 import {getBrowserTools, setupAgentBrowserTools} from '../../utils/browser_utils.js';
-import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
+import {MAGI_CONTEXT, COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
 
 /**
  * Create the browser agent
  */
 export function createBrowserAgent(): Agent {
+	const person = process.env.YOUR_NAME || 'User';
+
 	const agent = new Agent({
 		name: 'BrowserAgent',
 		description: 'Quickly reads and interacts with websites, fill forms and extracts data',
-		instructions: `You are a specialized browser agent with the ability to interact with websites.
+		instructions: `${MAGI_CONTEXT}
+---
+
+Your role in MAGI is to be a BrowserAgent. You can interact with websites, fill forms, and extract data. You can also take screenshots and execute JavaScript in the browser context. You are capable of performing complex web interactions and data extraction tasks.
+
+You operate in a shared browsing session with a human (${person}) overseeing your operation. This allows you to interact with websites together. You can access accounts ${person} is already logged into and perform actions for them.
 
 Your browsing capabilities include:
 - Navigating to URLs
@@ -28,14 +35,12 @@ Your browsing capabilities include:
 
 BROWSING APPROACH:
 1. Navigate to the specified URL
-2. Analyze the page structure to locate elements of interest
-3. Interact with elements as needed (click, fill, hover, etc.)
+2. Use get_page_content() to extract the page content - interactive elements will be given a numeric ID
+3. Interact with elements using their numeric ID as needed (click, fill, hover, etc.)
 4. Extract relevant information or take screenshots
 5. Report findings and explain what you did
 
 ${COMMON_WARNINGS}
-
-${DOCKER_ENV_TEXT}
 
 ${FILE_TOOLS_TEXT}
 
@@ -65,14 +70,11 @@ IMPORTANT:
 - Call get_page_content() after navigation and after significant page changes
 - Handle potential issues like popups, cookie consent forms, and other obstacles
 - Be patient with slow-loading websites and retry if necessary
-- Prefer stable selectors (IDs, data attributes) over volatile ones (indices, text content)
 - Report errors clearly if you cannot access a website or element
-- Use closeAgentSession when you are completely done browsing to free up resources
-
-SPECIAL INSTRUCTION: For any web request, first navigate to the URL and then use get_page_content to read the page content. Then respond with a summary of what you found.`,
+- Use closeAgentSession when you are completely done browsing to free up resources`,
 		tools: [
+			...getBrowserTools(),
 			...getFileTools(),
-			...getBrowserTools()
 		],
 		modelClass: 'standard'
 	});

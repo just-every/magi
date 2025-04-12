@@ -359,7 +359,7 @@ function ensureAllEnvVars(): void {
 
   // Create a list of all available configuration keys
   const allConfigPrompts = [
-    { key: 'YOUR_NAME', defaultValue: 'Human' },
+    { key: 'YOUR_NAME', defaultValue: 'User' },
     { key: 'AI_NAME', defaultValue: 'Magi' },
     { key: 'OPENAI_API_KEY' },
     { key: 'ANTHROPIC_API_KEY' },

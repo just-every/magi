@@ -131,10 +131,10 @@ export function getProjectTools(): ToolFunction[] {
 		),
 		createToolFunction(
 			review_branch,
-			'Review a branch created by an agent.',
+			'Review a branch created by an task.',
 			{
 				'project': 'The name of the new project. No spaces - letters, numbers, dashes and underscores only.',
-				'branch': 'The branch review. Use "magi-{agentId}" for an agent\'s default branch.',
+				'branch': 'The branch review. Use "magi-{taskId}" for an task\'s default branch.',
 			},
 			'An explanation of if the branch was merged or not and why.'
 		),
@@ -143,7 +143,7 @@ export function getProjectTools(): ToolFunction[] {
 			'Creates a pull request to merge a branch into another branch. Will be reviewed by a human.',
 			{
 				'project': 'The name of the new project. No spaces - letters, numbers, dashes and underscores only.',
-				'from_branch': 'The branch review. Use "magi-{agentId}" for an agent\'s default branch.',
+				'from_branch': 'The branch review. Use "magi-{taskId}" for an task\'s default branch.',
 				'to_branch': 'The destination branch. Use "default" for main/master if you don\'t know it\'s name.' ,
 			},
 			'If the request was successfully started or not. You will get a separate message if it is merged or rejected.'

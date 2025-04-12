@@ -69,6 +69,39 @@ function getOrCreateTabSession() {
  * @returns Result message from the bridge/extension.
  */
 export async function navigate(url: string, takeFocus?: false): Promise<string> {
+  // Validate URL: if it's just a domain name, add https:// prefix
+  if (url && !url.match(/^(https?:\/\/|file:\/\/|about:|chrome:|\/)/i) && url.includes('.')) {
+    url = `https://${url}`;
+    console.log(`[browser_utils] URL validated and prefix added: ${url}`);
+  }
+  
+  // Validate final URL
+  let isValidUrl = false;
+  try {
+    // Check if URL is valid using the URL constructor
+    new URL(url);
+    isValidUrl = true;
+  } catch (e) {
+    // URL constructor will throw if the URL is invalid
+    isValidUrl = false;
+  }
+  
+  // Also validate URLs that might not be handled by URL constructor (like chrome://, file://, etc.)
+  if (!isValidUrl) {
+    if (url.match(/^(about:|chrome:|file:\/\/)/i)) {
+      isValidUrl = true;
+    } else if (url.startsWith('/')) {
+      // Relative URLs are valid
+      isValidUrl = true;
+    }
+  }
+  
+  if (!isValidUrl) {
+    const errorMessage = `[browser_utils] Invalid URL: ${url}`;
+    console.error(errorMessage);
+    return errorMessage;
+  }
+  
   console.log(`[browser_utils] Requesting navigation to: ${url}`);
   try {
     const session = getOrCreateTabSession();

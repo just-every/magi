@@ -2,10 +2,11 @@
  * Content-related command handlers (DOM processing).
  */
 
-import { GetPageContentParams, ResponseMessage, DomProcessingResult, DomProcessingError, ElementInfo } from '../types';
+// Re-add DomProcessingOptions import
+import { GetPageContentParams, ResponseMessage, DomProcessingResult, DomProcessingError, ElementInfo, DomProcessingOptions } from '../types'; 
 import { agentTabs, updateAgentTabActivity } from '../state/state';
 import { storeElementMap } from '../storage/element-storage';
-import { processDomForLLM } from '../dom-processor/dom-processor';
+// No longer import processDomForLLM directly, as we'll inject the bundle
 
 /**
  * Processes the DOM of a page to extract simplified content and interactive elements
@@ -29,16 +30,34 @@ export async function getPageContentHandler(
   try {
     const chromeTabId = agentTabs[tabId].chromeTabId;
     updateAgentTabActivity(tabId);
-    
-    // Execute the DOM processing script in the page context using chrome.scripting.executeScript
-    const scriptResults = await chrome.scripting.executeScript({
+
+    // Inject the bundled DOM processor script first
+    await chrome.scripting.executeScript({
       target: { tabId: chromeTabId },
-      func: processDomForLLM,
-      args: [{ includeAllContent: !!params.allContent }],
-      world: 'MAIN' // Execute in the page's main world for access to DOM
+      files: ['dist/dom-processor.bundle.js'], // Path relative to extension root
+      world: 'MAIN'
     });
-    
-    // Check for script execution errors
+
+    // Now, execute a small function to *call* the globally available function from the bundle
+    const scriptResults = await chrome.scripting.executeScript<[DomProcessingOptions], DomProcessingResult | DomProcessingError>({
+        target: { tabId: chromeTabId },
+        func: (options: DomProcessingOptions): DomProcessingResult | DomProcessingError => { // Add return type annotation
+            // Access the function exposed by the IIFE bundle
+            // Use type assertion to inform TypeScript about the expected global
+            const processorUtil = (window as any).__MagiDomProcessorUtil; 
+            // Ensure the global name matches the one used in esbuild config
+            if (typeof processorUtil?.processDomForLLM === 'function') {
+                return processorUtil.processDomForLLM(options);
+            } else {
+                // Throw an error if the function isn't found, which executeScript will catch
+                throw new Error('__MagiDomProcessorUtil.processDomForLLM function not found after injection.');
+            }
+        },
+        args: [{ includeAllContent: !!params.allContent }],
+        world: 'MAIN' // Execute in the same world where the bundle was injected
+    });
+
+    // Check for script execution errors (including the error thrown above if function not found)
     if (!scriptResults || scriptResults.length === 0 || !scriptResults[0].result) {
       const error = chrome.runtime.lastError?.message || "Failed to execute content script or get result.";
       return {

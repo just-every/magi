@@ -3,6 +3,9 @@
  *
  * This module exports a collection of agents that work in a series to handle
  * all stages of the code-editing workflow: Planning, Writing, Testing, PR Submission, and Review.
+ * 
+ * It also provides a TDD-based orchestrator that implements the Test-Driven Development workflow
+ * for more disciplined and testable code development.
  */
 
 import {Runner} from '../../utils/runner.js';
@@ -12,14 +15,15 @@ import {createWritingAgent} from './writing_agent.js';
 import {createTestingAgent} from './testing_agent.js';
 import {createPRSubmissionAgent} from './pr_submission_agent.js';
 import {createPRReviewAgent} from './pr_review_agent.js';
-// import {createExecutionAgent} from '../task_force/execution_agent.js';
+import {TddGodelOrchestrator} from './tdd_orchestrator.js';
 
 export {
 	createPlanningAgent,
 	createWritingAgent,
 	createTestingAgent,
 	createPRSubmissionAgent,
-	createPRReviewAgent
+	createPRReviewAgent,
+	TddGodelOrchestrator
 };
 
 // Define the stage sequence for the Gödel Machine
@@ -28,7 +32,8 @@ export enum GodelStage {
 	WRITING = 'writing',
 	TESTING = 'testing',
 	PR_SUBMISSION = 'pr_submission',
-	PR_REVIEW = 'pr_review'
+	PR_REVIEW = 'pr_review',
+	TDD = 'tdd' // Test-Driven Development workflow
 }
 
 /**
@@ -86,17 +91,38 @@ const godelMachine: RunnerConfig = {
 /**
  * Run the Gödel Machine sequence with the given input
  * @param input The issue or feature request description
- * @param handlers Event handlers for streaming events
+ * @param useTDD Whether to use the TDD workflow instead of the standard workflow
  * @returns Results from all stages of the sequence
  */
 export async function runGodelMachine(
-	input: string
+	input: string,
+	useTDD: boolean = false
 ): Promise<void> {
+	if (useTDD) {
+		// Use the TDD Orchestrator for a test-driven development workflow
+		console.log("Starting TDD Gödel Machine workflow...");
+		const tddOrchestrator = new TddGodelOrchestrator(input);
+		const report = await tddOrchestrator.execute();
+		console.log("TDD workflow complete");
+		console.log(report);
+		return;
+	}
 
+	// Use the standard Gödel Machine workflow
+	console.log("Starting standard Gödel Machine workflow...");
 	await Runner.runSequential(
 		godelMachine,
 		input,
 		5, // Max retries per stage
 		30 // Max total retries
 	);
+}
+
+/**
+ * Create a TDD Gödel Orchestrator for test-driven development workflow
+ * @param goal The goal or feature request description
+ * @returns A TDD orchestrator instance ready to execute
+ */
+export function createTddOrchestrator(goal: string): TddGodelOrchestrator {
+	return new TddGodelOrchestrator(goal);
 }

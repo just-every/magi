@@ -10,7 +10,7 @@ import {getFileTools} from '../../utils/file_utils.js';
 import {getSearchTools} from '../../utils/search_utils.js';
 import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT} from '../constants.js';
 import {createBrowserAgent} from '../common_agents/browser_agent.js';
-// import {createSearchAgent} from '../task_force/search_agent.js';
+// import {createSearchAgent} from '../run_task/search_agent.js';
 
 const web_search_agent_prompt = `
 [Context & Role]

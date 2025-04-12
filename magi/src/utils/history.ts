@@ -162,7 +162,7 @@ export async function addHumanMessage(content: string): Promise<void> {
 	// Interrupt any active delay
 	setDelayInterrupted(true);
 
-	const person = process.env.YOUR_NAME || 'Human';
+	const person = process.env.YOUR_NAME || 'User';
 	return addHistory({
 		role: 'developer',
 		content: `${person} said: ${content}`

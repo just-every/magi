@@ -47,10 +47,10 @@ class ProcessTracker {
 	getStatus(processId: string): string {
 		const agentProcess = this.processes.get(processId);
 		if(!agentProcess) {
-			return `AgentID ${processId} not found`;
+			return `taskId ${processId} not found`;
 		}
 
-		return `AgentID: ${processId}
+		return `taskId: ${processId}
 Name: ${agentProcess.name}
 Status: ${agentProcess.status}
 History: 
@@ -66,7 +66,7 @@ ${JSON.stringify(agentProcess.history, null, 2)}`;
 		const processId: string = eventMessage.processId;
 		let process = this.processes.get(processId);
 		if(!process) {
-			console.error(`AgentID ${processId} not being tracked`, eventMessage);
+			console.error(`taskId ${processId} not being tracked`, eventMessage);
 			return;
 		}
 
@@ -86,20 +86,29 @@ ${JSON.stringify(agentProcess.history, null, 2)}`;
 
 			if(eventMessage.event.type === 'process_done') {
 				process.status = 'completed';
-				await addSystemMessage(`AgentID ${processId} completed!\nOutput:\n${eventMessage.event.output}`);
+				await addSystemMessage(`Task with taskId ${processId} completed!\nOutput:\n${eventMessage.event.output}`);
 			}
 			else {
 				process.status = 'running';
-				//await addSystemMessage(`AgentID ${processId} is still running.\nPartial Output:\n${eventMessage.event.output}`);
+				//await addSystemMessage(`taskId ${processId} is still running.\nPartial Output:\n${eventMessage.event.output}`);
 			}
 		}
 		else if(eventMessage.event.type === 'process_waiting') {
 			process.status = 'waiting';
-			await addSystemMessage(`AgentID ${processId} has completed and is waiting further messages.`);
+			if(eventMessage.event.history) process.history = eventMessage.event.history;
+			await addSystemMessage(`Task with taskId ${processId} has completed and is waiting further messages.`);
+		}
+		else if(eventMessage.event.type === 'process_failed') {
+			process.status = 'failed';
+			if(eventMessage.event.error) process.output = eventMessage.event.error;
+			if(eventMessage.event.history) process.history = eventMessage.event.history;
+			await addSystemMessage(`Task with taskId ${processId} FAILED. ${eventMessage.event.error || ''}`);
 		}
 		else if(eventMessage.event.type === 'process_terminated') {
 			process.status = 'terminated';
-			await addSystemMessage(`AgentID ${processId} terminated. ${eventMessage.event.error || ''}`);
+			if(eventMessage.event.error) process.output = eventMessage.event.error;
+			if(eventMessage.event.history) process.history = eventMessage.event.history;
+			await addSystemMessage(`Task with taskId ${processId} terminated. ${eventMessage.event.error || ''}`);
 		}
 
 		this.processes.set(processId, process);
@@ -112,13 +121,13 @@ ${JSON.stringify(agentProcess.history, null, 2)}`;
 	 */
 	listActive(): string {
 		if (this.processes.size === 0) {
-			return '- No agents';
+			return '- No tasks';
 		}
 
 		let result = '';
 		for (const [id, agentProcess] of this.processes.entries()) {
 			if(agentProcess.status === 'terminated') continue;
-			result += `- AgentID: ${id}
+			result += `- Task taskId: ${id}
   Name: ${agentProcess.name}
   Status: ${agentProcess.status}
 `;

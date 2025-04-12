@@ -15,7 +15,7 @@ import {createSynthesisAgent} from './synthesis_agent.js';
 import {createCodeGenerationAgent} from './code_generation_agent.js';
 import {createValidationAgent} from './validation_agent.js';
 // import {createPlanningAgent} from '../task_force/planning_agent.js';
-import {createExecutionAgent} from '../task_force/execution_agent.js';
+//import {createExecutionAgent} from '../task_run/execution_agent.js';
 
 export {
   createTaskDecompositionAgent,
@@ -83,7 +83,7 @@ const researchEngine: RunnerConfig = {
     agent: ()=> createTaskDecompositionAgent(),
     next: (): string => 'web_search',
   },
-  ['web_search']: {
+  /*['web_search']: {
     agent: ()=> createExecutionAgent(), // createWebSearchAgent
     next: (): string => 'content_extraction',
   },
@@ -102,7 +102,7 @@ const researchEngine: RunnerConfig = {
   ['validation']: {
     agent: ()=> createExecutionAgent(), //createValidationAgent
     next: (): null => null,
-  },
+  },*/
 };
 
 /**

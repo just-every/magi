@@ -32,6 +32,11 @@ export interface ElementInfo {
     width: number;
     height: number;
   };
+  childElements?: Array<{
+    description: string;
+    tagName: string;
+    isVisible: boolean;
+  }>;
 }
 
 // DOM processing options

@@ -55,7 +55,7 @@ const App: React.FC = () => {
 					onClick={() => toggleLogsViewer()}
 					style={{ cursor: 'pointer' }}
 				>
-					Magi
+					magi
 				</h1>
 
 				{/* Cost display */}

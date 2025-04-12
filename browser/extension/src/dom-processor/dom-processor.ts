@@ -7,6 +7,7 @@
  */
 
 import { ElementInfo, DomProcessingOptions, DomProcessingResult, DomProcessingError } from '../types';
+import { getCssSelector } from 'css-selector-generator';
 
 /**
  * Processes the DOM of the current page to extract a simplified, structured representation
@@ -168,7 +169,7 @@ export function processDomForLLM(options: DomProcessingOptions = {}): DomProcess
     }
     
     /**
-     * Generates a CSS selector for an element, prioritizing stable attributes.
+     * Generates a CSS selector for an element using the css-selector-generator library.
      * Shadow DOM-aware version that considers elements across shadow boundaries.
      * @param element - The DOM element.
      * @returns A CSS selector string, or empty string if invalid.
@@ -176,211 +177,10 @@ export function processDomForLLM(options: DomProcessingOptions = {}): DomProcess
     function generateSelector(element: Element): string {
         if (!(element instanceof Element)) return '';
 
-        try {
-            // Determine if element is in shadow DOM and get its shadow root if applicable
-            let isInShadowDOM = false;
-            let shadowRoot: ShadowRoot | null = null;
-            const rootNode = element.getRootNode();
-            if (rootNode instanceof ShadowRoot) {
-                isInShadowDOM = true;
-                shadowRoot = rootNode;
-            }
-            
-            // 1. Stable Custom Attributes
-            const stableAttrs = ['data-testid', 'data-cy', 'data-qa', 'data-test-id', 'data-test', 'id']; // Include 'id' here early if it's good
-            for (const attr of stableAttrs) {
-                const value = element.getAttribute(attr);
-                // Check if ID is reasonably unique-like (not just digits, no spaces, not overly long)
-                if (attr === 'id' && (!value || /^\d+$/.test(value) || /\s/.test(value) || value.length > 100)) {
-                    continue; // Skip non-ideal IDs
-                }
-                if (value) {
-                    const selector = `[${attr}="${escapeCSS(value)}"]`;
-                    // Verify the selector works and is reasonably specific - use shadow DOM aware query
-                    let foundElement: Element | null;
-                    if (isInShadowDOM && shadowRoot) {
-                        foundElement = querySelectorAcrossShadows(shadowRoot, selector);
-                    } else {
-                        foundElement = querySelectorAcrossShadows(document, selector);
-                    }
-                    
-                    if (foundElement === element) {
-                        return selector;
-                    }
-                    
-                    // If not unique, maybe unique within parent? (Less ideal but better than nothing)
-                    if (element.parentElement) {
-                        // Need shadow-DOM aware version for parent element query
-                        const parentElement = element.parentElement;
-                        let parentShadowRoot = parentElement.getRootNode();
-                        let parentQuery = parentElement.querySelector(selector) === element;
-                        
-                        if (parentQuery) {
-                            return generateSelector(parentElement) + ' > ' + selector; // Prepend parent selector
-                        }
-                    }
-                }
-            }
-
-            const tagName = element.tagName.toLowerCase();
-
-            // 2. Name + TagName (for form elements)
-            const name = element.getAttribute('name');
-            if (name && ['input', 'select', 'textarea', 'button', 'form'].includes(tagName)) {
-                const selector = `${tagName}[name="${escapeCSS(name)}"]`;
-                // Use shadow DOM-aware query
-                let foundElement: Element | null;
-                if (isInShadowDOM && shadowRoot) {
-                    foundElement = querySelectorAcrossShadows(shadowRoot, selector);
-                } else {
-                    foundElement = querySelectorAcrossShadows(document, selector);
-                }
-                
-                if (foundElement === element) {
-                    return selector;
-                }
-                
-                if (element.parentElement) {
-                    // Use shadow DOM-aware version for parent check
-                    if (element.parentElement.querySelector(selector) === element) {
-                        return generateSelector(element.parentElement) + ' > ' + selector;
-                    }
-                }
-            }
-
-            // 3. Role + Accessible Name (if available and specific roles)
-            const role = element.getAttribute('role');
-            const ariaLabel = element.getAttribute('aria-label');
-            if (role && ariaLabel && ['button', 'link', 'checkbox', 'radio', 'menuitem', 'tab', 'textbox'].includes(role)) {
-                if (ariaLabel.length < 100) { // Avoid overly long labels in selectors
-                    const selector = `${tagName}[role="${role}"][aria-label="${escapeCSS(ariaLabel)}"]`;
-                    
-                    // Use shadow DOM-aware query
-                    let foundElement: Element | null;
-                    if (isInShadowDOM && shadowRoot) {
-                        foundElement = querySelectorAcrossShadows(shadowRoot, selector);
-                    } else {
-                        foundElement = querySelectorAcrossShadows(document, selector);
-                    }
-                    
-                    if (foundElement === element) return selector;
-                    
-                    if (element.parentElement) {
-                        // Use shadow DOM-aware parent check
-                        if (element.parentElement.querySelector(selector) === element) {
-                            return generateSelector(element.parentElement) + ' > ' + selector;
-                        }
-                    }
-                }
-            }
-            
-            // Role only for specific landmark-like roles if unique
-            if (role && ['button', 'link', 'navigation', 'main', 'region', 'search', 'form'].includes(role)) {
-                const selector = `${tagName}[role="${role}"]`;
-                
-                // Use shadow DOM-aware query
-                let foundElement: Element | null;
-                if (isInShadowDOM && shadowRoot) {
-                    foundElement = querySelectorAcrossShadows(shadowRoot, selector);
-                } else {
-                    foundElement = querySelectorAcrossShadows(document, selector);
-                }
-                
-                if (foundElement === element) return selector;
-                
-                if (element.parentElement) {
-                    // Use shadow DOM-aware parent check
-                    if (element.parentElement.querySelector(selector) === element) {
-                        return generateSelector(element.parentElement) + ' > ' + selector;
-                    }
-                }
-            }
-
-            // 4. TagName + Type (for inputs)
-            const type = element.getAttribute('type');
-            if (tagName === 'input' && type) {
-                const selector = `input[type="${escapeCSS(type)}"]`;
-                
-                // Use shadow DOM-aware query
-                let foundElement: Element | null;
-                if (isInShadowDOM && shadowRoot) {
-                    foundElement = querySelectorAcrossShadows(shadowRoot, selector);
-                } else {
-                    foundElement = querySelectorAcrossShadows(document, selector);
-                }
-                
-                if (foundElement === element) return selector;
-                
-                if (element.parentElement) {
-                    // Use shadow DOM-aware parent check
-                    if (element.parentElement.querySelector(selector) === element) {
-                        return generateSelector(element.parentElement) + ' > ' + selector;
-                    }
-                }
-            }
-
-            // 5. Basic TagName + Class combination (simplified, check validity)
-            if (element.className && typeof element.className === 'string') {
-                const classes = element.className.split(/\s+/)
-                    .filter(Boolean)
-                    .filter(cls => !/^\d+$/.test(cls) && !/[.:@[\]()]/g.test(cls) && cls.length > 1); // Avoid complex/generated/single-letter/invalid classes
-
-                if (classes.length > 0 && classes.length <= 3) { // Limit complexity
-                    const selector = `${tagName}.${classes.map(cls => escapeCSS(cls)).join('.')}`;
-                    try {
-                        // Use shadow DOM-aware query
-                        let foundElement: Element | null;
-                        if (isInShadowDOM && shadowRoot) {
-                            foundElement = querySelectorAcrossShadows(shadowRoot, selector);
-                        } else {
-                            foundElement = querySelectorAcrossShadows(document, selector);
-                        }
-                        
-                        if (foundElement === element) return selector;
-                        
-                        if (element.parentElement) {
-                            // Use shadow DOM-aware parent check
-                            if (element.parentElement.querySelector(selector) === element) {
-                                return generateSelector(element.parentElement) + ' > ' + selector;
-                            }
-                        }
-                    } catch (e) { /* Invalid class selector, ignore */ }
-                }
-            }
-
-            // 6. Fallback: Path from parent (structural selector) - limited depth
-            if (element.parentElement) {
-                const siblings = Array.from(element.parentElement.children);
-                const ownIndex = siblings.indexOf(element);
-                if (ownIndex !== -1) {
-                    const nthSelector = `${tagName}:nth-child(${ownIndex + 1})`;
-                    const parentSelector = generateSelector(element.parentElement); // Recursive call
-                    // Limit recursion depth to avoid excessively long selectors
-                    if (parentSelector && parentSelector.split('>').length < 5) {
-                        const fullSelector = parentSelector + ' > ' + nthSelector;
-                        
-                        // Final check if this constructed selector actually works using shadow DOM-aware query
-                        let foundElement: Element | null;
-                        if (isInShadowDOM && shadowRoot) {
-                            foundElement = querySelectorAcrossShadows(shadowRoot, fullSelector);
-                        } else {
-                            foundElement = querySelectorAcrossShadows(document, fullSelector);
-                        }
-                        
-                        if (foundElement === element) {
-                            return fullSelector;
-                        }
-                    }
-                }
-            }
-
-            // 7. Absolute Fallback: Just use TagName (least specific)
-            return tagName;
-
-        } catch (e) {
-            warnings.push(`Error generating selector for element ${element.tagName}: ${e instanceof Error ? e.message : String(e)}`);
-            return element.tagName.toLowerCase(); // Fallback even in case of error
-        }
+        return getCssSelector(element, {
+            combineWithinSelector: false,
+            combineBetweenSelectors: false,
+        });
     }
 
     /**
@@ -495,6 +295,26 @@ export function processDomForLLM(options: DomProcessingOptions = {}): DomProcess
         }
 
         return false;
+    }
+
+    /**
+     * Finds the topmost interactive parent element, if any.
+     * @param element - The DOM element to check.
+     * @returns The topmost interactive parent or null if none exists.
+     */
+    function findTopmostInteractiveParent(element: Element): Element | null {
+        // First check if this element has an interactive ancestor
+        let current: Element | null = element.parentElement;
+        let interactiveParent: Element | null = null;
+        
+        while (current) {
+            if (isInteractive(current)) {
+                interactiveParent = current;
+            }
+            current = current.parentElement;
+        }
+        
+        return interactiveParent;
     }
 
     /**
@@ -904,6 +724,8 @@ export function processDomForLLM(options: DomProcessingOptions = {}): DomProcess
         isParentHidden: boolean;
         isParentAriaHidden: boolean;
         depth: number;
+        insideInteractiveElement: boolean; // Track if we're inside an interactive element
+        interactiveAncestorId: number | null; // Track ID of nearest interactive ancestor
     }
 
     // --- Main Processing Logic ---
@@ -917,7 +739,9 @@ export function processDomForLLM(options: DomProcessingOptions = {}): DomProcess
         isInsideShadowDom: false, 
         isParentHidden: false, 
         isParentAriaHidden: false, 
-        depth: 0 
+        depth: 0,
+        insideInteractiveElement: false,
+        interactiveAncestorId: null
     }): void {
         // --- Basic Filtering & Safety Checks ---
         if (!node || 
@@ -1023,37 +847,144 @@ export function processDomForLLM(options: DomProcessingOptions = {}): DomProcess
             // --- Add Element Representation to Output ---
             let elementId: number | null = null;
             if (interactive) {
-                elementId = currentId++;
-                const selector = generateSelector(element);
+                // Check if this element has an interactive parent
+                const interactiveParent = findTopmostInteractiveParent(element);
                 
-                // Get bounds if available
-                let bounds: {x: number, y: number, width: number, height: number} | undefined;
-                try {
-                    const rect = element.getBoundingClientRect();
-                    bounds = {
-                        x: rect.left,
-                        y: rect.top,
-                        width: rect.width,
-                        height: rect.height
+                // If this element has an interactive parent, add it as a child
+                if (interactiveParent && processedElements.has(interactiveParent)) {
+                    // Find the parent's ID by looking through all processed elements
+                    let parentId = null;
+                    for (const [id, info] of newIdMap.entries()) {
+                        if (info.selector && querySelectorAcrossShadows(document, info.selector) === interactiveParent) {
+                            parentId = id;
+                            break;
+                        }
+                    }
+                    
+                    if (parentId !== null) {
+                        const parentInfo = newIdMap.get(parentId);
+                        if (parentInfo) {
+                            // Add child information to parent's description
+                            if (!parentInfo.childElements) {
+                                parentInfo.childElements = [];
+                            }
+                            
+                            // Add this element as a child but don't assign it an ID
+                            parentInfo.childElements.push({
+                                description: description,
+                                tagName: element.tagName.toLowerCase(),
+                                isVisible: isCurrentlyVisible
+                            });
+                            
+                            // No need to add a new line to the output
+                            addedLine = false;
+                            // Use parent's ID as this element's ID for tracking
+                            elementId = parentId;
+                        } else {
+                            // Fallback: Process this as a top-level element
+                            elementId = currentId++;
+                            const selector = generateSelector(element);
+                            
+                            // Get bounds if available
+                            let bounds: {x: number, y: number, width: number, height: number} | undefined;
+                            try {
+                                const rect = element.getBoundingClientRect();
+                                bounds = {
+                                    x: rect.left,
+                                    y: rect.top,
+                                    width: rect.width,
+                                    height: rect.height
+                                };
+                            } catch (e) {
+                                // Ignore errors getting bounds
+                            }
+                            
+                            const elementInfo: ElementInfo = {
+                                id: elementId,
+                                description: description,
+                                selector: selector,
+                                tagName: element.tagName.toLowerCase(),
+                                isInteractive: true,
+                                isVisible: isCurrentlyVisible,
+                                bounds,
+                                childElements: []
+                            };
+                            
+                            newIdMap.set(elementId, elementInfo);
+                            linePrefix = `[${elementId}] `;
+                            simplifiedLines.push(`${linePrefix}${description} ${visibilityMarker}`.trim());
+                            addedLine = true;
+                        }
+                    } else {
+                        // Fallback: Process this as a top-level element
+                        elementId = currentId++;
+                        const selector = generateSelector(element);
+                        
+                        // Get bounds if available
+                        let bounds: {x: number, y: number, width: number, height: number} | undefined;
+                        try {
+                            const rect = element.getBoundingClientRect();
+                            bounds = {
+                                x: rect.left,
+                                y: rect.top,
+                                width: rect.width,
+                                height: rect.height
+                            };
+                        } catch (e) {
+                            // Ignore errors getting bounds
+                        }
+                        
+                        const elementInfo: ElementInfo = {
+                            id: elementId,
+                            description: description,
+                            selector: selector,
+                            tagName: element.tagName.toLowerCase(),
+                            isInteractive: true,
+                            isVisible: isCurrentlyVisible,
+                            bounds,
+                            childElements: []
+                        };
+                        
+                        newIdMap.set(elementId, elementInfo);
+                        linePrefix = `[${elementId}] `;
+                        simplifiedLines.push(`${linePrefix}${description} ${visibilityMarker}`.trim());
+                        addedLine = true;
+                    }
+                } else {
+                    // This is a top-level interactive element, process normally
+                    elementId = currentId++;
+                    const selector = generateSelector(element);
+                    
+                    // Get bounds if available
+                    let bounds: {x: number, y: number, width: number, height: number} | undefined;
+                    try {
+                        const rect = element.getBoundingClientRect();
+                        bounds = {
+                            x: rect.left,
+                            y: rect.top,
+                            width: rect.width,
+                            height: rect.height
+                        };
+                    } catch (e) {
+                        // Ignore errors getting bounds
+                    }
+                    
+                    const elementInfo: ElementInfo = {
+                        id: elementId,
+                        description: description, // Store the full description
+                        selector: selector,
+                        tagName: element.tagName.toLowerCase(),
+                        isInteractive: true,
+                        isVisible: isCurrentlyVisible,
+                        bounds,
+                        childElements: [] // Initialize empty array for child elements
                     };
-                } catch (e) {
-                    // Ignore errors getting bounds
+                    
+                    newIdMap.set(elementId, elementInfo);
+                    linePrefix = `[${elementId}] `;
+                    simplifiedLines.push(`${linePrefix}${description} ${visibilityMarker}`.trim());
+                    addedLine = true;
                 }
-                
-                const elementInfo: ElementInfo = {
-                    id: elementId,
-                    description: description, // Store the full description
-                    selector: selector,
-                    tagName: element.tagName.toLowerCase(),
-                    isInteractive: true,
-                    isVisible: isCurrentlyVisible,
-                    bounds
-                };
-                
-                newIdMap.set(elementId, elementInfo);
-                linePrefix = `[${elementId}] `;
-                simplifiedLines.push(`${linePrefix}${description} ${visibilityMarker}`.trim());
-                addedLine = true;
             } else if (landmark) {
                 // Add landmark start marker
                 linePrefix = `\n## Landmark: ${description} ${visibilityMarker} ##`.trim();
@@ -1096,7 +1027,12 @@ export function processDomForLLM(options: DomProcessingOptions = {}): DomProcess
                 isInsideShadowDom: context.isInsideShadowDom,
                 isParentHidden: combinedHidden, // Pass down the combined hidden status
                 isParentAriaHidden: combinedAriaHidden, // Pass down the combined aria-hidden status
-                depth: context.depth + 1 // Increment depth
+                depth: context.depth + 1, // Increment depth
+                // If this element is interactive, mark children as inside an interactive element
+                insideInteractiveElement: context.insideInteractiveElement || (interactive && !context.insideInteractiveElement),
+                // Pass down this element's ID if it's interactive and not already inside another interactive element
+                // Otherwise, pass down the existing ancestor ID
+                interactiveAncestorId: interactive && !context.insideInteractiveElement ? elementId : context.interactiveAncestorId
             };
 
             // --- Recursively Process Children ---
@@ -1116,7 +1052,9 @@ export function processDomForLLM(options: DomProcessingOptions = {}): DomProcess
                         isInsideShadowDom: true, // Set flag for shadow DOM context
                         isParentHidden: combinedHidden, // Host's hidden status becomes parent status
                         isParentAriaHidden: combinedAriaHidden, // Host's aria-hidden status
-                        depth: context.depth + 1 // Reset or increment depth? Increment seems safer.
+                        depth: context.depth + 1, // Reset or increment depth? Increment seems safer.
+                        insideInteractiveElement: context.insideInteractiveElement,
+                        interactiveAncestorId: context.interactiveAncestorId
                     };
                     //simplifiedLines.push(`  (Entering Shadow DOM for ${tagName}${elementId ? ` [${elementId}]` : ''}) ${visibilityMarker}`.trim());
 
@@ -1145,7 +1083,9 @@ export function processDomForLLM(options: DomProcessingOptions = {}): DomProcess
                                 isInsideShadowDom: context.isInsideShadowDom, // Keep outer shadow DOM status
                                 isParentHidden: combinedHidden, // Host iframe's hidden status
                                 isParentAriaHidden: combinedAriaHidden, // Host iframe's aria-hidden status
-                                depth: context.depth + 1 // Increment depth
+                                depth: context.depth + 1, // Increment depth
+                                insideInteractiveElement: context.insideInteractiveElement,
+                                interactiveAncestorId: context.interactiveAncestorId
                             };
                             // Add a marker for iframe body content
                             simplifiedLines.push("  (IFrame Body Content)");
@@ -1187,7 +1127,9 @@ export function processDomForLLM(options: DomProcessingOptions = {}): DomProcess
             isInsideShadowDom: false, 
             isParentHidden: false, 
             isParentAriaHidden: false, 
-            depth: 0 
+            depth: 0,
+            insideInteractiveElement: false,
+            interactiveAncestorId: null
         });
 
         // --- Cleanup Output ---

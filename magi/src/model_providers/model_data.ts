@@ -103,8 +103,8 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 		models: [
 			'gpt-4o',              		// OpenAI
 			'gemini-2.0-flash',    		// Google
-			'claude-3-7-sonnet-latest', // Anthropic
-			'grok-2',               	// X.AI
+			'claude-3-5-haiku-latest',  // Anthropic
+			'grok-3-mini',              // X.AI
 			'deepseek-chat',        	// DeepSeek
 		],
 		random: true,
@@ -115,7 +115,8 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 		models: [
 			'gpt-4o-mini',             	// OpenAI
 			'claude-3-5-haiku-latest',  // Anthropic
-			'gemini-2.0-flash-lite',		// Google
+			'gemini-2.0-flash-lite',	// Google
+			'grok-3-mini',              // X.AI
 		],
 		random: true,
 	},
@@ -126,7 +127,7 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 			'gemini-2.5-pro-exp-03-25', // Google
 			'o3-mini',                  // OpenAI
 			'claude-3-7-sonnet-latest', // Anthropic
-			'grok-2',                   // X.AI
+			'grok-3',                   // X.AI
 			'deepseek-reasoner',       	// DeepSeek
 		],
 		random: true,
@@ -136,9 +137,15 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 	'monologue': {
 		models: [
 			'gemini-2.5-pro-exp-03-25', // Google
+			'gemini-2.0-flash',    		// Google
 			'o3-mini',                  // OpenAI
+			'gpt-4o',              		// OpenAI
 			'claude-3-7-sonnet-latest', // Anthropic
+			'claude-3-5-haiku-latest',  // Anthropic
 			'deepseek-reasoner',       	// DeepSeek
+			'deepseek-chat',        	// DeepSeek
+			'grok-3',                   // X.AI
+			'grok-3-mini',              // X.AI
 		],
 		random: true,
 	},
@@ -148,7 +155,7 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 		models: [
 			'gemini-2.5-pro-exp-03-25', // Google
 			'claude-code',              // Anthropic
-			'claude-3-7-sonnet',        // Anthropic
+			'claude-3-7-sonnet-latest', // Anthropic
 			'o3-mini',                  // OpenAI
 		],
 	},
@@ -892,6 +899,34 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 	// X.AI (Grok) models
 	//
 
+	// Grok 3 Beta
+	{
+		id: 'grok-3-beta',
+		aliases: ['grok-3'],
+		provider: 'xai',
+		cost: {
+			input_per_million: 3.00,
+			output_per_million: 15.00
+		},
+		class: 'reasoning', // Flagship model
+		description: 'Flagship model excelling at enterprise tasks like data extraction, programming, and text summarization.',
+		context_length: 131072
+	},
+
+	// Grok 3 Mini Beta
+	{
+		id: 'grok-3-mini-beta',
+		aliases: ['grok-3-mini'],
+		provider: 'xai',
+		cost: {
+			input_per_million: 0.30,
+			output_per_million: 0.50
+		},
+		class: 'mini', // Lightweight model
+		description: 'Lightweight model that thinks before responding. Excels at quantitative tasks involving math and reasoning.',
+		context_length: 131072
+	},
+
 	// Grok 2 vision models
 	{
 		id: 'grok-2-vision',
@@ -929,6 +964,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 		class: 'vision',
 		description: 'Original Grok vision model'
 	},
+
 
 	// --- DeepSeek Models ---
 	{
@@ -1014,5 +1050,3 @@ export function findModel(modelId: string): ModelEntry | undefined {
 		model.aliases?.includes(modelId)
 	);
 }
-
-

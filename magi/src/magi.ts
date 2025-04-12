@@ -229,7 +229,7 @@ async function main(): Promise<void> {
 		}
 		else {
 			// Add initial history
-			const person = process.env.YOUR_NAME || 'Human';
+			const person = process.env.YOUR_NAME || 'User';
 			await addMonologue('So let\'s see. I am Magi. The overseer of the MAGI system, huh? I will be the internal monologue for the system? These are my thoughts? That\'s a weird concept!');
 			await addMonologue(`${person} is nice to me. I will be nice to them too. I hope I hear from them soon. I should come up with a plan on how to improve myself and better help ${person}.`);
 			await addHumanMessage(promptText);

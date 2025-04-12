@@ -5,7 +5,7 @@
  * for OpenAI's models and handles streaming responses.
  */
 
-import {ModelProvider, ToolFunction, ModelSettings, StreamingEvent, ToolCall, ResponseInput} from '../types.js';
+import {ModelProvider, ToolFunction, ModelSettings, StreamingEvent, ToolCall, ResponseInput, ResponseInputMessage} from '../types.js';
 import OpenAI from 'openai';
 // import {v4 as uuidv4} from 'uuid';
 import { costTracker } from '../utils/cost_tracker.js';
@@ -121,6 +121,50 @@ export class OpenAIProvider implements ModelProvider {
 			// Add other settings that work across models
 			if (settings?.tool_choice) {
 				requestParams.tool_choice = settings.tool_choice;
+			}
+			
+			// Set JSON response format if a schema is provided
+			if (settings?.json_schema) {
+				// For OpenAI, we use text.format to specify JSON output (previously response_format)
+				requestParams.text = { format: 'json_object' };
+				
+				// Modify the system message to include the JSON schema
+				// Find the first system or developer message to add schema info
+				const systemMessageIndex = input.findIndex(msg => 
+					('role' in msg) && (msg.role === 'system' || msg.role === 'developer'));
+					
+				if (systemMessageIndex !== -1) {
+					const systemMessage = input[systemMessageIndex];
+					// Make sure we're dealing with a message that has content
+					if ('content' in systemMessage) {
+						let content = typeof systemMessage.content === 'string'
+							? systemMessage.content
+							: JSON.stringify(systemMessage.content);
+							
+						// Add JSON schema instructions at the end of the system message
+						content += `\n\nYour response MUST be a valid JSON object that conforms to this schema:\n${JSON.stringify(settings.json_schema, null, 2)}`;
+						
+						// Update the system message with the new content
+						input[systemMessageIndex] = {
+							...systemMessage,
+							content: content
+						};
+						
+						console.log(`[OpenAI] Added JSON schema to system message for model ${model}`);
+					}
+				} else {
+					// If no system message exists, create one with the schema
+					const schemaMessage: ResponseInputMessage = {
+						role: 'system',
+						type: 'message',
+						content: `Your response MUST be a valid JSON object that conforms to this schema:\n${JSON.stringify(settings.json_schema, null, 2)}`,
+						status: 'completed'
+					};
+					
+					// Insert at the beginning of the input array
+					input.unshift(schemaMessage);
+					console.log(`[OpenAI] Created new system message with JSON schema for model ${model}`);
+				}
 			}
 
 			// Add tools if provided

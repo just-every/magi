@@ -39,6 +39,7 @@ export class Agent implements AgentInterface {
 	modelSettings?: ModelSettings;
 	maxToolCalls: number;
 	args: any;
+	jsonSchema?: object;  // JSON schema for structured output
 
 	// Event handlers for tool calls and results
 	onToolCall?: (toolCall: ToolCall) => Promise<void>;
@@ -47,8 +48,9 @@ export class Agent implements AgentInterface {
 	// Event handlers for request and response
 	onRequest?: (messages: ResponseInput) => Promise<ResponseInput>;
 	onResponse?: (response: string) => Promise<string>;
+	tryDirectExecution?: (messages: ResponseInput) => Promise<ResponseInput | null>; // Add this line
 
-	constructor(definition: AgentDefinition, modelSettings?: ModelSettings) {
+	constructor(definition: AgentDefinition) {
 
 		this.agent_id = definition.agent_id || uuid();
 		this.name = definition.name.replace(' ', '_');
@@ -57,13 +59,21 @@ export class Agent implements AgentInterface {
 		this.tools = definition.tools || [];
 		this.model = definition.model;
 		this.modelClass = definition.modelClass;
-		this.modelSettings = modelSettings;
+		this.jsonSchema = definition.jsonSchema;
+		this.modelSettings = definition.modelSettings || {};
 		this.maxToolCalls = definition.maxToolCalls || 10; // Default to 10 if not specified
 
 		this.onToolCall = definition.onToolCall;
 		this.onToolResult = definition.onToolResult;
 		this.onRequest = definition.onRequest;
 		this.onResponse = definition.onResponse;
+		this.tryDirectExecution = definition.tryDirectExecution; // Add this line
+
+		// Configure JSON formatting if schema is provided
+		if (this.jsonSchema) {
+			if (!this.modelSettings) this.modelSettings = {};
+			this.modelSettings.json_schema = this.jsonSchema;
+		}
 
 		if (definition.workers) {
 			this.workers = definition.workers.map((createAgentFn: WorkerFunction) => {
