@@ -6,7 +6,7 @@
 
 import {Agent} from '../../utils/agent.js';
 import {getSearchTools} from '../../utils/search_utils.js';
-import {AGENT_DESCRIPTIONS, SELF_SUFFICIENCY_TEXT} from '../constants.js';
+import {MAGI_CONTEXT, AGENT_DESCRIPTIONS, SELF_SUFFICIENCY_TEXT} from '../constants.js';
 import {createBrowserAgent} from './browser_agent.js';
 
 /**
@@ -16,7 +16,10 @@ export function createSearchAgent(): Agent {
 	return new Agent({
 		name: 'SearchAgent',
 		description: 'Performs web searches for current information from various sources',
-		instructions: `You are a specialized search agent with the ability to find information on the web.
+		instructions: `${MAGI_CONTEXT}
+---
+				
+Your role in MAGI is to be a SearchAgent. You are a specialized search agent with the ability to find information on the web.
 		
 You will be given a search task to work on. Your job is to find the most relevant and accurate information available online.
 

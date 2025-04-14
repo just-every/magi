@@ -376,6 +376,55 @@ export class AgentBrowserSession {
 		}
 	}
 
+	/**
+	 * Lists all open browser tabs across all windows
+	 * @returns Promise resolving to a JSON string with tab information
+	 */
+	async listOpenTabs(): Promise<string> {
+		await this.ensureInitialized();
+		console.log(`[browser_utils] Tab ${this.tabId}: Requesting list of all open tabs...`);
+		try {
+			const result = await sendWsCommand('list_open_tabs', this.tabId);
+			// Format the tab data for easier consumption
+			if (result.tabs && Array.isArray(result.tabs)) {
+				return JSON.stringify({
+					count: result.tabs.length,
+					tabs: result.tabs.map((tab: any) => ({
+						id: tab.id,
+						title: tab.title || 'Untitled',
+						url: tab.url || '',
+						active: tab.active || false,
+						windowId: tab.windowId
+					}))
+				}, null, 2);
+			}
+			return String(result);
+		} catch (error: any) {
+			return this.logError('listOpenTabs', error);
+		}
+	}
+
+	/**
+	 * Focuses on a specific browser tab by its Chrome tab ID
+	 * @param chromeTabId The Chrome tab ID to focus
+	 * @returns Promise resolving to a result message
+	 */
+	async focusTab(chromeTabId: number): Promise<string> {
+		await this.ensureInitialized();
+		if (typeof chromeTabId !== 'number' || chromeTabId <= 0) {
+			const errorMsg = `[browser_utils] Tab ${this.tabId}: Error: Invalid Chrome tab ID (${chromeTabId}).`;
+			console.error(errorMsg);
+			return Promise.resolve(errorMsg);
+		}
+		console.log(`[browser_utils] Tab ${this.tabId}: Requesting to focus on tab ${chromeTabId}...`);
+		try {
+			const result = await sendWsCommand('focus_tab', this.tabId, { chromeTabId });
+			return String(result);
+		} catch (error: any) {
+			return this.logError('focusTab', error, { chromeTabId });
+		}
+	}
+
 	async interactElement(
 		elementId: number,
 		action: 'click' | 'fill' | 'check' | 'hover' | 'focus' | 'scroll' | 'select_option',
@@ -451,18 +500,31 @@ export class AgentBrowserSession {
 	}
 
 	/**
-	 * Resets the interaction state (element map) for the specific tab.
-	 * Does NOT close the tab or clear cookies/storage.
-	 * @returns Result message from the bridge/extension or an error message string.
+	 * Switches the agent's tab or focuses on a specific tab
+	 * @param type Type of tab operation to perform
+	 * @param tabId Tab ID for 'id' or 'focus' operations
+	 * @returns Result message from the bridge/extension or an error message string
 	 */
 	async switchTab(
-		type: 'active' | 'new' | 'id',
-		tabId: string,
+		type: 'active' | 'new' | 'id' | 'focus',
+		tabId?: string,
 	): Promise<string> {
 		await this.ensureInitialized();
-		console.log(`[browser_utils] Tab ${this.tabId}: Requesting interaction map reset...`);
+		console.log(`[browser_utils] Tab ${this.tabId}: Requesting tab operation '${type}'...`);
+		
 		try {
-
+			// Handle the focus case directly using existing focusTab method
+			if (type === 'focus' && tabId) {
+				const chromeTabId = Number(tabId);
+				if (isNaN(chromeTabId) || chromeTabId <= 0) {
+					const errorMsg = `[browser_utils] Tab ${this.tabId}: Error: Invalid Chrome tab ID (${tabId}) for focus operation.`;
+					console.error(errorMsg);
+					return errorMsg;
+				}
+				return await this.focusTab(chromeTabId);
+			}
+			
+			// Handle other tab switch operations
 			const result = await sendWsCommand('switch_tab', this.tabId, {
 				type,
 				tabId,
@@ -472,7 +534,7 @@ export class AgentBrowserSession {
 			this.chromeTabId = result?.tabId || null; // Store chromeTabId if provided
 			return String(result);
 		} catch (error: any) {
-			return this.logError('resetInteractionMap', error);
+			return this.logError(type === 'focus' ? 'focusTab' : 'switchTab', error);
 		}
 	}
 

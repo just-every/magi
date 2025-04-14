@@ -99,6 +99,10 @@ export interface SwitchTabParams {
   tabId?: string;
 }
 
+export interface FocusTabParams {
+  chromeTabId: number;
+}
+
 // Native message types
 export interface NativeMessage {
   requestId: number;
@@ -110,6 +114,8 @@ export interface NativeMessage {
 // Map from command to parameter type
 export interface CommandParamMap {
   'initialize_agent': Record<string, never>;
+  'list_open_tabs': Record<string, never>;
+  'focus_tab': FocusTabParams;
   'navigate': NavigateParams;
   'get_page_content': GetPageContentParams;
   'get_url': Record<string, never>;

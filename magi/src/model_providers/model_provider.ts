@@ -1,3 +1,4 @@
+
 /**
  * Model provider interface for the MAGI system.
  *
@@ -13,6 +14,7 @@ import {geminiProvider} from './gemini.js';
 import {grokProvider} from './grok.js';
 import {deepSeekProvider} from './deepseek.js';
 import {testProvider} from './test_provider.js';
+import {openRouterProvider} from './openrouter.js';
 import {MODEL_CLASSES, ModelClassID, ModelProviderID} from './model_data.js';
 
 // Provider mapping by model prefix
@@ -54,7 +56,9 @@ function isProviderKeyValid(provider: ModelProviderID): boolean {
 		case 'xai':
 			return !!process.env.XAI_API_KEY && process.env.XAI_API_KEY.startsWith('xai-');
 		case 'deepseek':
-			return false; //!!process.env.DEEPSEEK_API_KEY && process.env.DEEPSEEK_API_KEY.startsWith('sk-');
+			return !!process.env.DEEPSEEK_API_KEY && process.env.DEEPSEEK_API_KEY.startsWith('sk-');
+		case 'openrouter':
+			return !!process.env.OPENROUTER_API_KEY;
 		case 'test':
 			return true; // Test provider is always valid
 		default:
@@ -79,7 +83,7 @@ export function getProviderFromModel(model: string): ModelProviderID {
 	} else if (model.startsWith('test-')) {
 		return 'test';
 	}
-	throw new Error(`Unknown model prefix: ${model}`);
+	return 'openrouter'; // Default to OpenRouter if no specific provider found
 }
 
 /**
@@ -152,23 +156,23 @@ export async function getModelFromClass(modelClass?: ModelClassID): Promise<stri
 	return defaultModel;
 }
 
+
 /**
  * Get the appropriate model provider based on the model name
+ * with fallback to OpenRouter if direct provider access isn't available
  */
 export function getModelProvider(model?: string): ModelProvider {
-	if (!model) {
-		// Default to OpenAI if no model specified
-		return openaiProvider;
-	}
-
-	// Find the matching provider based on model prefix
-	for (const [prefix, provider] of Object.entries(MODEL_PROVIDER_MAP)) {
-		if (model.startsWith(prefix)) {
-			return provider;
+	if (model) {
+		for (const [prefix, provider] of Object.entries(MODEL_PROVIDER_MAP)) {
+			if (model.startsWith(prefix) && isProviderKeyValid(getProviderFromModel(model))) {
+				return provider;
+			}
 		}
 	}
 
-	// Default to OpenAI if no matching provider found
-	console.warn(`No specific provider found for model "${model}", defaulting to OpenAI`);
-	return openaiProvider;
+	// Default to openRouter if no specific provider found
+	if(!isProviderKeyValid(getProviderFromModel('openrouter'))) {
+		throw new Error(`No valid provider found for the model ${model}. Please check your API keys.`);
+	}
+	return openRouterProvider;
 }

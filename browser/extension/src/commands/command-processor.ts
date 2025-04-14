@@ -3,7 +3,7 @@
  */
 
 import { CommandParamMap, CommandHandler, ResponseMessage } from '../types';
-import { getAgentTabHandler } from './tab-commands'; // <-- Keep this uncommented
+import { getAgentTabHandler, listOpenTabsHandler, focusTabHandler } from './tab-commands'; // <-- Keep this uncommented
 import { navigateHandler, getUrlHandler } from './navigation-commands'; // <-- Uncommented
 import { getPageContentHandler } from './content-commands'; // <-- Uncommented
 import { screenshotHandler } from './screenshot-commands'; // <-- Uncommented
@@ -16,6 +16,8 @@ const commandHandlers: {
   [K in keyof CommandParamMap]?: CommandHandler<K> // Make optional for partial testing
 } = {
   'initialize_agent': getAgentTabHandler, // <-- Keep this uncommented
+  'list_open_tabs': listOpenTabsHandler, // Get all open browser tabs
+  'focus_tab': focusTabHandler, // Focus on a specific tab (original implementation)
   'navigate': navigateHandler, // <-- Uncommented
   'get_page_content': getPageContentHandler, // <-- Uncommented
   'get_url': getUrlHandler, // <-- Uncommented

@@ -41,7 +41,6 @@ function formatToolsForPrompt(tools: OpenAITool[]): string {
 
 		const paramsJson = JSON.stringify(properties, null, 2);
 
-
 		return `  - Name: ${func.name}\n    Description: ${func.description || 'No description'}\n    Parameters (JSON Schema): ${paramsJson}\n    Required Parameters: ${requiredParams.join(', ') || 'None'}`;
 	}).join('\n\n');
 
@@ -81,8 +80,16 @@ export class DeepSeekProvider extends OpenAIChat {
 				delete requestParams.tool_choice;
 			}
 
-			// --- Message Transformation ---
-			const transformedMessages: MessageParam[] = requestParams.messages.map(originalMessage => {
+			let messages: MessageParam[] = [...requestParams.messages];
+
+			// Add in tool descriptions and instructions
+			const toolInfoForPrompt = formatToolsForPrompt(originalTools);
+			if(toolInfoForPrompt) {
+				messages.push({ role: 'system', content: toolInfoForPrompt });
+			}
+
+			// Ensure the content of messages are strings
+			messages = messages.map(originalMessage => {
 				// Create a shallow copy to avoid modifying the original request params directly if needed elsewhere
 				let message: MessageParam = {...originalMessage};
 
@@ -108,120 +115,66 @@ export class DeepSeekProvider extends OpenAIChat {
 					// Replace the original tool message with a user message containing the result
 					message = { role: 'user', content: `[Tool Result${toolCallIdInfo}] ${contentString}` };
 				}
-				// Return the potentially transformed message
+
+				// Ensure the content is a string
+				if (typeof message.content !== 'string') {
+					message.content = JSON.stringify(message.content);
+				}
+		
 				return message;
 			});
 
-			// --- Message Merging (FIXED) ---
-			// Reduces messages by merging consecutive messages of the same role with string content.
-			// This specifically addresses the issue where a 'tool' message transformed into 'user'
-			// might follow an existing 'user' message.
-			const mergedMessages: MessageParam[] = transformedMessages.reduce((acc: MessageParam[], currentMessage) => {
+			// Ensure the last message is 'user' 
+			if (messages.length === 0 || messages[messages.length - 1].role !== 'user') {
+				// Handle cases where the list is empty or ends with non-user
+				const aiName = process.env.AI_NAME || 'Magi'; // Use environment variable or default
+				messages.push({ role: 'user', content: `${aiName} thoughts: Let me think through this step by step...` });
+			}
+
+			// Merge consecutive messages of the same role 
+			messages = messages.reduce((acc: MessageParam[], currentMessage) => {
 				const lastMessage = acc.length > 0 ? acc[acc.length - 1] : null;
 
 				// Check if the last message exists and has the same role as the current one.
 				if (lastMessage && lastMessage.role === currentMessage.role) {
-					// Roles match. Now, ensure we can merge content meaningfully.
-					// We prioritize merging if the current message has string content,
-					// as the 'tool'->'user' transformation ensures this.
-					const currentContent = currentMessage.content;
-
-					if (typeof currentContent === 'string') {
-						// Current content is a string, proceed with merge.
-						// Treat null/undefined previous content as an empty string for concatenation.
-						const lastContent = lastMessage.content ?? '';
-
-						// Warn if the previous content wasn't a string or null, as merging might simplify complex data.
-						if (typeof lastMessage.content !== 'string' && lastMessage.content !== null) {
-							console.warn(`(${this.provider}) Merging string content from role '${currentMessage.role}' onto previous message whose content was not string/null (Type: ${typeof lastMessage.content}). Potential data structure loss.`);
-						}
-
-						// Perform the merge by appending to the last message's content.
-						lastMessage.content = `${lastContent}\n${currentContent}`;
-
-					} else {
-						// Current content isn't a string (unexpected for tool->user or typical user/assistant messages).
-						// Log a warning and append the current message separately to avoid errors/data loss.
-						console.warn(`(${this.provider}) Cannot merge message for role '${currentMessage.role}' because its own content is not a string (Type: ${typeof currentContent}). Appending separately.`);
-						acc.push({...currentMessage}); // Add a copy of the current message
-					}
+					lastMessage.content = `${lastMessage.content ?? ''}\n\n${currentMessage.content ?? ''}`;
 				} else {
-					// Roles don't match, or it's the first message in the accumulator.
-					// Add a copy of the current message separately.
 					acc.push({...currentMessage});
 				}
-				// Return the accumulator for the next iteration.
+
 				return acc;
-			}, []); // Start with an empty accumulator array
+			}, []); 
 
 
-			// --- System Message Consolidation & Tool Injection ---
+			// Extract system messages
 			const systemContents: string[] = [];
-			const otherMessages: MessageParam[] = [];
-			mergedMessages.forEach(msg => {
+			const finalMessages: MessageParam[] = [];
+			messages.forEach(msg => {
 				if (msg.role === 'system') {
 					// Collect content from system messages
 					if (msg.content && typeof msg.content === 'string') {
 						systemContents.push(msg.content);
 					} else if (msg.content) {
-						// Attempt to stringify non-string system content (though usually it's string)
-						console.warn(`(${this.provider}) System message content was not a string, attempting to stringify.`);
 						try {
 							systemContents.push(JSON.stringify(msg.content));
 						} catch (e) {
 							console.error(`(${this.provider}) Failed to stringify system message content:`, e);
-							systemContents.push('[Error processing system message content]');
 						}
 					}
 				} else {
 					// Collect all non-system messages
-					otherMessages.push(msg);
+					finalMessages.push(msg);
 				}
 			});
 
-			// Generate tool descriptions and instructions
-			const toolInfoForPrompt = formatToolsForPrompt(originalTools);
-			// Add tool instructions to the system message contents
-			systemContents.push(toolInfoForPrompt);
-
-			let finalMessages: MessageParam[] = [];
-			// Combine system messages into one at the start if any exist
-			if (systemContents.length > 0) {
-				const combinedSystemContent = systemContents.join('\n\n').trim();
-				const combinedSystemMessage: MessageParam = { role: 'system', content: combinedSystemContent };
-				finalMessages = [combinedSystemMessage, ...otherMessages];
-			} else {
-				// No system messages, just use the others
-				finalMessages = otherMessages;
+			if(systemContents.length > 0) {
+				// Add the consolidated system message at the start
+				finalMessages.unshift({ role: 'system', content: systemContents.join('\n\n') });
 			}
 
 			// Assign the processed messages back to the request parameters
 			requestParams.messages = finalMessages;
 
-			// --- Final Message Role Check (Simplified) ---
-			// Ensure the last message is 'user' as required by some models/APIs
-			// Removed the logic that swapped user -> assistant messages as it was potentially problematic.
-			if (requestParams.messages.length === 0 || requestParams.messages[requestParams.messages.length - 1].role !== 'user') {
-				// Handle cases where the list is empty or ends with non-user
-				const aiName = process.env.AI_NAME || 'Magi'; // Use environment variable or default
-				const placeholderContent = `${aiName} thoughts: Let me think about this for a moment...`;
-
-				if (requestParams.messages.length > 0 && requestParams.messages[requestParams.messages.length - 1].role === 'system') {
-					// If the only message(s) were system messages, add a user prompt
-					requestParams.messages.push({ role: 'user', content: `${aiName} thoughts: Proceeding with the given instructions.` });
-				}
-					// --- Swapping logic removed ---
-				// else if (requestParams.messages.length > 1 && ...) { ... swap ... }
-				else if (requestParams.messages.length > 0) {
-					// If the last message is non-user (system handled above, so likely assistant), add a placeholder user message
-					console.log(`(${this.provider}) Final message role was not 'user' (was: ${requestParams.messages[requestParams.messages.length - 1].role}). Appending placeholder user message.`);
-					requestParams.messages.push({ role: 'user', content: placeholderContent });
-				} else {
-					// If the message list was empty after processing, add a placeholder user message
-					console.log(`(${this.provider}) Message list was empty after processing. Appending placeholder user message.`);
-					requestParams.messages.push({ role: 'user', content: placeholderContent });
-				}
-			}
 		} else {
 			// If not 'deepseek-reasoner', delegate to the parent class's preparation
 			return super.prepareParameters(requestParams);

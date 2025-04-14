@@ -46,7 +46,7 @@ export class Agent implements AgentInterface {
 	onToolResult?: (toolCall: ToolCall, result: string) => Promise<void>;
 
 	// Event handlers for request and response
-	onRequest?: (messages: ResponseInput) => Promise<ResponseInput>;
+	onRequest?: (agent: Agent, messages: ResponseInput) => Promise<[Agent, ResponseInput]>;
 	onResponse?: (response: string) => Promise<string>;
 	tryDirectExecution?: (messages: ResponseInput) => Promise<ResponseInput | null>; // Add this line
 

@@ -120,7 +120,16 @@ export class OpenAIProvider implements ModelProvider {
 
 			// Add other settings that work across models
 			if (settings?.tool_choice) {
-				requestParams.tool_choice = settings.tool_choice;
+				if(typeof settings.tool_choice === 'object' && settings.tool_choice?.type === 'function' && settings.tool_choice?.function?.name) {
+					// If it's an object, we assume it's a function call
+					requestParams.tool_choice = {
+						type: settings.tool_choice.type,
+						name: settings.tool_choice.function.name,
+					};
+				}
+				else {
+					requestParams.tool_choice = settings.tool_choice;
+				}
 			}
 			
 			// Set JSON response format if a schema is provided

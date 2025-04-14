@@ -26,12 +26,21 @@ export function set_file_test_mode(mode: boolean): void {
  */
 export function get_output_dir(subdirectory?: string): string {
 	if (!processDirectory) {
-		// Create the working directory
-		processDirectory = path.join('/magi_output', process.env.PROCESS_ID);
-		console.log(`Output directory created: ${processDirectory}`);
+		// Use a relative path for test mode, absolute path otherwise
+		const baseOutputDir = testMode ? './test_output' : '/magi_output';
+		// Ensure the base directory exists in test mode
+		if (testMode && !fs.existsSync(baseOutputDir)) {
+			fs.mkdirSync(baseOutputDir, { recursive: true });
+		}
+		processDirectory = path.join(baseOutputDir, process.env.PROCESS_ID || 'test-process');
+		console.log(`Output directory determined: ${processDirectory}`);
 	}
 	const outputDirectory = subdirectory ? path.join(processDirectory, subdirectory) : processDirectory;
-	fs.mkdirSync(outputDirectory, { recursive: true });
+	// Ensure the specific output directory exists
+	if (!fs.existsSync(outputDirectory)) {
+		fs.mkdirSync(outputDirectory, { recursive: true });
+		console.log(`Created directory: ${outputDirectory}`);
+	}
 	return outputDirectory;
 }
 

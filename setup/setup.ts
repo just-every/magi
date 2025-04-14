@@ -361,6 +361,7 @@ function ensureAllEnvVars(): void {
   const allConfigPrompts = [
     { key: 'YOUR_NAME', defaultValue: 'User' },
     { key: 'AI_NAME', defaultValue: 'Magi' },
+    { key: 'OPENROUTER_API_KEY' },
     { key: 'OPENAI_API_KEY' },
     { key: 'ANTHROPIC_API_KEY' },
     { key: 'GOOGLE_API_KEY' },
@@ -439,6 +440,12 @@ function promptForMissingKeys(): void {
       prompt: 'Enter AI name (press Enter for default "Magi" or to skip): ',
       defaultValue: 'Magi',
       description: 'AI name - identifies the AI in thought processes'
+    },
+    {
+      key: 'OPENROUTER_API_KEY',
+      prompt: 'Enter your OpenRouter API Key (press Enter to skip): ',
+      infoUrl: 'https://openrouter.ai/settings/keys',
+      description: 'OpenRouter'
     },
     {
       key: 'OPENAI_API_KEY',
@@ -624,6 +631,7 @@ function saveEnvFile(): void {
     const configKeys = [
       { key: 'YOUR_NAME', comment: '# Your name - identifies you in primary commands' },
       { key: 'AI_NAME', comment: '# AI name - identifies the AI in thought processes' },
+      { key: 'OPENROUTER_API_KEY', comment: '# OpenAI API key for GPT models' },
       { key: 'OPENAI_API_KEY', comment: '# OpenAI API key for GPT models' },
       { key: 'ANTHROPIC_API_KEY', comment: '# Anthropic API key for Claude models' },
       { key: 'GOOGLE_API_KEY', comment: '# Google API key for Gemini models' },

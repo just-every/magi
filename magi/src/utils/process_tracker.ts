@@ -4,6 +4,7 @@
 import {AgentProcess} from '../types.js';
 import {ProcessEventMessage} from './communication.js';
 import {addSystemMessage} from './history.js';
+import {summarizeTaskOutput} from './summary_utils.js';
 
 const truncateString = (string = '', maxLength = 200) =>
 	string.length > maxLength
@@ -43,19 +44,94 @@ class ProcessTracker {
 	 * Get an existing process by ID
 	 *
 	 * @param processId string the process ID added
+	 * @param useSummary whether to return a summarized version
 	 */
-	getStatus(processId: string): string {
+	async getStatus(processId: string, useSummary = false): Promise<string> {
 		const agentProcess = this.processes.get(processId);
 		if(!agentProcess) {
 			return `taskId ${processId} not found`;
 		}
 
-		return `taskId: ${processId}
+		// If summary is not requested, return the full status
+		if (!useSummary) {
+			return `taskId: ${processId}
 Name: ${agentProcess.name}
 Status: ${agentProcess.status}
 History: 
 
 ${JSON.stringify(agentProcess.history, null, 2)}`;
+		}
+
+		// Generate a summarized version
+		try {
+			const { summary, potentialIssues, isLikelyFailing } = await summarizeTaskOutput(
+				processId,
+				agentProcess.output,
+				agentProcess.history
+			);
+
+			// Build the status message with the summary
+			let statusMessage = `taskId: ${processId}
+Name: ${agentProcess.name}
+Status: ${agentProcess.status}
+Summary: ${summary}`;
+
+			// Add potential issues if any were detected
+			if (potentialIssues) {
+				statusMessage += `\n\nPotential Issues: ${potentialIssues}`;
+				
+				// Add warning for likely failing tasks
+				if (isLikelyFailing) {
+					statusMessage += '\n\nWARNING: This task appears to be failing repeatedly. Consider checking its progress or restarting it.';
+				}
+			}
+
+			return statusMessage;
+		} catch (error) {
+			console.error(`Error generating summary for task ${processId}:`, error);
+			// Fall back to normal status if summary generation fails
+			return `taskId: ${processId}
+Name: ${agentProcess.name}
+Status: ${agentProcess.status}
+Note: Failed to generate summary - ${error}`;
+		}
+	}
+
+	/**
+	 * Check health of all active processes and report failing ones
+	 * @returns Array of process IDs that appear to be failing
+	 */
+	async checkTaskHealth(): Promise<string[]> {
+		const failingProcessIds: string[] = [];
+		
+		// Check each active process
+		for (const [id, agentProcess] of this.processes.entries()) {
+			// Skip completed or terminated processes
+			if (agentProcess.status === 'completed' || agentProcess.status === 'terminated' || agentProcess.status === 'failed') {
+				continue;
+			}
+			
+			try {
+				// Analyze the task for potential issues
+				const { isLikelyFailing } = await summarizeTaskOutput(
+					id,
+					agentProcess.output,
+					agentProcess.history
+				);
+				
+				// If the task is likely failing, add it to the list
+				if (isLikelyFailing) {
+					failingProcessIds.push(id);
+					
+					// Add a system message to notify about the failing task
+					await addSystemMessage(`WARNING: Task with taskId ${id} (${agentProcess.name}) appears to be failing or stuck. Consider checking its status.`);
+				}
+			} catch (error) {
+				console.error(`Error checking health for task ${id}:`, error);
+			}
+		}
+		
+		return failingProcessIds;
 	}
 
 

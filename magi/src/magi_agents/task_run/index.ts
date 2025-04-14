@@ -4,6 +4,7 @@
  * Runs through a series of stages to plan, execute and validate tasks
  */
 
+import {Agent} from '../../utils/agent.js';
 import {Runner} from '../../utils/runner.js';
 import {ResponseInput, RunnerConfig, ToolFunction, TaskCompleteSignal, TaskFatalErrorSignal} from '../../types.js';
 import {createToolFunction} from '../../utils/tool_call.js';
@@ -12,14 +13,13 @@ import {addFileStatus} from '../../utils/file_utils.js';
 import {dateFormat} from '../../utils/date_tools.js';
 import {getCommunicationManager} from '../../utils/communication.js';
 
-// Removed let continueRun = true; - No longer needed
-
-export async function taskForceContext(messages: ResponseInput):Promise<ResponseInput> {
+export async function taskForceContext(agent: Agent, messages: ResponseInput): Promise<[Agent, ResponseInput]> {
 	messages.push({
 		role: 'developer',
 		content: `Current Time: ${dateFormat()}`,
 	});
-	return addFileStatus(messages);
+	messages = addFileStatus(messages);
+	return [agent, messages];
 }
 
 /**
@@ -78,7 +78,6 @@ const taskForce: RunnerConfig = {
 export async function runTask(
 	input: string
 ): Promise<string> { // Changed return type to string
-	// Removed continueRun reset - No longer needed
 
 	try {
 		const finalOutput = await Runner.runSequential(
@@ -90,7 +89,7 @@ export async function runTask(
 		// If runSequential completes without throwing a signal, it means the loop finished unexpectedly.
 		// This shouldn't happen with the current 'next' logic, but handle it defensively.
 		console.warn('[TaskRun] runSequential completed without a TaskComplete or TaskFatalError signal.');
-		return finalOutput || "Task sequence completed without explicit success/error signal.";
+		return finalOutput || 'Task sequence completed without explicit success/error signal.';
 	} catch (error) {
 
 		const comm = getCommunicationManager();
@@ -113,7 +112,7 @@ export async function runTask(
 			return `Task failed\n\nError: ${error.errorDetails}`;
 		} else {
 			// Re-throw unexpected errors
-			console.error(`[TaskRun] Unexpected error during task execution:`, error);
+			console.error('[TaskRun] Unexpected error during task execution:', error);
 			throw error;
 		}
 	}

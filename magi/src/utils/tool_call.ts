@@ -13,8 +13,11 @@ import {
 	ToolParameter,
 	ToolParameterType,
 	validToolParameterTypes,
+	TaskCompleteSignal,
+	TaskFatalErrorSignal,
 } from '../types.js';
 import {Agent} from './agent.js';
+import { createSummary } from './summary_utils.js';
 
 /**
  * Process a tool call from an agent
@@ -51,18 +54,20 @@ export async function processToolCall(
 						JSON.parse(call.function.arguments);
 					}
 				} catch (parseError) {
+					if (parseError instanceof TaskCompleteSignal || parseError instanceof TaskFatalErrorSignal) {
+						throw parseError; // Re-throw to stop further processing in this function
+					}
 					console.error('Error parsing arguments:', parseError);
 				}
 
 				// Handle the tool call (pass the agent for event handlers)
-				const result = await handleToolCall(call, agent, handlers);
+				const result: string = await handleToolCall(call, agent, handlers);
 
-				// Log tool call
-				const {function: {name}} = call;
-				console.log(`[Tool] ${name} executed successfully`, result);
-
-				return result;
+				return createSummary(result, `The following is the output of a tool \`${call.function.name}()\` used by an AI agent in an autonomous system. Focus on including the overall approach taken and the final result of the tool. Your summary will be used to decide the next steps to take.`);
 			} catch (error) {
+				if (error instanceof TaskCompleteSignal || error instanceof TaskFatalErrorSignal) {
+					throw error; // Re-throw to stop further processing in this function
+				}
 				console.error('Error executing tool:', error);
 
 				return `{"error": "${String(error).replace(/"/g, '\\"')}"}`;
@@ -75,6 +80,9 @@ export async function processToolCall(
 		// Return results as a JSON string
 		return JSON.stringify(results, null, 2);
 	} catch (error) {
+		if (error instanceof TaskCompleteSignal || error instanceof TaskFatalErrorSignal) {
+			throw error; // Re-throw to stop further processing in this function
+		}
 		console.error('Error processing tool call:', error);
 		return `{"error": "${String(error).replace(/"/g, '\\"')}"}`;
 	}
@@ -104,6 +112,9 @@ export async function handleToolCall(
 			handlers.onToolCall(toolCall);
 		}
 	} catch (error) {
+		if (error instanceof TaskCompleteSignal || error instanceof TaskFatalErrorSignal) {
+			throw error; // Re-throw to stop further processing in this function
+		}
 		console.error('Error in onToolCall handler:', error);
 	}
 
@@ -117,6 +128,9 @@ export async function handleToolCall(
 			args = JSON.parse(argsString);
 		}
 	} catch (error: any) {
+		if (error instanceof TaskCompleteSignal || error instanceof TaskFatalErrorSignal) {
+			throw error; // Re-throw to stop further processing in this function
+		}
 		console.error('Error parsing tool arguments:', error);
 		console.error(`Arguments string: ${argsString}`);
 		throw new Error(`Invalid JSON in tool arguments: ${error?.message || String(error)}`);
@@ -179,11 +193,17 @@ export async function handleToolCall(
 				handlers.onToolResult(toolCall, result);
 			}
 		} catch (error) {
+			if (error instanceof TaskCompleteSignal || error instanceof TaskFatalErrorSignal) {
+				throw error; // Re-throw to stop further processing in this function
+			}
 			console.error('Error in onToolResult handler:', error);
 		}
 
 		return result;
 	} catch (error: any) {
+		if (error instanceof TaskCompleteSignal || error instanceof TaskFatalErrorSignal) {
+			throw error; // Re-throw to stop further processing in this function
+		}
 		console.error(`Error executing tool ${name}:`, error);
 		throw new Error(`Error executing tool ${name}: ${error?.message || String(error)}`);
 	}

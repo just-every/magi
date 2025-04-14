@@ -140,7 +140,7 @@ export function getProjectTools(): ToolFunction[] {
 		),
 		createToolFunction(
 			pull_request,
-			'Creates a pull request to merge a branch into another branch. Will be reviewed by a human.',
+			'Creates a pull request to merge a branch into another branch.',
 			{
 				'project': 'The name of the new project. No spaces - letters, numbers, dashes and underscores only.',
 				'from_branch': 'The branch review. Use "magi-{taskId}" for an task\'s default branch.',

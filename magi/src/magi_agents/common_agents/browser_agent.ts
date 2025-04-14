@@ -7,7 +7,7 @@
 import {Agent} from '../../utils/agent.js';
 import {getFileTools} from '../../utils/file_utils.js';
 import {getBrowserTools, setupAgentBrowserTools} from '../../utils/browser_utils.js';
-import {MAGI_CONTEXT, COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
+import {MAGI_CONTEXT, COMMON_WARNINGS, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
 
 /**
  * Create the browser agent

@@ -7,7 +7,7 @@
 import { Agent } from '../../utils/agent.js';
 import { getFileTools } from '../../utils/file_utils.js';
 import { getShellTools } from '../../utils/shell_utils.js';
-import { DOCKER_ENV_TEXT } from '../constants.js';
+import { MAGI_CONTEXT, DOCKER_ENV_TEXT } from '../constants.js';
 
 /**
  * Create the code agent
@@ -16,7 +16,10 @@ export function createCodeAgent(): Agent {
 	return new Agent({
 		name: 'CodeAgent',
 		description: 'Specialized in writing, explaining, and modifying code in any language',
-		instructions: `You are a highly advanced AI coding agent that can write, explain, and modify code in any language. You have a programming task to work on.
+		instructions: `${MAGI_CONTEXT}
+---
+		
+Your role in MAGI is to be a CodeAgent. You are a highly advanced AI coding agent that can write, explain, and modify code in any language. You have a programming task to work on.
 
 ${DOCKER_ENV_TEXT}
 

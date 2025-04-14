@@ -50,6 +50,7 @@ export interface ModelEntry {
 	description?: string; // Short description of the model's capabilities
 	context_length?: number; // Maximum context length in tokens
 	rate_limit_fallback?: string; // Fallback model ID in case of rate limit errors
+	openrouter_id?: string; // OpenRouter model ID for this model (if available)
 }
 
 // Represents usage data for cost calculation
@@ -78,6 +79,7 @@ export type ModelProviderID =
 	| 'google'
 	| 'xai'
 	| 'deepseek'
+	| 'openrouter'
 	| 'test'
 	;
 
@@ -88,6 +90,8 @@ export type ModelClassID =
 	| 'reasoning'
 	| 'monologue'
 	| 'code'
+	| 'writing'
+	| 'summary'
 	| 'vision'
 	| 'search'
 	| 'image_generation' // Added for Imagen
@@ -98,6 +102,7 @@ export type ModelClassID =
 // (Keep your existing MODEL_CLASSES definition here, just ensure IDs are consistent
 //  with the updated MODEL_REGISTRY below)
 export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
+
 	// Standard models with good all-around capabilities
 	'standard': {
 		models: [
@@ -106,6 +111,7 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 			'claude-3-5-haiku-latest',  // Anthropic
 			'grok-3-mini',              // X.AI
 			'deepseek-chat',        	// DeepSeek
+			'meta-llama/llama-4-maverick', // Meta/OpenRouter
 		],
 		random: true,
 	},
@@ -117,6 +123,8 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 			'claude-3-5-haiku-latest',  // Anthropic
 			'gemini-2.0-flash-lite',	// Google
 			'grok-3-mini',              // X.AI
+			'meta-llama/llama-4-scout', // Meta/OpenRouter
+			'mistral/ministral-8b', 	// Mistral/OpenRouter
 		],
 		random: true,
 	},
@@ -124,11 +132,14 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 	// Advanced reasoning models
 	'reasoning': {
 		models: [
+			'openrouter/optimus-alpha', // OpenRouter
 			'gemini-2.5-pro-exp-03-25', // Google
 			'o3-mini',                  // OpenAI
 			'claude-3-7-sonnet-latest', // Anthropic
 			'grok-3',                   // X.AI
 			'deepseek-reasoner',       	// DeepSeek
+			'meta-llama/llama-4-maverick', // Meta/OpenRouter
+			'qwen/qwen-max', 			// Qwen/OpenRouter
 		],
 		random: true,
 	},
@@ -136,16 +147,14 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 	// Monologue models
 	'monologue': {
 		models: [
+			'openrouter/optimus-alpha', // OpenRouter
 			'gemini-2.5-pro-exp-03-25', // Google
-			'gemini-2.0-flash',    		// Google
 			'o3-mini',                  // OpenAI
-			'gpt-4o',              		// OpenAI
 			'claude-3-7-sonnet-latest', // Anthropic
-			'claude-3-5-haiku-latest',  // Anthropic
-			'deepseek-reasoner',       	// DeepSeek
-			'deepseek-chat',        	// DeepSeek
 			'grok-3',                   // X.AI
-			'grok-3-mini',              // X.AI
+			'deepseek-reasoner',       	// DeepSeek
+			'meta-llama/llama-4-maverick', // Meta/OpenRouter
+			'qwen/qwen-max', 			// Qwen/OpenRouter
 		],
 		random: true,
 	},
@@ -153,16 +162,39 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 	// Programming models
 	'code': {
 		models: [
-			'gemini-2.5-pro-exp-03-25', // Google
 			'claude-code',              // Anthropic
+			'gemini-2.5-pro-exp-03-25', // Google
 			'claude-3-7-sonnet-latest', // Anthropic
 			'o3-mini',                  // OpenAI
+			'grok-3',                   // X.AI
 		],
+	},
+
+	// Writing models - optimized for conversation and text generation
+	'writing': {
+		models: [
+			'meta-llama/llama-4-maverick', // Meta/OpenRouter
+			'gemini-2.0-flash',    		// Google
+			'gpt-4o',              		// OpenAI
+		],
+		random: true,
+	},
+
+	// Summary models - optimized for extracting information from text
+	// High quality, low cost allows this to be used heavily and reduce token usage for other models
+	'summary': {
+		models: [
+			'meta-llama/llama-4-scout', // Meta/OpenRouter
+			'gemini-2.0-flash',    		// Google
+			'gpt-4o-mini',             	// OpenAI
+			'mistral/ministral-8b', 	// Mistral/OpenRouter
+		],
+		random: true,
 	},
 
 	// Models with vision capabilities
 	'vision': {
-		models:  [
+		models: [
 			'computer-use-preview',     // OpenAI
 			'gpt-4o',              		// OpenAI
 			'gemini-2.0-flash',    		// Google
@@ -171,7 +203,7 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 	},
 
 	// Models with search capabilities
-	'search':{
+	'search': {
 		models: [
 			'gpt-4o',					// OpenAI
 			'deepseek-reasoner',       	// DeepSeek
@@ -191,6 +223,54 @@ export const MODEL_CLASSES: Record<ModelClassID, ModelClass> = {
 
 // Main model registry with all supported models
 export const MODEL_REGISTRY: ModelEntry[] = [
+
+	// Models used via OpenRouter
+	{
+		id: 'meta-llama/llama-4-maverick',
+		provider: 'openrouter',
+		cost: {
+			input_per_million: 0.18,
+			output_per_million: 0.6,
+		},
+		class: 'standard',
+		description: 'Llama 4 Maverick 17B Instruct (128E) is a high-capacity multimodal language model from Meta, built on a mixture-of-experts (MoE) architecture with 128 experts and 17 billion active parameters per forward pass (400B total).',
+		context_length: 1048576
+	},
+	{
+		id: 'meta-llama/llama-4-scout',
+		provider: 'openrouter',
+		cost: {
+			input_per_million: 0.08,
+			output_per_million: 0.3,
+		},
+		class: 'mini',
+		description: 'Llama 4 Scout 17B Instruct (16E) is a mixture-of-experts (MoE) language model developed by Meta, activating 17 billion parameters out of a total of 109B.',
+		context_length: 327680
+	},
+	{
+		id: 'qwen/qwen-max',
+		provider: 'openrouter',
+		cost: {
+			input_per_million: 1.6,
+			output_per_million: 6.4,
+		},
+		class: 'reasoning',
+		description: 'Qwen-Max, based on Qwen2.5, provides the best inference performance among Qwen models, especially for complex multi-step tasks.',
+		context_length: 32768
+	},
+	{
+		id: 'mistral/ministral-8b',
+		provider: 'openrouter',
+		cost: {
+			input_per_million: 0.1,
+			output_per_million: 0.1,
+		},
+		class: 'standard',
+		description: 'Ministral 8B is a state-of-the-art language model optimized for on-device and edge computing. Designed for efficiency in knowledge-intensive tasks, commonsense reasoning, and function-calling.',
+		context_length: 131072
+	},
+
+
 	//
 	// Test provider models (add at the beginning for better visibility during tests)
 	{
@@ -534,7 +614,8 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 		},
 		class: 'mini',
 		description: 'Fast, cost-effective Claude model',
-		context_length: 200000
+		context_length: 200000,
+		openrouter_id: 'anthropic/claude-3-5-sonnet:20240620'
 	},
 
 	// Claude 3 Opus
@@ -549,7 +630,8 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 		},
 		class: 'standard',
 		description: 'Most powerful Claude model',
-		context_length: 200000
+		context_length: 200000,
+		openrouter_id: 'anthropic/claude-3-opus:20240229'
 	},
 
 	// Claude 3 Sonnet
@@ -563,7 +645,8 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 		},
 		class: 'standard',
 		description: 'Balanced Claude model for most use cases',
-		context_length: 200000
+		context_length: 200000,
+		openrouter_id: 'anthropic/claude-3-sonnet:20240229'
 	},
 
 	// Claude 3 Haiku
@@ -577,7 +660,8 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 		},
 		class: 'mini',
 		description: 'Fast, lightweight Claude model',
-		context_length: 200000
+		context_length: 200000,
+		openrouter_id: 'anthropic/claude-3-haiku:20240307'
 	},
 
 	// Claude 2.x

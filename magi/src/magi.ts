@@ -72,6 +72,22 @@ function endProcess(exit: number, error?: string): void {
 // Store agent IDs to reuse them for the same agent type
 // const agentIdMap = new Map<AgentType, string>();
 
+/**
+ * Execute a command using an agent and capture the results
+ */
+export async function spawnThought(agent: Agent, command: string): Promise<void> {
+	await addHumanMessage(command);
+
+	// Get conversation history
+	const history = getHistory();
+
+	agent.model = Runner.rotateModel(agent, 'writing');
+
+	// Run the command with unified tool handling
+	const response = await Runner.runStreamedWithTools(agent, '', history);
+
+	console.log('[SPAWN THOUGHT] ', response);
+}
 
 /**
  * Execute a command using an agent and capture the results
@@ -86,6 +102,7 @@ export async function mainLoop(agent: Agent, loop: boolean, model?: string): Pro
 			const history = getHistory();
 
 			agent.model = model || Runner.rotateModel(agent);
+			delete agent.modelSettings;
 
 			// Run the command with unified tool handling
 			const response = await Runner.runStreamedWithTools(agent, '', history);
@@ -98,13 +115,7 @@ export async function mainLoop(agent: Agent, loop: boolean, model?: string): Pro
 		} catch (error: any) {
 			// Handle any error that occurred during agent execution
 			console.error(`Error running agent command: ${error?.message || String(error)}`);
-
-			// Send error through WebSocket
-			try {
-				comm.send({type: 'error', error});
-			} catch (commError) {
-				console.error('Failed to send error via WebSocket:', commError);
-			}
+			comm.send({type: 'error', error});
 		}
 	}
 	while (loop && !comm.isClosed());
@@ -142,7 +153,6 @@ function checkModelProviderApiKeys(): boolean {
 }
 
 // Function to send cost data to the controller
-
 
 // Add exit handlers to print cost summary and send cost data
 process.on('exit', (code) => endProcess(-1, `Process exited with code ${code}`));
@@ -192,31 +202,31 @@ async function main(): Promise<void> {
 	// Move to working directory in /magi_output
 	move_to_working_dir(args.working);
 
-	// Make our own code accessible for Gödel Machine
-	//mount_magi_code();
-
-	// Set up command listener
-	comm.onCommand(async(cmd: ServerMessage) => {
-		if(cmd.type !== 'command') return;
-		const commandMessage = cmd as CommandMessage;
-
-		console.log(`Received command via WebSocket: ${commandMessage.command}`);
-		if (commandMessage.command === 'stop') {
-			return endProcess(0, 'Received stop command, terminating...');
-		} else {
-			// Process user-provided follow-up commands
-			console.log(`Processing user command: ${commandMessage.command}`);
-			await addHumanMessage(commandMessage.command);
-		}
-	});
-
 	// Verify API keys for model providers
 	if (!checkModelProviderApiKeys()) {
 		return endProcess(1, 'No valid API keys found for any model provider');
 	}
 
-	// Run the command or research pipeline
+	// Run the command or tool
 	try {
+		// Create the agent with model, modelClass, and optional agent_id parameters
+		const agent = createAgent(args);
+
+		// Set up command listener
+		comm.onCommand(async(cmd: ServerMessage) => {
+			if(cmd.type !== 'command') return;
+			const commandMessage = cmd as CommandMessage;
+	
+			console.log(`Received command via WebSocket: ${commandMessage.command}`);
+			if (commandMessage.command === 'stop') {
+				return endProcess(0, 'Received stop command, terminating...');
+			} else {
+				// Process user-provided follow-up commands
+				console.log(`Processing user command: ${commandMessage.command}`);
+
+				await spawnThought(agent, commandMessage.command);
+			}
+		});
 
 		comm.send({
 			type: 'process_running',
@@ -232,10 +242,8 @@ async function main(): Promise<void> {
 			const person = process.env.YOUR_NAME || 'User';
 			await addMonologue('So let\'s see. I am Magi. The overseer of the MAGI system, huh? I will be the internal monologue for the system? These are my thoughts? That\'s a weird concept!');
 			await addMonologue(`${person} is nice to me. I will be nice to them too. I hope I hear from them soon. I should come up with a plan on how to improve myself and better help ${person}.`);
-			await addHumanMessage(promptText);
 
-			// Create the agent with model, modelClass, and optional agent_id parameters
-			const agent = createAgent(args);
+			await spawnThought(agent, promptText);
 			await mainLoop(agent, (args.agent === 'overseer' && !args.test), args.model);
 
 			if (args.test) {

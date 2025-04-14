@@ -41,10 +41,9 @@ RUN npm install -g npm
 # Global installs needed at runtime
 RUN npm install -g @anthropic-ai/claude-code@latest
 
-# Install system dependencies required by Playwright and gosu at runtime
+# Install system dependencies required by gosu at runtime
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git gosu && \
-    npx playwright install-deps chromium && \
     # Clean up apt cache
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
@@ -69,13 +68,6 @@ RUN mkdir -p /magi_output /claude_shared
 # Copy node_modules (including devDependencies) from the builder stage
 # This layer depends only on package-lock.json changes via the builder stage
 COPY --from=builder --chown=${USER_NAME}:${GROUP_NAME} /build/node_modules ./node_modules
-
-# Switch to the user that will run playwright install
-USER ${USER_NAME}
-# Run the install command - this layer is cached unless node_modules changed
-RUN npx playwright install --only-shell chromium
-# Switch back to root temporarily for subsequent build steps
-USER root
 
 # Copy the entrypoint script (adjust source path as needed)
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh

@@ -14,9 +14,7 @@
  */
 
 import { Agent } from '../../utils/agent.js';
-import { getFileTools } from '../../utils/file_utils.js';
 import { Runner } from '../../utils/runner.js';
-import { ResponseInput } from '../../types.js';
 import { createPlanningAgent } from './planning_agent.js';
 import { createTestingAgent } from './testing_agent.js';
 import { createWritingAgent } from './writing_agent.js';
@@ -142,7 +140,7 @@ export class TestRunner {
       // Parse the result
       return this.parseTestResult(output);
     } catch (error) {
-      console.error(`Error running all tests:`, error);
+      console.error('Error running all tests:', error);
       
       // If the error is due to test failure, return formatted result
       if (error instanceof Error) {
@@ -222,10 +220,10 @@ export class TestRunner {
       if (parseInt(hasVitestConfig.trim()) > 0) return 'vitest';
       
       // Default to Jest if we can't determine
-      console.log("Could not determine test runner, defaulting to Jest");
+      console.log('Could not determine test runner, defaulting to Jest');
       return 'jest';
     } catch (error) {
-      console.warn(`Error detecting test runner:`, error);
+      console.warn('Error detecting test runner:', error);
       return 'jest'; // Default to Jest
     }
   }
@@ -369,8 +367,11 @@ export class TddGodelOrchestrator {
     // 1. Planning Phase: Break down the goal into features
     await this.planningPhase();
 
-    // 2. TDD Phase: Implement each feature using TDD workflow
-    await this.implementFeatures();
+    // 2. Gather project context for better understanding
+    const projectContext = await this.gatherProjectContext();
+    
+    // 3. TDD Phase: Implement each feature using TDD workflow with enhanced context
+    await this.implementFeatures(projectContext);
 
     // 3. Final Integration: Run all tests to ensure everything works together
     const finalResults = await this.runFinalTests();
@@ -383,10 +384,10 @@ export class TddGodelOrchestrator {
    * Planning phase: Break down the goal into features using the PlanningAgent
    */
   private async planningPhase(): Promise<void> {
-    console.log("Starting Planning Phase...");
+    console.log('Starting Planning Phase...');
     
     if (!this.agents.planning) {
-      throw new Error("Planning agent not initialized");
+      throw new Error('Planning agent not initialized');
     }
 
     // Construct planning context
@@ -442,7 +443,7 @@ Remember:
       const planJson = this.extractJsonFromText(result);
       
       if (!planJson || !planJson.features || !Array.isArray(planJson.features)) {
-        throw new Error("Invalid planning result format. Expected JSON with a features array.");
+        throw new Error('Invalid planning result format. Expected JSON with a features array.');
       }
 
       // Validate and process features
@@ -477,7 +478,7 @@ Remember:
 
       console.log(`Planning complete. Identified ${this.plan.features.length} features.`);
     } catch (error) {
-      console.error("Error in planning phase:", error);
+      console.error('Error in planning phase:', error);
       throw new Error(`Failed to plan features: ${error}`);
     }
   }
@@ -494,7 +495,7 @@ Remember:
       try {
         return JSON.parse(jsonMatches[1]);
       } catch (e) {
-        console.warn("Found JSON-like content but failed to parse:", e);
+        console.warn('Found JSON-like content but failed to parse:', e);
       }
     }
 
@@ -509,16 +510,159 @@ Remember:
         return JSON.parse(jsonText);
       }
     } catch (e) {
-      console.warn("Failed to extract JSON directly from text:", e);
+      console.warn('Failed to extract JSON directly from text:', e);
     }
 
     return null;
   }
 
   /**
-   * Process all features using the TDD workflow
+   * Gather project context to provide better information for the TDD workflow
+   * This helps agents understand the existing codebase, project structure,
+   * dependencies, and coding patterns
    */
-  private async implementFeatures(): Promise<void> {
+  private async gatherProjectContext(): Promise<string> {
+    console.log('Gathering project context...');
+    
+    if (!this.agents.reasoning) {
+      throw new Error('Reasoning agent not initialized');
+    }
+    
+    try {
+      // 1. Get project structure
+      const fileStructure = await this.runShellCommand('find . -type f -name "*.ts" -o -name "*.js" | grep -v "node_modules" | sort');
+      
+      // 2. Check the package.json for dependencies and scripts
+      let packageJson = '{}';
+      try {
+        packageJson = await this.runShellCommand('cat package.json 2>/dev/null || echo "{}"');
+      } catch (error) {
+        console.warn('Could not read package.json:', error);
+      }
+      
+      // 3. Check for TypeScript configuration
+      let tsConfig = '{}';
+      try {
+        tsConfig = await this.runShellCommand('cat tsconfig.json 2>/dev/null || echo "{}"');
+      } catch (error) {
+        console.warn('Could not read tsconfig.json:', error);
+      }
+      
+      // 4. Get a list of test files to understand testing patterns
+      const testFiles = await this.runShellCommand('find . -type f -name "*.test.ts" -o -name "*.spec.ts" -o -name "*Test.ts" | grep -v "node_modules" | sort');
+      
+      // 5. Sample a few key files to understand code style and patterns
+      let sampleFileContents = '';
+      try {
+        // Get the first few test files (up to 3)
+        const testFileList = testFiles.trim().split('\n').filter(line => line.trim() !== '');
+        
+        if (testFileList.length > 0) {
+          for (let i = 0; i < Math.min(3, testFileList.length); i++) {
+            const content = await this.runShellCommand(`cat ${testFileList[i]} 2>/dev/null || echo "// File not found"`);
+            sampleFileContents += `\n--- ${testFileList[i]} ---\n${content}\n`;
+          }
+        }
+        
+        // Also examine a few source files
+        const sourceFiles = await this.runShellCommand('find ./src -type f -name "*.ts" | grep -v ".test.ts" | grep -v ".spec.ts" | head -3');
+        const sourceFileList = sourceFiles.trim().split('\n').filter(line => line.trim() !== '');
+        
+        if (sourceFileList.length > 0) {
+          for (const file of sourceFileList) {
+            const content = await this.runShellCommand(`cat ${file} 2>/dev/null || echo "// File not found"`);
+            sampleFileContents += `\n--- ${file} ---\n${content}\n`;
+          }
+        }
+      } catch (error) {
+        console.warn('Could not sample file contents:', error);
+      }
+      
+      // 6. Use reasoning agent to analyze and synthesize the context information
+      const contextPrompt = `
+Analyze the following project information and create a concise but comprehensive context summary
+that will help implement new features using Test-Driven Development (TDD).
+
+PROJECT GOAL: ${this.plan.goal}
+
+FILE STRUCTURE:
+\`\`\`
+${fileStructure}
+\`\`\`
+
+PACKAGE.JSON:
+\`\`\`json
+${packageJson}
+\`\`\`
+
+TSCONFIG.JSON:
+\`\`\`json
+${tsConfig}
+\`\`\`
+
+TEST FILES:
+\`\`\`
+${testFiles}
+\`\`\`
+
+SAMPLE CODE:
+\`\`\`typescript
+${sampleFileContents}
+\`\`\`
+
+Create a context summary that includes:
+1. Project structure overview
+2. Key dependencies and their purpose
+3. Testing framework and patterns used
+4. Code style and patterns
+5. TypeScript configuration details
+6. Important interfaces, classes, or functions that might be relevant to our goal
+7. Recommendations for implementing new features in this codebase following TDD
+
+Your analysis should help developers who will be writing tests and implementing features understand:
+- How to structure new code to match the existing project
+- How to write tests that match the existing testing style
+- Which existing code might be relevant for reuse or extension
+- Any potential challenges or considerations when adding new features
+`;
+
+      const contextSummary = await Runner.runStreamedWithTools(
+        this.agents.reasoning,
+        undefined,
+        [{ role: 'user', content: contextPrompt }],
+        {}
+      );
+      
+      console.log('Project context gathered successfully');
+      return contextSummary;
+    } catch (error) {
+      console.error('Error gathering project context:', error);
+      return `Failed to gather comprehensive project context: ${error}\n\nContinuing with limited context.`;
+    }
+  }
+  
+  /**
+   * Run a shell command and return the result
+   */
+  private async runShellCommand(command: string): Promise<string> {
+    if (!this.agents.shell) {
+      throw new Error('Shell agent not initialized');
+    }
+    
+    const result = await Runner.runStreamedWithTools(
+      this.agents.shell,
+      undefined,
+      [{ role: 'user', content: `Execute this command and return ONLY the command output: ${command}` }],
+      {}
+    );
+    
+    return result;
+  }
+
+  /**
+   * Process all features using the TDD workflow with enhanced context
+   */
+  private async implementFeatures(projectContext: string): Promise<void> {
     // Sort features by dependencies to ensure correct order
     const sortedFeatures = this.sortFeaturesByDependencies();
     
@@ -529,9 +673,9 @@ Remember:
         // Update feature status
         feature.status = 'writing_tests';
         
-        // 1. RED Phase: Write tests first
-        const testContent = await this.writeTests(feature);
-        this.featureResults.set(feature.id, { test_content: testContent });
+    // 1. RED Phase: Write tests first with enhanced context
+    const testContent = await this.writeTests(feature, projectContext);
+    this.featureResults.set(feature.id, { test_content: testContent });
         
         // 2. Verify RED: Run tests (they should fail)
         feature.status = 'running_tests_red';
@@ -671,13 +815,13 @@ Remember:
   }
 
   /**
-   * Write tests for a feature using the TestingAgent
+   * Write tests for a feature using the TestingAgent with enhanced context
    */
-  private async writeTests(feature: Feature): Promise<string> {
+  private async writeTests(feature: Feature, projectContext: string): Promise<string> {
     console.log(`Writing tests for feature ${feature.id}...`);
     
     if (!this.agents.testing) {
-      throw new Error("Testing agent not initialized");
+      throw new Error('Testing agent not initialized');
     }
     
     const testingContext = `
@@ -685,10 +829,16 @@ You are going to write tests for the following feature following Test-Driven Dev
 
 FEATURE: ${feature.description}
 
-TEST FILE PATH: ${feature.test_file_path || "(to be determined)"}
-IMPLEMENTATION FILE PATH: ${feature.implementation_file_path || "(to be determined)"}
+TEST FILE PATH: ${feature.test_file_path || '(to be determined)'}
+IMPLEMENTATION FILE PATH: ${feature.implementation_file_path || '(to be determined)'}
 
 GOAL: ${this.plan.goal}
+
+PROJECT CONTEXT:
+${projectContext}
+
+RELATED FEATURES:
+${this.getRelatedFeatures(feature)}
 
 Your task is to:
 
@@ -750,7 +900,7 @@ Write the complete test file content.
 
     // Extract the test code from the result
     const codeBlocks = result.match(/```(?:typescript|javascript|ts|js)?\n([\s\S]*?)```/g);
-    let testCode = "";
+    let testCode = '';
     
     if (codeBlocks && codeBlocks.length > 0) {
       // Extract the content from the first code block
@@ -790,22 +940,72 @@ Write the complete test file content.
   }
 
   /**
-   * Write implementation code for a feature using the WritingAgent
+   * Get information about features related to the current feature (dependencies and dependents)
+   */
+  private getRelatedFeatures(feature: Feature): string {
+    // Find features this feature depends on
+    const dependencies = this.plan.features.filter(f => 
+      feature.depends_on.includes(f.id)
+    );
+    
+    // Find features that depend on this feature
+    const dependents = this.plan.features.filter(f => 
+      f.depends_on.includes(feature.id)
+    );
+    
+    let result = 'DEPENDENCIES:\n';
+    
+    if (dependencies.length === 0) {
+      result += 'This feature has no dependencies.\n';
+    } else {
+      for (const dep of dependencies) {
+        result += `- Feature ${dep.id}: ${dep.description} (Status: ${dep.status})\n`;
+        result += `  Test: ${dep.test_file_path || '(not determined)'}\n`;
+        result += `  Implementation: ${dep.implementation_file_path || '(not determined)'}\n`;
+        
+        // Add test content if available
+        const depResults = this.featureResults.get(dep.id);
+        if (depResults && depResults.test_content) {
+          result += `  Test Content:\n\`\`\`typescript\n${depResults.test_content}\n\`\`\`\n`;
+        }
+        
+        // Add implementation content if available
+        if (depResults && depResults.implementation_content) {
+          result += `  Implementation Content:\n\`\`\`typescript\n${depResults.implementation_content}\n\`\`\`\n`;
+        }
+      }
+    }
+    
+    result += '\nDEPENDENTS:\n';
+    
+    if (dependents.length === 0) {
+      result += 'No other features depend on this feature.\n';
+    } else {
+      for (const dep of dependents) {
+        result += `- Feature ${dep.id}: ${dep.description} (Status: ${dep.status})\n`;
+      }
+    }
+    
+    return result;
+  }
+
+  /**
+   * Write implementation code for a feature using the WritingAgent with enhanced context
    */
   private async writeImplementation(feature: Feature, testCode: string, testResult: TestResult): Promise<string> {
     console.log(`Writing implementation for feature ${feature.id}...`);
     
     if (!this.agents.writing) {
-      throw new Error("Writing agent not initialized");
+      throw new Error('Writing agent not initialized');
     }
     
     // Check for any existing code at the implementation path
-    let existingCode = "";
+    let existingCode = '';
     try {
       existingCode = await this.testRunner.readFile(feature.implementation_file_path!);
     } catch (error) {
       // File doesn't exist yet, which is expected
-      existingCode = "";
+      existingCode = '';
     }
     
     const writingContext = `
@@ -818,8 +1018,11 @@ GOAL: ${this.plan.goal}
 TEST FILE PATH: ${feature.test_file_path}
 IMPLEMENTATION FILE PATH: ${feature.implementation_file_path}
 
+RELATED FEATURES:
+${this.getRelatedFeatures(feature)}
+
 EXISTING IMPLEMENTATION:
-${existingCode ? "```typescript\n" + existingCode + "\n```" : "No existing implementation."}
+${existingCode ? '```typescript\n' + existingCode + '\n```' : 'No existing implementation.'}
 
 TEST CODE:
 \`\`\`typescript
@@ -829,7 +1032,7 @@ ${testCode}
 TEST RESULT (failing tests):
 \`\`\`
 ${testResult.output}
-${testResult.error || ""}
+${testResult.error || ''}
 \`\`\`
 
 Your task is to:
@@ -858,7 +1061,7 @@ Write the complete implementation file content.
 
     // Extract the implementation code from the result
     const codeBlocks = result.match(/```(?:typescript|javascript|ts|js)?\n([\s\S]*?)```/g);
-    let implementationCode = "";
+    let implementationCode = '';
     
     if (codeBlocks && codeBlocks.length > 0) {
       // Extract the content from the first code block
@@ -898,7 +1101,7 @@ Write the complete implementation file content.
   }
 
   /**
-   * Fix failing implementation
+   * Fix failing implementation with enhanced context
    */
   private async fixImplementation(
     feature: Feature, 
@@ -909,7 +1112,7 @@ Write the complete implementation file content.
     console.log(`Fixing implementation for feature ${feature.id}...`);
     
     if (!this.agents.writing) {
-      throw new Error("Writing agent not initialized");
+      throw new Error('Writing agent not initialized');
     }
     
     const fixContext = `
@@ -919,6 +1122,9 @@ FEATURE: ${feature.description}
 
 TEST FILE PATH: ${feature.test_file_path}
 IMPLEMENTATION FILE PATH: ${feature.implementation_file_path}
+
+RELATED FEATURES:
+${this.getRelatedFeatures(feature)}
 
 TEST CODE:
 \`\`\`typescript
@@ -933,7 +1139,7 @@ ${implementationCode}
 FAILING TEST RESULT:
 \`\`\`
 ${testResult.output}
-${testResult.error || ""}
+${testResult.error || ''}
 \`\`\`
 
 Your task is to:
@@ -955,7 +1161,7 @@ Focus on addressing the specific issues in the test failures. Write the complete
 
     // Extract the fixed implementation code
     const codeBlocks = result.match(/```(?:typescript|javascript|ts|js)?\n([\s\S]*?)```/g);
-    let fixedCode = "";
+    let fixedCode = '';
     
     if (codeBlocks && codeBlocks.length > 0) {
       // Extract the content from the first code block
@@ -994,13 +1200,13 @@ Focus on addressing the specific issues in the test failures. Write the complete
   }
 
   /**
-   * Refactor implementation while maintaining test passes
+   * Refactor implementation while maintaining test passes with enhanced context
    */
   private async refactorImplementation(feature: Feature, implementationCode: string): Promise<string> {
     console.log(`Refactoring implementation for feature ${feature.id}...`);
     
     if (!this.agents.writing) {
-      throw new Error("Writing agent not initialized");
+      throw new Error('Writing agent not initialized');
     }
     
     const refactorContext = `
@@ -1009,6 +1215,9 @@ You are going to refactor code following Test-Driven Development principles:
 FEATURE: ${feature.description}
 
 IMPLEMENTATION FILE PATH: ${feature.implementation_file_path}
+
+RELATED FEATURES:
+${this.getRelatedFeatures(feature)}
 
 CURRENT IMPLEMENTATION (passes all tests):
 \`\`\`typescript
@@ -1041,16 +1250,16 @@ Otherwise, write the complete refactored implementation file content.
     );
 
     // Check if the agent decided not to refactor
-    if (result.includes("The code is already well-structured") || 
+    if (result.includes('The code is already well-structured') || 
         result.includes("doesn't need refactoring") ||
-        result.includes("no refactoring needed")) {
+        result.includes('no refactoring needed')) {
       console.log(`No refactoring needed for feature ${feature.id}`);
       return implementationCode;
     }
 
     // Extract the refactored implementation code
     const codeBlocks = result.match(/```(?:typescript|javascript|ts|js)?\n([\s\S]*?)```/g);
-    let refactoredCode = "";
+    let refactoredCode = '';
     
     if (codeBlocks && codeBlocks.length > 0) {
       // Extract the content from the first code block
@@ -1075,7 +1284,7 @@ Otherwise, write the complete refactored implementation file content.
    * Run final tests on all features to ensure everything works together
    */
   private async runFinalTests(): Promise<TestResult> {
-    console.log("Running final integration tests...");
+    console.log('Running final integration tests...');
     
     // Collect all test file paths
     const testPaths = this.plan.features
@@ -1086,7 +1295,7 @@ Otherwise, write the complete refactored implementation file content.
     if (testPaths.length === 0) {
       return {
         passed: false,
-        output: "No tests to run - all features failed or were skipped",
+        output: 'No tests to run - all features failed or were skipped',
       };
     }
     
@@ -1098,7 +1307,7 @@ Otherwise, write the complete refactored implementation file content.
    * Generate a comprehensive report of the TDD process
    */
   private generateReport(finalTestResult: TestResult): string {
-    let report = `# TDD Gödel Machine Execution Report\n\n`;
+    let report = '# TDD Gödel Machine Execution Report\n\n';
     
     // Goal and overview
     report += `## Goal\n\n${this.plan.goal}\n\n`;
@@ -1108,14 +1317,14 @@ Otherwise, write the complete refactored implementation file content.
     const failedFeatures = this.plan.features.filter(f => f.status === 'failed').length;
     const totalFeatures = this.plan.features.length;
     
-    report += `## Summary\n\n`;
+    report += '## Summary\n\n';
     report += `- Total features: ${totalFeatures}\n`;
     report += `- Completed: ${completedFeatures} (${Math.round(completedFeatures/totalFeatures*100)}%)\n`;
     report += `- Failed: ${failedFeatures} (${Math.round(failedFeatures/totalFeatures*100)}%)\n`;
     report += `- Final integration tests: ${finalTestResult.passed ? 'PASSED' : 'FAILED'}\n\n`;
     
     // Feature details
-    report += `## Feature Details\n\n`;
+    report += '## Feature Details\n\n';
     
     this.plan.features.forEach(feature => {
       report += `### Feature ${feature.id}: ${feature.description}\n\n`;
@@ -1126,7 +1335,7 @@ Otherwise, write the complete refactored implementation file content.
       const results = this.featureResults.get(feature.id);
       
       if (!results) {
-        report += `- No execution results available\n\n`;
+        report += '- No execution results available\n\n';
         return;
       }
       
@@ -1142,20 +1351,20 @@ Otherwise, write the complete refactored implementation file content.
       
       // Refactoring
       if (results.refactored_content) {
-        report += `- Refactoring: Performed\n`;
+        report += '- Refactoring: Performed\n';
       } else {
-        report += `- Refactoring: Not needed\n`;
+        report += '- Refactoring: Not needed\n';
       }
       
-      report += `\n`;
+      report += '\n';
     });
     
     // Final test output
     if (finalTestResult.output) {
-      report += `## Final Integration Test Output\n\n`;
-      report += "```\n";
+      report += '## Final Integration Test Output\n\n';
+      report += '```\n';
       report += finalTestResult.output;
-      report += "\n```\n\n";
+      report += '\n```\n\n';
     }
     
     return report;

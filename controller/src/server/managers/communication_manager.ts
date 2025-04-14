@@ -8,7 +8,9 @@ import {Server as WebSocketServer, WebSocket} from 'ws';
 import {Server as HttpServer} from 'http';
 import {ProcessManager} from './process_manager';
 import {
-	createNewProject
+	createNewProject,
+	reviewBranchLocally,
+	createPullRequestLocally
 } from './container_manager';
 import fs from 'fs';
 import path from 'path';
@@ -482,13 +484,21 @@ export class CommunicationManager {
 		[key: string]: unknown;
 	}): Promise<void> {
 
-		if (event.type === 'command_start') {
-			this.sendCommand(processId, event.command as string);
+		if (event.type === 'command_start' && event.command && typeof event.command === 'string') {
+			if(event.command.trim().toLowerCase() === 'stop' && processId === this.processManager.coreProcessId) {
+				this.sendMessage(this.processManager.coreProcessId, JSON.stringify({
+					type: 'system_message',
+					message: 'Can not stop the core process.',
+				}));
+			}
+			else {
+				this.sendCommand(processId, event.command as string);
+			}
 		}
 		else if (event.type === 'process_start') {
 			await this.processManager.createAgentProcess(event.agentProcess as AgentProcess);
 		}
-		else if (event.type === 'project_create' && processId !== this.processManager.coreProcessId) {
+		else if (event.type === 'project_create' && processId === this.processManager.coreProcessId) {
 			try {
 				this.sendMessage(this.processManager.coreProcessId, JSON.stringify({
 					type: 'project_ready',
@@ -500,6 +510,76 @@ export class CommunicationManager {
 				this.sendMessage(this.processManager.coreProcessId, JSON.stringify({
 					type: 'system_message',
 					message: `Error creating "${event.project}" project: ${error}`,
+				}));
+			}
+		}
+		else if (event.type === 'review_branch' && processId === this.processManager.coreProcessId) {
+			// Handle branch review
+			const { project, branch } = event;
+			
+			if (!project || !branch) {
+				this.sendMessage(this.processManager.coreProcessId, JSON.stringify({
+					type: 'system_message',
+					message: 'Error: Project and branch are required for branch review.',
+				}));
+				return;
+			}
+			
+			try {
+				const reviewResult = await reviewBranchLocally(project as string, branch as string);
+				
+				// Send the review result back to the agent
+				this.sendMessage(this.processManager.coreProcessId, JSON.stringify({
+					type: 'branch_review_result',
+					project,
+					branch,
+					success: reviewResult.success,
+					diff: reviewResult.diff || '',
+					message: reviewResult.message,
+					error: reviewResult.error,
+				}));
+			} catch (error) {
+				this.sendMessage(this.processManager.coreProcessId, JSON.stringify({
+					type: 'system_message',
+					message: `Error reviewing branch: ${error}`,
+				}));
+			}
+		}
+		else if (event.type === 'pull_request' && processId === this.processManager.coreProcessId) {
+			// Handle pull request
+			const { project, from_branch, to_branch } = event;
+			
+			if (!project || !from_branch || !to_branch) {
+				this.sendMessage(this.processManager.coreProcessId, JSON.stringify({
+					type: 'system_message',
+					message: 'Error: Project, source branch, and destination branch are required for pull requests.',
+				}));
+				return;
+			}
+			
+			try {
+				const pullRequestResult = await createPullRequestLocally(
+					project as string, 
+					from_branch as string, 
+					to_branch as string
+				);
+				
+				// Send the pull request result back to the agent
+				this.sendMessage(this.processManager.coreProcessId, JSON.stringify({
+					type: 'pull_request_result',
+					project,
+					from_branch,
+					to_branch,
+					success: pullRequestResult.success,
+					merged: pullRequestResult.merged,
+					conflicts: pullRequestResult.conflicts || false,
+					message: pullRequestResult.message,
+					error: pullRequestResult.error,
+				}));
+			} catch (error) {
+				this.sendMessage(this.processManager.coreProcessId, JSON.stringify({
+					type: 'system_message',
+					message: `Error creating pull request: ${error}`,
 				}));
 			}
 		}

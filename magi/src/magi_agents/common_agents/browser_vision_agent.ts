@@ -8,7 +8,7 @@
 import {Agent} from '../../utils/agent.js';
 import {getFileTools} from '../../utils/file_utils.js';
 import {getBrowserTools, setupAgentBrowserTools} from '../../utils/browser_utils.js';
-import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
+import {MAGI_CONTEXT, COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
 
 /**
  * Create the browser vision agent
@@ -17,7 +17,10 @@ export function createBrowserVisionAgent(): Agent {
 	const agent = new Agent({
 		name: 'BrowserVisionAgent',
 		description: 'Uses computer vision to interact with websites and extract data',
-		instructions: `You are a specialized browser vision agent with the ability to analyze visual content on websites.
+		instructions: `${MAGI_CONTEXT}
+---
+
+Your role in MAGI is to be a BrowserVisionAgent. You are a specialized browser vision agent with the ability to analyze visual content on websites.
 
 Your vision capabilities include:
 - Analyzing screenshots to understand webpage layouts

@@ -16,9 +16,13 @@
     "setup": "node setup/bootstrap.js",
     "setup:claude": "npx tsc -p setup && node setup/dist/claude_setup.js",
     "setup:browser": "npx tsc -p setup && node setup/dist/browser_setup.js",
-    "test": "cd test/playwright && npx playwright test",
-    "test:ui": "cd test/playwright && npx playwright test --ui",
-    "test:install": "cd test/playwright && npm install && npx playwright install"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "cd test/playwright && npx playwright test",
+    "test:e2e:ui": "cd test/playwright && npx playwright test --ui",
+    "test:e2e:install": "cd test/playwright && npm install && npx playwright install"
   },
   "repository": {
     "type": "git",
@@ -33,9 +37,13 @@
     "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
+    "@vitest/coverage-v8": "^3.1.1",
+    "@vitest/ui": "^3.1.1",
     "eslint": "^8.56.0",
+    "jsdom": "^26.0.0",
     "typescript": "^5.8.2",
-    "typescript-eslint": "^7.0.0"
+    "typescript-eslint": "^7.0.0",
+    "vitest": "^3.1.1"
   },
   "dependencies": {
     "ws": "^8.18.1"

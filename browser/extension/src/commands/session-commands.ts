@@ -8,7 +8,7 @@ import { closeAgentSession } from '../tab-management/tab-manager';
 import { clearElementMap } from '../storage/element-storage';
 
 /**
- * Switches between tabs or creates a new tab
+ * Switches between tabs, creates a new tab, or focuses on an existing tab
  * @param tabId The agent's current tab identifier
  * @param params Switch tab parameters
  * @returns Promise resolving to a response message
@@ -17,7 +17,7 @@ export async function switchTabHandler(
   tabId: string,
   params: SwitchTabParams
 ): Promise<ResponseMessage> {
-  console.log(`[session-commands] Switching tab type: ${params.type}`);
+  console.log(`[session-commands] Switching/focusing tab type: ${params.type}`);
   
   try {
     if (params.type === 'active') {
@@ -120,11 +120,17 @@ export async function switchTabHandler(
         registerAgentTab(tabId, tab.id);
         await clearElementMap(tabId); // Clear element map for the new tab
         
+        // Focus the tab if it exists
+        if (tab.windowId) {
+          await chrome.windows.update(tab.windowId, { focused: true });
+        }
+        await chrome.tabs.update(tab.id, { active: true });
+        
         return {
           status: 'ok',
           result: {
             tabId: tab.id,
-            message: `Successfully switched to tab (${tab.id}) for agent ${tabId}.`
+            message: `Successfully switched to and focused tab (${tab.id}) for agent ${tabId}.`
           }
         };
       } catch (error) {
@@ -134,10 +140,55 @@ export async function switchTabHandler(
         };
       }
     }
+    else if (params.type === 'focus') {
+      // This handles the functionality previously in focusTabHandler
+      if (!params.tabId) {
+        return {
+          status: 'error',
+          error: 'Tab ID is required for tab type "focus".'
+        };
+      }
+      
+      const chromeTabId = Number(params.tabId);
+      if (isNaN(chromeTabId)) {
+        return {
+          status: 'error',
+          error: `Invalid tab ID: ${params.tabId}`
+        };
+      }
+      
+      try {
+        // Get tab info
+        const tab = await chrome.tabs.get(chromeTabId);
+        
+        // Activate the window containing the tab
+        if (tab.windowId) {
+          await chrome.windows.update(tab.windowId, { focused: true });
+        }
+        
+        // Focus the tab itself
+        await chrome.tabs.update(chromeTabId, { active: true });
+        
+        return {
+          status: 'ok',
+          result: {
+            tabId: chromeTabId,
+            title: tab.title || 'Untitled',
+            url: tab.url || '',
+            message: `Successfully focused tab ${chromeTabId}: ${tab.title || tab.url || 'Untitled'}.`
+          }
+        };
+      } catch (error) {
+        return {
+          status: 'error',
+          error: `Failed to focus tab ${chromeTabId}: ${error instanceof Error ? error.message : String(error)}`
+        };
+      }
+    }
     else {
       return {
         status: 'error',
-        error: `Unsupported tab type: ${params.type}`
+        error: `Unsupported tab type: ${params.type}. Supported types are: 'active', 'new', 'id', or 'focus'.`
       };
     }
   } catch (error) {

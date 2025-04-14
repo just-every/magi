@@ -149,6 +149,297 @@ async function prepareGitRepository(
 }
 
 /**
+ * Review a branch in a git repository
+ * 
+ * @param project The name of the project repository
+ * @param branch The branch to review
+ * @returns Object with diff info and status
+ */
+export async function reviewBranchLocally(project: string, branch: string): Promise<{
+	success: boolean;
+	diff?: string;
+	message: string;
+	error?: string;
+}> {
+	try {
+		// Where the git repository is located on the host
+		const hostPath = path.join('/external/host', project);
+
+		// Check if the path exists on the host
+		if (!fs.existsSync(hostPath)) {
+			return {
+				success: false,
+				message: `Project directory ${hostPath} does not exist`,
+				error: 'PROJECT_NOT_FOUND'
+			};
+		}
+
+		// Check if it's a git repository
+		try {
+			await execPromise(`git -C "${hostPath}" rev-parse --is-inside-work-tree`);
+		} catch (error) {
+			return {
+				success: false,
+				message: `Not a valid git repository at ${hostPath}`,
+				error: 'INVALID_GIT_REPO'
+			};
+		}
+
+		// Get the default branch (main or master)
+		const {stdout: branchesOutput} = await execPromise(`git -C "${hostPath}" branch`);
+		
+		// Parse branches to find main/master branch
+		const branches = branchesOutput.split('\n').map(b => b.trim().replace('* ', ''));
+		const defaultBranch = branches.includes('main') ? 'main' : 
+							(branches.includes('master') ? 'master' : branches[0]);
+		
+		if (!defaultBranch) {
+			return {
+				success: false,
+				message: 'Could not determine default branch',
+				error: 'NO_DEFAULT_BRANCH'
+			};
+		}
+
+		// Check if the requested branch exists
+		try {
+			await execPromise(`git -C "${hostPath}" show-ref --verify --quiet refs/heads/${branch}`);
+		} catch (error) {
+			return {
+				success: false,
+				message: `Branch "${branch}" does not exist in project "${project}"`,
+				error: 'BRANCH_NOT_FOUND'
+			};
+		}
+
+		// Generate the diff between the requested branch and the default branch
+		try {
+			const {stdout: diffOutput} = await execPromise(
+				`git -C "${hostPath}" diff ${defaultBranch}..${branch} --color=never`
+			);
+
+			if (!diffOutput.trim()) {
+				return {
+					success: true,
+					diff: '',
+					message: `No changes found in branch "${branch}" compared to "${defaultBranch}"`
+				};
+			}
+
+			// For large diffs, get a summary instead of the full diff
+			const {stdout: statOutput} = await execPromise(
+				`git -C "${hostPath}" diff --stat ${defaultBranch}..${branch}`
+			);
+
+			// Get commit log
+			const {stdout: logOutput} = await execPromise(
+				`git -C "${hostPath}" log --oneline ${defaultBranch}..${branch}`
+			);
+
+			// Combine information for a comprehensive review
+			const review = `
+# Branch Review: ${branch}
+
+## Summary of Changes
+${statOutput}
+
+## Commits
+${logOutput || 'No commits found.'}
+
+## Diff Preview (first 500 lines)
+\`\`\`diff
+${diffOutput.split('\n').slice(0, 500).join('\n')}
+${diffOutput.split('\n').length > 500 ? '\n... (diff truncated for length)' : ''}
+\`\`\`
+`;
+
+			return {
+				success: true,
+				diff: review,
+				message: `Successfully reviewed branch "${branch}" against "${defaultBranch}"`
+			};
+		} catch (error) {
+			return {
+				success: false,
+				message: `Error generating diff: ${error}`,
+				error: 'DIFF_ERROR'
+			};
+		}
+	} catch (error) {
+		return {
+			success: false,
+			message: `Unexpected error reviewing branch: ${error}`,
+			error: 'UNEXPECTED_ERROR'
+		};
+	}
+}
+
+/**
+ * Create a pull request by merging one branch into another
+ * 
+ * @param project The name of the project repository
+ * @param fromBranch The source branch
+ * @param toBranch The destination branch
+ * @returns Object with merge status and message
+ */
+export async function createPullRequestLocally(
+	project: string, 
+	fromBranch: string, 
+	toBranch: string
+): Promise<{
+	success: boolean;
+	merged: boolean;
+	conflicts?: boolean;
+	message: string;
+	error?: string;
+}> {
+	try {
+		// Where the git repository is located on the host
+		const hostPath = path.join('/external/host', project);
+
+		// Check if the path exists on the host
+		if (!fs.existsSync(hostPath)) {
+			return {
+				success: false,
+				merged: false,
+				message: `Project directory ${hostPath} does not exist`,
+				error: 'PROJECT_NOT_FOUND'
+			};
+		}
+
+		// Check if it's a git repository
+		try {
+			await execPromise(`git -C "${hostPath}" rev-parse --is-inside-work-tree`);
+		} catch (error) {
+			return {
+				success: false,
+				merged: false,
+				message: `Not a valid git repository at ${hostPath}`,
+				error: 'INVALID_GIT_REPO'
+			};
+		}
+
+		// Handle the special case for "default" branch
+		let targetBranch = toBranch;
+		if (targetBranch === 'default') {
+			// Find the actual default branch (main or master)
+			const {stdout: branchesOutput} = await execPromise(`git -C "${hostPath}" branch`);
+			const branches = branchesOutput.split('\n').map(b => b.trim().replace('* ', ''));
+			
+			targetBranch = branches.includes('main') ? 'main' : 
+							(branches.includes('master') ? 'master' : branches[0]);
+			
+			if (!targetBranch) {
+				return {
+					success: false,
+					merged: false,
+					message: 'Could not determine default branch',
+					error: 'NO_DEFAULT_BRANCH'
+				};
+			}
+		}
+
+		// Check if the source branch exists
+		try {
+			await execPromise(`git -C "${hostPath}" show-ref --verify --quiet refs/heads/${fromBranch}`);
+		} catch (error) {
+			return {
+				success: false,
+				merged: false,
+				message: `Source branch "${fromBranch}" does not exist in project "${project}"`,
+				error: 'FROM_BRANCH_NOT_FOUND'
+			};
+		}
+
+		// Check if the target branch exists
+		try {
+			await execPromise(`git -C "${hostPath}" show-ref --verify --quiet refs/heads/${targetBranch}`);
+		} catch (error) {
+			return {
+				success: false,
+				merged: false,
+				message: `Target branch "${targetBranch}" does not exist in project "${project}"`,
+				error: 'TO_BRANCH_NOT_FOUND'
+			};
+		}
+
+		// Get current branch and stash any changes
+		const {stdout: currentBranchOutput} = await execPromise(`git -C "${hostPath}" rev-parse --abbrev-ref HEAD`);
+		const currentBranch = currentBranchOutput.trim();
+		
+		// Stash changes if there are any
+		const {stdout: statusOutput} = await execPromise(`git -C "${hostPath}" status --porcelain`);
+		if (statusOutput.trim()) {
+			await execPromise(`git -C "${hostPath}" stash save "Automatic stash before pull request"`);
+		}
+
+		try {
+			// Checkout the target branch
+			await execPromise(`git -C "${hostPath}" checkout ${targetBranch}`);
+			
+			// Try to merge the source branch
+			try {
+				await execPromise(`git -C "${hostPath}" merge ${fromBranch} --no-ff -m "Merge branch '${fromBranch}' into ${targetBranch}"`);
+				
+				return {
+					success: true,
+					merged: true,
+					message: `Successfully merged branch "${fromBranch}" into "${targetBranch}"`
+				};
+			} catch (mergeError) {
+				// Check if there are merge conflicts
+				const {stdout: conflictOutput} = await execPromise(`git -C "${hostPath}" diff --name-only --diff-filter=U`);
+				
+				if (conflictOutput.trim()) {
+					// Abort the merge
+					await execPromise(`git -C "${hostPath}" merge --abort`);
+					
+					return {
+						success: true,
+						merged: false,
+						conflicts: true,
+						message: `Merge conflicts detected. The following files have conflicts:\n${conflictOutput}`
+					};
+				} else {
+					// Some other merge error occurred
+					try {
+						await execPromise(`git -C "${hostPath}" merge --abort`);
+					} catch (abortError) {
+						console.error('Error aborting merge:', abortError);
+					}
+					
+					return {
+						success: false,
+						merged: false,
+						message: `Error merging branches: ${mergeError}`,
+						error: 'MERGE_ERROR'
+					};
+				}
+			}
+		} finally {
+			// Always return to the original branch
+			try {
+				await execPromise(`git -C "${hostPath}" checkout ${currentBranch}`);
+				
+				// Apply stashed changes if there were any
+				if (statusOutput.trim()) {
+					await execPromise(`git -C "${hostPath}" stash pop`);
+				}
+			} catch (checkoutError) {
+				console.error('Error returning to original branch:', checkoutError);
+			}
+		}
+	} catch (error) {
+		return {
+			success: false,
+			merged: false,
+			message: `Unexpected error creating pull request: ${error}`,
+			error: 'UNEXPECTED_ERROR'
+		};
+	}
+}
+
+/**
  * Create a new project in /external/host with a git repository
  *
  * @param project The repository options

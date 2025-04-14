@@ -15,10 +15,11 @@ import {
 	RunnerConfig, ResponseInputItem, ResponseInputFunctionCall, ResponseInputFunctionCallOutput, ResponseInputMessage,
 	TaskCompleteSignal, // Import the signal
 	TaskFatalErrorSignal, // Import the signal
+	StreamEventType,
 } from '../types.js';
 import {Agent} from './agent.js';
 import {getModelProvider} from '../model_providers/model_provider.js';
-import {findModel, MODEL_CLASSES, ModelEntry} from '../model_providers/model_data.js';
+import {findModel, MODEL_CLASSES, ModelClassID, ModelEntry} from '../model_providers/model_data.js';
 import {getModelFromClass} from '../model_providers/model_provider.js';
 import {processToolCall} from './tool_call.js';
 import {capitalize} from './llm_utils.js';
@@ -124,55 +125,7 @@ async function* createTimeoutProxyStream<T>(
  * Agent runner class for executing agents with tools
  */
 export class Runner {
-	/**
-	 * Run a summarization task using an agent
-	 * @param agent The agent to use for summarization
-	 * @param messages The messages to summarize
-	 * @param maxTokens Optional maximum length of the summary
-	 * @returns The summarized content
-	 */
-	static async summarizeContent(
-		agent: Agent,
-		messages: ResponseInput,
-		maxTokens: number = 500
-	): Promise<string> {
-		// Convert the messages to a readable format
-		const messagesText = messages.map(msg => {
-			if('role' in msg && 'content' in msg) {
-				const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
-				return `Role: ${msg.role}\nContent: ${content}\n`;
-			} else if('type' in msg && msg.type === 'function_call') {
-				return `Tool Call: ${msg.name}\nArguments: ${msg.arguments}\n`;
-			} else if('type' in msg && msg.type === 'function_call_output') {
-				return `Tool Result: ${msg.name}\nOutput: ${msg.output}\n`;
-			}
-			return JSON.stringify(msg);
-		}).join('\n---\n');
-
-		// Prepare the summarization prompt
-		const summarizationPrompt = `Summarize the following conversation history concisely, focusing on:
-1. Key topics discussed
-2. Important decisions or actions taken
-3. Main user requests and assistant responses
-4. Essential information only - omit repetitive or irrelevant details
-
-Keep the summary clear and comprehensive while staying under ${maxTokens} tokens.
-
-Conversation History:
-${messagesText}
-
-SUMMARY:`;
-
-		// Run the agent with the summarization prompt
-		try {
-			const summary = await this.runStreamedWithTools(agent, summarizationPrompt);
-			return summary.trim();
-		} catch (error) {
-			console.error('Error summarizing content:', error);
-			return `Failed to generate summary: ${error}`;
-		}
-	}
-
+	
 	/**
 	 * Helper function to get the next fallback model, avoiding already tried ones.
 	 * Special handling for rate-limited models to try paid alternatives.
@@ -236,7 +189,7 @@ SUMMARY:`;
 
 		// Allow agent onRequest hook
 		if(agent.onRequest) {
-			messages = await agent.onRequest(messages);
+			[agent, messages] = await agent.onRequest(agent, messages);
 		}
 
 		// --- Main loop for trying initial model and fallbacks ---
@@ -302,6 +255,10 @@ SUMMARY:`;
 				return; // Success: exit the generator function normally.
 
 			} catch (error) {
+				if (error instanceof TaskCompleteSignal || error instanceof TaskFatalErrorSignal) {
+					throw error; // Re-throw to stop further processing in this function
+				}
+				
 				// --- Catch block for the current model attempt ---
 				// This catches:
 				// 1. TimeoutError thrown by createTimeoutProxyStream
@@ -357,6 +314,7 @@ SUMMARY:`;
 		input?: string,
 		conversationHistory: ResponseInput = [],
 		handlers: ToolCallHandler = {},
+		allowedEvents: StreamEventType[] | null = null,
 		toolCallCount = 0 // Track the number of tool call iterations across recursive calls
 	): Promise<string> {
 		let fullResponse = '';
@@ -372,14 +330,17 @@ SUMMARY:`;
 
 			const comm = getCommunicationManager();
 			for await (const event of stream) {
+				// Handle different event types
+				const eventType = event.type as StreamEventType;
+
 				// Call the event handler if provided
-				comm.send(event);
-				if (handlers.onEvent) {
-					handlers.onEvent(event);
+				if(allowedEvents === null || allowedEvents.includes(eventType)) {
+					comm.send(event);
+					if (handlers.onEvent) {
+						handlers.onEvent(event);
+					}
 				}
 
-				// Handle different event types
-				const eventType = event.type as string;
 				switch (eventType) {
 					case 'message_delta':
 						break;
@@ -448,13 +409,6 @@ SUMMARY:`;
 
 						// Parse tool results for better logging (only if toolResult is not null)
 						let parsedResults = null;
-						if (toolResult !== null) {
-							try {
-								parsedResults = JSON.parse(toolResult);
-							} catch (e) {
-								parsedResults = toolResult; // Keep as string if not JSON
-							}
-						}
 						try {
 							parsedResults = JSON.parse(toolResult);
 						} catch (e) {
@@ -487,9 +441,8 @@ SUMMARY:`;
 							}
 						}
 
-
 						// Send detailed tool result via event handler (only if results were processed)
-						if (parsedResults !== null && handlers.onEvent) {
+						if (parsedResults !== null && (allowedEvents === null || allowedEvents.includes('tool_done'))) {
 							// Create a resultsById object that maps tool call IDs to their results
 							const resultsById: Record<string, unknown> = {};
 
@@ -501,13 +454,10 @@ SUMMARY:`;
 										resultsById[toolEvent.tool_calls[i].id] = parsedResults[i];
 									}
 								}
-							} else if (parsedResults !== null) { // Check again for non-array, non-null case
-								// If parsedResults is not an array, map it to the first tool call ID
-								if (toolEvent.tool_calls.length > 0) {
-									resultsById[toolEvent.tool_calls[0].id] = parsedResults;
-								}
 							}
-
+							else if (toolEvent.tool_calls.length > 0) {
+								resultsById[toolEvent.tool_calls[0].id] = parsedResults;
+							}
 
 							comm.send({
 								agent: event.agent,
@@ -515,12 +465,15 @@ SUMMARY:`;
 								tool_calls: toolEvent.tool_calls,
 								results: resultsById,
 							});
-							handlers.onEvent({
-								agent: event.agent,
-								type: 'tool_done',
-								tool_calls: toolEvent.tool_calls,
-								results: resultsById,
-							});
+							
+							if(handlers.onEvent) {
+								handlers.onEvent({
+									agent: event.agent,
+									type: 'tool_done',
+									tool_calls: toolEvent.tool_calls,
+									results: resultsById,
+								});
+							}
 						}
 						break; // End of 'tool_start' case
 					} // End of 'tool_start' case
@@ -634,6 +587,7 @@ SUMMARY:`;
 					'', // No new user input is needed, history contains results
 					toolCallMessages,
 					handlers,
+					allowedEvents,
 					toolCallCount // Pass the current toolCallCount to track across recursive calls
 				);
 
@@ -799,7 +753,7 @@ SUMMARY:`;
 					}
 					
 					if (stageOutput === null) {
-						stageOutput = "Direct execution completed but response format was unexpected or content was empty.";
+						stageOutput = 'Direct execution completed but response format was unexpected or content was empty.';
 						console.warn(`[Runner] Unexpected response format or empty content from tryDirectExecution for stage ${currentStage}:`, directExecutionResult);
 					}
 					
@@ -820,7 +774,7 @@ SUMMARY:`;
 
 
 				// Determine the next stage based on the output string (ensure it's not null)
-				const nextStage = agentSequence[currentStage].next(stageOutput ?? ""); // Use nullish coalescing for safety
+				const nextStage = agentSequence[currentStage].next(stageOutput ?? ''); // Use nullish coalescing for safety
 				if (!nextStage) {
 					console.log('[Runner] No next stage found, ending sequence.');
 					break; // Exit the while loop
@@ -1028,11 +982,12 @@ SUMMARY:`;
 		return currentMessages;
 	}
 
-	public static rotateModel(agent: Agent): string|undefined {
+	public static rotateModel(agent: Agent, modelClass?: ModelClassID): string|undefined {
 		let model = agent.model;
 
-		if(agent.modelClass === 'monologue') {
-			let models: string[] = [...MODEL_CLASSES[agent.modelClass].models];
+		modelClass = modelClass || agent.modelClass;
+		if(modelClass) {
+			let models: string[] = [...MODEL_CLASSES[modelClass].models];
 			if(model) {
 				// Try to use a different model if we can
 				models = models.filter(newModel => newModel !== model);

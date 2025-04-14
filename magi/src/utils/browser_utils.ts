@@ -63,6 +63,47 @@ function getOrCreateTabSession() {
 // These maintain the existing API but use the new agent-specific sessions
 
 /**
+ * Lists all open browser tabs across all windows
+ * @returns JSON string with tab information
+ */
+export async function listOpenTabs(): Promise<string> {
+  console.log('[browser_utils] Requesting list of all open tabs...');
+  try {
+    const session = getOrCreateTabSession();
+    await session.initialize(); // Ensure session is initialized
+    return await session.listOpenTabs();
+  } catch (error: any) {
+    const errorMessage = `[browser_utils] Error listing open tabs: ${error?.message || String(error)}`;
+    console.error(errorMessage, error?.details || '');
+    return errorMessage; // Return error message string
+  }
+}
+
+/**
+ * Focuses on a specific browser tab by its Chrome tab ID
+ * This only focuses the tab in the UI; it does not change which tab the agent controls
+ * @param chromeTabId The Chrome tab ID to focus
+ * @returns Result message
+ */
+export async function focusTab(chromeTabId: number): Promise<string> {
+  if (typeof chromeTabId !== 'number' || chromeTabId <= 0) {
+    const errorMsg = `[browser_utils] Error: Invalid Chrome tab ID (${chromeTabId}).`;
+    console.error(errorMsg);
+    return Promise.resolve(errorMsg);
+  }
+  console.log(`[browser_utils] Requesting to focus on tab ${chromeTabId}...`);
+  try {
+    const session = getOrCreateTabSession();
+    await session.initialize(); // Ensure session is initialized
+    return await session.focusTab(chromeTabId);
+  } catch (error: any) {
+    const errorMessage = `[browser_utils] Error focusing tab ${chromeTabId}: ${error?.message || String(error)}`;
+    console.error(errorMessage, error?.details || '');
+    return errorMessage; // Return error message string
+  }
+}
+
+/**
  * Navigate the agent's browser tab to a URL via the extension bridge.
  *
  * @param url - URL to navigate to.
@@ -242,24 +283,30 @@ export async function press(keys: string): Promise<string> {
 }
 
 /**
- * Resets the extension's interaction map for the agent's tab via the bridge.
+ * Switches which tab the agent controls for future operations
+ * When type is 'id', also focuses the tab in the UI
  *
  * @returns Result message from the bridge/extension or an error message string.
  */
 export async function switch_tab(
     type: 'active' | 'new' | 'id',
-    tabId: string,
+    tabId?: string,
 ): Promise<string> {
-  console.log('[browser_utils] Requesting session tab change...');
+  console.log(`[browser_utils] Requesting tab switch to ${type}...`);
+  
+  // Validate parameters
   if (type === 'id' && (typeof tabId !== 'string' || !tabId)) {
-    const errorMsg = `[browser_utils] Error: Invalid tabId (${tabId}) provided for tabs switch '${type}'.`;
+    const errorMsg = `[browser_utils] Error: Invalid tabId (${tabId}) provided for tab switch operation.`;
     console.error(errorMsg);
-    return Promise.resolve(errorMsg); // Return error string directly
+    return Promise.resolve(errorMsg);
   }
+  
   try {
     const session = getOrCreateTabSession();
     await session.initialize(); // Ensure session is initialized
-    const result = await session.switchTab(type, tabId);
+    
+    // Handle normal tab switching - this will also focus the tab when type='id'
+    const result = await session.switchTab(type, tabId || '');
     return String(result);
   } catch (error: any) {
     const errorMessage = `[browser_utils] Error switching tab: ${error?.message || String(error)}`;
@@ -379,6 +426,22 @@ export async function closeAgentSession(): Promise<string> {
  */
 export function getBrowserTools(): ToolFunction[] {
   return [
+    // --- Tab Management ---
+    createToolFunction(
+      listOpenTabs,
+      'List all open browser tabs across all windows. Returns information about all tabs including their ID, title, and URL.',
+      {},
+      'JSON string containing information about all open tabs.'
+    ),
+    createToolFunction(
+      focusTab,
+      'Focus on a specific browser tab by its Chrome tab ID. This brings the tab to the foreground without changing which tab the agent controls.',
+      {
+        'chromeTabId': { type: 'number', description: 'The Chrome tab ID to focus (from listOpenTabs)' }
+      },
+      'Status message indicating success or failure.'
+    ),
+    
     // --- Navigation and Page Context ---
     createToolFunction(
       navigate,
@@ -492,19 +555,19 @@ export function getBrowserTools(): ToolFunction[] {
     ),
     createToolFunction(
       switch_tab,
-      'Each browser agent operates in it\'s own tab. This function switches between them for future operations.',
+      'Each browser agent operates in its own tab. This function changes which tab the agent controls for future operations.',
       {
         'destination': {
           type: 'string',
-          description: 'What tab to switch to\n' +
-              'active: the currently active tab (shared with the operator of this computer)' +
-              'new: open a new tab for future operations' +
-              'id: switch to an existing tab by their ID',
+          description: 'What tab operation to perform\n' +
+              'active: switch to and track the currently active tab (shared with the operator of this computer)\n' +
+              'new: create and switch to a new tab for future operations\n' +
+              'id: switch to an existing tab by its ID (also focuses it in the UI)',
           enum: ['active', 'new', 'id'],
         },
         'tabId': {
           type: 'string',
-          description: 'The ID of the tab to switch to. Only used if destination is "id".',
+          description: 'The ID of the tab to switch to. Required when destination is "id".',
           optional: true
         },
       },

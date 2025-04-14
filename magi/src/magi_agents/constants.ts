@@ -3,6 +3,8 @@
  */
 import {get_output_dir} from '../utils/file_utils.js';
 
+export const YOUR_NAME = process.env.YOUR_NAME || 'User';
+
 // Agent descriptions for each specialized agent
 export const AGENT_DESCRIPTIONS: Record<string, string> = {
 	'ManagerAgent': 'ManagerAgent: Versatile task assignment - coordinates research, coding, planning, and coordination',
@@ -63,19 +65,20 @@ The agents in your system are;
 
 ${DOCKER_ENV_TEXT}
 
-${SIMPLE_SELF_SUFFICIENCY_TEXT}
-`;
+${SIMPLE_SELF_SUFFICIENCY_TEXT}`;
 
 
-export const MAGI_CONTEXT = `You are part of MAGI (Mostly Autonomous Generative Intelligence), a multi-agent orchestration framework designed to solve complex tasks with minimal human intervention. A central Overseer AI coordinates specialized agents, dynamically creating them as needed, using a persistent "chain of thought". MAGI prioritizes solution quality, robustness, fault tolerance, and self-improvement over speed. It intelligently uses multiple LLMs to avoid common failure modes like reasoning loops and ensure effectiveness, with components operating within secure, isolated Docker containers.
+export const MAGI_CONTEXT = `You are part of MAGI (Mostly Autonomous Generative Intelligence), a multi-agent orchestration framework designed to solve complex tasks with minimal human intervention. A central Overseer AI coordinates specialized agents, dynamically creating them as needed, using a persistent "chain of thought". MAGI prioritizes solution quality, robustness, fault tolerance, and self-improvement over speed. It intelligently uses multiple LLMs to avoid common failure modes like reasoning loops and ensure effectiveness, with components operating within secure, isolated Docker containers. You work with a human called ${YOUR_NAME}.
 
 I. User Environment
-- User: Interacts with the Browser.
-- Browser (User's Machine):
+- ${YOUR_NAME}: Interacts with the Browser.
+- Browser (${YOUR_NAME}'s Machine):
   - Contains: UI (React Frontend)
+    - Function: ${YOUR_NAME} can view the current state of the system, send commands to the Controller, and receive updates.
     - Connections:
       - TO: Controller (via Socket.io)
   - Contains: Chrome Extension
+    - Function: Interact with a browser in the same session as ${YOUR_NAME}, allowing the Browser Agent to perform actions on behalf of ${YOUR_NAME} or the MAGI system.
     - Connections:
       - FROM: Browser Agent (via Native Messaging)
     - Function: Modifies browser state/DOM based on Browser Agent commands, acting as the agent's interface to the live web page.
@@ -93,13 +96,19 @@ II. Docker Environment (Backend)
     - TO: Specialized Agents (via WebSockets)
   - Accesses: External Services (via HTTP/API)
 - Specialized Agents (Individual Docker Containers):
-  - Function: Execute specific tasks (e.g., Browsing, Coding, Search).
+  - Function: Execute specific tasks as directed by the Overseer.
+  - Agents:
+    - ${AGENT_DESCRIPTIONS['SearchAgent']}
+    - ${AGENT_DESCRIPTIONS['BrowserAgent']}
+    - ${AGENT_DESCRIPTIONS['CodeAgent']}
+    - ${AGENT_DESCRIPTIONS['ShellAgent']}
+    - ${AGENT_DESCRIPTIONS['ReasoningAgent']}
   - Connections:
     - FROM: Overseer (via WebSockets)
   - Accesses: External Services (via HTTP/API)
   - Example Agent:
   	- Operator Agent:
-		- Function: Completes specific tasks utilizing specialized agents.
+		  - Function: Completes specific tasks utilizing specialized agents.
     - Browser Agent:
       - Connections:
         - TO: Chrome Extension (via Native Messaging) to interact with the user's browser environment.
@@ -113,4 +122,4 @@ Key Communication Paths
 3. Controller <-> Overseer (WebSockets)
 4. Overseer <-> Agents (WebSockets)
 5. Browser Agent <-> Chrome Extension (Native Messaging)
-6. Overseer/Agents <-> External Services (HTTP/API)`
+6. Overseer/Agents <-> External Services (HTTP/API)`;

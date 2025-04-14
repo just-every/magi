@@ -11,6 +11,7 @@ declare global {
 			PROCESS_ID: string;
 			CONTROLLER_PORT: string;
 			HOST_HOSTNAME: string;
+			OPENROUTER_API_KEY?: string;
 			OPENAI_API_KEY?: string;
 			ANTHROPIC_API_KEY?: string;
 			GOOGLE_API_KEY?: string;
@@ -121,7 +122,7 @@ export interface AgentDefinition {
 
 	onToolCall?: (toolCall: ToolCall) => Promise<void>;
 	onToolResult?: (toolCall: ToolCall, result: string) => Promise<void>;
-	onRequest?: (messages: ResponseInput) => Promise<ResponseInput>;
+	onRequest?: (agent: Agent, messages: ResponseInput) => Promise<[Agent, ResponseInput]>;
 	onResponse?: (response: string) => Promise<string>;
 	tryDirectExecution?: (messages: ResponseInput) => Promise<ResponseInput | null>; // Add this line
 }

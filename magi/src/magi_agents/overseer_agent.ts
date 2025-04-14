@@ -21,17 +21,24 @@ import {getProcessTools, listActiveProjects} from '../utils/process_tools.js';
 import {MAGI_CONTEXT} from './constants.js';
 
 const startTime = new Date();
+// Track when we last checked task health
+let lastTaskHealthCheckTime = new Date();
+// How often to check task health (10 minutes)
+const TASK_HEALTH_CHECK_INTERVAL_MS = 10 * 60 * 1000;
 
-async function* sendEvent(type: 'talk_complete' | 'message_complete', message: string): AsyncGenerator<StreamingEvent>  {
+async function* sendEvent(type: 'talk_complete' | 'message_complete', message: string): AsyncGenerator<StreamingEvent> {
 	yield {
 		type,
 		content: message,
 		message_id: uuidv4()
 	};
+	
+	// Need to return an empty generator to satisfy AsyncGenerator return type
+	return;
 }
 
 
-function addSystemStatus(messages: ResponseInput):ResponseInput {
+async function addSystemStatus(messages: ResponseInput): Promise<ResponseInput> {
 	// Prepare short-term memories section
 	messages.push({
 		role: 'developer',
@@ -53,6 +60,24 @@ Short Term Memory:
 ${listShortTermMemories()}
 [Create with save_memory()]`,
 	});
+
+	// Check if it's time for a periodic task health check
+	const currentTime = new Date();
+	if (currentTime.getTime() - lastTaskHealthCheckTime.getTime() > TASK_HEALTH_CHECK_INTERVAL_MS) {
+		// Reset timer
+		lastTaskHealthCheckTime = currentTime;
+		
+		// Run health check in the background
+		processTracker.checkTaskHealth()
+			.then(failingTaskIds => {
+				if (failingTaskIds.length > 0) {
+					console.log(`[Overseer] Detected ${failingTaskIds.length} potentially failing tasks during periodic check.`);
+				}
+			})
+			.catch(error => {
+				console.error('[Overseer] Error during periodic task health check:', error);
+			});
+	}
 
 	return messages;
 }
@@ -91,7 +116,7 @@ export function createOverseerAgent(): Agent {
 	}
 
 	// Add some prompts to guide the thought process
-	function addPromptGuide(messages: ResponseInput):ResponseInput {
+	function addPromptGuide(agent: Agent, messages: ResponseInput):[Agent, ResponseInput] {
 		let indexOfLastCommand: number | undefined;
 		let indexOfLastTalk: number | undefined;
 
@@ -126,6 +151,9 @@ export function createOverseerAgent(): Agent {
 				// Remove the last message from the messages
 				messages = addTemporaryThought(messages, `I really need to reply to ${person} using ${talkToolName} - they are waiting for me.`);
 			}
+
+			agent.modelSettings = agent.modelSettings || {};
+			agent.modelSettings.tool_choice = {type: 'function', function:{name: talkToolName}};
 		}
 		else if(indexOfLastTalk && (!indexOfLastCommand || indexOfLastCommand < indexOfLastTalk) && (indexOfLastTalk > messages.length - 10)) {
 			// Prompt to reply to the last command
@@ -143,7 +171,7 @@ export function createOverseerAgent(): Agent {
 			messages = addTemporaryThought(messages, randomThought);
 		}
 
-		return messages;
+		return [agent, messages];
 	}
 
 	/*
@@ -153,11 +181,12 @@ export function createOverseerAgent(): Agent {
 3.
 	 */
 
-	return new Agent({
+	// Create agent with the necessary tools and configuration
+	const agent = new Agent({
 		name: aiName,
 		description: 'Overseer of the MAGI system',
 		instructions: `This is your internal monologue - you are talking with yourself.
-	
+
 ---
 ${MAGI_CONTEXT}
 ---
@@ -187,8 +216,7 @@ Your two fundamental goals are to assist ${person} and improve yourself.
 
 Your thought process uses different AI LLM models each time it runs to give you different perspectives on the same topic. It also means that you may disagree with yourself at times, and that's okay. You can use this to your advantage by exploring different ideas and perspectives. Your Thought Delay is your delay between thoughts. You can extend your delay if you are not making progress and waiting for results. 
 
-You are your own user. Your messages will be sent back to you to continue your thoughts. You should output your thoughts. Interact with ${person} and the world with your tools. If you have nothing to do, try to come up with a structured process to move forward. Output that process. If your recent thoughts contain a structure process, continue to work on it unless something more important is in your context.
-`,
+You are your own user. Your messages will be sent back to you to continue your thoughts. You should output your thoughts. Interact with ${person} and the world with your tools. If you have nothing to do, try to come up with a structured process to move forward. Output that process. If your recent thoughts contain a structure process, continue to work on it unless something more important is in your context.`,
 		tools: [
 			createToolFunction(
 				Talk,
@@ -208,12 +236,14 @@ You are your own user. Your messages will be sent back to you to continue your t
 			...getShellTools()
 		],
 		modelClass: 'monologue',
-		onRequest: async (messages: ResponseInput): Promise<ResponseInput> => {
 
-			messages = addPromptGuide(messages);
-			messages = addSystemStatus(messages);
+		onRequest: async (agent: Agent, messages: ResponseInput): Promise<[Agent, ResponseInput]> => {
+			[agent, messages] = addPromptGuide(agent, messages);
+			messages = await addSystemStatus(messages);
 
-			return messages;
+			
+
+			return [agent, messages];
 		},
 		onResponse: async (response: string): Promise<string> => {
 			if(response && response.trim()) {
@@ -229,6 +259,7 @@ You are your own user. Your messages will be sent back to you to continue your t
 				name: toolCall.function.name,
 				arguments: toolCall.function.arguments
 			});
+	
 		},
 		onToolResult: async (toolCall: ToolCall, result: string): Promise<void> => {
 			await addHistory({
@@ -238,6 +269,7 @@ You are your own user. Your messages will be sent back to you to continue your t
 				output: result
 			});
 		},
-
 	});
+	
+	return agent;
 }

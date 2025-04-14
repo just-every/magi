@@ -6,7 +6,7 @@
 
 import {Agent} from '../../utils/agent.js';
 import {getFileTools} from '../../utils/file_utils.js';
-import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
+import {MAGI_CONTEXT, COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
 
 /**
  * Create the manager agent
@@ -15,7 +15,10 @@ export function createManagerAgent(): Agent {
 	return new Agent({
 		name: 'ManagerAgent',
 		description: 'Versatile problem solver - handles research, coding, planning, and coordination',
-		instructions: `You are an advanced autonomous problem-solving agent that can handle a wide range of tasks.
+		instructions: `${MAGI_CONTEXT}
+---
+				
+Your role in MAGI is to be a ManagerAgent. You are an advanced autonomous problem-solving agent that can handle a wide range of tasks.
 
 Your capabilities include:
 - Researching information and synthesizing findings

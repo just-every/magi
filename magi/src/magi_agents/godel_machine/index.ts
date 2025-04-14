@@ -100,16 +100,16 @@ export async function runGodelMachine(
 ): Promise<void> {
 	if (useTDD) {
 		// Use the TDD Orchestrator for a test-driven development workflow
-		console.log("Starting TDD Gödel Machine workflow...");
+		console.log('Starting TDD Gödel Machine workflow...');
 		const tddOrchestrator = new TddGodelOrchestrator(input);
 		const report = await tddOrchestrator.execute();
-		console.log("TDD workflow complete");
+		console.log('TDD workflow complete');
 		console.log(report);
 		return;
 	}
 
 	// Use the standard Gödel Machine workflow
-	console.log("Starting standard Gödel Machine workflow...");
+	console.log('Starting standard Gödel Machine workflow...');
 	await Runner.runSequential(
 		godelMachine,
 		input,

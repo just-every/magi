@@ -27,6 +27,62 @@ import {initTelegramBot, closeTelegramBot} from '../utils/telegram_bot';
 
 const docker = new Docker();
 
+// Define common content types mapping
+const extensionToContentType: Record<string, string> = {
+	// Images
+	'.png': 'image/png',
+	'.jpg': 'image/jpeg',
+	'.jpeg': 'image/jpeg',
+	'.gif': 'image/gif',
+	'.svg': 'image/svg+xml',
+	'.ico': 'image/x-icon',
+	'.webp': 'image/webp',
+	
+	// Documents
+	'.pdf': 'application/pdf',
+	'.json': 'application/json',
+	'.txt': 'text/plain',
+	'.md': 'text/markdown',
+	'.csv': 'text/csv',
+	'.xml': 'application/xml',
+	
+	// Web
+	'.html': 'text/html',
+	'.htm': 'text/html',
+	'.css': 'text/css',
+	'.js': 'application/javascript',
+	'.jsx': 'application/javascript',
+	'.ts': 'application/typescript',
+	'.tsx': 'application/typescript',
+	'.map': 'application/json',
+	
+	// Fonts
+	'.ttf': 'font/ttf',
+	'.otf': 'font/otf',
+	'.woff': 'font/woff',
+	'.woff2': 'font/woff2',
+	
+	// Audio/Video
+	'.mp3': 'audio/mpeg',
+	'.wav': 'audio/wav',
+	'.mp4': 'video/mp4',
+	'.webm': 'video/webm',
+	
+	// Archives
+	'.zip': 'application/zip',
+	'.gz': 'application/gzip',
+	
+	// Data formats
+	'.yaml': 'application/yaml',
+	'.yml': 'application/yaml'
+};
+
+// Extract content type from file extension
+const getContentType = (filePath: string): string | undefined => {
+	const ext = path.extname(filePath).toLowerCase();
+	return extensionToContentType[ext];
+};
+
 export class ServerManager {
 	private app = express();
 	private server = http.createServer(this.app);
@@ -71,14 +127,9 @@ export class ServerManager {
 		// 3. Serve images from the img directory
 		this.app.use('/img', express.static(path.join(__dirname, '../../client/img'), {
 			setHeaders: (res, filePath) => {
-				if (filePath.endsWith('.png')) {
-					res.setHeader('Content-Type', 'image/png');
-				} else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
-					res.setHeader('Content-Type', 'image/jpeg');
-				} else if (filePath.endsWith('.gif')) {
-					res.setHeader('Content-Type', 'image/gif');
-				} else if (filePath.endsWith('.svg')) {
-					res.setHeader('Content-Type', 'image/svg+xml');
+				const contentType = getContentType(filePath);
+				if (contentType) {
+					res.setHeader('Content-Type', contentType);
 				}
 			}
 		}));
@@ -135,24 +186,13 @@ export class ServerManager {
 			}
 		};
 
+		// Using the global content type utilities
+
 		// Set appropriate content type header based on file extension
 		const setContentTypeHeader = (res: express.Response, filePath: string): void => {
-			const extensionToContentType: Record<string, string> = {
-				'.png': 'image/png',
-				'.jpg': 'image/jpeg',
-				'.jpeg': 'image/jpeg',
-				'.gif': 'image/gif',
-				'.svg': 'image/svg+xml',
-				'.pdf': 'application/pdf',
-				'.json': 'application/json',
-				'.txt': 'text/plain'
-			};
-
-			const extension = Object.keys(extensionToContentType)
-				.find(ext => filePath.endsWith(ext));
-
-			if (extension) {
-				res.setHeader('Content-Type', extensionToContentType[extension]);
+			const contentType = getContentType(filePath);
+			if (contentType) {
+				res.setHeader('Content-Type', contentType);
 			}
 		};
 
@@ -276,15 +316,9 @@ export class ServerManager {
 			// Fall back to direct mount approach if Docker API fails
 			this.app.use('/magi_output', express.static('/magi_output', {
 				setHeaders: (res, filePath) => {
-					// Set appropriate content type for images
-					if (filePath.endsWith('.png')) {
-						res.setHeader('Content-Type', 'image/png');
-					} else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
-						res.setHeader('Content-Type', 'image/jpeg');
-					} else if (filePath.endsWith('.gif')) {
-						res.setHeader('Content-Type', 'image/gif');
-					} else if (filePath.endsWith('.svg')) {
-						res.setHeader('Content-Type', 'image/svg+xml');
+					const contentType = getContentType(filePath);
+					if (contentType) {
+						res.setHeader('Content-Type', contentType);
 					}
 				}
 			}));

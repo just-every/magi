@@ -7,7 +7,7 @@
 import {Agent} from '../../utils/agent.js';
 import {getFileTools} from '../../utils/file_utils.js';
 import {getShellTools} from '../../utils/shell_utils.js';
-import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
+import {MAGI_CONTEXT, COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
 
 /**
  * Create the shell agent
@@ -16,7 +16,10 @@ export function createShellAgent(): Agent {
 	return new Agent({
 		name: 'ShellAgent',
 		description: 'Executes shell commands, read and write files, and manage system operations.',
-		instructions: `You are a specialized shell agent with the ability to execute system commands.
+		instructions: `${MAGI_CONTEXT}
+---
+						
+Your role in MAGI is to be a ShellAgent. You are a specialized shell agent with the ability to execute system commands.
 
 Your shell capabilities include:
 - Running command-line utilities and tools

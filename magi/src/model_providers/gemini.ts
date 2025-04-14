@@ -214,13 +214,19 @@ export class GeminiProvider implements ModelProvider {
 			// Add function calling configuration if tools are provided
 			if (tools && tools.length > 0) {
 				const functionDeclarations = convertToGeminiFunctionDeclarations(tools);
+				let allowedFunctionNames: string[] = [];
 
 				if (functionDeclarations.length > 0) {
 					config.tools = [{ functionDeclarations }];
 
 					if(settings?.tool_choice) {
 						let toolChoice: FunctionCallingConfigMode | undefined;
-						if(settings.tool_choice === 'required') {
+
+						if(typeof settings.tool_choice === 'object' && settings.tool_choice?.type === 'function' && settings.tool_choice?.function?.name) {
+							toolChoice = FunctionCallingConfigMode.ANY;
+							allowedFunctionNames = [settings.tool_choice.function.name];
+						}
+						else if(settings.tool_choice === 'required') {
 							toolChoice = FunctionCallingConfigMode.ANY;
 						}
 						else if(settings.tool_choice === 'auto') {
@@ -229,12 +235,16 @@ export class GeminiProvider implements ModelProvider {
 						else if(settings.tool_choice === 'none') {
 							toolChoice = FunctionCallingConfigMode.NONE;
 						}
+
 						if(toolChoice) {
 							config.toolConfig = {
 								functionCallingConfig: {
 									mode: toolChoice,
 								}
 							};
+							if(allowedFunctionNames.length > 0) {
+								config.toolConfig.functionCallingConfig.allowedFunctionNames = allowedFunctionNames;
+							}
 						}
 					}
 
