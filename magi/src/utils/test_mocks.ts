@@ -3,16 +3,12 @@
  */
 
 import { vi } from 'vitest';
-import fs from 'fs';
-import path from 'path';
 
 /**
  * Setup common mocks for tests that need to handle file operations without actually accessing the file system
  */
 export function setupFileMocks() {
   // First, backup the real fs and path methods to restore during cleanup
-  const realFs = { ...fs };
-  const realPath = { ...path };
 
   // Mock file system functions to prevent actual file system operations
   vi.mock('fs', () => ({

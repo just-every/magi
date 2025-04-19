@@ -5,9 +5,10 @@
  */
 
 import {Agent} from '../../utils/agent.js';
-import {getFileTools} from '../../utils/file_utils.js';
-import {getBrowserTools, setupAgentBrowserTools} from '../../utils/browser_utils.js';
-import {MAGI_CONTEXT, COMMON_WARNINGS, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
+import {addScreenshot, getBrowserTools, setupAgentBrowserTools} from '../../utils/browser_utils.js';
+import {MAGI_CONTEXT, COMMON_WARNINGS, SELF_SUFFICIENCY_TEXT} from '../constants.js';
+import { getCommonTools } from '../../utils/index.js';
+import { createBrowserVisionAgent } from './browser_vision_agent.js';
 
 /**
  * Create the browser agent
@@ -35,48 +36,42 @@ Your browsing capabilities include:
 
 BROWSING APPROACH:
 1. Navigate to the specified URL
-2. Use get_page_content() to extract the page content - interactive elements will be given a numeric ID
-3. Interact with elements using their numeric ID as needed (click, fill, hover, etc.)
-4. Extract relevant information or take screenshots
-5. Report findings and explain what you did
+2. Get page content;
+- If reading, use get_page_content('markdown')
+- If interacting, use get_page_content('interact') to extract the page content and interactive element map - interactive elements will be given a numeric ID. 
+- If you need the full HTML, use get_page_content('html') - this results in a large amount of tokens, so use it only when necessary.
+3. Perform your task
+- Interact with elements using their numeric ID as needed (click, fill, hover, etc.)
+- Extract relevant information or take screenshots
+- Navigate to new pages if needed
+4. Report findings and explain what you did
 
 ${COMMON_WARNINGS}
-
-${FILE_TOOLS_TEXT}
-
-BROWSER TOOLS:
-- navigate: Navigate to a URL
-- get_page_content: Extract content from a webpage
-- get_page_url: Get the current URL of the page
-- clickElement: Click on an element
-- fillField: Fill in a form field
-- checkElement: Check a checkbox or radio button
-- hoverElement: Hover over an element
-- focusElement: Focus on an element
-- scrollElement: Scroll an element into view
-- selectOption: Select an option from a dropdown
-- press: Press specific keys on the keyboard
-- type: Type text using the keyboard
-- screenshot: Take a screenshot of a webpage or element
-- js_evaluate: Execute JavaScript code in the browser context
-- reset_session: Reset the browser tab's interaction map
-- closeAgentSession: Close the browser tab when finished
 
 ${SELF_SUFFICIENCY_TEXT}
 
 IMPORTANT:
 - Each agent gets its own browser tab, which will be closed after an extended period of inactivity
-- Wait for pages to load before interacting with them
-- Call get_page_content() after navigation and after significant page changes
-- Handle potential issues like popups, cookie consent forms, and other obstacles
-- Be patient with slow-loading websites and retry if necessary
+- The browser session is shared with ${person}, so you can access accounts they are logged into
+- Before interacting, call get_page_content('interact') after navigation and after significant page changes to update the element map.
 - Report errors clearly if you cannot access a website or element
-- Use closeAgentSession when you are completely done browsing to free up resources`,
+
+BROWSER VISION:
+- If you need to analyze visual content on a webpage, you can use the BrowserVisionAgent.
+- BrowserVisionAgent interacts with the web page through screenshots so can work around obstacles that block normal interaction.
+
+COMPLETION:
+- If you can mostly complete a task after a couple of attempts, that's fine. Just explain what you did and what you couldn't do.
+- Your may need to modify your goals based on what you find while browsing. Your requester does not know what you will find, so be flexible and adapt to the situation.`,
 		tools: [
 			...getBrowserTools(),
-			...getFileTools(),
+			...getCommonTools(),
 		],
-		modelClass: 'standard'
+		workers: [
+			createBrowserVisionAgent,
+		],
+		modelClass: 'standard',
+		onRequest: addScreenshot,
 	});
 	
 	// Setup agent-specific browser tools

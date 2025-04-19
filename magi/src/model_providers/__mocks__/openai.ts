@@ -45,6 +45,6 @@ class MockOpenAI {
 }
 
 // Export the mock class as the default export
-export default function(config: any) {
+export default function() {
   return new MockOpenAI();
 }

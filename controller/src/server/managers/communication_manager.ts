@@ -46,6 +46,11 @@ export interface CommandMessage {
 	args?: any;
 }
 
+export interface SystemCommandMessage {
+	type: 'system_command';
+	command: string;
+}
+
 
 export type ProcessToolType = 'research_engine' | 'godel_machine' | 'task_force';
 
@@ -77,6 +82,9 @@ interface ProcessState {
 	recentEvents: Array<{ timestamp: number; cost: number }>; // timestamp in milliseconds
 }
 
+// Event handler type
+export type EventHandler = (event: any, sourceProcessId?: string) => Promise<any>;
+
 export class CommunicationManager {
 	private wss: WebSocketServer;
 	private processManager: ProcessManager;
@@ -86,6 +94,7 @@ export class CommunicationManager {
 	private costStartTime: number = Date.now();
 	private processCostData: Record<string, ProcessState> = {};
 	private readonly LAST_MINUTE_WINDOW_MS = 60 * 1000;
+	private eventHandlers: Map<string, EventHandler> = new Map();
 
 	constructor(server: HttpServer, processManager: ProcessManager) {
 		this.processManager = processManager;
@@ -479,13 +488,42 @@ export class CommunicationManager {
 		return processed;
 	};
 
+	/**
+	 * Register a handler for a specific event type
+	 * 
+	 * @param eventType - The type of event to handle
+	 * @param handler - The function to call when an event of this type is received
+	 */
+	public addEventHandler(eventType: string, handler: EventHandler): void {
+		this.eventHandlers.set(eventType, handler);
+		console.log(`Event handler registered for event type: ${eventType}`);
+	}
+
 	private async processContainerEvent(processId: string, event: {
 		type: string;
 		[key: string]: unknown;
 	}): Promise<void> {
+		// Check if we have a registered handler for this event type
+		if (this.eventHandlers.has(event.type)) {
+			try {
+				const handler = this.eventHandlers.get(event.type)!;
+				const response = await handler(event, processId);
+				
+				// If the handler returns a response, send it back to the source process
+				if (response) {
+					this.sendMessage(processId, JSON.stringify({
+						type: `${event.type}_response`,
+						...response
+					}));
+				}
+				return;
+			} catch (error) {
+				console.error(`Error handling event ${event.type} from ${processId}:`, error);
+			}
+		}
 
-		if (event.type === 'command_start' && event.command && typeof event.command === 'string') {
-			if(event.command.trim().toLowerCase() === 'stop' && processId === this.processManager.coreProcessId) {
+		if (event.type === 'command_start') {
+			if(event.command && typeof event.command === 'string' && event.command.trim().toLowerCase() === 'stop' && processId === this.processManager.coreProcessId) {
 				this.sendMessage(this.processManager.coreProcessId, JSON.stringify({
 					type: 'system_message',
 					message: 'Can not stop the core process.',
@@ -645,6 +683,9 @@ export class CommunicationManager {
 		else if (event.type === 'cost_update' && 'usage' in event) {
 			this.handleModelUsage(processId, event as unknown as CostUpdateEvent);
 		}
+		else if (event.type === 'system_status' && 'status' in event && processId === this.processManager.coreProcessId) {
+			this.processManager.io.emit('system:status', event.status);
+		}
 	}
 
 
@@ -706,6 +747,23 @@ export class CommunicationManager {
 					// Include the source process ID if provided
 					sourceProcessId: sourceId
 				}
+			};
+
+			return this.sendMessage(processId, JSON.stringify(commandMessage));
+		} catch (err) {
+			console.error(`Error sending command to process ${processId}:`, err);
+			return false;
+		}
+	}
+
+	/**
+	 * Send a system command (i.e. not a message)
+	 */
+	sendSystemCommand(processId: string, command: string): boolean {
+		try {
+			const commandMessage: SystemCommandMessage = {
+				type: 'system_command',
+				command,
 			};
 
 			return this.sendMessage(processId, JSON.stringify(commandMessage));
@@ -821,6 +879,13 @@ export class CommunicationManager {
 	 */
 	stopProcess(processId: string): boolean {
 		return this.sendCommand(processId, 'stop');
+	}
+
+	/**
+	 * Set the pause state for a process
+	 */
+	setPauseState(processId: string, pauseState: boolean): boolean {
+		return this.sendSystemCommand(processId, pauseState ? 'pause' : 'resume');
 	}
 
 	/**
