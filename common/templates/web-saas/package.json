@@ -1,0 +1,14 @@
+{
+  "name": "@web-saas/source",
+  "version": "0.0.0",
+  "license": "MIT",
+  "scripts": {},
+  "private": true,
+  "devDependencies": {
+    "@nx/js": "20.8.0",
+    "@nx/nest": "^20.8.0",
+    "@nx/react": "^20.8.0",
+    "@nx/workspace": "20.8.0",
+    "nx": "20.8.0"
+  }
+}

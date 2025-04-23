@@ -7,4 +7,4 @@
 
 // Re-export everything from the new modules
 export * from './managers/env_store';
-export {saveUsedColors, loadUsedColors} from './managers/color_manager';
+export { saveUsedColors, loadUsedColors } from './managers/color_manager';

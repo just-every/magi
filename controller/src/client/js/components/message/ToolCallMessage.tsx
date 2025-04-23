@@ -12,33 +12,78 @@ interface ToolCallMessageProps {
     complete: boolean;
 }
 
-const ToolCallMessage: React.FC<ToolCallMessageProps> = ({ message, rgb, complete }) => {
-    if(message.toolName.startsWith('talk_to_')) {
+function prepareToolName(name: string): string {
+    // Convert tool name to a more readable format
+    return name.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+}
+
+const ToolCallMessage: React.FC<ToolCallMessageProps> = ({
+    message,
+    rgb,
+    complete,
+}) => {
+    if (message.toolName.startsWith('talk_to_')) {
         return (
-            <div className="message-group assistant-message" key={message.message_id || message.id}>
-                <div className={"message-bubble assistant-bubble talk-bubble"}
-                    style={{color: `rgba(${rgb} / 1)`}}>
-                    { message.command && <div dangerouslySetInnerHTML={parseMarkdown(message.command)}/> }
+            <div
+                className="message-group assistant-message"
+                key={message.message_id || message.id}
+            >
+                <div
+                    className={'message-bubble assistant-bubble talk-bubble'}
+                    style={{ color: `rgba(${rgb} / 1)` }}
+                >
+                    {message.command && (
+                        <div
+                            dangerouslySetInnerHTML={parseMarkdown(
+                                message.command
+                            )}
+                        />
+                    )}
                 </div>
             </div>
         );
     }
+
+    const toolCallParams = JSON.stringify(
+        message.toolParams || '',
+        null,
+        2
+    ).trim();
     return (
         <div className="message-group tool-message" key={message.id}>
             <div className="message-bubble tool-bubble">
-                <div className="tool-call-header">
-                    <span className="tool-name">
-                        {(complete ? "": "Running ")+message.toolName.replaceAll('_', ' ')+(message.agent?.model ? ` (${message.agent.model})` : '')+(complete ? " Complete" : "...")}
-                    </span>
+                <div className="message-header">
+                    {message.agent?.model && (
+                        <div className="message-model">
+                            {message.agent.model}
+                        </div>
+                    )}
+                    <div className="message-title">
+                        {prepareToolName(message.toolName)}{' '}
+                        {complete ? '' : 'Running...'}
+                    </div>
                 </div>
                 {message.command && (
-                    <div className="tool-call-command message-bubble assistant-bubble" style={{color: `rgba(${rgb} / 1)`}}>
-                        <div dangerouslySetInnerHTML={parseMarkdown(message.command)}/>
+                    <div
+                        className="message-bubble tool-call-command"
+                        style={{ color: `rgba(${rgb} / 1)` }}
+                    >
+                        <div
+                            dangerouslySetInnerHTML={parseMarkdown(
+                                message.command
+                            )}
+                        />
                     </div>
                 )}
                 {!message.command && (
-                    <div className="tool-call-params">
-                        <pre>{JSON.stringify(message.toolParams, null, 2)}</pre>
+                    <div className="message-bubble tool-call-command">
+                        <pre>
+                            {message.toolName}(
+                            {toolCallParams && toolCallParams !== '{}'
+                                ? toolCallParams
+                                : ''}
+                            )
+                        </pre>
                     </div>
                 )}
             </div>

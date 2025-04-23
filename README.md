@@ -20,16 +20,17 @@ Think of Magi like a co-worker. She might make some mistakes, but she learns fro
 The system consists of two primary components:
 
 1. **Controller (Node.js Web Server)**
-   - TypeScript/Express backend with Socket.IO for real-time communication
-   - Docker container management for running AI agents
-   - Web interface for interacting with the system
-   - Provides a secure interface with host system (LLMs do not have direct access to the host)
+
+    - TypeScript/Express backend with Socket.IO for real-time communication
+    - Docker container management for running AI agents
+    - Web interface for interacting with the system
+    - Provides a secure interface with host system (LLMs do not have direct access to the host)
 
 2. **MAGI Agents (TypeScript Backend)**
-   - Specialized agents for different tasks (coding, browsing, searching, etc.)
-   - Runs in Docker containers for isolation and resource management
-   - Modular design for easy extension
-   - Supports multiple LLM providers
+    - Specialized agents for different tasks (coding, browsing, searching, etc.)
+    - Runs in Docker containers for isolation and resource management
+    - Modular design for easy extension
+    - Supports multiple LLM providers
 
 ## Installation
 
@@ -70,6 +71,7 @@ npm run setup:browser
 ```
 
 This will guide you through:
+
 1. Installing the Chrome extension from the browser/ directory
 2. Configuring the native messaging host for Chrome to communicate with MAGI
 
@@ -83,6 +85,7 @@ npm run dev
 ```
 
 This will:
+
 1. Start the browser bridge for Chrome extension communication
 2. Build the Docker images for the controller and MAGI base
 3. Start the system with Docker Compose
@@ -153,18 +156,18 @@ magi-system/
 
 1. Make code changes
 2. Run linting to check for errors:
-   ```bash
-   npm run lint        # Check for errors
-   npm run lint:fix    # Fix automatically fixable errors
-   ```
+    ```bash
+    npm run lint     # Check for errors
+    npm run lint:fix # Fix automatically fixable errors
+    ```
 3. Run tests to verify functionality:
-   ```bash
-   npm test
-   ```
+    ```bash
+    npm test
+    ```
 4. Start the system:
-   ```bash
-   npm run dev
-   ```
+    ```bash
+    npm run dev
+    ```
 
 ## Key Features
 

@@ -6,34 +6,34 @@
  * Synthesis, Code Generation, and Validation.
  */
 
-import {Runner} from '../../utils/runner.js';
-import {RunnerConfig} from '../../types.js';
-import {createTaskDecompositionAgent} from './task_decomposition_agent.js';
-import {createWebSearchAgent} from './web_search_agent.js';
-import {createContentExtractionAgent} from './content_extraction_agent.js';
-import {createSynthesisAgent} from './synthesis_agent.js';
-import {createCodeGenerationAgent} from './code_generation_agent.js';
-import {createValidationAgent} from './validation_agent.js';
+import { Runner } from '../../utils/runner.js';
+import { RunnerConfig } from '../../types/shared-types.js';
+import { createTaskDecompositionAgent } from './task_decomposition_agent.js';
+import { createWebSearchAgent } from './web_search_agent.js';
+import { createContentExtractionAgent } from './content_extraction_agent.js';
+import { createSynthesisAgent } from './synthesis_agent.js';
+import { createCodeGenerationAgent } from './code_generation_agent.js';
+import { createValidationAgent } from './validation_agent.js';
 // import {createPlanningAgent} from '../task_force/planning_agent.js';
 //import {createExecutionAgent} from '../task_run/execution_agent.js';
 
 export {
-  createTaskDecompositionAgent,
-  createWebSearchAgent,
-  createContentExtractionAgent,
-  createSynthesisAgent,
-  createCodeGenerationAgent,
-  createValidationAgent
+    createTaskDecompositionAgent,
+    createWebSearchAgent,
+    createContentExtractionAgent,
+    createSynthesisAgent,
+    createCodeGenerationAgent,
+    createValidationAgent,
 };
 
 // Define the stage sequence for the Research Engine
 export enum UnderstandingStage {
-  TASK_DECOMPOSITION = 'task_decomposition',
-  WEB_SEARCH = 'web_search',
-  CONTENT_EXTRACTION = 'content_extraction',
-  SYNTHESIS = 'synthesis',
-  CODE_GENERATION = 'code_generation',
-  VALIDATION = 'validation'
+    TASK_DECOMPOSITION = 'task_decomposition',
+    WEB_SEARCH = 'web_search',
+    CONTENT_EXTRACTION = 'content_extraction',
+    SYNTHESIS = 'synthesis',
+    CODE_GENERATION = 'code_generation',
+    VALIDATION = 'validation',
 }
 
 /**
@@ -42,48 +42,48 @@ export enum UnderstandingStage {
  * @returns An object with factory functions for each agent in the sequence
  */
 export function createUnderstandingEngine(query: string) {
-  return {
-    // Each stage returns a factory function that optionally takes metadata from previous stages
-    [UnderstandingStage.TASK_DECOMPOSITION]: () => createTaskDecompositionAgent(query),
-    [UnderstandingStage.WEB_SEARCH]: (metadata?: any) => {
-      // Search agent needs the research plan from the task decomposition stage
-      const research_plan = metadata?.research_plan || '';
-      return createWebSearchAgent(research_plan);
-    },
-    [UnderstandingStage.CONTENT_EXTRACTION]: (metadata?: any) => {
-      // Content extraction agent needs the search results from the web search stage
-      const search_results = metadata?.search_results || [];
-      return createContentExtractionAgent(search_results);
-    },
-    [UnderstandingStage.SYNTHESIS]: (metadata?: any) => {
-      // Synthesis agent needs the extracted content from the content extraction stage
-      const extracted_content = metadata?.extracted_content || [];
-      return createSynthesisAgent(query, extracted_content);
-    },
-    [UnderstandingStage.CODE_GENERATION]: (metadata?: any) => {
-      // Code generation agent needs the synthesis result if code is required
-      const synthesis_result = metadata?.synthesis_result || '';
-      return createCodeGenerationAgent(synthesis_result);
-    },
-    [UnderstandingStage.VALIDATION]: (metadata?: any) => {
-      // Validation agent needs the synthesis result and code (if any)
-      const synthesis_result = metadata?.synthesis_result || '';
-      const code_result = metadata?.code_result || '';
-      return createValidationAgent(query, synthesis_result, code_result);
-    }
-  };
+    return {
+        // Each stage returns a factory function that optionally takes metadata from previous stages
+        [UnderstandingStage.TASK_DECOMPOSITION]: () =>
+            createTaskDecompositionAgent(query),
+        [UnderstandingStage.WEB_SEARCH]: (metadata?: any) => {
+            // Search agent needs the research plan from the task decomposition stage
+            const research_plan = metadata?.research_plan || '';
+            return createWebSearchAgent(research_plan);
+        },
+        [UnderstandingStage.CONTENT_EXTRACTION]: (metadata?: any) => {
+            // Content extraction agent needs the search results from the web search stage
+            const search_results = metadata?.search_results || [];
+            return createContentExtractionAgent(search_results);
+        },
+        [UnderstandingStage.SYNTHESIS]: (metadata?: any) => {
+            // Synthesis agent needs the extracted content from the content extraction stage
+            const extracted_content = metadata?.extracted_content || [];
+            return createSynthesisAgent(query, extracted_content);
+        },
+        [UnderstandingStage.CODE_GENERATION]: (metadata?: any) => {
+            // Code generation agent needs the synthesis result if code is required
+            const synthesis_result = metadata?.synthesis_result || '';
+            return createCodeGenerationAgent(synthesis_result);
+        },
+        [UnderstandingStage.VALIDATION]: (metadata?: any) => {
+            // Validation agent needs the synthesis result and code (if any)
+            const synthesis_result = metadata?.synthesis_result || '';
+            const code_result = metadata?.code_result || '';
+            return createValidationAgent(query, synthesis_result, code_result);
+        },
+    };
 }
-
 
 /**
  * Task Force sequence configuration
  */
 const researchEngine: RunnerConfig = {
-  ['task_decomposition']: {
-    agent: ()=> createTaskDecompositionAgent(),
-    next: (): string => 'web_search',
-  },
-  /*['web_search']: {
+    ['task_decomposition']: {
+        agent: () => createTaskDecompositionAgent(),
+        next: (): string => 'web_search',
+    },
+    /*['web_search']: {
     agent: ()=> createExecutionAgent(), // createWebSearchAgent
     next: (): string => 'content_extraction',
   },
@@ -110,14 +110,11 @@ const researchEngine: RunnerConfig = {
  * @param query The research query or question
  * @returns Results from all stages of the sequence
  */
-export async function runResearchEngine(
-    input: string
-): Promise<void> {
-
-  await Runner.runSequential(
-      researchEngine,
-      input,
-      5, // Max retries per stage
-      30 // Max total retries
-  );
+export async function runResearchEngine(input: string): Promise<void> {
+    await Runner.runSequential(
+        researchEngine,
+        input,
+        5, // Max retries per stage
+        30 // Max total retries
+    );
 }

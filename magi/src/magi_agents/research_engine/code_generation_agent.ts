@@ -5,10 +5,14 @@
  * identified by the Synthesis agent.
  */
 
-import {Agent} from '../../utils/agent.js';
-import {getFileTools} from '../../utils/file_utils.js';
-import {getShellTools} from '../../utils/shell_utils.js';
-import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT} from '../constants.js';
+import { Agent } from '../../utils/agent.js';
+import { getFileTools } from '../../utils/file_utils.js';
+import { getShellTools } from '../../utils/shell_utils.js';
+import {
+    COMMON_WARNINGS,
+    DOCKER_ENV_TEXT,
+    SELF_SUFFICIENCY_TEXT,
+} from '../constants.js';
 // import {createCodeAgent} from '../run_task/code_agent.js';
 
 const code_generation_agent_prompt = `
@@ -101,17 +105,18 @@ NEXT: validation
  * Create the code generation agent
  */
 export function createCodeGenerationAgent(synthesis_result: string): Agent {
-  return new Agent({
-    name: 'CodeGenerationAgent',
-    description: 'Generates high-quality code solutions based on synthesis requirements',
-    instructions: code_generation_agent_prompt.replace('{{synthesis_result}}', synthesis_result),
-    tools: [
-      ...getFileTools(),
-      ...getShellTools()
-    ],
-    workers: [],
-    modelClass: 'code'
-  });
+    return new Agent({
+        name: 'CodeGenerationAgent',
+        description:
+            'Generates high-quality code solutions based on synthesis requirements',
+        instructions: code_generation_agent_prompt.replaceAll(
+            '{{synthesis_result}}',
+            synthesis_result
+        ),
+        tools: [...getFileTools(), ...getShellTools()],
+        workers: [],
+        modelClass: 'code',
+    });
 }
 
 export default code_generation_agent_prompt;

@@ -8,9 +8,13 @@ import { OpenAIChat } from './openai_chat.js';
  * OpenRouter model provider implementation
  */
 export class OpenRouterProvider extends OpenAIChat {
-	constructor() {
-		super('openrouter', process.env.OPENROUTER_API_KEY, 'https://openrouter.ai/api/v1');
-	}
+    constructor() {
+        super(
+            'openrouter',
+            process.env.OPENROUTER_API_KEY,
+            'https://openrouter.ai/api/v1'
+        );
+    }
 }
 
 /**

@@ -5,9 +5,9 @@
  * or bug fixes, and produces a detailed plan for code changes and test updates.
  */
 
-import {Agent} from '../../utils/agent.js';
-import {getFileTools} from '../../utils/file_utils.js';
-import {createBrowserAgent} from '../common_agents/browser_agent.js';
+import { Agent } from '../../utils/agent.js';
+import { getFileTools } from '../../utils/file_utils.js';
+import { createBrowserAgent } from '../common_agents/browser_agent.js';
 // These constants can be used in the instructions if needed
 // import { COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT } from '../constants.js';
 
@@ -52,18 +52,18 @@ You are the Planning Agent. Your goal is to:
  * Create the planning agent
  */
 export function createPlanningAgent(issue_description: string): Agent {
-	return new Agent({
-		name: 'PlanningAgent',
-		description: 'Analyzes repository and produces a detailed plan for code changes',
-		instructions: planning_agent_prompt.replace('{{issue_description}}', issue_description),
-		tools: [
-			...getFileTools()
-		],
-		workers: [
-			createBrowserAgent,
-		],
-		modelClass: 'reasoning'
-	});
+    return new Agent({
+        name: 'PlanningAgent',
+        description:
+            'Analyzes repository and produces a detailed plan for code changes',
+        instructions: planning_agent_prompt.replaceAll(
+            '{{issue_description}}',
+            issue_description
+        ),
+        tools: [...getFileTools()],
+        workers: [createBrowserAgent],
+        modelClass: 'reasoning',
+    });
 }
 
 export default planning_agent_prompt;

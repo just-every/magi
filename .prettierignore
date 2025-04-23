@@ -1,0 +1,21 @@
+# Build and output directories
+**/dist/
+**/node_modules/
+**/.git/
+
+# Compiled output
+**/*.js.map
+
+# Logs
+*.log
+
+# Cache directories
+.npm
+.eslintcache
+
+# Environment variables
+.env
+.env.*
+
+# Large generated artifacts
+package-lock.json

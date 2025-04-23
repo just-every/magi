@@ -1,7 +1,7 @@
 /**
  * Utility functions for ProcessBox component
  */
-import { ProcessStatus } from '@types';
+import { ProcessStatus } from '../../../../types';
 import { ClientMessage, ToolResultMessage } from '../../context/SocketContext';
 
 /**
@@ -71,14 +71,16 @@ export const processMessages = (messages: ClientMessage[]): ClientMessage[] => {
     });
 
     // Convert back to array and sort by timestamp
-    return Array.from(messageMap.values())
-        .sort((a, b) => {
-            // Sort by timestamp if available
-            if (a.timestamp && b.timestamp) {
-                return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
-            }
-            return 0;
-        });
+    return Array.from(messageMap.values()).sort((a, b) => {
+        // Sort by timestamp if available
+        if (a.timestamp && b.timestamp) {
+            return (
+                new Date(a.timestamp).getTime() -
+                new Date(b.timestamp).getTime()
+            );
+        }
+        return 0;
+    });
 };
 
 /**
@@ -90,16 +92,25 @@ export const findImagePath = (text: string): string => {
     if (!text) return '';
 
     // For markdown links: [text](/magi_output/path.png)
-    const markdownMatch = text.match(/\[([^\]]*\/magi_output\/[^\]]+\.(png|jpg|jpeg|gif))\]|\(([^)]*\/magi_output\/[^)]+\.(png|jpg|jpeg|gif))\)/i);
+    const markdownMatch = text.match(
+        /\[([^\]]*\/magi_output\/[^\]]+\.(png|jpg|jpeg|gif))\]|\(([^)]*\/magi_output\/[^)]+\.(png|jpg|jpeg|gif))\)/i
+    );
     if (markdownMatch) {
         // Return the first non-undefined group (either from brackets or parentheses)
         return markdownMatch[1] || markdownMatch[3] || '';
     }
 
     // Fallback to regular text search
-    if (text.includes('/magi_output/') &&
-        (text.includes('.png') || text.includes('.jpg') || text.includes('.jpeg') || text.includes('.gif'))) {
-        const match = text.match(/\/magi_output\/[^\s)"']+\.(png|jpg|jpeg|gif)/i);
+    if (
+        text.includes('/magi_output/') &&
+        (text.includes('.png') ||
+            text.includes('.jpg') ||
+            text.includes('.jpeg') ||
+            text.includes('.gif'))
+    ) {
+        const match = text.match(
+            /\/magi_output\/[^\s)"']+\.(png|jpg|jpeg|gif)/i
+        );
         if (match && typeof match[0] === 'string') {
             return match[0];
         }
@@ -115,7 +126,11 @@ export const findImagePath = (text: string): string => {
  */
 export const getDeltaMessageContent = (message: ClientMessage): string => {
     // If this is a delta message with chunks, ensure we display all concatenated content
-    return (message.thinking_content || '')+(message.thinking_content && message.content ? '\n\n---\n\n' : '')+(message.content || '');
+    return (
+        (message.thinking_content || '') +
+        (message.thinking_content && message.content ? '\n\n---\n\n' : '') +
+        (message.content || '')
+    );
 };
 
 /**
@@ -123,7 +138,9 @@ export const getDeltaMessageContent = (message: ClientMessage): string => {
  * @param resultMsg The tool result message to format
  * @returns Object containing result content and image path
  */
-export const getToolResultContent = (resultMsg: ToolResultMessage): {
+export const getToolResultContent = (
+    resultMsg: ToolResultMessage
+): {
     content: string;
     imagePath: string;
 } => {
@@ -133,7 +150,10 @@ export const getToolResultContent = (resultMsg: ToolResultMessage): {
     if (typeof resultMsg.result === 'string') {
         resultContent = resultMsg.result;
         imagePath = findImagePath(resultContent);
-    } else if (typeof resultMsg.result === 'object' && resultMsg.result !== null) {
+    } else if (
+        typeof resultMsg.result === 'object' &&
+        resultMsg.result !== null
+    ) {
         // Type assertion for TypeScript
         const resultObj = resultMsg.result as Record<string, unknown>;
 

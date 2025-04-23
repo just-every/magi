@@ -7,6 +7,9 @@ import { AgentTabInfo } from '../types';
 // Native messaging port connection
 export let nativePort: chrome.runtime.Port | null = null;
 
+// Track the dedicated MAGI window ID
+export let magiWindowId: number | null = null;
+
 // Track agent tabs: { agentTabId: { chromeTabId, lastActive: timestamp, groupId } }
 // This state is inherently volatile and tied to live tabs, so in-memory is acceptable.
 // It will be rebuilt as needed via getAgentTab.
@@ -20,9 +23,9 @@ export const attachedDebuggerTabs = new Set<number>();
  * @param agentTabId The agent's tab identifier
  */
 export function updateAgentTabActivity(agentTabId: string): void {
-  if (agentTabs[agentTabId]) {
-    agentTabs[agentTabId].lastActive = Date.now();
-  }
+    if (agentTabs[agentTabId]) {
+        agentTabs[agentTabId].lastActive = Date.now();
+    }
 }
 
 /**
@@ -32,15 +35,15 @@ export function updateAgentTabActivity(agentTabId: string): void {
  * @param groupId Optional tab group ID
  */
 export function registerAgentTab(
-  agentTabId: string, 
-  chromeTabId: number, 
-  groupId?: number
+    agentTabId: string,
+    chromeTabId: number,
+    groupId?: number
 ): void {
-  agentTabs[agentTabId] = {
-    chromeTabId,
-    lastActive: Date.now(),
-    groupId
-  };
+    agentTabs[agentTabId] = {
+        chromeTabId,
+        lastActive: Date.now(),
+        groupId,
+    };
 }
 
 /**
@@ -48,7 +51,7 @@ export function registerAgentTab(
  * @param agentTabId The agent's tab identifier to remove
  */
 export function removeAgentTab(agentTabId: string): void {
-  delete agentTabs[agentTabId];
+    delete agentTabs[agentTabId];
 }
 
 /**
@@ -56,13 +59,15 @@ export function removeAgentTab(agentTabId: string): void {
  * @param chromeTabId The Chrome tab ID to check
  * @returns The agent tab ID if found, undefined otherwise
  */
-export function getAgentTabIdByChromeTabId(chromeTabId: number): string | undefined {
-  for (const [agentTabId, info] of Object.entries(agentTabs)) {
-    if (info.chromeTabId === chromeTabId) {
-      return agentTabId;
+export function getAgentTabIdByChromeTabId(
+    chromeTabId: number
+): string | undefined {
+    for (const [agentTabId, info] of Object.entries(agentTabs)) {
+        if (info.chromeTabId === chromeTabId) {
+            return agentTabId;
+        }
     }
-  }
-  return undefined;
+    return undefined;
 }
 
 /**
@@ -71,10 +76,10 @@ export function getAgentTabIdByChromeTabId(chromeTabId: number): string | undefi
  * @returns Array of agent tab IDs that are inactive
  */
 export function getInactiveAgentTabs(inactivityThreshold: number): string[] {
-  const now = Date.now();
-  return Object.entries(agentTabs)
-    .filter(([_, info]) => (now - info.lastActive) > inactivityThreshold)
-    .map(([agentTabId]) => agentTabId);
+    const now = Date.now();
+    return Object.entries(agentTabs)
+        .filter(([, info]) => now - info.lastActive > inactivityThreshold)
+        .map(([agentTabId]) => agentTabId);
 }
 
 /**
@@ -82,5 +87,13 @@ export function getInactiveAgentTabs(inactivityThreshold: number): string[] {
  * @param port The Chrome runtime port object
  */
 export function setNativePort(port: chrome.runtime.Port | null): void {
-  nativePort = port;
+    nativePort = port;
+}
+
+/**
+ * Sets the dedicated MAGI window ID
+ * @param windowId The Chrome window ID
+ */
+export function setMagiWindowId(windowId: number | null): void {
+    magiWindowId = windowId;
 }

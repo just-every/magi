@@ -1,20 +1,29 @@
 /**
  * Constants and shared text for MAGI agents.
  */
-import {get_output_dir} from '../utils/file_utils.js';
+import { get_output_dir } from '../utils/file_utils.js';
+import { getAllProjects } from '../utils/project_utils.js';
 
 export const YOUR_NAME = process.env.YOUR_NAME || 'User';
 
 // Agent descriptions for each specialized agent
 export const AGENT_DESCRIPTIONS: Record<string, string> = {
-	'ManagerAgent': 'ManagerAgent: Versatile task assignment - coordinates research, coding, planning, and coordination',
-	'ReasoningAgent': 'ReasoningAgent: Expert at complex reasoning and multi-step problem-solving',
-	'CodeAgent': 'CodeAgent: Specialized in programming, explaining, and modifying code in any language. Has skills equivalent to a senior software engineer.',
-	'BrowserAgent': 'BrowserAgent: Uses a browser to interact with websites, fill forms, and extract data. Can act like any human user.',
-	'ShellAgent': 'ShellAgent: Executes shell commands for system operations in your docker container',
-	'SearchAgent': 'SearchAgent: Performs complex web searches for current information from various sources',
-	'BrowserVisionAgent': 'BrowserVisionAgent: Uses a computer vision to browse websites',
-	'GodelMachine': 'GodelMachine: Advanced structured pipeline for code authoring, testing, and PR management',
+    ManagerAgent:
+        'ManagerAgent: Versatile task assignment - coordinates research, coding, planning, and coordination',
+    ReasoningAgent:
+        'ReasoningAgent: Expert at complex reasoning and multi-step problem-solving',
+    CodeAgent:
+        'CodeAgent: Specialized in programming, explaining, and modifying code in any language. Has skills equivalent to a senior software engineer.',
+    BrowserAgent:
+        'BrowserAgent: Uses a browser to interact with websites, fill forms, and extract data. Can act like any human user. Use when you think you know the starting URL.',
+    ShellAgent:
+        'ShellAgent: Executes shell commands for system operations in your docker container',
+    SearchAgent:
+        "SearchAgent: Performs complex web searches for current information from various sources - like a Google search. Use when you don't think you know the URL.",
+    BrowserVisionAgent:
+        'BrowserVisionAgent: Uses a computer vision to browse websites',
+    GodelMachine:
+        'GodelMachine: Advanced structured pipeline for code authoring, testing, and PR management',
 };
 
 // Common warning text for all agents
@@ -26,12 +35,27 @@ export const COMMON_WARNINGS = `IMPORTANT WARNINGS:
 5. Call a tool only once you have all the required parameters
 6. Where possible, validate your results before reporting them`;
 
+// Project context for agents
+export const PROJECTS_CONTEXT =
+    getAllProjects().length === 0
+        ? 'You can read/write to /magi_output which is a virtual volume shared with all MAGI agents.'
+        : `You can read/write to /magi_output which is a virtual volume shared with all MAGI agents. You have access to projects which are git repositories with files you are working on. You will receive a read/write clone of the project git repo at /magi_output/${process.env.PROCESS_ID}/projects/{project} and your default branch is "magi-${process.env.PROCESS_ID}"
+
+YOUR PROJECTS:
+- ${getAllProjects().join('\n- ')}
+
+Your starting directory is: ${get_output_dir(getAllProjects().length > 0 ? `projects/${getAllProjects()[0]}` : '')}
+Your taskID is: ${process.env.PROCESS_ID}`;
+
 // Docker environment information
 export const DOCKER_ENV_TEXT = `ENVIRONMENT INFO:
 - You are running in a Docker container with Debian Bookworm
 - You can run programs and modify you environment without fear of permanent damage
 - You have full network access for web searches and browsing
-- Both you and whoever receives your response has read/write access to all files in ${get_output_dir()}`;
+- Both you and whoever receives your response has read/write access to all files in ${get_output_dir()}
+
+${PROJECTS_CONTEXT}
+`;
 
 // Self-sufficiency guidance
 export const SELF_SUFFICIENCY_TEXT = `SELF-SUFFICIENCY:
@@ -54,8 +78,6 @@ export const FILE_TOOLS_TEXT = `FILE TOOLS:
 
 export const TASK_CONTEXT = `You operate in a shared browsing session with a human overseeing your operation. This allows you to interact with websites together. You can access accounts this person is already logged into and perform actions for them.
 
- You and your agents all have access to the same /magi_output file system. You can all read/write to /magi_output which is a virtual volume shared with all agents. You may have access to projects which are git repositories of files you are working on. If so, you will receive a read/write clone of the project git repo at /magi_output/{taskId}/projects/{project} and your default branch is "magi-{taskId}". Information in /magi_output can be access via http://localhost:3011/magi_output/... in a browser URL.
-
 The agents in your system are;
 - ${AGENT_DESCRIPTIONS['SearchAgent']}
 - ${AGENT_DESCRIPTIONS['BrowserAgent']}
@@ -66,7 +88,6 @@ The agents in your system are;
 ${DOCKER_ENV_TEXT}
 
 ${SIMPLE_SELF_SUFFICIENCY_TEXT}`;
-
 
 export const MAGI_CONTEXT = `You are part of MAGI (Mostly Autonomous Generative Intelligence), a multi-agent orchestration framework designed to solve complex tasks with minimal human intervention. A central Overseer AI coordinates specialized agents, dynamically creating them as needed, using a persistent "chain of thought". MAGI prioritizes solution quality, robustness, fault tolerance, and self-improvement over speed. It intelligently uses multiple LLMs to avoid common failure modes like reasoning loops and ensure effectiveness, with components operating within secure, isolated Docker containers. You work with a human called ${YOUR_NAME}.
 

@@ -5,9 +5,13 @@
  * or questions, creating a research plan.
  */
 
-import {Agent} from '../../utils/agent.js';
-import {getFileTools} from '../../utils/file_utils.js';
-import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT} from '../constants.js';
+import { Agent } from '../../utils/agent.js';
+import { getFileTools } from '../../utils/file_utils.js';
+import {
+    COMMON_WARNINGS,
+    DOCKER_ENV_TEXT,
+    SELF_SUFFICIENCY_TEXT,
+} from '../constants.js';
 
 const task_decomposition_agent_prompt = `
 [Context & Role]
@@ -89,15 +93,17 @@ NEXT: web_search
  * Create the task decomposition agent
  */
 export function createTaskDecompositionAgent(research_query?: string): Agent {
-  return new Agent({
-    name: 'TaskDecompositionAgent',
-    description: 'Analyzes the research query and produces a detailed research plan',
-    instructions: task_decomposition_agent_prompt.replace('{{research_query}}', research_query || ''),
-    tools: [
-      ...getFileTools()
-    ],
-    modelClass: 'reasoning'
-  });
+    return new Agent({
+        name: 'TaskDecompositionAgent',
+        description:
+            'Analyzes the research query and produces a detailed research plan',
+        instructions: task_decomposition_agent_prompt.replaceAll(
+            '{{research_query}}',
+            research_query || ''
+        ),
+        tools: [...getFileTools()],
+        modelClass: 'reasoning',
+    });
 }
 
 export default task_decomposition_agent_prompt;

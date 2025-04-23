@@ -1,0 +1,9 @@
+{
+  "name": "web",
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "web/src",
+  "projectType": "application",
+  "tags": ["scope:frontend", "type:app"],
+  "// targets": "to see all targets run: nx show project web --web",
+  "targets": {}
+}

@@ -6,7 +6,7 @@ declare module 'marked' {
         link(href: string, title: string | null, text: string): string;
         image(href: string, title: string | null, text: string): string;
     }
-    
+
     export interface MarkedOptions {
         gfm?: boolean;
         breaks?: boolean;
@@ -17,7 +17,7 @@ declare module 'marked' {
         highlight?: (code: string, lang: string) => string;
         renderer?: Renderer;
     }
-    
+
     export function parse(text: string, options?: MarkedOptions): string;
     export function use(options: { renderer?: Renderer }): void;
 }

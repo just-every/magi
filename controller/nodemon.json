@@ -1,17 +1,12 @@
 {
-  "verbose": true,
-  "quiet": false,
-  "watch": [
-    "src/**/*.*"
-  ],
-  "exec": "npm run build && node dist/server/server.js",
-  "ext": "js,jsx,ts,tsx,json,css,scss,html",
-  "env": {
-    "NODE_ENV": "development"
-  },
-  "ignore": [
-    "node_modules",
-    "dist"
-  ],
-  "delay": "500"
+    "verbose": true,
+    "quiet": false,
+    "watch": ["src/**/*.*"],
+    "exec": "npm run build && node dist/server/server.js",
+    "ext": "js,jsx,ts,tsx,json,css,scss,html",
+    "env": {
+        "NODE_ENV": "development"
+    },
+    "ignore": ["node_modules", "dist"],
+    "delay": "500"
 }

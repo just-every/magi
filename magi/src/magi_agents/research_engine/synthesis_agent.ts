@@ -5,9 +5,13 @@
  * a coherent understanding or answer.
  */
 
-import {Agent} from '../../utils/agent.js';
-import {getFileTools} from '../../utils/file_utils.js';
-import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT} from '../constants.js';
+import { Agent } from '../../utils/agent.js';
+import { getFileTools } from '../../utils/file_utils.js';
+import {
+    COMMON_WARNINGS,
+    DOCKER_ENV_TEXT,
+    SELF_SUFFICIENCY_TEXT,
+} from '../constants.js';
 
 const synthesis_agent_prompt = `
 [Context & Role]
@@ -96,30 +100,42 @@ NEXT: {{code_generation_or_validation}}
 /**
  * Create the synthesis agent
  */
-export function createSynthesisAgent(research_query: string, extracted_content: any): Agent {
-  // Convert extracted_content to a string if it's an object
-  const extractedContentStr = typeof extracted_content === 'object'
-    ? JSON.stringify(extracted_content, null, 2)
-    : extracted_content;
+export function createSynthesisAgent(
+    research_query: string,
+    extracted_content: any
+): Agent {
+    // Convert extracted_content to a string if it's an object
+    const extractedContentStr =
+        typeof extracted_content === 'object'
+            ? JSON.stringify(extracted_content, null, 2)
+            : extracted_content;
 
-  // First, replace the research query
-  let instructions = synthesis_agent_prompt.replace('{{research_query}}', research_query);
+    // First, replace the research query
+    let instructions = synthesis_agent_prompt.replaceAll(
+        '{{research_query}}',
+        research_query
+    );
 
-  // Then, replace the extracted content
-  instructions = instructions.replace('{{extracted_content}}', extractedContentStr);
+    // Then, replace the extracted content
+    instructions = instructions.replaceAll(
+        '{{extracted_content}}',
+        extractedContentStr
+    );
 
-  // The next stage will be determined dynamically based on whether code is needed
-  instructions = instructions.replace('{{code_generation_or_validation}}', 'code_generation');
+    // The next stage will be determined dynamically based on whether code is needed
+    instructions = instructions.replaceAll(
+        '{{code_generation_or_validation}}',
+        'code_generation'
+    );
 
-  return new Agent({
-    name: 'SynthesisAgent',
-    description: 'Aggregates information from multiple sources and synthesizes a comprehensive answer',
-    instructions: instructions,
-    tools: [
-      ...getFileTools()
-    ],
-    modelClass: 'reasoning'
-  });
+    return new Agent({
+        name: 'SynthesisAgent',
+        description:
+            'Aggregates information from multiple sources and synthesizes a comprehensive answer',
+        instructions: instructions,
+        tools: [...getFileTools()],
+        modelClass: 'reasoning',
+    });
 }
 
 export default synthesis_agent_prompt;

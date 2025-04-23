@@ -13,28 +13,32 @@ interface AssistantMessageProps {
     isLast: boolean;
 }
 
-const AssistantMessage: React.FC<AssistantMessageProps> = ({ message, rgb, isLast }) => {
+const AssistantMessage: React.FC<AssistantMessageProps> = ({
+    message,
+    rgb,
+    isLast,
+}) => {
     // Add a special class for delta messages (streaming)
-    const bubbleClass = message.isDelta && isLast
-        ? "message-bubble assistant-bubble streaming"
-        : "message-bubble assistant-bubble";
+    const bubbleClass =
+        message.isDelta && isLast
+            ? 'message-bubble assistant-bubble streaming'
+            : 'message-bubble assistant-bubble';
 
     // Get the content to display (handling delta messages)
     const displayContent = getDeltaMessageContent(message);
 
     return (
-        <div className="message-group assistant-message" key={message.message_id || message.id}>
-            <div className={bubbleClass}
-                style={{color: `rgba(${rgb} / 1)`}}>
-                { message.agent?.model && <div className="message-header">
-                    {isLast && <>
-                        Thinking ({message.agent.model})...
-                    </>}
-                    {!isLast && <>
-                        Thoughts ({message.agent.model})
-                    </>}
-                </div> }
-                <div dangerouslySetInnerHTML={parseMarkdown(displayContent)}/>
+        <div
+            className="message-group assistant-message"
+            key={message.message_id || message.id}
+        >
+            <div className="message-header">
+                {message.agent?.model && (
+                    <div className="message-model">{message.agent.model}</div>
+                )}
+            </div>
+            <div className={bubbleClass} style={{ color: `rgba(${rgb} / 1)` }}>
+                <div dangerouslySetInnerHTML={parseMarkdown(displayContent)} />
             </div>
         </div>
     );

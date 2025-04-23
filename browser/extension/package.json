@@ -1,26 +1,26 @@
 {
-  "name": "magi-browser-extension",
-  "version": "1.0.0",
-  "description": "Chrome extension for MAGI system browser control",
-  "scripts": {
-    "build:background": "esbuild src/background.ts --bundle --outfile=dist/background.js --platform=browser --format=esm",
-    "build:domprocessor": "esbuild src/dom-processor/dom-processor.ts --bundle --outfile=dist/dom-processor.bundle.js --platform=browser --format=iife --global-name=__MagiDomProcessorUtil",
-    "build": "npm run build:background && npm run build:domprocessor",
-    "watch": "tsc --watch",
-    "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix"
-  },
-  "author": "MAGI",
-  "license": "MIT",
-  "devDependencies": {
-    "@types/chrome": "^0.0.255",
-    "@typescript-eslint/eslint-plugin": "^6.19.0",
-    "@typescript-eslint/parser": "^6.19.0",
-    "esbuild": "^0.19.11",
-    "eslint": "^8.56.0",
-    "typescript": "^5.3.3"
-  },
-  "dependencies": {
-    "css-selector-generator": "^3.6.9"
-  }
+    "name": "magi-browser-extension",
+    "version": "1.0.0",
+    "description": "Chrome extension for MAGI system browser control",
+    "scripts": {
+        "build:background": "esbuild src/background.ts --bundle --outfile=dist/background.js --platform=browser --format=esm",
+        "build:domprocessor": "esbuild src/dom-processor/dom-processor.ts --bundle --outfile=dist/dom-processor.bundle.js --platform=browser --format=iife --global-name=__MagiDomProcessorUtil",
+        "build": "npm run build:background && npm run build:domprocessor",
+        "watch": "tsc --watch",
+        "lint": "eslint src/",
+        "lint:fix": "eslint src/ --fix"
+    },
+    "author": "MAGI",
+    "license": "MIT",
+    "devDependencies": {
+        "@types/chrome": "^0.0.255",
+        "@typescript-eslint/eslint-plugin": "^6.19.0",
+        "@typescript-eslint/parser": "^6.19.0",
+        "esbuild": "^0.19.11",
+        "eslint": "^8.56.0",
+        "typescript": "^5.3.3"
+    },
+    "dependencies": {
+        "css-selector-generator": "^3.6.9"
+    }
 }

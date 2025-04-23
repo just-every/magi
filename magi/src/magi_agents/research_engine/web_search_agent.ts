@@ -5,11 +5,15 @@
  * based on the research plan created by the Task Decomposition agent.
  */
 
-import {Agent} from '../../utils/agent.js';
-import {getFileTools} from '../../utils/file_utils.js';
-import {getSearchTools} from '../../utils/search_utils.js';
-import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT} from '../constants.js';
-import {createBrowserAgent} from '../common_agents/browser_agent.js';
+import { Agent } from '../../utils/agent.js';
+import { getFileTools } from '../../utils/file_utils.js';
+import { getSearchTools } from '../../utils/search_utils.js';
+import {
+    COMMON_WARNINGS,
+    DOCKER_ENV_TEXT,
+    SELF_SUFFICIENCY_TEXT,
+} from '../constants.js';
+import { createBrowserAgent } from '../common_agents/browser_agent.js';
 // import {createSearchAgent} from '../run_task/search_agent.js';
 
 const web_search_agent_prompt = `
@@ -96,19 +100,18 @@ NEXT: content_extraction
  * Create the web search agent
  */
 export function createWebSearchAgent(research_plan: string): Agent {
-  return new Agent({
-    name: 'WebSearchAgent',
-    description: 'Formulates search queries and gathers information from multiple sources',
-    instructions: web_search_agent_prompt.replace('{{research_plan}}', research_plan),
-    tools: [
-      ...getFileTools(),
-      ...getSearchTools()
-    ],
-    workers: [
-      createBrowserAgent,
-    ],
-    modelClass: 'standard'
-  });
+    return new Agent({
+        name: 'WebSearchAgent',
+        description:
+            'Formulates search queries and gathers information from multiple sources',
+        instructions: web_search_agent_prompt.replaceAll(
+            '{{research_plan}}',
+            research_plan
+        ),
+        tools: [...getFileTools(), ...getSearchTools()],
+        workers: [createBrowserAgent],
+        modelClass: 'standard',
+    });
 }
 
 export default web_search_agent_prompt;

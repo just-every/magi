@@ -5,8 +5,8 @@
  * and decides whether to approve, request changes, or reject.
  */
 
-import {Agent} from '../../utils/agent.js';
-import {getFileTools} from '../../utils/file_utils.js';
+import { Agent } from '../../utils/agent.js';
+import { getFileTools } from '../../utils/file_utils.js';
 // These constants can be used in the instructions if needed
 // import { COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT } from '../constants.js';
 
@@ -50,22 +50,28 @@ You are the Review Agent. You inspect the pull request for correctness, style, m
 /**
  * Create the PR review agent
  */
-export function createPRReviewAgent(issue_description: string, pr_details?: string): Agent {
-	let instructions = pr_review_agent_prompt.replace('{{issue_description}}', issue_description);
+export function createPRReviewAgent(
+    issue_description: string,
+    pr_details?: string
+): Agent {
+    let instructions = pr_review_agent_prompt.replaceAll(
+        '{{issue_description}}',
+        issue_description
+    );
 
-	if (pr_details) {
-		instructions = instructions + `\n\nPull Request Details:\n${pr_details}`;
-	}
+    if (pr_details) {
+        instructions =
+            instructions + `\n\nPull Request Details:\n${pr_details}`;
+    }
 
-	return new Agent({
-		name: 'PRReviewAgent',
-		description: 'Reviews pull requests for correctness, style, and security',
-		instructions: instructions,
-		tools: [
-			...getFileTools()
-		],
-		modelClass: 'code'
-	});
+    return new Agent({
+        name: 'PRReviewAgent',
+        description:
+            'Reviews pull requests for correctness, style, and security',
+        instructions: instructions,
+        tools: [...getFileTools()],
+        modelClass: 'code',
+    });
 }
 
 export default pr_review_agent_prompt;

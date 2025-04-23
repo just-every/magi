@@ -9,9 +9,12 @@ import * as marked from 'marked';
 export class CustomRenderer extends marked.Renderer {
     link(href: any, title: any, text: any): string {
         // Convert href to string and handle object case
-        const hrefStr = typeof href === 'object' ?
-            (href && href.href ? href.href : String(href)) :
-            String(href || '');
+        const hrefStr =
+            typeof href === 'object'
+                ? href && href.href
+                    ? href.href
+                    : String(href)
+                : String(href || '');
 
         // Handle title safely
         const titleAttr = title ? ` title="${title}"` : '';
@@ -57,9 +60,9 @@ export const parseMarkdown = (content: string): { __html: string } => {
         const renderer = new CustomRenderer();
         const parsedOutput = marked.parse(formattedContent, { renderer });
 
-        return {__html: parsedOutput};
+        return { __html: parsedOutput };
     } catch (e) {
         console.error('Error parsing markdown:', e);
-        return {__html: content};
+        return { __html: content };
     }
 };

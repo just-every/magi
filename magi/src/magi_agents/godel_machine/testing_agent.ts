@@ -5,8 +5,8 @@
  * if coverage or quality standards are met.
  */
 
-import {Agent} from '../../utils/agent.js';
-import {getFileTools} from '../../utils/file_utils.js';
+import { Agent } from '../../utils/agent.js';
+import { getFileTools } from '../../utils/file_utils.js';
 // These constants can be used in the instructions if needed
 // import { COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT } from '../constants.js';
 
@@ -47,15 +47,13 @@ You are the Testing Agent. You ensure code correctness by running and analyzing 
  * Create the testing agent
  */
 export function createTestingAgent(): Agent {
-	return new Agent({
-		name: 'TestingAgent',
-		description: 'Runs tests and ensures code quality standards are met',
-		instructions: testing_agent_prompt,
-		tools: [
-			...getFileTools()
-		],
-		modelClass: 'code'
-	});
+    return new Agent({
+        name: 'TestingAgent',
+        description: 'Runs tests and ensures code quality standards are met',
+        instructions: testing_agent_prompt,
+        tools: [...getFileTools()],
+        modelClass: 'code',
+    });
 }
 
 export default testing_agent_prompt;

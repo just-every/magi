@@ -1,51 +1,59 @@
 {
-  "name": "magi-system",
-  "version": "1.0.0",
-  "description": "MAGI System",
-  "type": "module",
-  "scripts": {
-    "postinstall": "cd controller && npm install && cd ../magi && npm install && cd ../browser/bridge && npm install && cd ../extension && npm install",
-    "build": "npm run build:tsc && npm run build:docker",
-    "build:docker": "docker compose build controller magi-base",
-    "build:tsc": "npx tsc -p browser/bridge && cd browser/extension && npm run build",
-    "dev": "npm run build && docker compose up",
-    "bridge:start": "scripts/start-bridge.sh",
-    "bridge:stop": "scripts/stop-bridge.sh",
-    "lint": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts' 'setup/**/*.ts'",
-    "lint:fix": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts' 'setup/**/*.ts' --fix",
-    "setup": "node setup/bootstrap.js",
-    "setup:claude": "npx tsc -p setup && node setup/dist/claude_setup.js",
-    "setup:browser": "npx tsc -p setup && node setup/dist/browser_setup.js",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:ui": "vitest --ui",
-    "test:coverage": "vitest run --coverage",
-    "test:e2e": "cd test/playwright && npx playwright test",
-    "test:e2e:ui": "cd test/playwright && npx playwright test --ui",
-    "test:e2e:install": "cd test/playwright && npm install && npx playwright install"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/has-context/magi-system.git"
-  },
-  "overrides": {
-    "tar-fs": "^2.1.2"
-  },
-  "devDependencies": {
-    "@eslint/js": "^8.56.0",
-    "@types/node": "^22.14.0",
-    "@types/ws": "^8.18.1",
-    "@typescript-eslint/eslint-plugin": "^7.0.0",
-    "@typescript-eslint/parser": "^7.0.0",
-    "@vitest/coverage-v8": "^3.1.1",
-    "@vitest/ui": "^3.1.1",
-    "eslint": "^8.56.0",
-    "jsdom": "^26.0.0",
-    "typescript": "^5.8.2",
-    "typescript-eslint": "^7.0.0",
-    "vitest": "^3.1.1"
-  },
-  "dependencies": {
-    "ws": "^8.18.1"
-  }
+    "name": "magi-system",
+    "version": "1.0.0",
+    "description": "MAGI System",
+    "type": "module",
+    "scripts": {
+        "postinstall": "cd controller && npm install && cd ../magi && npm install && cd ../browser/bridge && npm install && cd ../extension && npm install",
+        "build": "npm run build:env && npm run build:tsc && npm run build:docker",
+        "build:env": "export DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 COMPOSE_BAKE=true",
+        "build:docker": "docker compose build controller magi-base",
+        "build:tsc": "npx tsc -p browser/bridge && cd browser/extension && npm run build",
+        "dev": "npm run build && docker compose up",
+        "bridge:start": "scripts/start-bridge.sh",
+        "bridge:stop": "scripts/stop-bridge.sh",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "lint": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts' 'setup/**/*.ts'",
+        "lint:fix": "eslint 'controller/src/**/*.ts' 'magi/src/**/*.ts' 'setup/**/*.ts' --fix",
+        "setup": "node setup/bootstrap.js",
+        "setup:claude": "npx tsc -p setup && node setup/dist/claude_setup.js",
+        "setup:browser": "npx tsc -p setup && node setup/dist/browser_setup.js",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:ui": "vitest --ui",
+        "test:coverage": "vitest run --coverage",
+        "test:e2e": "cd test/playwright && npx playwright test",
+        "test:e2e:ui": "cd test/playwright && npx playwright test --ui",
+        "test:e2e:install": "cd test/playwright && npm install && npx playwright install"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/has-context/magi-system.git"
+    },
+    "overrides": {
+        "tar-fs": "^2.1.2"
+    },
+    "devDependencies": {
+        "@eslint/js": "^8.56.0",
+        "@types/node": "^22.14.0",
+        "@types/ws": "^8.18.1",
+        "@typescript-eslint/eslint-plugin": "^7.0.0",
+        "@typescript-eslint/parser": "^7.0.0",
+        "@vitest/coverage-v8": "^3.1.1",
+        "@vitest/ui": "^3.1.1",
+        "eslint": "^8.56.0",
+        "eslint-config-prettier": "^10.1.2",
+        "eslint-plugin-prettier": "^5.2.6",
+        "jsdom": "^26.0.0",
+        "prettier": "^3.5.3",
+        "prettier-plugin-sh": "^0.17.2",
+        "typescript": "^5.8.2",
+        "typescript-eslint": "^7.0.0",
+        "vitest": "^3.1.1"
+    },
+    "dependencies": {
+        "simple-git": "^3.27.0",
+        "ws": "^8.18.1"
+    }
 }

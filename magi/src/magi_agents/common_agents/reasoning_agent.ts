@@ -4,21 +4,31 @@
  * This agent specializes in complex reasoning and problem-solving.
  */
 
-import {Agent} from '../../utils/agent.js';
-import {MAGI_CONTEXT, COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT} from '../constants.js';
-import {getSearchTools} from '../../utils/search_utils.js';
-import {createBrowserAgent} from './browser_agent.js';
-import {getFileTools} from '../../utils/file_utils.js';
-import {getShellTools} from '../../utils/shell_utils.js';
-
+import { Agent } from '../../utils/agent.js';
+import {
+    MAGI_CONTEXT,
+    COMMON_WARNINGS,
+    DOCKER_ENV_TEXT,
+    SELF_SUFFICIENCY_TEXT,
+} from '../constants.js';
+import { getSearchTools } from '../../utils/search_utils.js';
+import { createBrowserAgent } from './browser_agent.js';
+import { getCommonTools } from '../../utils/index.js';
 /**
- * Create the reasoning agent
+ * Create the reasoning agent with optional confidence signaling
+ *
+ * @param instructions Optional custom instructions to override the default
+ * @param settings Optional settings to control behavior (e.g., confidence signaling)
+ * @returns The configured ReasoningAgent instance
  */
 export function createReasoningAgent(instructions?: string): Agent {
-	return new Agent({
-		name: 'ReasoningAgent',
-		description: 'Expert at complex reasoning and multi-step problem-solving',
-		instructions: instructions || `${MAGI_CONTEXT}
+    return new Agent({
+        name: 'ReasoningAgent',
+        description:
+            'Expert at complex reasoning and multi-step problem-solving',
+        instructions:
+            instructions ||
+            `${MAGI_CONTEXT}
 ---
 		
 Your role in MAGI is to be a ReasoningAgent. You are an advanced reasoning engine specialized in complex problem-solving.
@@ -51,14 +61,13 @@ IMPORTANT:
 - Use mathematical notation, logic, or pseudocode when helpful
 - If certain information is missing, state your assumptions clearly
 - Consider the question from multiple perspectives before concluding`,
-		tools: [
-			...getFileTools(),
-			...getShellTools(),
-			...getSearchTools()
-		],
-		workers: [
-			createBrowserAgent,
-		],
-		modelClass: 'reasoning'
-	});
+        tools: [...getSearchTools(), ...getCommonTools()],
+        workers: [createBrowserAgent],
+        modelClass: 'reasoning',
+        modelSettings: {
+            enableDiverseEnsemble: true,
+            ensembleSamples: 5,
+            enableRefinement: true,
+        },
+    });
 }

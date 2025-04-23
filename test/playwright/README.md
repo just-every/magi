@@ -17,43 +17,48 @@ Tests are organized into the following categories:
 To run the tests, you need to have Node.js installed. Then:
 
 1. Install dependencies:
-   ```bash
-   npm run test:install
-   ```
+
+    ```bash
+    npm run test:install
+    ```
 
 2. Run all tests:
-   ```bash
-   npm test
-   ```
+
+    ```bash
+    npm test
+    ```
 
 3. Run with UI for debugging:
-   ```bash
-   npm run test:ui
-   ```
+
+    ```bash
+    npm run test:ui
+    ```
 
 4. Run specific test suites:
-   ```bash
-   # API tests
-   npm run test:api
-   
-   # Model tests
-   npm run test:models
-   
-   # Agent tests
-   npm run test:agents
-   
-   # Runner tests
-   npm run test:runner
-   
-   # E2E tests
-   npm run test:e2e
-   ```
+
+    ```bash
+    # API tests
+    npm run test:api
+    
+    # Model tests
+    npm run test:models
+    
+    # Agent tests
+    npm run test:agents
+    
+    # Runner tests
+    npm run test:runner
+    
+    # E2E tests
+    npm run test:e2e
+    ```
 
 ## Test Provider
 
-The test suite includes a `test_provider.ts` module that simulates various LLM model behaviors for testing without requiring real API calls. 
+The test suite includes a `test_provider.ts` module that simulates various LLM model behaviors for testing without requiring real API calls.
 
 Key features of the test provider:
+
 - Simulate rate limiting (HTTP 429)
 - Simulate errors
 - Simulate tool calls
@@ -70,15 +75,15 @@ import { test } from '../../utils/test-utils';
 import { testProviderConfig } from '../../../../magi/src/model_providers/test_provider.js';
 
 test('should simulate specific behavior', async ({ configureTestProvider }) => {
-  // Configure the test provider for this test
-  configureTestProvider({
-    fixedResponse: 'Custom response for testing',
-    streamingDelay: 10,
-    simulateToolCall: true,
-    toolName: 'web_search'
-  });
-  
-  // Run your test...
+    // Configure the test provider for this test
+    configureTestProvider({
+        fixedResponse: 'Custom response for testing',
+        streamingDelay: 10,
+        simulateToolCall: true,
+        toolName: 'web_search',
+    });
+
+    // Run your test...
 });
 ```
 
@@ -88,9 +93,9 @@ To add a new test:
 
 1. Create a new test file in the appropriate directory
 2. Import the extended test utilities:
-   ```ts
-   import { test, expect } from '../../utils/test-utils';
-   ```
+    ```ts
+    import { test, expect } from '../../utils/test-utils';
+    ```
 3. Use Playwright's test structure with our extensions
 4. Use the `configureTestProvider` fixture to control test behavior
 

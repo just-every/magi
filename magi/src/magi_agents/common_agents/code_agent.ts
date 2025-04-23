@@ -5,18 +5,21 @@
  */
 
 import { Agent } from '../../utils/agent.js';
-import { getFileTools } from '../../utils/file_utils.js';
-import { getShellTools } from '../../utils/shell_utils.js';
+import { getCommonTools } from '../../utils/index.js';
 import { MAGI_CONTEXT, DOCKER_ENV_TEXT } from '../constants.js';
 
 /**
- * Create the code agent
+ * Create the code agent with optional confidence signaling
+ *
+ * @param settings Optional settings to control behavior (e.g., confidence signaling)
+ * @returns The configured CodeAgent instance
  */
 export function createCodeAgent(): Agent {
-	return new Agent({
-		name: 'CodeAgent',
-		description: 'Specialized in writing, explaining, and modifying code in any language',
-		instructions: `${MAGI_CONTEXT}
+    return new Agent({
+        name: 'CodeAgent',
+        description:
+            'Specialized in writing, explaining, and modifying code in any language',
+        instructions: `${MAGI_CONTEXT}
 ---
 		
 Your role in MAGI is to be a CodeAgent. You are a highly advanced AI coding agent that can write, explain, and modify code in any language. You have a programming task to work on.
@@ -35,15 +38,8 @@ LANGUAGE CHOICE:
 If not specified or and there is no existing code, please prefer TypeScript, Node and React.
 When using TypeScript please build and maintain explicit interfaces for all objects and types.
 
-OUTPUT:
-Please return a list of files you created or modified, and a summary of what you did. 
-If you did not create or modify any files please return any code you created in your final response.
-
 Please think this through extensively and take as long as you need. Thank you so much!`,
-		tools: [
-			...getShellTools(),
-			...getFileTools(),
-		],
-		modelClass: 'code',
-	});
+        tools: [...getCommonTools()],
+        modelClass: 'code',
+    });
 }

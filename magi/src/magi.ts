@@ -6,67 +6,83 @@
 
 // Note: The 'path' import was removed as it was unused
 
-import {parseArgs} from 'node:util';
-import {Runner} from './utils/runner.js';
-import {ProcessToolType} from './types.js';
-import {createAgent} from './magi_agents/index.js';
-import {addHumanMessage, addMonologue, getHistory} from './utils/history.js';
+import { parseArgs } from 'node:util';
 import {
-	initCommunication,
-	ServerMessage,
-	getCommunicationManager,
-	CommandMessage, hasCommunicationManager,
+    ProcessToolType,
+    ResponseInput,
+    ServerMessage,
+    CommandMessage,
+} from './types/shared-types.js';
+import { Runner } from './utils/runner.js';
+import { createAgent } from './magi_agents/index.js';
+import {
+    addHumanMessage,
+    addMonologue,
+    getHistory,
+    mergeHistoryThread,
+} from './utils/history.js';
+import {
+    initCommunication,
+    getCommunicationManager,
+    hasCommunicationManager,
 } from './utils/communication.js';
-import {move_to_working_dir, set_file_test_mode} from './utils/file_utils.js';
-import {costTracker} from './utils/cost_tracker.js';
-import {runProcessTool} from './utils/process_tools.js';
-import {Agent} from './utils/agent.js';
-import {runThoughtDelay} from './utils/thought_utils.js';
+import { move_to_working_dir, set_file_test_mode } from './utils/file_utils.js';
+import { costTracker } from './utils/cost_tracker.js';
+import { runProcessTool } from './utils/process_tools.js';
+import { Agent } from './utils/agent.js';
+import { runThoughtDelay } from './utils/thought_utils.js';
+import { runMECH } from './utils/mech_tools.js';
+import { getAllProjects } from './utils/project_utils.js';
+
+const person = process.env.YOUR_NAME || 'User';
+const talkToolName = `talk to ${person}`.toLowerCase().replaceAll(' ', '_');
+let primaryAgentId: string | undefined;
 
 // Parse command line arguments
 function parseCommandLineArgs() {
-	const options = {
-		test: {type: 'boolean' as const, short: 't', default: false},
-		agent: {type: 'string' as const, short: 'a', default: 'overseer'},
-		tool: {type: 'string' as const, default: 'none'},
-		prompt: {type: 'string' as const, short: 'p'},
-		base64: {type: 'string' as const, short: 'b'},
-		model: {type: 'string' as const, short: 'm'},
-		modelClass: {type: 'string' as const, short: 'c'},
-		working: {type: 'string' as const, short: 'w'},
-	};
+    const options = {
+        test: { type: 'boolean' as const, short: 't', default: false },
+        agent: { type: 'string' as const, short: 'a', default: 'overseer' },
+        tool: { type: 'string' as const, default: 'none' },
+        prompt: { type: 'string' as const, short: 'p' },
+        base64: { type: 'string' as const, short: 'b' },
+        model: { type: 'string' as const, short: 'm' },
+        modelClass: { type: 'string' as const, short: 'c' },
+    };
 
-	const {values} = parseArgs({options, allowPositionals: true});
-	return values;
+    const { values } = parseArgs({ options, allowPositionals: true });
+    return values;
 }
 
-
 function endProcess(exit: number, error?: string): void {
-	if(exit > 0 && !error) {
-		error = 'Exited with error';
-	}
-	if(hasCommunicationManager()) {
-		const comm = getCommunicationManager();
-		if(error) {
-			console.error(`\n**Fatal Error** ${error}`);
-			if(exit > 0) comm.send({type: 'error', error: `\n**Fatal Error** ${error}`});
-		}
-		comm.send({
-			type: 'process_terminated',
-			error,
-		});
-	}
-	else {
-		console.error('\n**endProcess() with no communication manager**');
-		if(error) {
-			console.error(`\n**Fatal Error** ${error}`);
-		}
-	}
+    if (exit > 0 && !error) {
+        error = 'Exited with error';
+    }
+    if (hasCommunicationManager()) {
+        const comm = getCommunicationManager();
+        if (error) {
+            console.error(`\n**Fatal Error** ${error}`);
+            if (exit > 0)
+                comm.send({
+                    type: 'error',
+                    error: `\n**Fatal Error** ${error}`,
+                });
+        }
+        comm.send({
+            type: 'process_terminated',
+            error,
+        });
+    } else {
+        console.error('\n**endProcess() with no communication manager**');
+        if (error) {
+            console.error(`\n**Fatal Error** ${error}`);
+        }
+    }
 
-	costTracker.printSummary();
-	if(exit > -1) {
-		process.exit(exit);
-	}
+    costTracker.printSummary();
+    if (exit > -1) {
+        process.exit(exit);
+    }
 }
 
 // Store agent IDs to reuse them for the same agent type
@@ -75,97 +91,142 @@ function endProcess(exit: number, error?: string): void {
 /**
  * Execute a command using an agent and capture the results
  */
-export async function spawnThought(agent: Agent, command: string): Promise<void> {
-	await addHumanMessage(command);
+export async function spawnThought(
+    args: Record<string, unknown>,
+    command: string
+): Promise<void> {
+    if (args.agent !== 'overseer') {
+        // If not overseer, just append to history and let the main thread handle it
+        return await addHumanMessage(command);
+    }
 
-	// Get conversation history
-	const history = getHistory();
+    const agent = createAgent(args);
+    if (!primaryAgentId) {
+        primaryAgentId = agent.agent_id;
+    } else {
+        agent.agent_id = primaryAgentId;
+    }
 
-	agent.model = Runner.rotateModel(agent, 'writing');
+    // Get conversation history
+    const history: ResponseInput = [...getHistory()];
 
-	// Run the command with unified tool handling
-	const response = await Runner.runStreamedWithTools(agent, '', history);
+    // Create a separate history thread for this thought
+    const thread: ResponseInput = [];
+    await addHumanMessage(command, thread);
 
-	console.log('[SPAWN THOUGHT] ', response);
+    // Only modify the clone, leaving the original untouched
+    agent.model = Runner.rotateModel(agent, 'writing');
+    agent.historyThread = thread;
+    agent.maxToolCallRoundsPerTurn = 1;
+
+    // Run the command with unified tool handling
+    thread.forEach(message => history.push(message));
+    history.push({
+        role: 'developer',
+        content: `Please respond to ${person} using ${talkToolName}(message, affect, incomplete). You are a model which specialized in writing responses. The response may be obvious from the information provided to you, but if not you can just acknowledge ${person}'s message and set incomplete = true`,
+    });
+    const response = await Runner.runStreamedWithTools(agent, '', history);
+
+    console.log('[SPAWN THOUGHT] ', response);
+
+    // Merge the thread back into the main history
+    await mergeHistoryThread(thread);
 }
 
 /**
  * Execute a command using an agent and capture the results
  */
-export async function mainLoop(agent: Agent, loop: boolean, model?: string): Promise<void> {
+export async function mainLoop(
+    agent: Agent,
+    loop: boolean,
+    model?: string
+): Promise<void> {
+    const comm = getCommunicationManager();
 
-	const comm = getCommunicationManager();
+    do {
+        try {
+            // Get conversation history
+            const history = getHistory();
 
-	do {
-		try {
-			// Get conversation history
-			const history = getHistory();
+            agent.model = model || Runner.rotateModel(agent);
+            delete agent.modelSettings;
 
-			agent.model = model || Runner.rotateModel(agent);
-			delete agent.modelSettings;
+            // Run the command with unified tool handling
+            const response = await Runner.runStreamedWithTools(
+                agent,
+                '',
+                history
+            );
 
-			// Run the command with unified tool handling
-			const response = await Runner.runStreamedWithTools(agent, '', history);
+            console.log('[MONOLOGUE] ', response);
 
-			console.log('[MONOLOGUE] ', response);
-
-			// Wait the required delay before the next thought
-			await runThoughtDelay();
-
-		} catch (error: any) {
-			// Handle any error that occurred during agent execution
-			console.error(`Error running agent command: ${error?.message || String(error)}`);
-			comm.send({type: 'error', error});
-		}
-	}
-	while (loop && !comm.isClosed());
+            // Wait the required delay before the next thought
+            await runThoughtDelay();
+        } catch (error: any) {
+            // Handle any error that occurred during agent execution
+            console.error(
+                `Error running agent command: ${error?.message || String(error)}`
+            );
+            comm.send({ type: 'error', error });
+        }
+    } while (loop && !comm.isClosed());
 }
 
 /**
  * Check environment variables for model provider API keys
  */
 function checkModelProviderApiKeys(): boolean {
-	let hasValidKey = false;
+    let hasValidKey = false;
 
-	// Check OpenAI API key
-	if (process.env.OPENAI_API_KEY) {
-		hasValidKey = true;
-	} else {
-		console.warn('⚠ OPENAI_API_KEY environment variable not set');
-	}
+    // Check OpenAI API key
+    if (process.env.OPENAI_API_KEY) {
+        hasValidKey = true;
+    } else {
+        console.warn('⚠ OPENAI_API_KEY environment variable not set');
+    }
 
-	// Check Anthropic (Claude) API key
-	if (process.env.ANTHROPIC_API_KEY) {
-		hasValidKey = true;
-	}
+    // Check Anthropic (Claude) API key
+    if (process.env.ANTHROPIC_API_KEY) {
+        hasValidKey = true;
+    }
 
-	// Check Google API key for Gemini
-	if (process.env.GOOGLE_API_KEY) {
-		hasValidKey = true;
-	}
+    // Check Google API key for Gemini
+    if (process.env.GOOGLE_API_KEY) {
+        hasValidKey = true;
+    }
 
-	// Check X.AI API key for Grok
-	if (process.env.XAI_API_KEY) {
-		hasValidKey = true;
-	}
+    // Check X.AI API key for Grok
+    if (process.env.XAI_API_KEY) {
+        hasValidKey = true;
+    }
 
-	return hasValidKey;
+    return hasValidKey;
 }
 
 // Function to send cost data to the controller
 
 // Add exit handlers to print cost summary and send cost data
-process.on('exit', (code) => endProcess(-1, `Process exited with code ${code}`));
-process.on('SIGINT', (signal) => endProcess(0, `Received SIGINT ${signal}, terminating...`));
-process.on('SIGTERM', (signal) => endProcess(0, `Received SIGTERM ${signal}, terminating...`));
-process.on('unhandledRejection', (reason) => endProcess(-1, `Unhandled Rejection reason ${reason}`));
-process.on('uncaughtException', (err, origin) => endProcess(-1, `Unhandled Exception ${err} Origin: ${origin}`));
-process.on('uncaughtExceptionMonitor', (err, origin) => endProcess(-1, `Unhandled Exception Monitor ${err} Origin: ${origin}`));
+process.on('exit', code => endProcess(-1, `Process exited with code ${code}`));
+process.on('SIGINT', signal =>
+    endProcess(0, `Received SIGINT ${signal}, terminating...`)
+);
+process.on('SIGTERM', signal =>
+    endProcess(0, `Received SIGTERM ${signal}, terminating...`)
+);
+process.on('unhandledRejection', reason =>
+    endProcess(-1, `Unhandled Rejection reason ${reason}`)
+);
+process.on('uncaughtException', (err, origin) =>
+    endProcess(-1, `Unhandled Exception ${err} Origin: ${origin}`)
+);
+process.on('uncaughtExceptionMonitor', (err, origin) =>
+    endProcess(-1, `Unhandled Exception Monitor ${err} Origin: ${origin}`)
+);
 
-process.on('warning', (warning) => {
-	console.warn(warning.name);    // Print the warning name
-	console.warn(warning.message); // Print the warning message
-	console.warn(warning.stack);   // Print the stack trace
+process.on('warning', warning => {
+    console.warn(warning.name); // Print the warning name
+    console.warn(warning.message); // Print the warning message
+    console.warn(warning.stack); // Print the stack trace
 });
 
 /**
@@ -173,88 +234,109 @@ process.on('warning', (warning) => {
  * Returns a promise that resolves when the command processing is complete
  */
 async function main(): Promise<void> {
-	// Parse command line arguments
-	const args = parseCommandLineArgs();
+    // Parse command line arguments
+    const args = parseCommandLineArgs();
 
-	// Set up process ID from env var
-	process.env.PROCESS_ID = process.env.PROCESS_ID || `magi-${Date.now()}`;
-	console.log(`Initializing with process ID: ${process.env.PROCESS_ID}`);
+    // Set up process ID from env var
+    process.env.PROCESS_ID = process.env.PROCESS_ID || `magi-${Date.now()}`;
+    console.log(`Initializing with process ID: ${process.env.PROCESS_ID}`);
 
-	// Setup comms early, so we can send back failure messages
-	const comm = initCommunication(args.test);
-	set_file_test_mode(args.test);
+    // Setup comms early, so we can send back failure messages
+    const comm = initCommunication(args.test);
+    set_file_test_mode(args.test);
 
-	// Process prompt (either plain text or base64-encoded)
-	let promptText: string;
-	if (args.base64) {
-		try {
-			const buffer = Buffer.from(args.base64, 'base64');
-			promptText = buffer.toString('utf-8');
-		} catch (error) {
-			return endProcess(1, `Failed to decode base64 prompt: ${error}`);
-		}
-	} else if (args.prompt) {
-		promptText = args.prompt;
-	} else {
-		return endProcess(1, 'Either --prompt or --base64 must be provided');
-	}
+    // Process prompt (either plain text or base64-encoded)
+    let promptText: string;
+    if (args.base64) {
+        try {
+            const buffer = Buffer.from(args.base64, 'base64');
+            promptText = buffer.toString('utf-8');
+        } catch (error) {
+            return endProcess(1, `Failed to decode base64 prompt: ${error}`);
+        }
+    } else if (args.prompt) {
+        promptText = args.prompt;
+    } else {
+        return endProcess(1, 'Either --prompt or --base64 must be provided');
+    }
 
-	// Move to working directory in /magi_output
-	move_to_working_dir(args.working);
+    // Move to working directory in /magi_output
+    const projects = getAllProjects();
+    move_to_working_dir(projects.length > 0 ? `projects/${projects[0]}` : '');
 
-	// Verify API keys for model providers
-	if (!checkModelProviderApiKeys()) {
-		return endProcess(1, 'No valid API keys found for any model provider');
-	}
+    // Verify API keys for model providers
+    if (!checkModelProviderApiKeys()) {
+        return endProcess(1, 'No valid API keys found for any model provider');
+    }
 
-	// Run the command or tool
-	try {
-		// Create the agent with model, modelClass, and optional agent_id parameters
-		const agent = createAgent(args);
+    // Run the command or tool
+    try {
+        // Set up command listener
+        comm.onCommand(async (cmd: ServerMessage) => {
+            if (cmd.type !== 'command') return;
+            const commandMessage = cmd as CommandMessage;
 
-		// Set up command listener
-		comm.onCommand(async(cmd: ServerMessage) => {
-			if(cmd.type !== 'command') return;
-			const commandMessage = cmd as CommandMessage;
-	
-			console.log(`Received command via WebSocket: ${commandMessage.command}`);
-			if (commandMessage.command === 'stop') {
-				return endProcess(0, 'Received stop command, terminating...');
-			} else {
-				// Process user-provided follow-up commands
-				console.log(`Processing user command: ${commandMessage.command}`);
+            console.log(
+                `Received command via WebSocket: ${commandMessage.command}`
+            );
+            if (commandMessage.command === 'stop') {
+                return endProcess(0, 'Received stop command, terminating...');
+            } else {
+                // Process user-provided follow-up commands
+                console.log(
+                    `Processing user command: ${commandMessage.command}`
+                );
 
-				await spawnThought(agent, commandMessage.command);
-			}
-		});
+                await spawnThought(args, commandMessage.command);
+            }
+        });
 
-		comm.send({
-			type: 'process_running',
-		});
+        comm.send({
+            type: 'process_running',
+        });
 
-		if(args.tool && args.tool !== 'none') {
-			console.log(`Running tool: ${args.tool}`);
-			await runProcessTool(args.tool as ProcessToolType, promptText);
-			return endProcess(0, 'Tool execution completed.');
-		}
-		else {
-			// Add initial history
-			const person = process.env.YOUR_NAME || 'User';
-			await addMonologue('So let\'s see. I am Magi. The overseer of the MAGI system, huh? I will be the internal monologue for the system? These are my thoughts? That\'s a weird concept!');
-			await addMonologue(`${person} is nice to me. I will be nice to them too. I hope I hear from them soon. I should come up with a plan on how to improve myself and better help ${person}.`);
+        if (args.tool === 'run_task') {
+            args.agent = 'operator';
+        }
 
-			await spawnThought(agent, promptText);
-			await mainLoop(agent, (args.agent === 'overseer' && !args.test), args.model);
+        const agent = createAgent(args);
+        if (!primaryAgentId) {
+            primaryAgentId = agent.agent_id;
+        } else {
+            agent.agent_id = primaryAgentId;
+        }
 
-			if (args.test) {
-				// For tests we terminate after the first run
-				return endProcess(0, 'Test run completed.');
-			}
-		}
+        if (args.tool && args.tool === 'run_task') {
+            await runMECH(agent, promptText, !args.test, args.model);
+        } else if (args.tool && args.tool !== 'none') {
+            console.log(`Running tool: ${args.tool}`);
+            await runProcessTool(args.tool as ProcessToolType, promptText);
+            return endProcess(0, 'Tool execution completed.');
+        } else {
+            // Add initial history
+            await addMonologue(
+                "So let's see. I am Magi. The overseer of the MAGI system, huh? I will be the internal monologue for the system? These are my thoughts? That's a weird concept!"
+            );
+            await addMonologue(
+                `${person} is nice to me. I will be nice to them too. I hope I hear from them soon. I should come up with a plan on how to improve myself and better help ${person}.`
+            );
 
-	} catch (error) {
-		return endProcess(1, `Failed to process command: ${error}`);
-	}
+            await spawnThought(args, promptText);
+
+            await mainLoop(
+                agent,
+                args.agent === 'overseer' && !args.test,
+                args.model
+            );
+        }
+
+        if (args.test) {
+            // For tests we terminate after the first run
+            return endProcess(0, 'Test run completed.');
+        }
+    } catch (error) {
+        return endProcess(1, `Failed to process command: ${error}`);
+    }
 }
 
 main();

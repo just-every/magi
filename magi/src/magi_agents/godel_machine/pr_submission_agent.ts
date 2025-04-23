@@ -5,8 +5,8 @@
  * and references the issue or feature request.
  */
 
-import {Agent} from '../../utils/agent.js';
-import {getFileTools} from '../../utils/file_utils.js';
+import { Agent } from '../../utils/agent.js';
+import { getFileTools } from '../../utils/file_utils.js';
 // These constants can be used in the instructions if needed
 // import { COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT } from '../constants.js';
 
@@ -46,17 +46,19 @@ You are the PR Submission Agent. You prepare and push a new branch, then open a 
  * Create the PR submission agent
  */
 export function createPRSubmissionAgent(issue_description: string): Agent {
-	const instructions = pr_submission_agent_prompt.replace('{{issue_description}}', issue_description);
+    const instructions = pr_submission_agent_prompt.replaceAll(
+        '{{issue_description}}',
+        issue_description
+    );
 
-	return new Agent({
-		name: 'PRSubmissionAgent',
-		description: 'Creates and submits pull requests with proper descriptions',
-		instructions: instructions,
-		tools: [
-			...getFileTools()
-		],
-		modelClass: 'code'
-	});
+    return new Agent({
+        name: 'PRSubmissionAgent',
+        description:
+            'Creates and submits pull requests with proper descriptions',
+        instructions: instructions,
+        tools: [...getFileTools()],
+        modelClass: 'code',
+    });
 }
 
 export default pr_submission_agent_prompt;

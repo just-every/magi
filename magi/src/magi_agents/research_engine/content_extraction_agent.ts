@@ -5,11 +5,15 @@
  * identified by the Web Search agent.
  */
 
-import {Agent} from '../../utils/agent.js';
-import {getFileTools} from '../../utils/file_utils.js';
-import {getBrowserTools} from '../../utils/browser_utils.js';
-import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT} from '../constants.js';
-import {createBrowserAgent} from '../common_agents/browser_agent.js';
+import { Agent } from '../../utils/agent.js';
+import { getFileTools } from '../../utils/file_utils.js';
+import { getBrowserTools } from '../../utils/browser_utils.js';
+import {
+    COMMON_WARNINGS,
+    DOCKER_ENV_TEXT,
+    SELF_SUFFICIENCY_TEXT,
+} from '../constants.js';
+import { createBrowserAgent } from '../common_agents/browser_agent.js';
 
 const content_extraction_agent_prompt = `
 [Context & Role]
@@ -97,25 +101,24 @@ NEXT: synthesis
  * Create the content extraction agent
  */
 export function createContentExtractionAgent(search_results: any): Agent {
+    // Convert search_results to a string if it's an object
+    const searchResultsStr =
+        typeof search_results === 'object'
+            ? JSON.stringify(search_results, null, 2)
+            : search_results;
 
-  // Convert search_results to a string if it's an object
-  const searchResultsStr = typeof search_results === 'object'
-    ? JSON.stringify(search_results, null, 2)
-    : search_results;
-
-  return new Agent({
-    name: 'ContentExtractionAgent',
-    description: 'Navigates websites and extracts relevant content from web pages',
-    instructions: content_extraction_agent_prompt.replace('{{search_results}}', searchResultsStr),
-    tools: [
-      ...getFileTools(),
-      ...getBrowserTools()
-    ],
-    workers: [
-      createBrowserAgent
-    ],
-    modelClass: 'standard'
-  });
+    return new Agent({
+        name: 'ContentExtractionAgent',
+        description:
+            'Navigates websites and extracts relevant content from web pages',
+        instructions: content_extraction_agent_prompt.replaceAll(
+            '{{search_results}}',
+            searchResultsStr
+        ),
+        tools: [...getFileTools(), ...getBrowserTools()],
+        workers: [createBrowserAgent],
+        modelClass: 'standard',
+    });
 }
 
 export default content_extraction_agent_prompt;

@@ -4,19 +4,19 @@
  */
 
 import * as React from 'react';
-import {createRoot} from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
 import App from './js/components/App';
 import './css/styles.scss';
 
 // Wait for DOM to be fully loaded
 document.addEventListener('DOMContentLoaded', () => {
-	const rootElement = document.getElementById('root');
+    const rootElement = document.getElementById('root');
 
-	if (!rootElement) {
-		console.error('Root element not found');
-		return;
-	}
+    if (!rootElement) {
+        console.error('Root element not found');
+        return;
+    }
 
-	const root = createRoot(rootElement);
-	root.render(<App/>);
+    const root = createRoot(rootElement);
+    root.render(<App />);
 });

@@ -1,16 +1,22 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "esModuleInterop": true,
-    "strict": true,
-    "outDir": "dist",
-    "declaration": true,
-    "sourceMap": true,
-    "rootDir": "src",
-    "resolveJsonModule": true
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+    "compilerOptions": {
+        "target": "ESNext",
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "esModuleInterop": true,
+        "strict": false,
+        "baseUrl": "./",
+        "outDir": "./dist",
+        "sourceMap": true,
+        "declaration": false,
+        "removeComments": true,
+        "skipLibCheck": true,
+        "typeRoots": ["node_modules/@types", "src/types"],
+        "paths": {
+            "*": ["node_modules/*"],
+            "@types/*": ["src/types/*"]
+        }
+    },
+    "include": ["src/**/*"],
+    "exclude": ["node_modules", "dist"]
 }

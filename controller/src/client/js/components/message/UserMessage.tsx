@@ -14,7 +14,7 @@ const UserMessage: React.FC<UserMessageProps> = ({ message }) => {
     return (
         <div className="message-group user-message" key={message.id}>
             <div className="message-bubble user-bubble">
-                <div dangerouslySetInnerHTML={parseMarkdown(message.content)}/>
+                <div dangerouslySetInnerHTML={parseMarkdown(message.content)} />
             </div>
         </div>
     );

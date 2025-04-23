@@ -4,130 +4,192 @@
 
 // State type for agent tabs
 export interface AgentTabInfo {
-  chromeTabId: number;
-  lastActive: number; // timestamp
-  groupId?: number;
+    chromeTabId: number;
+    lastActive: number; // timestamp
+    groupId?: number;
 }
 
 // Response type for structured messaging
 export interface ResponseMessage {
-  status: 'ok' | 'error';
-  result?: any;
-  error?: string;
-  details?: string;
-  tabId?: string;
+    status: 'ok' | 'error';
+    result?: unknown;
+    error?: string;
+    details?: string;
+    tabId?: string;
 }
 
 // Element info from DOM processing
 export interface ElementInfo {
-  id: number;
-  tagName: string;
-  description: string;
-  selector: string;
-  isInteractive: boolean;
-  isVisible: boolean;
-  bounds?: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
-  childElements?: Array<{
-    description: string;
+    id: number;
     tagName: string;
+    description: string;
+    selector: string;
+    isInteractive: boolean;
     isVisible: boolean;
-  }>;
+    bounds?: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+    };
+    childElements?: Array<{
+        description: string;
+        tagName: string;
+        isVisible: boolean;
+    }>;
 }
 
 // DOM processing options
 export interface DomProcessingOptions {
-  includeAllContent?: boolean;
+    type: 'interactive' | 'html' | 'markdown'; // Specify the type of processing needed
 }
 
-// DOM processing result
-export interface DomProcessingResult {
-  simplifiedText: string;
-  idMapArray: [number, ElementInfo][];
-  warnings: string[];
+// DOM processing result for 'interactive' type
+export interface InteractiveDomProcessingResult {
+    type: 'interactive';
+    simplifiedText: string;
+    idMapArray: [number, ElementInfo][]; // Use array for serialization
+    warnings: string[];
 }
+
+// DOM processing result for 'html' type
+export interface HtmlDomProcessingResult {
+    type: 'html';
+    htmlContent: string; // The cleaned HTML string
+    warnings: string[];
+}
+
+// Union type for DOM processing result
+export type DomProcessingResult =
+    | InteractiveDomProcessingResult
+    | HtmlDomProcessingResult;
 
 // Error result for DOM processing
 export interface DomProcessingError {
-  error: boolean;
-  message: string;
-  stack?: string;
+    error: boolean;
+    message: string;
+    stack?: string;
 }
 
 // Command parameter types
+export interface OpenControllerUiParams {
+    url: string;
+}
+
 export interface NavigateParams {
-  url: string;
-  takeFocus?: boolean;
-  waitUntil?: 'load' | 'domcontentloaded' | 'networkidle' | 'commit';
+    url: string;
+    takeFocus?: boolean;
+    waitUntil?: 'load' | 'domcontentloaded' | 'networkidle' | 'commit';
 }
 
 export interface GetPageContentParams {
-  allContent?: boolean;
+    type: 'interactive' | 'html' | 'markdown'; // Type of content requested by the backend
 }
 
 export interface ScreenshotParams {
-  type?: 'viewport' | 'page' | 'element';
-  elementId?: number;
-  preserveFocus?: boolean;
+    type?: 'viewport' | 'page' | 'element';
+    elementId?: number;
+    preserveFocus?: boolean;
+    includeCoreTabs?: boolean; // When true, includes active, magi group, and pinned tabs info
 }
 
 export interface JsEvaluateParams {
-  code: string;
+    code: string;
 }
 
 export interface TypeParams {
-  text: string;
+    text: string;
 }
 
 export interface PressParams {
-  keys: string;
+    keys: string;
+}
+
+export interface ScrollToParams {
+    mode: 'page_down' | 'page_up' | 'bottom' | 'top' | 'coordinates';
+    x?: number;
+    y?: number;
+}
+
+export interface ClickAtParams {
+    x: number;
+    y: number;
+    button?: 'left' | 'middle' | 'right' | 'back' | 'forward';
+}
+
+export interface DragParams {
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+    button?: 'left' | 'middle' | 'right' | 'back' | 'forward';
+    steps?: number; // Optional, default = 10
+}
+
+export interface DebugCommandParams {
+    method: string;
+    commandParams?: object;
 }
 
 export interface InteractElementParams {
-  elementId: number;
-  action: 'click' | 'fill' | 'check' | 'hover' | 'focus' | 'scroll' | 'select_option';
-  value?: string;
-  checked?: boolean;
+    elementId: number;
+    action:
+        | 'click'
+        | 'fill'
+        | 'check'
+        | 'hover'
+        | 'focus'
+        | 'scroll'
+        | 'select_option';
+    value?: string;
+    checked?: boolean;
 }
 
 export interface SwitchTabParams {
-  type: 'active' | 'new' | 'id';
-  tabId?: string;
+    type: 'active' | 'new' | 'id';
+    tabId?: string;
+}
+
+export interface InitializeAgentParams {
+    startUrl?: string;
 }
 
 export interface FocusTabParams {
-  chromeTabId: number;
+    chromeTabId: number;
 }
 
 // Native message types
 export interface NativeMessage {
-  requestId: number;
-  command: string;
-  params?: any;
-  tabId?: string;
+    requestId: number;
+    command: string;
+    params?: Record<string, unknown>;
+    tabId?: string;
 }
 
 // Map from command to parameter type
 export interface CommandParamMap {
-  'initialize_agent': Record<string, never>;
-  'list_open_tabs': Record<string, never>;
-  'focus_tab': FocusTabParams;
-  'navigate': NavigateParams;
-  'get_page_content': GetPageContentParams;
-  'get_url': Record<string, never>;
-  'screenshot': ScreenshotParams;
-  'js_evaluate': JsEvaluateParams;
-  'type': TypeParams;
-  'press': PressParams;
-  'interact_element': InteractElementParams;
-  'switch_tab': SwitchTabParams;
-  'close_agent_session': Record<string, never>;
+    initialize_agent: InitializeAgentParams;
+    list_open_tabs: Record<string, never>;
+    focus_tab: FocusTabParams;
+    navigate: NavigateParams;
+    get_page_content: GetPageContentParams;
+    get_url: Record<string, never>;
+    screenshot: ScreenshotParams;
+    js_evaluate: JsEvaluateParams;
+    type: TypeParams;
+    press: PressParams;
+    interact_element: InteractElementParams;
+    switch_tab: SwitchTabParams;
+    close_agent_session: Record<string, never>;
+    open_controller_ui: OpenControllerUiParams;
+    scroll_to: ScrollToParams;
+    click_at: ClickAtParams;
+    drag: DragParams;
+    debug_command: DebugCommandParams;
 }
 
 // Command handler function type
-export type CommandHandler<T extends keyof CommandParamMap> = 
-  (tabId: string, params: CommandParamMap[T]) => Promise<ResponseMessage>;
+export type CommandHandler<T extends keyof CommandParamMap> = (
+    tabId: string,
+    params: CommandParamMap[T]
+) => Promise<ResponseMessage>;

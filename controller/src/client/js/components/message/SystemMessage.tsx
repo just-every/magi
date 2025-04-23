@@ -11,10 +11,40 @@ interface SystemMessageProps {
 }
 
 const SystemMessage: React.FC<SystemMessageProps> = ({ message }) => {
+    if (message.type === 'error') {
+        return (
+            <div
+                className="message-group system-message"
+                key={message.message_id || message.id}
+            >
+                <div
+                    className={
+                        'message-bubble alert mb-0 ' +
+                        (message.type === 'error'
+                            ? ' alert-danger'
+                            : 'alert-secondary')
+                    }
+                >
+                    <div
+                        dangerouslySetInnerHTML={parseMarkdown(message.content)}
+                    />
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className="message-group system-message" key={message.id}>
-            <div className={"message-bubble alert mb-0 "+(message.type === 'error' ? ' alert-danger' : 'alert-secondary')}>
-                <div dangerouslySetInnerHTML={parseMarkdown(message.content)}/>
+        <div
+            className="message-group assistant-message"
+            key={message.message_id || message.id}
+        >
+            <div className="message-header">
+                {message.agent?.model && (
+                    <div className="message-model">{message.agent.model}</div>
+                )}
+            </div>
+            <div className="message-bubble assistant-bubble">
+                <div dangerouslySetInnerHTML={parseMarkdown(message.content)} />
             </div>
         </div>
     );

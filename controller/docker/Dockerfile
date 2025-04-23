@@ -11,7 +11,7 @@ RUN apt-get update && \
 WORKDIR /build
 
 # Copy package files for controller
-COPY package.json package-lock.json ./
+COPY  ./controller/package.json ./controller/package-lock.json ./
 
 # Install ALL dependencies (including dev dependencies)
 RUN npm ci
@@ -28,39 +28,47 @@ RUN apt-get update && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
     apt-get update && \
     apt-get install -y docker-ce-cli && \
-    rm -rf /var/lib/apt/lists/* && \
-    npm install -g npm nodemon
+    rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user
-ARG USER_ID=1001
-ARG GROUP_ID=1001
-RUN groupadd -g ${GROUP_ID} magi_user && \
-    useradd -u ${USER_ID} -g magi_user -m magi_user && \
-    # Add user to docker group to access docker socket
-    groupadd -g 998 docker || true && \
-    usermod -aG docker magi_user
+ARG TARGET_UID=1001
+ARG TARGET_GID=1001
+ARG USER_NAME=magi_user
+ARG GROUP_NAME=magi_user
+RUN groupadd --gid ${TARGET_GID} ${GROUP_NAME} || true && \
+    useradd --uid ${TARGET_UID} --gid ${TARGET_GID} -m --shell /bin/bash ${USER_NAME}
 
-# Set working directory
-WORKDIR /app
+# Add user to docker group to access docker socket
+RUN groupadd -g 998 docker || true && \
+    usermod -aG docker ${USER_NAME}
 
 # Create volume mount points
 RUN mkdir -p /magi_output /claude_shared /external/host && \
-	chown -R magi_user:magi_user /magi_output /claude_shared /external/host
-
-# Copy node_modules from builder stage
-# This provides all dependencies separate from the mounted code
-COPY --from=builder --chown=magi_user:magi_user /build/node_modules ./node_modules
-
-COPY nodemon.json package.json tsconfig.json webpack.config.js ./
+	chown -R ${USER_NAME}:${GROUP_NAME} /magi_output /claude_shared /external/host
 
 # Expose the ports
 EXPOSE 3010
 EXPOSE 3011
 
+# Set working directory
+WORKDIR /app
+
+# Copy node_modules from builder stage
+# This provides all dependencies separate from the mounted code
+COPY --from=builder --chown=${USER_NAME}:${GROUP_NAME} /build/node_modules ./node_modules
+
+# Copy the application source code
+# Changes here will invalidate cache from this point onwards
+COPY --chown=${USER_NAME}:${GROUP_NAME} ./controller/ ./
+COPY --chown=${USER_NAME}:${GROUP_NAME} ./common/shared-types.ts ./src/types/shared-types.ts
+
+# Build the application (runs as root)
+RUN npm run build
+
 # Default command for development
 # We'll run as root to have Docker socket access
 # Use exec form with node directly for proper signal handling
-COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY ./controller/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["dev"]

@@ -1,12 +1,38 @@
+/* Override Bootstrap variables */
+$primary: #00a2ff;
+$bg-primary: #00a2ff;
+$code-color: #000000;
+
+/* Import Bootstrap and Bootstrap Icons */
+@import '~bootstrap/scss/bootstrap';
+@import 'bootstrap-icons/font/bootstrap-icons.css';
+
 /* Default theme styling */
 :root {
+    /* Core colors */
     --bg-primary: #fff;
-    --bg-secondary: #f8f8f8;
-    --bg-tertiary: #f0f0f0;
+    --bg-secondary: #f8f9fb;
+    --bg-tertiary: #f0f2f5;
     --text-primary: #333;
     --text-secondary: #555;
-    --accent-primary: #000;
-    --accent-secondary: #555;
+    --accent-primary: #00a2ff;
+    --accent-secondary: #6c757d;
+
+    /* Alternative UI Theme */
+    --alt-bg-primary: #fff;
+    --alt-bg-secondary: #f6f5fa;
+    --alt-bg-tertiary: #eeedf2;
+    --alt-sidebar-bg: #f6f5fa;
+    --alt-content-bg: #fff;
+    --alt-card-bg: #fff;
+    --alt-text-primary: #333;
+    --alt-text-secondary: #666;
+    --alt-accent: #00a2ff;
+    --alt-border-color: #e9e8ed;
+    --alt-border-radius: 12px;
+    --alt-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+
+    /* Original theme variables */
     --border-color: #ddd;
     --border-hover: #ccc;
     --cost-display-bg: rgba(255, 255, 255, 0.9);
@@ -66,7 +92,9 @@ header {
 #center-input-container {
     opacity: 1;
     z-index: 100;
-    transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+    transition:
+        opacity 0.5s ease-out,
+        transform 0.5s ease-out;
     max-width: 600px;
 }
 
@@ -109,7 +137,9 @@ header {
         border-left: none;
         border-top-right-radius: 0.375rem !important;
         border-bottom-right-radius: 0.375rem !important;
-        transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        transition:
+            border-color 0.15s ease-in-out,
+            box-shadow 0.15s ease-in-out;
         padding-left: 0.5rem;
 
         &.multiline {
@@ -154,7 +184,13 @@ header {
     overflow: hidden;
     /*background-color: #ff8f00;*/
     /*background-color: #00b7ff;*/
-    background: linear-gradient(110deg, #31b2ff, #31b2ff 20%, #007dd9 60%, #0072c6);
+    background: linear-gradient(
+        110deg,
+        #31b2ff,
+        #31b2ff 20%,
+        #007dd9 60%,
+        #0072c6
+    );
     z-index: 0;
 }
 
@@ -168,7 +204,9 @@ header {
 .process-btn {
     --btn-color-opacity: 0.2;
     --btn-border-opacity: 0.1;
-    transition: color 0.3s ease-in-out, border-color 0.3s ease-in-out;
+    transition:
+        color 0.3s ease-in-out,
+        border-color 0.3s ease-in-out;
 
     &:hover {
         --btn-color-opacity: 1;
@@ -193,25 +231,13 @@ header {
 /* Center boxes within the view - dimensions set in process-box class */
 
 /* Reset zoom button styling */
-.reset-zoom-button {
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    border: none !important;
-    background-color: white !important;
-    padding: 0.3rem 0.7rem !important;
-    font-size: 0.8rem !important;
 
-    &:hover {
-        background-color: #f8f9fa !important;
-    }
-
+.canvas-buttons {
     position: fixed;
     bottom: 30px;
     right: 30px;
     z-index: 1001;
     display: block;
-    opacity: 0.8;
-    transition: opacity 0.3s;
-    pointerEvents: auto;
 }
 
 /* Zoom hint styling */
@@ -264,7 +290,9 @@ header {
     min-height: 0;
     overflow: hidden;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    transition: opacity 0.3s ease, transform 0.3s ease;
+    transition:
+        opacity 0.3s ease,
+        transform 0.3s ease;
     background-color: white;
     border-radius: 16px;
     pointer-events: auto; /* Ensure process boxes can be interacted with */
@@ -311,14 +339,18 @@ header {
         opacity: 0;
         max-height: 0;
         overflow: hidden;
-        transition: opacity 0.3s ease, max-height 0.3s ease, padding 0.3s ease;
+        transition:
+            opacity 0.3s ease,
+            max-height 0.3s ease,
+            padding 0.3s ease;
         padding-top: 0;
         padding-bottom: 0;
         z-index: 10;
     }
 
     /* Show process input container on hover */
-    &:hover, &:focus-within {
+    &:hover,
+    &:focus-within {
         .process-input-container {
             opacity: 1;
             max-height: 60px;
@@ -363,7 +395,12 @@ header {
     min-height: 0;
     white-space: normal;
 
-    h1, h2, h3, h4, h5, h6 {
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
         margin-top: 1rem;
         margin-bottom: 0.5rem;
         font-weight: 600;
@@ -383,7 +420,7 @@ header {
         position: relative;
 
         &::before {
-            content: ">";
+            content: '>';
             position: absolute;
             left: 0;
             color: var(--prompt-color);
@@ -409,7 +446,9 @@ header {
                 height: auto;
                 border-radius: 8px;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-                transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+                transition:
+                    transform 0.2s ease-in-out,
+                    box-shadow 0.2s ease-in-out;
             }
         }
     }
@@ -504,12 +543,81 @@ header {
     p:last-of-type {
         margin-bottom: 0 !important;
     }
+
+    h5,
+    h6 {
+        font-size: 1em !important;
+        margin-bottom: 1em !important;
+        font-weight: 500 !important;
+    }
+    h4,
+    strong {
+        font-size: 1em !important;
+        margin-bottom: 1em !important;
+        font-weight: 600 !important;
+    }
+    h3 {
+        font-size: 1.1em !important;
+        margin-bottom: 1em !important;
+        padding-top: 0.1em !important;
+        font-weight: 700 !important;
+    }
+    h2 {
+        font-size: 1.1em !important;
+        margin-bottom: 1em !important;
+        padding-top: 0.3em !important;
+        font-weight: 800 !important;
+    }
+    h1 {
+        font-size: 1.1em !important;
+        margin-bottom: 1em !important;
+        padding-top: 0.5em !important;
+        font-weight: 900 !important;
+    }
+
+    hr {
+        color: #c5c5c5 !important;
+    }
+
+    .message-header {
+        .message-model {
+            font-size: 0.8em;
+            opacity: 0.3;
+            margin-bottom: 0.3em;
+        }
+        .message-title {
+            font-weight: 600;
+            font-size: 1em;
+            margin-bottom: 0.6em;
+        }
+        margin-bottom: 0.4em;
+    }
+
+    .tool-message + .tool-result-message {
+        margin-top: -2em !important;
+    }
+
+    .tool-call-command {
+        font-size: 0.8em;
+        padding: 1em 1.3em;
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+
+    .tool-result-content {
+        font-size: 0.9em;
+        padding: 1em 1.3em;
+    }
+
+    .assistant-bubble {
+        font-size: 0.9em;
+    }
 }
 
 .message-group {
     display: flex;
     flex-direction: column;
     max-width: 95%;
+    margin-bottom: 1em;
 }
 
 .assistant-message {
@@ -527,7 +635,6 @@ header {
 }
 
 .message-bubble {
-    padding: 1em 1.3em;
     border-radius: 0.5rem;
     position: relative;
     display: inline-block;
@@ -537,19 +644,13 @@ header {
         max-width: 100%;
         overflow-x: auto;
         white-space: pre-wrap;
-        background-color: rgba(0, 0, 0, 0.05);
-        border-radius: 6px;
-        border: none;
-        padding: 8px;
-        margin: 5px 0;
-        font-size: 13px;
+        margin: 0;
     }
 
     code {
         background-color: rgba(0, 0, 0, 0.05);
         padding: 2px 4px;
         border-radius: 4px;
-        font-size: 13px;
         border: none;
     }
 
@@ -566,7 +667,9 @@ header {
                 height: auto;
                 border-radius: 6px;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-                transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+                transition:
+                    transform 0.2s ease-in-out,
+                    box-shadow 0.2s ease-in-out;
                 display: block;
                 margin: 0 auto;
             }
@@ -576,17 +679,20 @@ header {
 
 /* User message styling */
 .user-bubble {
+    padding: 1em 1.3em;
     background-color: #2ca1e5;
     color: white;
     border-bottom-right-radius: 2px;
 
-    a {
-        color: white;
+    a,
+    code {
+        color: white !important;
     }
 }
 
 /* Assistant message styling */
 .assistant-bubble {
+    padding: 1em 1.3em;
     background-color: #fff;
     color: #000;
     border-bottom-left-radius: 2px;
@@ -600,13 +706,18 @@ header {
         overflow: hidden;
 
         &::after {
-            content: "";
+            content: '';
             position: absolute;
             bottom: 0;
             left: 0;
             right: 0;
             height: 3px;
-            background: linear-gradient(to right, transparent, #007AFF, transparent);
+            background: linear-gradient(
+                to right,
+                transparent,
+                #007aff,
+                transparent
+            );
             animation: loading 1.5s infinite ease-in-out;
         }
     }
@@ -619,7 +730,13 @@ header {
         font-size: 0.85em !important;
         padding: 14px 10px !important;
 
-        h1, h2, h3, h4, h5, h6, strong {
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6,
+        strong {
             font-size: 1em !important;
         }
 
@@ -678,7 +795,9 @@ header {
 }
 
 @keyframes typingAnimation {
-    0%, 60%, 100% {
+    0%,
+    60%,
+    100% {
         transform: translateY(0);
         opacity: 0.6;
     }
@@ -703,14 +822,6 @@ header {
 
 .tool-icon {
     margin-right: 6px;
-}
-
-.tool-call-command {
-    margin-bottom: 8px;
-    background-color: rgba(0, 0, 0, 0.05);
-    border-radius: 4px;
-    overflow: auto;
-    background: #fff;
 }
 
 .command-line {
@@ -747,10 +858,6 @@ header {
 
 .tool-result-icon {
     margin-right: 6px;
-}
-
-.tool-result-content {
-    font-size: 14px;
 }
 
 /* System message styling */
@@ -816,16 +923,55 @@ header {
 
 /* Fixed MAGI title styling */
 #fixed-magi-title {
-    font-family: 'Borel', sans-serif;
-    color: #fff;
     top: 30px;
     left: 20px;
-    font-size: 1.4rem;
     z-index: 1;
+    color: #fff;
+    transition: color 0.2s ease;
+    gap: 1.5rem !important;
+    cursor: pointer;
+
+    h1 {
+        font-family: 'Borel', sans-serif;
+        color: #fff;
+        transition: color 0.2s ease;
+        font-size: 1.4rem;
+    }
+
+    &.column {
+        color: var(--accent-primary);
+        h1 {
+            color: var(--accent-primary);
+        }
+    }
+
+    .ui-mode-toggle {
+        font-size: 0.75em;
+        position: relative;
+        top: -5.8px;
+        opacity: 0.3;
+        transition: opacity 0.3s ease;
+
+        .form-check.form-switch {
+            position: relative;
+            top: 4px;
+
+            .form-check-input {
+                cursor: pointer;
+            }
+        }
+    }
+
+    &:hover {
+        .ui-mode-toggle {
+            opacity: 1;
+        }
+    }
 }
 
 /* Process and agent wrapper positioning */
-.process-wrapper, .agent-wrapper {
+.process-wrapper,
+.agent-wrapper {
     position: absolute;
     transition: all 0.5s ease-in-out;
     pointer-events: auto;
@@ -886,4 +1032,34 @@ header {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+#chat-command-caret {
+    color: #c2c2c2 !important;
+    font-weight: normal !important;
+}
+
+#main-content {
+    letter-spacing: 0.01em;
+    font-size: 0.9em;
+}
+
+.chat-messages {
+    padding-top: 1rem;
+    word-break: break-word;
+
+    .chat-message {
+        padding: 0.8rem 1.3rem !important;
+    }
+}
+
+.status-details {
+    .bi-circle-fill {
+        font-size: 0.6rem;
+        vertical-align: 0.16em;
+    }
+}
+
+.process-item {
+    cursor: pointer;
 }

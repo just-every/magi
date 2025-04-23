@@ -7,7 +7,7 @@ import {
     AgentData,
     ClientMessage,
     ToolCallMessage as ToolCallMessageType,
-    ToolResultMessage as ToolResultMessageType
+    ToolResultMessage as ToolResultMessageType,
 } from '../../context/SocketContext';
 import { processMessages } from '../utils/ProcessBoxUtils';
 import UserMessage from './UserMessage';
@@ -15,14 +15,12 @@ import AssistantMessage from './AssistantMessage';
 import ToolCallMessage from './ToolCallMessage';
 import ToolResultMessage from './ToolResultMessage';
 import SystemMessage from './SystemMessage';
-import { parseMarkdown } from '../utils/MarkdownUtils';
 
 interface MessageListProps {
     agent?: AgentData;
     messages: ClientMessage[];
-    logs: string;
-    isTyping: boolean;
-    colors: {
+    isTyping?: boolean;
+    colors?: {
         rgb: string;
         bgColor: string;
         textColor: string;
@@ -32,15 +30,24 @@ interface MessageListProps {
 const MessageList: React.FC<MessageListProps> = ({
     agent,
     messages,
-    logs,
     isTyping,
-    colors
+    colors,
 }) => {
+    colors = colors || {
+        rgb: '0 0 0',
+        bgColor: '#000000',
+        textColor: '#000000',
+    };
+
     // If no structured messages, render raw logs with markdown
     if (messages.length === 0) {
         return (
             <>
-                {agent?.model && <div className="message-header">Starting ({agent.model})...</div>}
+                {agent?.model && (
+                    <div className="message-header">
+                        Starting ({agent.model})...
+                    </div>
+                )}
                 {renderTypingIndicator(isTyping, colors.textColor)}
             </>
         );
@@ -51,7 +58,9 @@ const MessageList: React.FC<MessageListProps> = ({
 
     return (
         <div className="message-container">
-            {filteredMessages.map((message, index) => renderMessage(message, colors.rgb, filteredMessages, index))}
+            {filteredMessages.map((message, index) =>
+                renderMessage(message, colors.rgb, filteredMessages, index)
+            )}
             {renderTypingIndicator(isTyping, colors.textColor)}
         </div>
     );
@@ -64,7 +73,11 @@ const renderTypingIndicator = (isTyping: boolean, textColor: string) => {
     if (!isTyping) return null;
 
     return (
-        <span className="typing-indicator" title="Agent is thinking..." style={{color: textColor}}>
+        <span
+            className="typing-indicator"
+            title="Agent is thinking..."
+            style={{ color: textColor }}
+        >
             <span className="dot"></span>
             <span className="dot"></span>
             <span className="dot"></span>
@@ -75,40 +88,68 @@ const renderTypingIndicator = (isTyping: boolean, textColor: string) => {
 /**
  * Render a message based on its type
  */
-const renderMessage = (message: ClientMessage, rgb: string, filteredMessages: ClientMessage[], index: number) => {
-    const lastMessage: ClientMessage | undefined = (filteredMessages[index - 1] || undefined);
+const renderMessage = (
+    message: ClientMessage,
+    rgb: string,
+    filteredMessages: ClientMessage[],
+    index: number
+) => {
+    const lastMessage: ClientMessage | undefined =
+        filteredMessages[index - 1] || undefined;
     switch (message.type) {
         case 'user':
             return <UserMessage key={message.id} message={message} />;
 
         case 'assistant':
-            return <AssistantMessage key={message.id} message={message} rgb={rgb} isLast={ index === (filteredMessages.length - 1) } />;
+            return (
+                <AssistantMessage
+                    key={message.id}
+                    message={message}
+                    rgb={rgb}
+                    isLast={index === filteredMessages.length - 1}
+                />
+            );
 
         case 'tool_call':
             const toolCallMessage = message as ToolCallMessageType;
             let complete = false;
-            for(let i = index + 1; i < filteredMessages.length; i++) {
+            for (let i = index + 1; i < filteredMessages.length; i++) {
                 const resultMessage = filteredMessages[i];
-                if (resultMessage.type === 'tool_result' && (resultMessage as ToolResultMessageType).toolCallId === toolCallMessage.toolCallId) {
+                if (
+                    resultMessage.type === 'tool_result' &&
+                    (resultMessage as ToolResultMessageType).toolCallId ===
+                        toolCallMessage.toolCallId
+                ) {
                     complete = true;
                     break;
                 }
             }
-            return <ToolCallMessage
-                key={toolCallMessage.id}
-                message={toolCallMessage}
-                rgb={rgb}
-                complete={complete}
-            />;
+            return (
+                <ToolCallMessage
+                    key={toolCallMessage.id}
+                    message={toolCallMessage}
+                    rgb={rgb}
+                    complete={complete}
+                />
+            );
 
         case 'tool_result':
             const toolResultMessage = message as ToolResultMessageType;
-            const lastToolCallMessage = (lastMessage && lastMessage.type === 'tool_call') ? lastMessage as ToolCallMessageType : undefined;
-            return <ToolResultMessage
-                key={toolResultMessage.id}
-                followsCall={lastToolCallMessage && lastToolCallMessage.toolCallId === toolResultMessage.toolCallId}
-                message={toolResultMessage}
-            />;
+            const lastToolCallMessage =
+                lastMessage && lastMessage.type === 'tool_call'
+                    ? (lastMessage as ToolCallMessageType)
+                    : undefined;
+            return (
+                <ToolResultMessage
+                    key={toolResultMessage.id}
+                    followsCall={
+                        lastToolCallMessage &&
+                        lastToolCallMessage.toolCallId ===
+                            toolResultMessage.toolCallId
+                    }
+                    message={toolResultMessage}
+                />
+            );
 
         default: // system or unknown type
             return <SystemMessage key={message.id} message={message} />;

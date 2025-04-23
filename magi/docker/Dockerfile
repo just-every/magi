@@ -15,8 +15,7 @@ RUN apt-get update && \
 WORKDIR /build
 
 # Copy package.json and package-lock.json
-COPY package.json .
-COPY package-lock.json .
+COPY ./magi/package.json ./magi/package-lock.json ./
 
 # Install ALL dependencies using npm ci based on lock file
 # Native modules are compiled here for the build architecture
@@ -39,18 +38,25 @@ ARG GROUP_NAME=magi_user
 RUN npm install -g npm
 
 # Global installs needed at runtime
-RUN npm install -g @anthropic-ai/claude-code@latest
+RUN npm install -g @anthropic-ai/claude-code@latest @openai/codex@latest
 
-# Install system dependencies required by gosu at runtime
+# Install system dependencies required at runtime, including sudo and git
+# Also install gosu for switching users in the entrypoint
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git gosu && \
+    apt-get install -y --no-install-recommends git gosu sudo && \
     # Clean up apt cache
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Create a non-root user and group, create app and config directories
+# Create a non-root user and group
 RUN groupadd --gid ${TARGET_GID} ${GROUP_NAME} || true && \
-    useradd --uid ${TARGET_UID} --gid ${TARGET_GID} -m --shell /bin/bash ${USER_NAME}
+    useradd --uid ${TARGET_UID} --gid ${TARGET_GID} -m --shell /bin/bash ${USER_NAME} && \
+    # Add the user to the sudo group
+    usermod -aG sudo ${USER_NAME} && \
+    # Allow sudo group members to run commands without a password
+    echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+
+# Create app and config directories and set permissions
 RUN mkdir -p /app && chown -R ${USER_NAME}:${GROUP_NAME} /app
 RUN mkdir -p /home/${USER_NAME}/.claude && \
     touch /home/${USER_NAME}/.claude/config.json && \
@@ -62,7 +68,6 @@ RUN mkdir -p /home/${USER_NAME}/.cache && chown -R ${USER_NAME}:${GROUP_NAME} /h
 WORKDIR /app
 
 # Create volume mount points (ownership will be handled by entrypoint for mounted volumes)
-# The chown command previously here was removed as it's ineffective for runtime volumes.
 RUN mkdir -p /magi_output /claude_shared
 
 # Copy node_modules (including devDependencies) from the builder stage
@@ -70,17 +75,19 @@ RUN mkdir -p /magi_output /claude_shared
 COPY --from=builder --chown=${USER_NAME}:${GROUP_NAME} /build/node_modules ./node_modules
 
 # Copy the entrypoint script (adjust source path as needed)
-COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY ./magi/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Copy the application source code
 # Changes here will invalidate cache from this point onwards
-COPY --chown=${USER_NAME}:${GROUP_NAME} . ./
+COPY --chown=${USER_NAME}:${GROUP_NAME} ./magi/ ./
+COPY --chown=${USER_NAME}:${GROUP_NAME} ./common/shared-types.ts ./src/types/shared-types.ts
 
 # Build the application (runs as root)
 RUN npm run build
 
 # DO NOT switch user here - let the entrypoint script run as root initially
+# The entrypoint script should use 'gosu ${USER_NAME} <command>' to run the main process as the non-root user
 # USER ${USER_NAME} # <-- REMOVED THIS LINE
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

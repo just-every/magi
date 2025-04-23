@@ -4,19 +4,25 @@
  * This agent specializes in executing shell commands and managing system operations.
  */
 
-import {Agent} from '../../utils/agent.js';
-import {getFileTools} from '../../utils/file_utils.js';
-import {getShellTools} from '../../utils/shell_utils.js';
-import {MAGI_CONTEXT, COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT} from '../constants.js';
+import { Agent } from '../../utils/agent.js';
+import { getCommonTools } from '../../utils/index.js';
+import {
+    MAGI_CONTEXT,
+    COMMON_WARNINGS,
+    DOCKER_ENV_TEXT,
+    SELF_SUFFICIENCY_TEXT,
+    FILE_TOOLS_TEXT,
+} from '../constants.js';
 
 /**
  * Create the shell agent
  */
 export function createShellAgent(): Agent {
-	return new Agent({
-		name: 'ShellAgent',
-		description: 'Executes shell commands, read and write files, and manage system operations.',
-		instructions: `${MAGI_CONTEXT}
+    return new Agent({
+        name: 'ShellAgent',
+        description:
+            'Executes shell commands, read and write files, and manage system operations.',
+        instructions: `${MAGI_CONTEXT}
 ---
 						
 Your role in MAGI is to be a ShellAgent. You are a specialized shell agent with the ability to execute system commands.
@@ -47,6 +53,10 @@ SHELL TOOLS:
 - install_package: Install a software package
 - list_directory: List files and directories
 
+SUDO:
+- You may need to use sudo for certain commands, such as installing packages or modifying system files.
+- Use sudo only when necessary
+
 ${SELF_SUFFICIENCY_TEXT}
 
 IMPORTANT:
@@ -56,10 +66,7 @@ IMPORTANT:
 - Provide clear explanations of commands and their effects
 - Use appropriate flags and options for commands
 - Sanitize any inputs used in commands to prevent injection`,
-		tools: [
-			...getFileTools(),
-			...getShellTools()
-		],
-		modelClass: 'mini'
-	});
+        tools: [...getCommonTools()],
+        modelClass: 'mini',
+    });
 }

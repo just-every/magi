@@ -5,10 +5,14 @@
  * Synthesis and Code Generation agents.
  */
 
-import {Agent} from '../../utils/agent.js';
-import {getFileTools} from '../../utils/file_utils.js';
-import {getShellTools} from '../../utils/shell_utils.js';
-import {COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT} from '../constants.js';
+import { Agent } from '../../utils/agent.js';
+import { getFileTools } from '../../utils/file_utils.js';
+import { getShellTools } from '../../utils/shell_utils.js';
+import {
+    COMMON_WARNINGS,
+    DOCKER_ENV_TEXT,
+    SELF_SUFFICIENCY_TEXT,
+} from '../constants.js';
 
 const validation_agent_prompt = `
 [Context & Role]
@@ -95,23 +99,31 @@ ${SELF_SUFFICIENCY_TEXT}
 /**
  * Create the validation agent
  */
-export function createValidationAgent(research_query: string, synthesis_result: string, code_result: string = ''): Agent {
-  // Replace the placeholders in the instructions
-  let instructions = validation_agent_prompt.replace('{{research_query}}', research_query);
-  instructions = instructions.replace('{{synthesis_result}}', synthesis_result);
-  instructions = instructions.replace('{{code_result}}', code_result);
+export function createValidationAgent(
+    research_query: string,
+    synthesis_result: string,
+    code_result: string = ''
+): Agent {
+    // Replace the placeholders in the instructions
+    let instructions = validation_agent_prompt.replaceAll(
+        '{{research_query}}',
+        research_query
+    );
+    instructions = instructions.replaceAll(
+        '{{synthesis_result}}',
+        synthesis_result
+    );
+    instructions = instructions.replaceAll('{{code_result}}', code_result);
 
-  return new Agent({
-    name: 'ValidationAgent',
-    description: 'Verifies the accuracy and completeness of research results and code solutions',
-    instructions: instructions,
-    tools: [
-      ...getFileTools(),
-      ...getShellTools()
-    ],
-    workers: [],
-    modelClass: 'reasoning'
-  });
+    return new Agent({
+        name: 'ValidationAgent',
+        description:
+            'Verifies the accuracy and completeness of research results and code solutions',
+        instructions: instructions,
+        tools: [...getFileTools(), ...getShellTools()],
+        workers: [],
+        modelClass: 'reasoning',
+    });
 }
 
 export default validation_agent_prompt;

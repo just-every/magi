@@ -1,13 +1,13 @@
 {
-  "name": "magi-bridge",
-  "version": "1.0.0",
-  "description": "MAGI Bridge",
-  "main": "dist/bridge.js",
-  "dependencies": {
-    "ws": "^8.18.1"
-  },
-  "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@types/ws": "^8.18.1"
-  }
+    "name": "magi-bridge",
+    "version": "1.0.0",
+    "description": "MAGI Bridge",
+    "main": "dist/bridge.js",
+    "dependencies": {
+        "ws": "^8.18.1"
+    },
+    "devDependencies": {
+        "@types/node": "^22.14.0",
+        "@types/ws": "^8.18.1"
+    }
 }

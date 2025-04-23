@@ -5,8 +5,8 @@
  * editing or creating TypeScript files, and updating or adding tests.
  */
 
-import {Agent} from '../../utils/agent.js';
-import {getFileTools} from '../../utils/file_utils.js';
+import { Agent } from '../../utils/agent.js';
+import { getFileTools } from '../../utils/file_utils.js';
 // These constants can be used in the instructions if needed
 // import { COMMON_WARNINGS, DOCKER_ENV_TEXT, SELF_SUFFICIENCY_TEXT, FILE_TOOLS_TEXT } from '../constants.js';
 
@@ -51,15 +51,16 @@ You are the Writing (Code-Editing) Agent. Your job is to:
  * Create the writing agent
  */
 export function createWritingAgent(plan_document: string): Agent {
-	return new Agent({
-		name: 'WritingAgent',
-		description: 'Implements code changes based on the planning document',
-		instructions: writing_agent_prompt.replace('{{plan_document}}', plan_document),
-		tools: [
-			...getFileTools()
-		],
-		modelClass: 'code'
-	});
+    return new Agent({
+        name: 'WritingAgent',
+        description: 'Implements code changes based on the planning document',
+        instructions: writing_agent_prompt.replaceAll(
+            '{{plan_document}}',
+            plan_document
+        ),
+        tools: [...getFileTools()],
+        modelClass: 'code',
+    });
 }
 
 export default writing_agent_prompt;

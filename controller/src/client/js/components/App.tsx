@@ -1,82 +1,101 @@
 import * as React from 'react';
-import {useState, useEffect} from 'react';
-import {SocketProvider} from '../context/SocketContext';
-import ProcessGrid from './ProcessGrid';
-import CommandInput from './CommandInput';
-import LogsViewer from './LogsViewer';
-import CostDisplay from './ui/CostDisplay';
+import { useState, useEffect } from 'react';
+import { SocketProvider, useSocket } from '../context/SocketContext';
 import { AudioPlayer } from '../utils/AudioUtils';
+// Import the UI layouts
+import ColumnLayout from './column_ui/ColumnLayout';
+import CanvasLayout from './canvas_ui/CanvasLayout';
 
+// Content component that uses socket context
+const AppContent: React.FC = () => {
+    const [showLogs, setShowLogs] = useState<boolean>(false);
+    const [activeProcess, setActiveProcess] = useState<string>('');
+    const { uiMode, toggleUIMode } = useSocket();
+
+    useEffect(() => {
+        // Define the handler function
+        const initializeAudioGlobally = () => {
+            console.log(
+                'First user interaction detected anywhere on the page. Initializing AudioContext...'
+            );
+            AudioPlayer.getInstance().initAudioContext();
+        };
+
+        // Add the event listener to the document body or window
+        document.addEventListener('click', initializeAudioGlobally, {
+            once: true,
+        });
+        document.addEventListener('keydown', initializeAudioGlobally, {
+            once: true,
+        });
+
+        console.log('Global AudioContext initialization listeners attached.');
+    }, []); // Empty dependency array ensures this effect runs only once
+
+    const toggleLogsViewer = (processId?: string) => {
+        if (processId) {
+            setActiveProcess(processId);
+            setShowLogs(true);
+        } else {
+            setShowLogs(!showLogs);
+        }
+    };
+
+    return (
+        <div className="container-fluid px-0">
+            <div
+                id="fixed-magi-title"
+                className={
+                    uiMode +
+                    ' position-fixed mb-0 d-flex flex-row align-items-start'
+                }
+            >
+                <h1 className="mb-0" onClick={() => toggleUIMode()}>
+                    magi
+                </h1>
+                <div className="ui-settings d-flex flex-row align-items-center gap-3">
+                    {/* UI Mode Toggle */}
+                    <div
+                        className="ui-mode-toggle d-flex flex-row align-items-center gap-2"
+                        onClick={() => toggleUIMode()}
+                    >
+                        <i className={'bi bi-columns-gap me-1'}></i>
+                        <div className="form-check form-switch">
+                            <input
+                                className="form-check-input"
+                                type="checkbox"
+                                role="switch"
+                                checked={uiMode === 'column'}
+                                readOnly
+                            />
+                        </div>
+                        <i className={'bi bi-layout-three-columns'}></i>
+                    </div>
+                </div>
+            </div>
+            <div id="main-content">
+                {uiMode === 'canvas' ? (
+                    <CanvasLayout
+                        showLogs={showLogs}
+                        activeProcess={activeProcess}
+                        toggleLogsViewer={toggleLogsViewer}
+                        setShowLogs={setShowLogs}
+                    />
+                ) : (
+                    <ColumnLayout />
+                )}
+            </div>
+        </div>
+    );
+};
+
+// Main App component that provides the socket context
 const App: React.FC = () => {
-	const [showLogs, setShowLogs] = useState<boolean>(false);
-	const [activeProcess, setActiveProcess] = useState<string>('');
-
-	useEffect(() => {
-		// Define the handler function
-		const initializeAudioGlobally = () => {
-			console.log("First user interaction detected anywhere on the page. Initializing AudioContext...");
-			AudioPlayer.getInstance().initAudioContext();
-			// Note: No need to remove the listener if using { once: true }
-		};
-
-		// Add the event listener to the document body or window
-		// Use { once: true } so it automatically cleans itself up after the first trigger
-		document.addEventListener('click', initializeAudioGlobally, { once: true });
-		document.addEventListener('keydown', initializeAudioGlobally, { once: true });
-		// Add more event types if needed (e.g., 'touchstart')
-
-		console.log("Global AudioContext initialization listeners attached.");
-
-		// No explicit cleanup needed here because of { once: true }
-		// If not using { once: true }, you would need a cleanup function:
-		// return () => {
-		//     document.removeEventListener('click', initializeAudioGlobally);
-		//     document.removeEventListener('keydown', initializeAudioGlobally);
-		// };
-
-	}, []); // Empty dependency array ensures this effect runs only once when the component mounts
-
-
-	const toggleLogsViewer = (processId?: string) => {
-		if (processId) {
-			setActiveProcess(processId);
-			setShowLogs(true);
-		} else {
-			setShowLogs(!showLogs);
-		}
-	};
-
-	return (
-		<SocketProvider>
-			<div className="container-fluid px-0">
-				<h1
-					id="fixed-magi-title"
-					className="position-fixed mb-0"
-					onClick={() => toggleLogsViewer()}
-					style={{ cursor: 'pointer' }}
-				>
-					magi
-				</h1>
-
-				{/* Cost display */}
-				<CostDisplay />
-
-				{/* Main command input */}
-				<CommandInput/>
-
-				{/* Process grid */}
-				<ProcessGrid onProcessSelect={toggleLogsViewer}/>
-
-				{/* Logs viewer (hidden by default) */}
-				{showLogs && (
-					<LogsViewer
-						processId={activeProcess}
-						onClose={() => setShowLogs(false)}
-					/>
-				)}
-			</div>
-		</SocketProvider>
-	);
+    return (
+        <SocketProvider>
+            <AppContent />
+        </SocketProvider>
+    );
 };
 
 export default App;
