@@ -34,6 +34,9 @@ type ElementJSON = {
     cy: number;         // center point y
     label?: string;     // human-readable text label
     href?: string;      // for links/buttons with navigation
+    type?: string;      // input/button type
+    score?: number;     // interaction priority score
+    offscreen?: boolean; // element is outside the viewport
 };
 
 type Payload = {
@@ -308,18 +311,20 @@ function b64(buf: ArrayBuffer): string {
 }
 
 /**
- * Convert DOMSnapshot → base‑64 binary (10 bytes × N elements) + string table.
- * Binary layout per element:
- *  0  : roleCode (UInt8)
- *  1‑2: x   (UInt16)
- *  3‑4: y
- *  5‑6: w
- *  7‑8: h
- *  9  : labelIdx (UInt8) 255 = none
+ * Convert DOMSnapshot into an array of interactive elements with scores
+ * to prioritize important elements for clicking/interaction.
+ *
+ * Elements are scored based on:
+ * - Visibility in viewport
+ * - Element type (input, button, link, etc.)
+ * - Size/area (larger elements are easier to click)
+ * - Position (elements at top of page often include menus)
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildElementArray(
-    snap: any
+    snap: any,
+    viewportWidth = 1024,
+    viewportHeight = 768
 ): ElementJSON[] {
     const doc = snap.documents?.[0];
     const strings: string[] = snap.strings ?? [];
@@ -346,6 +351,9 @@ function buildElementArray(
         labelIdx?: number;
         label?: string;      // Direct label text
         href?: string;       // For links
+        type?: string;       // For inputs and buttons
+        score?: number;      // Interactivity score
+        offscreen?: boolean; // Element is outside viewport
     };
     let elements: RawEl[] = [];
 
@@ -479,6 +487,61 @@ function buildElementArray(
             }
         }
 
+        // Extract type attribute for inputs and buttons
+        let type = '';
+        if (tagStr === 'INPUT' || tagStr === 'BUTTON') {
+            for (let j = 0; j < attrs.length; j += 2) {
+                if (strings[attrs[j]] === 'type') {
+                    type = strings[attrs[j + 1]] || '';
+                    break;
+                }
+            }
+        }
+
+        // Check if element is in viewport
+        const inViewport = (x < viewportWidth && x + w > 0 && y < viewportHeight && y + h > 0);
+        const fullyInViewport = (x >= 0 && x + w <= viewportWidth && y >= 0 && y + h <= viewportHeight);
+
+        // Calculate distance to viewport center
+        const centerX = viewportWidth / 2;
+        const centerY = viewportHeight / 2;
+        const elementCenterX = x + w / 2;
+        const elementCenterY = y + h / 2;
+        const distanceToCenter = Math.sqrt(
+            Math.pow(elementCenterX - centerX, 2) +
+            Math.pow(elementCenterY - centerY, 2)
+        );
+
+        // Calculate score based on criteria
+        let score = 0;
+
+        // Viewport visibility
+        if (inViewport) score += 60;
+        if (fullyInViewport) score += 40;
+
+        // Element type bonuses
+        if (tagStr === 'INPUT' || tagStr === 'TEXTAREA' || tagStr === 'SELECT') {
+            if (w >= 10 && h >= 10) score += 30;
+        }
+        if (tagStr === 'BUTTON' || roleStr === 'button') {
+            if (w >= 8 && h >= 8) score += 25;
+        }
+        if (tagStr === 'A' && href) {
+            if (w >= 8 && h >= 8) score += 20;
+        }
+        if (roleStr === 'checkbox' || roleStr === 'radio' || roleStr === 'menuitem') {
+            if (w >= 6 && h >= 6) score += 10;
+        }
+
+        // Size bonus (log base 2 of area, capped at 15)
+        const area = w * h;
+        const areaBonus = Math.min(15, Math.log2(area > 0 ? area : 1));
+        score += areaBonus;
+
+        // Distance penalty (avoid too much penalty for offscreen elements)
+        const distancePenalty = Math.log2(distanceToCenter + 50);
+        score -= distancePenalty;
+
         elements.push({
             role: roleStr || tagStr.toLowerCase(),
             tag: tagStr,
@@ -487,7 +550,10 @@ function buildElementArray(
             w,
             h,
             label, // Store the direct label we constructed
-            href: href || undefined
+            href: href || undefined,
+            type: type || undefined,
+            score, // Store the calculated interaction score
+            offscreen: !inViewport // Flag for elements outside viewport
         });
     }
 
@@ -532,6 +598,18 @@ function buildElementArray(
     }
     elements = filtered;
 
+    /* ----- Sort by score and build high-quality element list ----- */
+
+    // First, sort by score (descending), then by y-position (ascending) as secondary sort
+    elements.sort((a, b) => {
+        // Primary sort: score (descending)
+        if ((b.score || 0) !== (a.score || 0)) {
+            return (b.score || 0) - (a.score || 0);
+        }
+        // Secondary sort: y-position (ascending - top elements first)
+        return a.y - b.y;
+    });
+
     /* ----- build human‑readable JSON list with all required fields ----- */
     const elementJson: ElementJSON[] = elements.map((el, index) => {
         // Calculate center point coordinates
@@ -549,9 +627,16 @@ function buildElementArray(
             cx,
             cy,
             label: el.label,
-            href: el.href
+            href: el.href,
+            type: el.type,
+            score: el.score,
+            offscreen: el.offscreen
         };
     });
+
+    // Log details about scoring results
+    const inViewport = elementJson.filter(el => !(el.offscreen)).length;
+    console.log(`[screenshot-commands] Scored ${elementJson.length} elements, ${inViewport} in viewport`);
 
     return elementJson;
 }

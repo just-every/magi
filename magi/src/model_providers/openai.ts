@@ -204,7 +204,8 @@ export class OpenAIProvider implements ModelProvider {
                 }
 
                 // Handle standard message types (user, assistant, etc.)
-                if (message.type === 'message' && 'content' in message) {
+                // Also handle messages without a type property (treat as 'message' type)
+                if ((message.type ?? 'message') === 'message' && 'content' in message) {
                     // Check if the message content contains an image
                     if (typeof message.content === 'string') {
                         const extracted = extractBase64Image(message.content);
@@ -213,6 +214,7 @@ export class OpenAIProvider implements ModelProvider {
                             // Add modified message with placeholder
                             input.push({
                                 ...message,
+                                type: 'message', // Ensure type property is set
                                 content: extracted.replaceContent, // Already contains [image ID] placeholders
                             });
 
@@ -237,18 +239,35 @@ export class OpenAIProvider implements ModelProvider {
                                 });
                             }
                         } else {
-                            // Add the original message
-                            input.push(message);
+                            // Add the original message (ensure type is set only if it's a valid message)
+                            if (message.type === undefined && 'role' in message && 'content' in message) {
+                                // Only add type:'message' to objects that have content and role properties
+                                input.push({ ...message, type: 'message' });
+                            } else {
+                                // Otherwise keep original
+                                input.push(message);
+                            }
                         }
                     } else {
-                        // Add the original message
-                        input.push(message);
+                        // Add the original message (ensure type is set only if it's a valid message)
+                        if (message.type === undefined && 'role' in message && 'content' in message) {
+                            // Only add type:'message' to objects that have content and role properties
+                            input.push({ ...message, type: 'message' });
+                        } else {
+                            // Otherwise keep original
+                            input.push(message);
+                        }
                     }
                     continue;
                 }
 
                 // Default: add the original message
-                input.push(message);
+                // Only add type:'message' if it's a valid message with role and content
+                if (message.type === undefined && 'role' in message && 'content' in message) {
+                    input.push({ ...message, type: 'message' });
+                } else {
+                    input.push(message);
+                }
             }
 
             // Format the request according to the Responses API specification

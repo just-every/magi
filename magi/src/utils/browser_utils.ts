@@ -982,35 +982,61 @@ Viewport: ${payload.view?.w || 0} × ${payload.view?.h || 0} CSS px Full page: $
                 tabsSection += `\n${tabsList}`;
             }
 
-            // Build elements section (limited to first 15 elements)
+            // Build elements section with interactive elements sorted by score
             let elementsSection = '';
             if (payload.elementMap && Array.isArray(payload.elementMap)) {
-                const elementCount = payload.elementMap.length;
-                const MAX_ELEMENTS_TO_SHOW = 100;
-                const elementsToShow = payload.elementMap.slice(
-                    0,
-                    MAX_ELEMENTS_TO_SHOW
-                );
+                // Copy and sort elements by score and visibility
+                const sortedElements = [...payload.elementMap];
+                sortedElements.sort((a, b) => {
+                    // Primary sort: offscreen (in viewport first)
+                    if (!!a.offscreen !== !!b.offscreen) {
+                        return a.offscreen ? 1 : -1;
+                    }
+                    // Secondary sort: score (descending)
+                    if ((b.score || 0) !== (a.score || 0)) {
+                        return (b.score || 0) - (a.score || 0);
+                    }
+                    // Tertiary sort: y-position (top elements first)
+                    return a.y - b.y;
+                });
 
-                elementsSection = `\n\n### Interactive elements (${elementsToShow.length} shown of ${elementCount})
-| id | role | tag | label | position (x,y) | size (w×h) |
-|----|------|-----|-------|--------------|-----------|`;
+                // Limit to reasonable display size
+                const MAX_ELEMENTS_TO_SHOW = 40;
+                const elementsToShow = sortedElements.slice(0, MAX_ELEMENTS_TO_SHOW);
+                const inViewportCount = elementsToShow.filter(el => !el.offscreen).length;
+                const totalInViewport = sortedElements.filter(el => !el.offscreen).length;
+
+                elementsSection = `\n\n### Interactive elements (${inViewportCount} visible of ${totalInViewport} in viewport, ${sortedElements.length} total)
+| id | role | type | label | extras | position | vis |
+|----|------|------|-------|--------|----------|-----|`;
 
                 elementsToShow.forEach((el: any) => {
                     // Format the label - trim and limit length
                     const label = el.label
-                        ? el.label.length > 30
-                            ? `"${el.label.substring(0, 27)}..."`
+                        ? el.label.length > 25
+                            ? `"${el.label.substring(0, 22)}..."`
                             : `"${el.label}"`
                         : '';
 
-                    // Format position and size
-                    const position = `${el.x},${el.y}`;
-                    const size = `${el.w}×${el.h}`;
+                    // Format extras (href, type, etc.)
+                    let extras = '';
+                    if (el.href) {
+                        extras = el.href.length > 20 ? el.href.substring(0, 17) + '...' : el.href;
+                    } else if (el.type) {
+                        extras = `type=${el.type}`;
+                    }
+
+                    // Format position as center point for easier clicking
+                    const position = `${el.cx},${el.cy}`;
+
+                    // Visibility indicator
+                    const visibility = el.offscreen ? '▼' : '✓';
 
                     // Create table row
-                    elementsSection += `\n| ${el.id || '?'} | ${el.role || '?'} | ${el.tag || '?'} | ${label} | ${position} | ${size} |`;
+                    elementsSection += `\n| ${el.id || '?'} | ${el.role || '?'} | ${el.tag || '?'} | ${label} | ${extras} | ${position} | ${visibility} |`;
                 });
+
+                elementsSection += `\n\n*(✓ = visible now, ▼ = requires scrolling, coordinates are element centers)*`;
             }
 
             // Send screenshot data to visualization
