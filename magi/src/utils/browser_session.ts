@@ -134,7 +134,7 @@ export class AgentBrowserSessionCDP {
         );
 
         try {
-            const host = process.env.CDP_HOST || 'localhost'; // Use env var or default
+            const host = process.env.CDP_HOST || 'host.docker.internal'; // Use env var or default
             const port = parseInt(process.env.HOST_CDP_PORT || '9222', 10); // Default Chrome CDP port
 
             console.log(
@@ -177,10 +177,6 @@ export class AgentBrowserSessionCDP {
                     this.cdpClient.Page.enable(),
                     this.cdpClient.DOM.enable(),
                     this.cdpClient.Runtime.enable(),
-                    this.cdpClient.Input.enable(), // Enable Input domain for interactions
-                    this.cdpClient.DOMSnapshot.enable(), // Enable DOMSnapshot for browserStatus
-                    this.cdpClient.Emulation.enable(), // Enable Emulation for viewport setting
-                    this.cdpClient.Target.enable(), // Enable Target domain for closing
                 ]);
                 console.log(
                     `[browser_session_cdp] Enabled required CDP domains for target: ${targetId}`
