@@ -123,10 +123,6 @@ export class AgentBrowserSessionCDP {
                     this.cdpClient.Page.enable(),      // Page navigation, lifecycle events
                     this.cdpClient.DOM.enable(),       // DOM inspection, querying
                     this.cdpClient.Runtime.enable(),   // JavaScript execution, getting properties
-                    this.cdpClient.Input.enable(),     // Simulating input (mouse, keyboard)
-                    this.cdpClient.DOMSnapshot.enable(),// Capturing DOM snapshots for element mapping
-                    this.cdpClient.Emulation.enable(), // Setting viewport size, device metrics
-                    this.cdpClient.Target.enable(),    // Managing targets (closing)
                 ]);
                 console.log(`[browser_session_cdp] Enabled required CDP domains for target: ${targetId}`);
 
