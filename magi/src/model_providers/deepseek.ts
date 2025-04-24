@@ -168,30 +168,9 @@ export class DeepSeekProvider extends OpenAIChat {
                 });
             }
 
-            // Merge consecutive messages of the same role
-            messages = messages.reduce(
-                (acc: MessageParam[], currentMessage) => {
-                    const lastMessage =
-                        acc.length > 0 ? acc[acc.length - 1] : null;
-
-                    // Check if the last message exists and has the same role as the current one.
-                    if (
-                        lastMessage &&
-                        lastMessage.role === currentMessage.role
-                    ) {
-                        lastMessage.content = `${lastMessage.content ?? ''}\n\n${currentMessage.content ?? ''}`;
-                    } else {
-                        acc.push({ ...currentMessage });
-                    }
-
-                    return acc;
-                },
-                []
-            );
-
             // Extract system messages
             const systemContents: string[] = [];
-            const finalMessages: MessageParam[] = [];
+            let finalMessages: MessageParam[] = [];
             messages.forEach(msg => {
                 if (msg.role === 'system') {
                     // Collect content from system messages
@@ -212,6 +191,27 @@ export class DeepSeekProvider extends OpenAIChat {
                     finalMessages.push(msg);
                 }
             });
+
+            // Merge consecutive messages of the same role
+            finalMessages = finalMessages.reduce(
+                (acc: MessageParam[], currentMessage) => {
+                    const lastMessage =
+                        acc.length > 0 ? acc[acc.length - 1] : null;
+
+                    // Check if the last message exists and has the same role as the current one.
+                    if (
+                        lastMessage &&
+                        lastMessage.role === currentMessage.role
+                    ) {
+                        lastMessage.content = `${lastMessage.content ?? ''}\n\n${currentMessage.content ?? ''}`;
+                    } else {
+                        acc.push({ ...currentMessage });
+                    }
+
+                    return acc;
+                },
+                []
+            );
 
             if (systemContents.length > 0) {
                 // Add the consolidated system message at the start

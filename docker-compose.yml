@@ -66,6 +66,7 @@ services:
             - HOST_HOSTNAME=controller # Use service name instead of host.docker.internal
             - CONTROLLER_PORT=3010
             - TZ=$(date +%Z) # Get host timezone - conversion handled in code
+            - RUNNING_IN_DOCKER=true # Flag to indicate we're running in Docker
         networks:
             - magi-network
         profiles:

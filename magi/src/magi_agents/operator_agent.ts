@@ -38,7 +38,7 @@ Your Thought Delay: ${getThoughtDelay()} seconds
 Your Projects:
 ${listActiveProjects()}
 
-Running Tools:
+Active Tools:
 ${runningToolTracker.listActive()}`;
 
     // Add the system status to the messages
@@ -75,7 +75,7 @@ PLANNING
 If this is the first time you've run and you have not yet used a tool, spend some time thinking first, output a plan, then choose your first set of tools to use. Remember: determine the task's INTENT, think through the task step by step, then come up with a final plan to execute it.
 
 EXECUTION
-Once you decide what to do, you can use the tools available to you. After each tool usage you should consider what work has been done and what else you need to do to complete the task. 
+Once you decide what to do, you can use the tools available to you. After each tool usage you should consider what work has been done and what else you need to do to complete the task.
 You should launch as many specialized agents at once as possible. Use a parallel approach to explore multiple angles simultaneously. You should approach the problem from many different ways until you find a solution.
 
 When you are done, please use the task_complete(result) tool to report that the task has been completed successfully. If you encounter an error that you can not recover from, use the task_fatal_error(error) tool to report that you were not able to complete the task. You should only use task_fatal_error() once you have made many attempts to resolve the issue and you are sure that you can not complete the task.

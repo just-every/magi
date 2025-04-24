@@ -4,6 +4,7 @@ import { ProcessData } from '../../context/SocketContext';
 import { PRIMARY_RGB } from '../../utils/constants';
 import { getStatusIcon } from '../utils/FormatUtils';
 import { TruncatedStartText } from '../utils/TextFormatComponents';
+import AutoScrollContainer from '../ui/AutoScrollContainer';
 
 interface ProcessTreeColumnProps {
     selectedItemId: string | null;
@@ -240,9 +241,9 @@ const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
 
     return (
         <div className="process-tree-column h-100 d-flex flex-column">
-            <div className="flex-grow-1 overflow-auto pe-2">
+            <AutoScrollContainer className="flex-grow-1 pe-2">
                 {renderProcessTree()}
-            </div>
+            </AutoScrollContainer>
         </div>
     );
 };

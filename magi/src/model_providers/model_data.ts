@@ -158,11 +158,11 @@ export const MODEL_CLASSES = {
         models: [
             'gemini-2.5-pro-exp-03-25', // Google
             'o4-mini', // OpenAI
-            'gpt-4.1', // OpenAI
+            //'gpt-4.1', // OpenAI
             'claude-3-7-sonnet-latest', // Anthropic
             'grok-3', // X.AI
-            'grok-3-mini', // X.AI
-            'deepseek-reasoner', // DeepSeek
+            //'grok-3-mini', // X.AI
+            //'deepseek-reasoner', // DeepSeek
             'meta-llama/llama-4-maverick', // Meta/OpenRouter
             'qwen/qwen-max', // Qwen/OpenRouter
         ],

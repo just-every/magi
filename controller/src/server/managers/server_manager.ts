@@ -34,6 +34,7 @@ import {
 } from '../utils/talk';
 import { initTelegramBot, closeTelegramBot } from '../utils/telegram_bot';
 import { loadAppSettings, saveAppSettings } from '../utils/storage';
+import { openUI } from '../utils/cdp';
 
 const docker = new Docker();
 
@@ -218,7 +219,7 @@ export class ServerManager {
             });
 
             // Start the server
-            this.server.listen(port, () => {
+            this.server.listen(port, async () => {
                 const address = this.server.address();
                 if (!address || typeof address === 'string') {
                     console.error('Invalid server address');
@@ -244,7 +245,7 @@ export class ServerManager {
                 }
 
                 const url = `http://localhost:${listeningPort}`;
-                this.connectToBrowserBridgeAndOpenUI(url);
+                await openUI(url);
 
                 console.log(`
 ┌────────────────────────────────────────────────┐
@@ -282,80 +283,6 @@ export class ServerManager {
                 }
             });
         });
-    }
-
-    /**
-     * Connects to the browser extension bridge and opens the controller UI in Chrome
-     * @param url The URL of the controller UI
-     */
-    private connectToBrowserBridgeAndOpenUI(url: string): void {
-        try {
-            console.log(
-                `[ServerManager] Connecting to browser bridge to open UI at: ${url}`
-            );
-
-            // Connect to the browser bridge WebSocket server
-            const ws = new WebSocket(
-                process.env.MAGI_BRIDGE_WS_URL ||
-                    'ws://host.docker.internal:9001'
-            );
-
-            ws.on('open', () => {
-                // Successfully connected to browser bridge
-                console.log('[ServerManager] Connected to WebSocket Bridge');
-
-                // Prepare the command to open the controller UI in a Chrome window
-                const command = {
-                    wsRequestId: `controller-start-${Date.now()}`,
-                    command: 'open_controller_ui',
-                    params: { url: url },
-                };
-
-                // Send the command to the bridge
-                ws.send(JSON.stringify(command));
-                console.log(
-                    `[ServerManager] Sent open_controller_ui command for ${url}`
-                );
-
-                // Close the WebSocket connection after sending command
-                setTimeout(() => {
-                    ws.close();
-                    console.log(
-                        '[ServerManager] Disconnected from WebSocket Bridge'
-                    );
-                }, 500);
-            });
-
-            ws.on('message', data => {
-                console.log(
-                    '[ServerManager] Received response from WebSocket Bridge:',
-                    data.toString()
-                );
-            });
-
-            ws.on('error', err => {
-                console.error(
-                    '[ServerManager] Failed to connect to WebSocket Bridge:',
-                    err
-                );
-                console.log(
-                    '[ServerManager] Browser UI will not automatically open. Please open manually at:',
-                    url
-                );
-            });
-
-            ws.on('close', () => {
-                console.log(
-                    '[ServerManager] WebSocket Bridge connection closed'
-                );
-            });
-        } catch (error) {
-            console.error(
-                '[ServerManager] Error setting up browser UI opening:',
-                error
-            );
-            console.log('[ServerManager] Please open the UI manually at:', url);
-        }
     }
 
     /**

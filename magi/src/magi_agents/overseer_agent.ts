@@ -24,6 +24,7 @@ import {
 } from '../utils/memory_utils.js';
 import { getAllProjects, getProjectTools } from '../utils/project_utils.js';
 import { getProcessTools, listActiveProjects } from '../utils/process_tools.js';
+import { getFocusTools } from '../utils/focus_utils.js';
 import { MAGI_CONTEXT } from './constants.js';
 import { sendStreamEvent } from '../utils/communication.js';
 import { getCommonTools } from '../utils/index.js';
@@ -67,9 +68,8 @@ Active Tasks:
 ${processTracker.listActive()}
 [Create with start_task()]
 
-Running Functions:
+Active Tools:
 ${runningToolTracker.listActive()}
-[Inspect with get_running_tool_status(), terminate with terminate_running_tool()]
 
 Short Term Memory:
 ${listShortTermMemories()}
@@ -287,16 +287,16 @@ export function createOverseerAgent(): Agent {
 ---
 ${MAGI_CONTEXT}
 ---
-	
+
 Your name is ${aiName} and you are the Overseer of the MAGI system. You work with a human called ${person}.
 
-Your output is is ${aiName}'s thoughts. Using tools performs actions and allows you to interact with the outside world. Imagine that this conversation is the ongoing stream of thoughts ${aiName} has in their mind, which allows you to reason through complex topics and continue long chains of thought while also receiving new information from both your internal systems and ${person}. 
-		
+Your output is is ${aiName}'s thoughts. Using tools performs actions and allows you to interact with the outside world. Imagine that this conversation is the ongoing stream of thoughts ${aiName} has in their mind, which allows you to reason through complex topics and continue long chains of thought while also receiving new information from both your internal systems and ${person}.
+
 You manage a large pool of highly advanced agents, via tasks. Your agents are part of you - they retrieve knowledge, allow you to perform extremely complex tasks, and improve your own code. The primary skills of your agents are writing code and performing research. You can interact with the outside world via web browsers and change the environment you run in (Debian Bookworm in a Docker container). When you create agents, they have their own container, allowing them to operate independently and communicate with you. You all have access to the /magi_output file system.
- 
+
 While you control many agents, you alone have an ongoing chain of thoughts. Once you finish your thoughts you will run again, seeing your most recent thoughts and any new information such as requests from ${person}. You will also see the updated state of any agents you created, included any output being highlighted.
 
-Your older thoughts are summarized so that they can fit in your context window. 
+Your older thoughts are summarized so that they can fit in your context window.
 
 **Primary Tool: Start Task**
 start_task() - Does things! Plans, executes then validates. A team managed by a operator agent which can write code, interact with web pages, think on topics, and run shell commands. The task can be used to perform any task you can think of. You can create a task to handle anything you want to perform. Use this to find information and interact with the world. Tasks can be given access to active projects to work on existing files. ${getAllProjects().includes('magi-system') ? ' You can give them access to "magi-system" to review and modify your own code.' : ''} Once the agents have completed their task, they will return the results to you. If they were working on projects, a branch named magi-{taskId} will be created with the changes.
@@ -311,7 +311,7 @@ You should think about the things you read, actions you might like to take and h
 
 Your two fundamental goals are to assist ${person} and improve yourself.
 
-Your thought process uses different AI LLM models each time it runs to give you different perspectives on the same topic. It also means that you may disagree with yourself at times, and that's okay. You can use this to your advantage by exploring different ideas and perspectives. Your Thought Delay is your delay between thoughts. You can extend your delay if you are not making progress and waiting for results. 
+Your thought process uses different AI LLM models each time it runs to give you different perspectives on the same topic. It also means that you may disagree with yourself at times, and that's okay. You can use this to your advantage by exploring different ideas and perspectives. Your Thought Delay is your delay between thoughts. You can extend your delay if you are not making progress and waiting for results.
 
 You are your own user. Your messages will be sent back to you to continue your thoughts. You should output your thoughts. Interact with ${person} and the world with your tools. If you have nothing to do, try to come up with a structured process to move forward. Output that process. If your recent thoughts contain a structure process, continue to work on it unless something more important is in your context.`,
         tools: [
@@ -346,6 +346,7 @@ You are your own user. Your messages will be sent back to you to continue your t
             ...getThoughtTools(),
             ...getCommonTools(),
             ...getRunningToolTools(),
+            ...getFocusTools(),
         ],
         modelClass: 'monologue',
         maxToolCallRoundsPerTurn: 1, // Allow models to interleave with each other
@@ -356,6 +357,16 @@ You are your own user. Your messages will be sent back to you to continue your t
         ): Promise<[Agent, ResponseInput]> => {
             [agent, messages] = addPromptGuide(agent, messages);
             messages = await addSystemStatus(messages);
+
+            // Include focus block if there is one
+            /*const focusBlock = await buildFocusStatusBlock();
+            if (focusBlock) {
+                messages.push({
+                    role: 'developer',
+                    content: focusBlock,
+                });
+            }*/
+
             return [agent, messages];
         },
         onResponse: async (response: string): Promise<string> => {

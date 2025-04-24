@@ -9,7 +9,6 @@ import { createManagerAgent } from './common_agents/manager_agent.js';
 import { createReasoningAgent } from './common_agents/reasoning_agent.js';
 import { createCodeAgent } from './common_agents/code_agent.js';
 import { createBrowserAgent } from './common_agents/browser_agent.js';
-import { createBrowserCodeAgent } from './common_agents/browser_code_agent.js';
 import { createSearchAgent } from './common_agents/search_agent.js';
 import { createShellAgent } from './common_agents/shell_agent.js';
 import {
@@ -102,9 +101,6 @@ export function createAgent(args: Record<string, unknown>): Agent {
         case 'browser':
             agent = createBrowserAgent();
             break;
-        case 'browser_code':
-            agent = createBrowserCodeAgent();
-            break;
         case 'search':
             agent = createSearchAgent();
             break;
@@ -187,7 +183,6 @@ export {
     createReasoningAgent,
     createCodeAgent,
     createBrowserAgent,
-    createBrowserCodeAgent,
     createSearchAgent,
     createShellAgent,
     // Gödel Machine agents

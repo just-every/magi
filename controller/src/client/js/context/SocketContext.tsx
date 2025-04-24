@@ -138,6 +138,8 @@ export interface ProcessData {
     };
     logs: string;
     agent?: AgentData;
+    pendingScreenshots: Map<string, ScreenshotEvent[]>;
+    pendingMessages: Map<string, PartialClientMessage[]>;
 }
 
 // Create the context with a default value
@@ -294,6 +296,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         isTyping: true,
                         workers: new Map<string, AgentData>(),
                     },
+                    pendingScreenshots: new Map<string, ScreenshotEvent[]>(),
+                    pendingMessages: new Map<string, PartialClientMessage[]>(),
                 });
 
                 // Set the core process ID if this is the first process created
@@ -443,10 +447,102 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     } as ClientMessage;
                 }
 
+                // Utility function to queue pending data when agent isn't available yet
+                function queuePending<T>(
+                    map: Map<string, T[]>,
+                    agent_id: string | undefined,
+                    item: T
+                ): void {
+                    if (!agent_id) return;
+                    const list = map.get(agent_id) || [];
+                    map.set(agent_id, [...list, item]);
+                }
+
+                // Utility to merge a screenshot into an agent with downsampling
+                function mergeScreenshot(
+                    targetAgent: AgentData,
+                    screenshotEvent: ScreenshotEvent
+                ): void {
+                    // Create a new screenshots array immutably
+                    let updatedScreenshots = [
+                        ...(targetAgent.screenshots || []),
+                        screenshotEvent,
+                    ];
+
+                    const RECENT_KEEP = 10; // always keep these newest frames
+                    const HIST_EVERY = 5; // keep only every 5th older frame
+                    const MAX_FRAMES = 25; // absolute cap
+
+                    // Down‑sample when exceeding MAX_FRAMES
+                    if (updatedScreenshots.length > MAX_FRAMES) {
+                        const recent = updatedScreenshots.slice(-RECENT_KEEP);
+                        const older = updatedScreenshots
+                            .slice(0, -RECENT_KEEP)
+                            .filter((_, idx) => idx % HIST_EVERY === 0);
+
+                        updatedScreenshots = [...older, ...recent].slice(
+                            -MAX_FRAMES
+                        );
+                    }
+
+                    // Apply the updated screenshots to the agent
+                    targetAgent.screenshots = updatedScreenshots;
+                }
+
+                // Utility to flush pending screenshots for an agent
+                function flushPendingScreenshots(agent_id: string): void {
+                    const pending = process.pendingScreenshots.get(agent_id);
+                    if (!pending?.length) return;
+
+                    // Find the target agent
+                    const targetAgent = process.agent!.agent_id === agent_id
+                        ? process.agent!
+                        : process.agent!.workers?.get(agent_id);
+
+                    if (targetAgent) {
+                        // Process each pending screenshot
+                        pending.forEach(screenshotEvent => {
+                            mergeScreenshot(targetAgent, screenshotEvent);
+                        });
+
+                        // Clear the pending list
+                        process.pendingScreenshots.delete(agent_id);
+                    }
+                }
+
+                // Utility to flush pending messages for an agent
+                function flushPendingMessages(agent_id: string): void {
+                    const pending = process.pendingMessages.get(agent_id);
+                    if (!pending?.length) return;
+
+                    // Find the target agent
+                    const targetAgent = process.agent!.agent_id === agent_id
+                        ? process.agent!
+                        : process.agent!.workers?.get(agent_id);
+
+                    if (targetAgent) {
+                        // Process each pending message
+                        pending.forEach(message => {
+                            addMessage(completeMessage(message), agent_id, targetAgent);
+                        });
+
+                        // Clear the pending list
+                        process.pendingMessages.delete(agent_id);
+                    }
+                }
+
                 function addPartialMessage(
                     message: PartialClientMessage
                 ): AgentData | undefined {
-                    return addMessage(completeMessage(message));
+                    const agent_id = streamingEvent.agent?.agent_id;
+                    const result = addMessage(completeMessage(message));
+
+                    // If message couldn't be added to an agent (agent not found), queue it
+                    if (!result && agent_id) {
+                        queuePending(process.pendingMessages, agent_id, message);
+                    }
+
+                    return result;
                 }
 
                 // Handle different event types
@@ -705,48 +801,24 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         : process.agent;
 
                     if (targetAgent && data) {
-                        // Create a new screenshots array immutably
-                        let updatedScreenshots = [
-                            ...(targetAgent.screenshots || []),
-                            streamingEvent,
-                        ];
+                        // Use our helper to merge the screenshot with downsampling
+                        mergeScreenshot(targetAgent, streamingEvent);
 
-                        const RECENT_KEEP = 10; // always keep these newest frames
-                        const HIST_EVERY = 5; // keep only every 5th older frame
-                        const MAX_FRAMES = 25; // absolute cap
-
-                        // Down‑sample when exceeding MAX_FRAMES
-                        if (updatedScreenshots.length > MAX_FRAMES) {
-                            const recent = updatedScreenshots.slice(-RECENT_KEEP);
-                            const older = updatedScreenshots
-                                .slice(0, -RECENT_KEEP)
-                                .filter((_, idx) => idx % HIST_EVERY === 0);
-
-                            updatedScreenshots = [...older, ...recent].slice(
-                                -MAX_FRAMES
-                            );
-                        }
-
-                        // Create a new agent object with the updated screenshots
-                        const updatedAgentData = {
-                            ...targetAgent,
-                            screenshots: updatedScreenshots,
-                        };
-
-                        // Update the correct agent (either main or worker) immutably
+                        // Make sure parent references are updated properly
                         if (process.agent.agent_id === targetAgent.agent_id) {
-                            process.agent = updatedAgentData;
+                            // Agent already updated in place
                         } else if (process.agent.workers) {
+                            // Update the worker reference in the parent
                             const updatedWorkers = new Map(process.agent.workers);
-                            updatedWorkers.set(
-                                targetAgent.agent_id!,
-                                updatedAgentData
-                            );
+                            updatedWorkers.set(targetAgent.agent_id!, targetAgent);
                             process.agent = {
                                 ...process.agent,
                                 workers: updatedWorkers,
                             };
                         }
+                    } else if (agent_id && data) {
+                        // Queue the screenshot for later when the agent becomes available
+                        queuePending(process.pendingScreenshots, agent_id, streamingEvent);
                     }
                 } else if (eventType === 'error') {
                     // Error message
@@ -797,25 +869,38 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
                             // Add this sub-agent to the parent's subAgents map
                             process.agent!.workers.set(workerId, worker);
+
+                            // Flush any pending data for this newly created agent
+                            flushPendingScreenshots(workerId);
+                            flushPendingMessages(workerId);
                         } else if (streamingEvent.input) {
                             addPartialMessage({
                                 content: streamingEvent.input,
                             });
                         }
                     } else if (streamingEvent.agent) {
-                        if (
-                            !process.agent!.agent_id ||
-                            process.agent!.agent_id != process.agent!.agent_id
-                        ) {
-                            process.agent!.agent_id =
-                                streamingEvent.agent.agent_id;
+                        const agent_id = streamingEvent.agent.agent_id;
+
+                        // Check if this is the first time we're getting the agent_id
+                        const isNewAgentId = !process.agent!.agent_id ||
+                            process.agent!.agent_id != agent_id;
+
+                        if (isNewAgentId) {
+                            process.agent!.agent_id = agent_id;
                         }
+
                         updateAgent({
                             name: streamingEvent.agent.name,
                             model: streamingEvent.agent.model || undefined,
                             modelClass:
                                 streamingEvent.agent.modelClass || undefined,
                         });
+
+                        // If this is the first time we've seen this agent, flush any pending data
+                        if (isNewAgentId && agent_id) {
+                            flushPendingScreenshots(agent_id);
+                            flushPendingMessages(agent_id);
+                        }
                     }
                 }
 

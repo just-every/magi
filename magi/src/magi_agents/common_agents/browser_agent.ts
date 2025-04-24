@@ -69,9 +69,6 @@ COMPLETION:
             ...getCommonTools(),
             ...getBrowserDebugTools(),
         ],
-        //workers: [
-        //	createBrowserCodeAgent,
-        //],
         modelClass: 'vision',
         onRequest: addBrowserStatus,
         params: getBrowserParams('BrowserAgent'),

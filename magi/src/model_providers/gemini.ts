@@ -253,6 +253,13 @@ function convertToGeminiContents(messages: ResponseInput): Content[] {
                     const cleanedImageData = cleanBase64Data(imageData);
                     const parts: Part[] = [];
 
+                    // Add remaining text if any
+                    if (extracted.replaceContent.trim()) {
+                        parts.push({
+                            text: extracted.replaceContent.trim(),
+                        });
+                    }
+
                     // Add the image
                     parts.push({
                         inlineData: {
@@ -260,13 +267,6 @@ function convertToGeminiContents(messages: ResponseInput): Content[] {
                             data: cleanedImageData,
                         },
                     });
-
-                    // Add remaining text if any
-                    if (extracted.replaceContent.trim()) {
-                        parts.push({
-                            text: extracted.replaceContent.trim(),
-                        });
-                    }
 
                     contents.push({
                         role,

@@ -1,0 +1,133 @@
+/* TimelinePlayer.css */
+
+/* --- Prefixed Custom Styles --- */
+
+/* Style the slider track container for interaction */
+.tsp-track-container {
+  position: relative;
+  height: 1rem; /* 16px */
+  width: 100%;
+  cursor: pointer;
+  user-select: none; /* Prevent text selection during drag */
+  touch-action: none; /* Improve touch interaction */
+}
+
+/* Base track style (used as container for active/inactive bars) */
+.tsp-track {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 0.25rem; /* 4px */
+  width: 100%;
+  border-radius: 9999px; /* Fully rounded */
+  overflow: hidden; /* Ensure bars stay within bounds */
+  background-color: #cbd5e1; /* Default background (inactive color) */
+}
+
+/* Active (filled) part of the track bar */
+.tsp-track-bar-active {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background-color: var(--accent-primary); /* Active color */
+    border-radius: 9999px 0 0 9999px; /* Round left corners */
+    /* Width is set inline */
+    transition: width 0.1s linear; /* Smooth transition for non-drag updates */
+}
+
+/* Inactive part (now handled by the main tsp-track background) */
+/* .tsp-track-bar-inactive { ... } */ /* No longer needed */
+
+
+/* Container for the knob and its ripple effect */
+.tsp-knob-container {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%); /* Center knob on the percentage */
+  /* Dynamic 'left' style will be applied inline */
+  pointer-events: none; /* Clicks go through to the track container */
+  /* Add transitions for smooth movement */
+   transition: left 0.1s linear;
+}
+
+/* The visible knob */
+.tsp-knob {
+  position: relative; /* Needed for z-index and ripple positioning */
+  display: block;
+  width: 12px; /* Default size */
+  height: 12px; /* Default size */
+  border-radius: 50%;
+  background-color: var(--accent-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.1);
+  transition: width 0.15s ease-out, height 0.15s ease-out;
+  z-index: 2; /* Ensure knob is above track bars */
+}
+
+/* Ripple effect pseudo-element */
+.tsp-knob::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0; /* Start hidden */
+    height: 0; /* Start hidden */
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background-color: rgba(0, 162, 255, 0.3);
+    transition: width 0.15s ease-out, height 0.15s ease-out, opacity 0.15s ease-out;
+    opacity: 0;
+    z-index: -1; /* Behind the main knob */
+    pointer-events: none;
+}
+
+/* Styles applied when dragging */
+.tsp-knob--dragging {
+    width: 20px;
+    height: 20px;
+}
+
+.tsp-knob--dragging::after {
+    width: 40px; /* Ripple size */
+    height: 40px; /* Ripple size */
+    opacity: 1;
+}
+
+
+/* Thumbnail preview container */
+.tsp-thumbnail-preview {
+  position: absolute;
+  bottom: 100%; /* Position above the track */
+  margin-bottom: 8px; /* Space between track and thumbnail */
+  z-index: 10;
+  pointer-events: none; /* Doesn't block interaction */
+}
+
+/* Thumbnail image itself */
+.tsp-thumbnail-image {
+  width: 128px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 0.2rem; /* rounded */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-lg */
+  border: 1px solid #fff; /* border border-white */
+  background-color: #eee; /* Fallback bg */
+}
+
+/* Styling for the time labels below the slider */
+.tsp-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem; /* text-xs */
+  color: #b5b5b5; /* Equivalent to text-slate-600 or text-gray-600 */
+  margin-top: 0.125rem; /* Small margin */
+}
+
+.tsp-labels-live {
+    color: var(--accent-primary);
+}
+
+/* Ensure collapse button icon transitions smoothly */
+.tsp-collapse-icon {
+    transition: transform 0.2s ease-in-out;
+}

@@ -749,6 +749,7 @@ export class CommunicationManager {
                 // Also log to Docker logs for debugging purposes only
                 if (
                     ![
+                        'screenshot',
                         'message_delta',
                         'message_complete',
                         'system_status',

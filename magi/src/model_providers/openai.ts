@@ -177,8 +177,7 @@ export class OpenAIProvider implements ModelProvider {
                                 extracted.images
                             )) {
                                 input.push({
-                                    type: 'message',
-                                    role: 'developer',
+                                    role: 'user',
                                     content: [
                                         {
                                             type: 'input_text',
@@ -187,7 +186,7 @@ export class OpenAIProvider implements ModelProvider {
                                         {
                                             type: 'input_image',
                                             image_url: imageData,
-                                            detail: 'auto', // Add required 'detail' property
+                                            detail: 'high', // Add required 'detail' property
                                         },
                                     ],
                                 });
@@ -205,7 +204,10 @@ export class OpenAIProvider implements ModelProvider {
 
                 // Handle standard message types (user, assistant, etc.)
                 // Also handle messages without a type property (treat as 'message' type)
-                if ((message.type ?? 'message') === 'message' && 'content' in message) {
+                if (
+                    (message.type ?? 'message') === 'message' &&
+                    'content' in message
+                ) {
                     // Check if the message content contains an image
                     if (typeof message.content === 'string') {
                         const extracted = extractBase64Image(message.content);
@@ -223,8 +225,7 @@ export class OpenAIProvider implements ModelProvider {
                                 extracted.images
                             )) {
                                 input.push({
-                                    type: 'message',
-                                    role: 'developer',
+                                    role: 'user',
                                     content: [
                                         {
                                             type: 'input_text',
@@ -233,14 +234,18 @@ export class OpenAIProvider implements ModelProvider {
                                         {
                                             type: 'input_image',
                                             image_url: imageData,
-                                            detail: 'auto', // Add required 'detail' property
+                                            detail: 'high', // Add required 'detail' property
                                         },
                                     ],
                                 });
                             }
                         } else {
                             // Add the original message (ensure type is set only if it's a valid message)
-                            if (message.type === undefined && 'role' in message && 'content' in message) {
+                            if (
+                                message.type === undefined &&
+                                'role' in message &&
+                                'content' in message
+                            ) {
                                 // Only add type:'message' to objects that have content and role properties
                                 input.push({ ...message, type: 'message' });
                             } else {
@@ -250,7 +255,11 @@ export class OpenAIProvider implements ModelProvider {
                         }
                     } else {
                         // Add the original message (ensure type is set only if it's a valid message)
-                        if (message.type === undefined && 'role' in message && 'content' in message) {
+                        if (
+                            message.type === undefined &&
+                            'role' in message &&
+                            'content' in message
+                        ) {
                             // Only add type:'message' to objects that have content and role properties
                             input.push({ ...message, type: 'message' });
                         } else {
@@ -263,7 +272,11 @@ export class OpenAIProvider implements ModelProvider {
 
                 // Default: add the original message
                 // Only add type:'message' if it's a valid message with role and content
-                if (message.type === undefined && 'role' in message && 'content' in message) {
+                if (
+                    message.type === undefined &&
+                    'role' in message &&
+                    'content' in message
+                ) {
                     input.push({ ...message, type: 'message' });
                 } else {
                     input.push(message);

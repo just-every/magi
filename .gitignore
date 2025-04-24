@@ -49,6 +49,7 @@ Desktop.ini
 *.env
 *.env.local
 local_settings.py
+.aider*
 
 # Node.js
 node_modules/
@@ -58,14 +59,15 @@ yarn-error.log
 
 # Local state storage
 .server
+.chrome
 
 # Ignore compiled files
 *.js
 *.js.map
 *.jsx
-*.css
+#*.css
 
 # Allow specific JS files
+!host/setup.js
 !controller/webpack.config.js
 !eslint.config.js
-.aider*

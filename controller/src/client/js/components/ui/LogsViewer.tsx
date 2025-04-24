@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
+import AutoScrollContainer from './AutoScrollContainer';
 
 interface LogsViewerProps {
     processId: string;
@@ -13,10 +14,20 @@ interface LogTab {
     component: React.ReactNode;
 }
 
+interface ModelCostData {
+    calls: number;
+    cost: number;
+}
+
+interface CostData {
+    total: number;
+    byModel: Record<string, ModelCostData>;
+}
+
 interface LogFile {
     timestamp: string;
     provider: string;
-    request: any;
+    request: Record<string, unknown>;
 }
 
 const LogsViewer: React.FC<LogsViewerProps> = ({
@@ -27,7 +38,7 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
     const [activeTab, setActiveTab] = useState<string>(inlineTab || 'llm');
     const [llmLogs, setLlmLogs] = useState<string[]>([]);
     const [dockerLogs, setDockerLogs] = useState<string[]>([]);
-    const [costData, setCostData] = useState<any>(null);
+    const [costData, setCostData] = useState<CostData | null>(null);
     const [selectedLogFile, setSelectedLogFile] = useState<LogFile | null>(
         null
     );
@@ -278,7 +289,9 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
                     </div>
                     <div className="card-body">
                         <h2 className="text-center">
-                            ${parseFloat(costData.total).toFixed(6)}
+                            ${(typeof costData.total === 'string'
+                                ? parseFloat(costData.total)
+                                : costData.total).toFixed(6)}
                         </h2>
                     </div>
                 </div>
@@ -298,15 +311,15 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
                             </thead>
                             <tbody>
                                 {Object.entries(costData.byModel).map(
-                                    ([model, data]: [string, any]) => (
+                                    ([model, data]: [string, ModelCostData]) => (
                                         <tr key={model}>
                                             <td>{model}</td>
                                             <td>{data.calls}</td>
                                             <td>
                                                 $
-                                                {parseFloat(data.cost).toFixed(
-                                                    6
-                                                )}
+                                                {(typeof data.cost === 'string'
+                                                    ? parseFloat(data.cost)
+                                                    : data.cost).toFixed(6)}
                                             </td>
                                         </tr>
                                     )
@@ -362,9 +375,9 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
             </div>
 
             <div className="row flex-grow-1 overflow-hidden mt-3">
-                <div className="col h-100 overflow-auto">
+                <AutoScrollContainer className="col h-100">
                     {tabs.find(tab => tab.id === activeTab)?.component}
-                </div>
+                </AutoScrollContainer>
             </div>
         </div>
     );

@@ -6,8 +6,6 @@
  * browser sessions to ensure each agent has its own tab.
  */
 
-// No longer used since global session state was removed
-import TurndownService from 'turndown'; // For HTML to Markdown conversion
 import {
     AgentInterface,
     ResponseInput,
@@ -15,61 +13,11 @@ import {
     ToolParameterMap,
 } from '../types/shared-types.js'; // Keep if used by your framework
 import { createToolFunction } from './tool_call.js'; // Keep if used by your framework
-import { getAgentBrowserSession } from './browser_session.js';
+// Import BrowserAction type, session getter, and BrowserStatusPayload
+import { getAgentBrowserSession, BrowserAction } from './browser_session.js'; // Assuming BrowserAction is exported from here
+import type { BrowserStatusPayload } from './cdp/browser_helpers.js'; // Added import
 import type { Agent } from './agent.js';
 import { getCommunicationManager } from './communication.js';
-
-// Instantiate Turndown service
-const turndownService = new TurndownService();
-
-// --- Exported Browser Control Functions ---
-// These maintain the existing API but use the new agent-specific sessions
-
-/**
- * Lists all open browser tabs across all windows
- * @param inject_agent_id - The agent ID to use for the browser session
- * @returns JSON string with tab information
- */
-export async function list_browser_tabs(
-    inject_agent_id: string
-): Promise<string> {
-    console.log('[browser_utils] Requesting list of all open tabs...');
-    try {
-        const session = getAgentBrowserSession(inject_agent_id);
-        return await session.listOpenTabs();
-    } catch (error: any) {
-        const errorMessage = `[browser_utils] Error listing open tabs: ${error?.message || String(error)}`;
-        console.error(errorMessage, error?.details || '');
-        return errorMessage; // Return error message string
-    }
-}
-
-/**
- * Focuses on a specific browser tab by its Chrome tab ID
- * This only focuses the tab in the UI; it does not change which tab the agent controls
- * @param inject_agent_id - The agent ID to use for the browser session
- * @param chromeTabId The Chrome tab ID to focus
- * @returns Result message
- */
-export async function focusTab(
-    inject_agent_id: string,
-    chromeTabId: number
-): Promise<string> {
-    if (typeof chromeTabId !== 'number' || chromeTabId <= 0) {
-        const errorMsg = `[browser_utils] Error: Invalid Chrome tab ID (${chromeTabId}).`;
-        console.error(errorMsg);
-        return Promise.resolve(errorMsg);
-    }
-    console.log(`[browser_utils] Requesting to focus on tab ${chromeTabId}...`);
-    try {
-        const session = getAgentBrowserSession(inject_agent_id);
-        return await session.focusTab(chromeTabId);
-    } catch (error: any) {
-        const errorMessage = `[browser_utils] Error focusing tab ${chromeTabId}: ${error?.message || String(error)}`;
-        console.error(errorMessage, error?.details || '');
-        return errorMessage; // Return error message string
-    }
-}
 
 /**
  * Navigate the agent's browser tab to a URL via the extension bridge.
@@ -80,8 +28,7 @@ export async function focusTab(
  */
 export async function navigate(
     inject_agent_id: string,
-    url: string,
-    takeFocus?: false
+    url: string
 ): Promise<string> {
     // Validate URL: if it's just a domain name, add https:// prefix
     if (
@@ -123,73 +70,12 @@ export async function navigate(
     console.log(`[browser_utils] Requesting navigation to: ${url}`);
     try {
         const session = getAgentBrowserSession(inject_agent_id);
-        const result = await session.navigate(url, takeFocus);
+        // Ensure session is initialized before navigating
+        await session.initialize();
+        const result = await session.navigate(url);
         return result;
     } catch (error: any) {
         const errorMessage = `[browser_utils] Error during navigation: ${error?.message || String(error)}`;
-        console.error(errorMessage, error?.details || '');
-        return errorMessage; // Return error message string
-    }
-}
-
-/**
- * Gets the page content from the agent's tab in the specified format.
- *
- * @param inject_agent_id - The agent ID to use for the browser session
- * @param type - The desired format: 'interact', 'markdown', or 'html'.
- * @returns The page content in the requested format or an error message string.
- */
-export async function get_page_content(
-    inject_agent_id: string,
-    type: 'interact' | 'markdown' | 'html'
-): Promise<string> {
-    console.log(`[browser_utils] Requesting page content as type: ${type}...`);
-    try {
-        const session = getAgentBrowserSession(inject_agent_id);
-
-        if (type === 'interact') {
-            // Get interactive elements map + landmarks
-            const interactiveContent =
-                await session.get_page_content('interactive');
-            return interactiveContent;
-        } else if (type === 'html') {
-            // Get cleaned body HTML
-            const htmlContent = await session.get_page_content('html');
-            return htmlContent;
-        } else if (type === 'markdown') {
-            // Get full HTML first, then convert
-            const htmlContent = await session.get_page_content('html'); // We always request html from backend for markdown
-            if (htmlContent.startsWith('[browser_utils] Error:')) {
-                return htmlContent; // Propagate error
-            }
-            // Convert HTML to Markdown using TurndownService
-            const markdownContent = turndownService.turndown(htmlContent);
-            return markdownContent;
-        } else {
-            // Should not happen due to TypeScript types, but handle defensively
-            return `[browser_utils] Error: Invalid content type requested: ${type}`;
-        }
-    } catch (error: any) {
-        const errorMessage = `[browser_utils] Error getting page content (type: ${type}): ${error?.message || String(error)}`;
-        console.error(errorMessage, error?.details || '');
-        return `${errorMessage}. Content may be unavailable.`; // Return error message string
-    }
-}
-
-/**
- * Gets the current URL of the agent's tab via the extension bridge.
- *
- * @param inject_agent_id - The agent ID to use for the browser session
- * @returns The current URL string or an error message string.
- */
-export async function get_page_url(inject_agent_id: string): Promise<string> {
-    console.log('[browser_utils] Requesting current page URL...');
-    try {
-        const session = getAgentBrowserSession(inject_agent_id);
-        const url = await session.get_page_url();
-        return String(url); // Ensure it's a string
-    } catch (error: any) {
-        const errorMessage = `[browser_utils] Error getting page URL: ${error?.message || String(error)}`;
         console.error(errorMessage, error?.details || '');
         return errorMessage; // Return error message string
     }
@@ -211,6 +97,8 @@ export async function js_evaluate(
     );
     try {
         const session = getAgentBrowserSession(inject_agent_id);
+        // Ensure session is initialized before evaluating JS
+        await session.initialize();
         const result = await session.js_evaluate(code);
         return String(result);
     } catch (error: any) {
@@ -234,6 +122,8 @@ export async function type(
     console.log(`[browser_utils] Requesting to type text: ${text}`);
     try {
         const session = getAgentBrowserSession(inject_agent_id);
+        // Ensure session is initialized before typing
+        await session.initialize();
         const result = await session.type(text);
         return String(result);
     } catch (error: any) {
@@ -247,31 +137,36 @@ export async function type(
  * Simulates pressing special keys in the agent's tab via the extension bridge.
  *
  * @param inject_agent_id - The agent ID to use for the browser session
- * @param keys - Keys to press (e.g., "Enter", "Tab", "ArrowDown").
+ * @param key - The single key to press (e.g., "Enter", "Tab", "ArrowDown").
  * @returns Result message from the bridge/extension or an error message string.
  */
 export async function press_keys(
     inject_agent_id: string,
-    keys: string[]
+    key: string // Expects a single key string
 ): Promise<string> {
-    console.log(`[browser_utils] Requesting to press keys: ${keys.join(', ')}`);
+    console.log(`[browser_utils] Requesting to press key: ${key}`);
     try {
         const session = getAgentBrowserSession(inject_agent_id);
-        const result = await session.press(keys.join(', '));
+        // Ensure session is initialized before pressing keys
+        await session.initialize();
+        // Pass the single key string to session.press
+        const result = await session.press(key);
         return String(result);
     } catch (error: any) {
-        const errorMessage = `[browser_utils] Error pressing keys '${keys}': ${error?.message || String(error)}`;
+        const errorMessage = `[browser_utils] Error pressing key '${key}': ${error?.message || String(error)}`;
         console.error(errorMessage, error?.details || '');
         return errorMessage; // Return error message string
     }
 }
 
 /**
- * Simulates scrolling to coords
+ * Simulates scrolling the page in the agent's tab.
  *
  * @param inject_agent_id - The agent ID to use for the browser session
- * @param x - X coordinate to scroll to
- * @param y - Y coordinate to scroll to
+ * @param mode - How to scroll ('page_down', 'page_up', 'bottom', 'top', 'coordinates')
+ * @param x - X coordinate to scroll to (only for 'coordinates' mode)
+ * @param y - Y coordinate to scroll to (only for 'coordinates' mode)
+ * @returns Result message or error string.
  */
 export async function scroll_to(
     inject_agent_id: string,
@@ -279,477 +174,190 @@ export async function scroll_to(
     x?: number,
     y?: number
 ): Promise<string> {
-    console.log(
-        `[browser_utils] Requesting to scroll (${mode}) to: ${{ x, y }}`
-    );
+    const coordString =
+        mode === 'coordinates' && typeof x === 'number' && typeof y === 'number'
+            ? ` to ${x},${y}`
+            : '';
+    console.log(`[browser_utils] Requesting to scroll (${mode})${coordString}`);
     try {
         const session = getAgentBrowserSession(inject_agent_id);
+        // Ensure session is initialized before scrolling
+        await session.initialize();
         const result = await session.scroll_to(mode, x, y);
         return String(result);
     } catch (error: any) {
-        const errorMessage = `[browser_utils] Error scrolling (${mode}) to '${{ x, y }}': ${error?.message || String(error)}`;
+        const errorMessage = `[browser_utils] Error scrolling (${mode})${coordString}: ${error?.message || String(error)}`;
         console.error(errorMessage, error?.details || '');
         return errorMessage; // Return error message string
     }
 }
 
 /**
- * Simulates clicking at coords with specified button
+ * Simulates clicking at coordinates in the agent's tab.
+ *
  * @param inject_agent_id - The agent ID to use for the browser session
- * @param x X coordinate
- * @param y Y coordinate
- * @param button Optional mouse button to use ('left', 'middle', 'right', 'back', 'forward')
+ * @param x X coordinate (CSS pixels, max 1024)
+ * @param y Y coordinate (CSS pixels, max 768)
+ * @param button Optional mouse button ('left', 'middle', 'right')
+ * @returns Result message or error string.
  */
 export async function click_at(
     inject_agent_id: string,
     x: number,
     y: number,
-    button?: 'left' | 'middle' | 'right' | 'back' | 'forward'
+    button?: 'left' | 'middle' | 'right'
 ): Promise<string> {
     console.log(`[browser_utils] Requesting to click at: ${{ x, y, button }}`);
+    // Validate coordinates against expected viewport size
+    if (x < 0 || y < 0 || x > 1024 || y > 768) {
+        return `Error: Invalid coordinates (${x}, ${y}) provided for click_at. The viewport size is 1024x768 and coordinates must be within this range (0-1024 for x, 0-768 for y).`;
+    }
+
     try {
         const session = getAgentBrowserSession(inject_agent_id);
+        // Ensure session is initialized before clicking
+        await session.initialize();
         const result = await session.click_at(x, y, button);
         return String(result);
     } catch (error: any) {
-        const errorMessage = `[browser_utils] Error clicking at '${{ x, y }}': ${error?.message || String(error)}`;
+        const errorMessage = `[browser_utils] Error clicking at '${x},${y}': ${error?.message || String(error)}`;
         console.error(errorMessage, error?.details || '');
         return errorMessage; // Return error message string
     }
 }
 
 /**
- * Switches which tab the agent controls for future operations
- * When type is 'id', also focuses the tab in the UI
+ * Simulates dragging from start to end coordinates in the agent's tab.
  *
  * @param inject_agent_id - The agent ID to use for the browser session
- * @param type - Type of tab operation to perform
- * @param tabId - ID of the tab to switch to (for 'id' operation)
- * @returns Result message from the bridge/extension or an error message string.
+ * @param startX Starting X coordinate (CSS pixels, max 1024)
+ * @param startY Starting Y coordinate (CSS pixels, max 768)
+ * @param endX Ending X coordinate (CSS pixels, max 1024)
+ * @param endY Ending Y coordinate (CSS pixels, max 768)
+ * @param button Optional mouse button ('left', 'middle', 'right')
+ * @returns Result message or error string.
  */
-export async function change_tab(
+export async function drag(
     inject_agent_id: string,
-    type: 'active' | 'new' | 'id',
-    tabId?: string
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    button: 'left' | 'middle' | 'right' = 'left'
 ): Promise<string> {
-    console.log(`[browser_utils] Requesting tab switch to ${type}...`);
-
-    // Validate parameters
-    if (type === 'id' && (typeof tabId !== 'string' || !tabId)) {
-        const errorMsg = `[browser_utils] Error: Invalid tabId (${tabId}) provided for tab switch operation.`;
-        console.error(errorMsg);
-        return Promise.resolve(errorMsg);
+    console.log(
+        `[browser_utils] Requesting to drag: ${{ startX, startY, endX, endY, button }}`
+    );
+    // Validate coordinates against expected viewport size
+    if (
+        startX < 0 ||
+        startY < 0 ||
+        endX < 0 ||
+        endY < 0 ||
+        startX > 1024 ||
+        endX > 1024 ||
+        startY > 768 ||
+        endY > 768
+    ) {
+        return `Error: Invalid coordinates dragging from ${startX},${startY} to ${endX},${endY}. The viewport size is 1024x768 and coordinates must be within this range (0-1024 for x, 0-768 for y).`;
     }
 
     try {
         const session = getAgentBrowserSession(inject_agent_id);
-
-        // Handle normal tab switching - this will also focus the tab when type='id'
-        const result = await session.switchTab(type, tabId || '');
+        // Ensure session is initialized before dragging
+        await session.initialize();
+        const result = await session.drag(startX, startY, endX, endY, button);
         return String(result);
     } catch (error: any) {
-        const errorMessage = `[browser_utils] Error switching tab: ${error?.message || String(error)}`;
+        const errorMessage = `[browser_utils] Error dragging from ${startX},${startY} to ${endX},${endY}: ${error?.message || String(error)}`;
         console.error(errorMessage, error?.details || '');
         return errorMessage; // Return error message string
     }
 }
 
-// --- Element Interaction Functions ---
-
-/** Helper to call the versatile interact_element command */
-async function interactElement(
+/**
+ * Executes a sequence of browser actions provided as a JSON string.
+ * This function is intended to be called by an LLM agent to perform multiple browser
+ * interactions in a single step, improving efficiency and reducing round trips.
+ * Actions are executed sequentially, and execution stops immediately if any action fails.
+ *
+ * @param inject_agent_id - The agent ID identifying the target browser session.
+ * @param actionsJson - A JSON string representing an array of action objects. Each object
+ * defines a single browser action and its parameters.
+ * See the `getBrowserVisionTools` description for available actions and format.
+ * Example: '[{"action": "navigate", "url": "https://example.com"}, {"action": "click_at", "x": 100, "y": 200}]'
+ * @returns A JSON string containing:
+ * - `status`: "success" or "error".
+ * - `message`: A summary of execution (e.g., "Successfully executed 2 actions." or error details).
+ * - `lastResult`: The result returned by the *last successfully executed* action in the sequence
+ * (could be a string, a BrowserStatusPayload object, etc., depending on the last action).
+ * This is null if no actions were provided or if the first action failed.
+ */
+export async function execute(
     inject_agent_id: string,
-    elementId: number,
-    action:
-        | 'click'
-        | 'fill'
-        | 'check'
-        | 'hover'
-        | 'focus'
-        | 'scroll'
-        | 'select_option',
-    value?: string, // Used for fill, select_option
-    checked?: boolean // Used for check
+    actionsJson: string
 ): Promise<string> {
-    if (typeof elementId !== 'number' || elementId <= 0) {
-        const errorMsg = `[browser_utils] Error: Invalid elementId (${elementId}) provided for action '${action}'.`;
+    console.log(
+        `[browser_utils] Requesting to execute actions for agent ${inject_agent_id}: ${actionsJson.substring(0, 200)}${actionsJson.length > 200 ? '...' : ''}`
+    );
+
+    let actions: BrowserAction[];
+    try {
+        actions = JSON.parse(actionsJson);
+        // Basic validation: check if it's an array and not empty
+        if (!Array.isArray(actions)) {
+            throw new Error('Parsed JSON is not an array.');
+        }
+        // Optional: Add deeper validation for each action object structure if needed
+        // e.g., check for 'action' property, validate parameters per action type
+    } catch (parseError: any) {
+        const errorMsg = `[browser_utils] Error: Invalid JSON string provided for actionsJson: ${parseError?.message || String(parseError)}. JSON string was: ${actionsJson}`;
         console.error(errorMsg);
-        return Promise.resolve(errorMsg); // Return error string directly
+        // Return a structured error JSON consistent with the expected return format
+        return JSON.stringify({
+            status: 'error',
+            message: `Invalid JSON for actions: ${parseError?.message || String(parseError)}`,
+            lastResult: null,
+        });
     }
-    console.log(
-        `[browser_utils] Requesting action '${action}' on element ID ${elementId}...`
-    );
-    try {
-        const session = getAgentBrowserSession(inject_agent_id);
-        const result = await session.interactElement(
-            elementId,
-            action,
-            value,
-            checked
-        );
-        return String(result); // Return success/status message from background script
-    } catch (error: any) {
-        const errorMessage = `[browser_utils] Error performing action '${action}' on element ID ${elementId}: ${error?.message || String(error)}`;
-        console.error(errorMessage, error?.details || '');
-        return errorMessage; // Return error message string
-    }
-}
 
-export async function element_click(
-    inject_agent_id: string,
-    elementId: number
-): Promise<string> {
-    const result = await interactElement(inject_agent_id, elementId, 'click');
-    // Add recommendation here as the result string comes from background.js now
-    if (
-        !result.startsWith('[browser_utils] Error:') &&
-        !result.toLowerCase().includes('error')
-    ) {
-        return result + ' IMPORTANT: Page state might have changed.';
+    if (actions.length === 0) {
+        // Return success but indicate no actions were performed
+        return JSON.stringify({
+            status: 'success',
+            message: 'No actions provided to execute.',
+            lastResult: null,
+        });
     }
-    return result;
-}
-
-export async function element_value(
-    inject_agent_id: string,
-    elementId: number,
-    value: string
-): Promise<string> {
-    if (value === undefined || value === null) {
-        return "[browser_utils] Error: 'value' parameter must be provided for 'element_value'.";
-    }
-    return interactElement(inject_agent_id, elementId, 'fill', value);
-}
-
-export async function element_check(
-    inject_agent_id: string,
-    elementId: number,
-    checked: boolean
-): Promise<string> {
-    if (checked === undefined || checked === null) {
-        return "[browser_utils] Error: 'checked' parameter (true/false) must be provided for 'element_check'.";
-    }
-    return interactElement(
-        inject_agent_id,
-        elementId,
-        'check',
-        undefined,
-        checked
-    );
-}
-
-export async function element_hover(
-    inject_agent_id: string,
-    elementId: number
-): Promise<string> {
-    const result = await interactElement(inject_agent_id, elementId, 'hover');
-    if (
-        !result.startsWith('[browser_utils] Error:') &&
-        !result.toLowerCase().includes('error')
-    ) {
-        return result + ' Tooltips or menus might now be visible.';
-    }
-    return result;
-}
-
-export async function element_focus(
-    inject_agent_id: string,
-    elementId: number
-): Promise<string> {
-    const result = await interactElement(inject_agent_id, elementId, 'focus');
-    if (
-        !result.startsWith('[browser_utils] Error:') &&
-        !result.toLowerCase().includes('error')
-    ) {
-        return (
-            result +
-            " Subsequent 'press' or 'type' actions may target this element."
-        );
-    }
-    return result;
-}
-
-export async function element_scroll(
-    inject_agent_id: string,
-    elementId: number
-): Promise<string> {
-    return interactElement(inject_agent_id, elementId, 'scroll');
-}
-
-export async function element_select(
-    inject_agent_id: string,
-    elementId: number,
-    value: string
-): Promise<string> {
-    if (value === undefined || value === null) {
-        return "[browser_utils] Error: 'value' parameter (option value, text, or label) must be provided for 'element_select'.";
-    }
-    const result = await interactElement(
-        inject_agent_id,
-        elementId,
-        'select_option',
-        value
-    );
-    if (
-        !result.startsWith('[browser_utils] Error:') &&
-        !result.toLowerCase().includes('error')
-    ) {
-        return result + ' IMPORTANT: Page state might have changed.';
-    }
-    return result;
-}
-
-// Close the tab browser session when done
-export async function close_tab(inject_agent_id: string): Promise<string> {
-    console.log(
-        `[browser_utils] Requesting to close session for tab: ${inject_agent_id}`
-    );
 
     try {
         const session = getAgentBrowserSession(inject_agent_id);
-        const result = await session.closeSession();
-        return result;
+        // Ensure session is initialized before executing actions
+        await session.initialize();
+        // Call the session's executeActions method, which handles sequential execution and errors
+        const resultString = await session.executeActions(actions);
+        // executeActions already returns a JSON string with status, message, and lastResult
+        return resultString;
     } catch (error: any) {
-        const errorMessage = `[browser_utils] Error closing session for tab ${inject_agent_id}: ${error?.message || String(error)}`;
+        // Catch errors during session initialization or unexpected errors in executeActions itself
+        const errorMessage = `[browser_utils] Error executing actions sequence for agent ${inject_agent_id}: ${error?.message || String(error)}`;
         console.error(errorMessage, error?.details || '');
-        return errorMessage;
+        // Return a structured error JSON
+        return JSON.stringify({
+            status: 'error',
+            message: `Error executing actions: ${error?.message || String(error)}`,
+            lastResult: null, // Indicate no successful result
+        });
     }
 }
 
 /**
- * Get all browser tools as an array of tool definitions
- */
-export function getCommonBrowserTools(): ToolFunction[] {
-    return [
-        // --- Navigation and Page Context ---
-        createToolFunction(
-            navigate,
-            'Navigate to a URL.',
-            {
-                url: { type: 'string', description: 'URL to navigate to' },
-                takeFocus: {
-                    type: 'boolean',
-                    description:
-                        'Have this tab take focus in the live browser. This should rarely be used unless explicitly requested as you have a shared browser session with the computer operator and this may interrupt their usage. Default: false',
-                    optional: true,
-                },
-            },
-            'Status message including new page title.'
-        ),
-
-        createToolFunction(
-            type,
-            'Type text using the keyboard. Will type into the currently focused element.',
-            { text: { type: 'string', description: 'Text to type' } }
-        ),
-        createToolFunction(
-            press_keys,
-            'Simulate pressing a specific key or key combination. Affects focused element.',
-            {
-                keys: {
-                    type: 'array',
-                    description:
-                        'List of keys to press in order (e.g., ["Enter", "Tab", "ArrowDown", "Control+C"])',
-                },
-            }
-        ),
-
-        // --- Tab Management ---
-        createToolFunction(
-            list_browser_tabs,
-            'List all open browser tabs across all windows. Returns information about all tabs including their tabId, title, and URL.'
-        ),
-        createToolFunction(
-            change_tab,
-            'Each browser agent operates in its own tab. This function changes which tab the agent is in for future operations.',
-            {
-                destination: {
-                    type: 'string',
-                    description:
-                        'What tab operation to perform\n' +
-                        'new: create and switch to a new tab for future operations\n' +
-                        'id: switch to an existing tab by its ID (also focuses it in the UI)',
-                    enum: ['new', 'id'],
-                },
-                tabId: {
-                    type: 'string',
-                    description:
-                        'The ID of the tab to switch to. Required when destination is "id".',
-                    optional: true,
-                },
-            }
-        ),
-    ];
-}
-
-/**
- * Get all browser tools as an array of tool definitions
- */
-export function getBrowserDebugTools(): ToolFunction[] {
-    return [
-        createToolFunction(
-            js_evaluate,
-            'Advanced: Execute arbitrary JavaScript code in the current page.',
-            {
-                code: {
-                    type: 'string',
-                    description: 'JavaScript code to execute',
-                },
-            },
-            'Result of the executed code, JSON stringified.'
-        ),
-        createToolFunction(
-            debug_command,
-            'Advanced: Send an arbitrary Chrome DevTools Protocol command to the browser',
-            {
-                method: {
-                    type: 'string',
-                    description:
-                        "The CDP method to call (e.g., 'DOM.querySelectorAll', 'Page.handleJavaScriptDialog')",
-                },
-                commandParamsJson: {
-                    type: 'string',
-                    description:
-                        'Optional parameters for the CDP method, provided as a valid JSON string. Example: \'{"nodeId": 123, "selector": ".my-class"}\'',
-                    optional: true,
-                },
-            }
-        ),
-    ];
-}
-/**
- * Get all browser tools as an array of tool definitions
- */
-export function getBrowserTools(): ToolFunction[] {
-    return [
-        createToolFunction(
-            get_page_content,
-            'Get content of the current page in a specified format. Updates the internal map for ID-based interactions when type is "interact". IMPORTANT: Call this AFTER navigation or actions that significantly change the page (clicks, submits).',
-            {
-                type: {
-                    type: 'string',
-                    description:
-                        'Format for the page content:\n' +
-                        "'interact': Simplified text with interactive elements ([ID] description) and landmarks (## Landmark ##).\n" +
-                        "'markdown': Page content converted to Markdown format.\n" +
-                        "'html': Cleaned HTML content of the page body (scripts removed, etc.).",
-                    enum: ['interact', 'markdown', 'html'],
-                },
-            },
-            'Page content in the requested format (interactive elements, markdown, or cleaned HTML).'
-        ),
-        createToolFunction(
-            element_click,
-            'Click on an element identified by its numeric ID',
-            {
-                elementId: {
-                    type: 'number',
-                    description:
-                        'The numeric ID of the element (e.g., 3 for [3])',
-                },
-            }
-        ),
-        createToolFunction(
-            element_value,
-            'Fill in a form field identified by its numeric ID',
-            {
-                elementId: {
-                    type: 'number',
-                    description:
-                        'The numeric ID of the element (e.g., 3 for [3])',
-                },
-                value: {
-                    type: 'string',
-                    description: 'Text to enter into the field',
-                },
-            }
-        ),
-        createToolFunction(
-            element_check,
-            'Check or uncheck a checkbox or radio button identified by its numeric ID',
-            {
-                elementId: {
-                    type: 'number',
-                    description:
-                        'The numeric ID of the element (e.g., 3 for [3])',
-                },
-                checked: {
-                    type: 'boolean',
-                    description: 'true to check, false to uncheck',
-                },
-            }
-        ),
-        createToolFunction(
-            element_hover,
-            'Hover over an element identified by its numeric ID',
-            {
-                elementId: {
-                    type: 'number',
-                    description:
-                        'The numeric ID of the element (e.g., 3 for [3])',
-                },
-            }
-        ),
-        createToolFunction(
-            element_focus,
-            'Focus on an element identified by its numeric ID',
-            {
-                elementId: {
-                    type: 'number',
-                    description:
-                        'The numeric ID of the element (e.g., 3 for [3])',
-                },
-            }
-        ),
-        createToolFunction(
-            element_scroll,
-            'Scroll an element into view identified by its numeric ID',
-            {
-                elementId: {
-                    type: 'number',
-                    description:
-                        'The numeric ID of the element (e.g., 3 for [3])',
-                },
-            }
-        ),
-        createToolFunction(
-            element_select,
-            'Pick an option from a dropdown identified by its numeric ID',
-            {
-                elementId: {
-                    type: 'number',
-                    description:
-                        'The numeric ID of the <select> element (e.g., 3 for [3])',
-                },
-                value: {
-                    type: 'string',
-                    description:
-                        'Value, text content, or label of the option to select',
-                },
-            }
-        ),
-        createToolFunction(
-            close_tab,
-            'Close the current browser tab. Use this when you are completely done browsing.'
-        ),
-
-        /*createToolFunction(
-      focusTab,
-      'Focus on a specific browser tab by its Chrome tab ID. This brings the tab to the foreground without changing which tab the agent controls.',
-      {
-        'chromeTabId': { type: 'number', description: 'The Chrome tabId to focus (from list_browser_tabs)' }
-      },
-      'Status message indicating success or failure.'
-    ),*/
-    ];
-}
-
-/**
- * Sends an arbitrary debug command to the Chrome DevTools Protocol
- * @param method The CDP method to call (e.g., 'Page.captureScreenshot', 'DOM.getDocument')
- * @param commandParams Optional parameters for the CDP method
+ * Sends an arbitrary debug command to the Chrome DevTools Protocol. Use with caution.
+ *
+ * @param inject_agent_id The agent ID to use for the browser session.
+ * @param method The CDP method to call (e.g., 'Page.captureScreenshot', 'DOM.getDocument').
  * @param commandParamsJson Optional parameters for the CDP method, as a JSON string.
- * @returns Result of the command execution as a string
+ * @returns Result of the command execution as a JSON string, or an error message string if parsing/execution fails.
  */
 export async function debug_command(
     inject_agent_id: string,
@@ -757,343 +365,628 @@ export async function debug_command(
     commandParamsJson?: string
 ): Promise<string> {
     console.log(
-        `[browser_utils] Executing debug command '${method}' with params string: ${commandParamsJson}`
+        `[browser_utils] Executing debug command '${method}' for agent ${inject_agent_id} with params string: ${commandParamsJson}`
     );
     if (!method || typeof method !== 'string') {
         const errorMsg =
-            "[browser_utils] Error: Valid method name is required for 'debug_command'.";
+            "[browser_utils] Error: Valid method name string is required for 'debug_command'.";
         console.error(errorMsg);
-        return Promise.resolve(errorMsg);
+        return errorMsg; // Return simple error string
     }
 
     let commandParams: object | undefined;
     if (commandParamsJson) {
         try {
             commandParams = JSON.parse(commandParamsJson);
+            // Ensure it's an object after parsing
             if (typeof commandParams !== 'object' || commandParams === null) {
                 throw new Error('Parsed JSON is not an object.');
             }
         } catch (parseError: any) {
             const errorMsg = `[browser_utils] Error: Invalid JSON string provided for commandParamsJson: ${parseError?.message || String(parseError)}. JSON string was: ${commandParamsJson}`;
             console.error(errorMsg);
-            return Promise.resolve(errorMsg);
+            return errorMsg; // Return simple error string
         }
     }
 
     try {
+        // Get the browser session for this agent
         const session = getAgentBrowserSession(inject_agent_id);
-        // Pass the parsed object (or undefined) to the session method
+        // Ensure session is initialized before sending debug command
+        await session.initialize();
+
+        // Execute the CDP command using the session's debugCommand method
         const result = await session.debugCommand(method, commandParams);
-        return result;
+
+        // Format the result for return - always attempt to stringify
+        try {
+            // Stringify with indentation for better readability if logged
+            const resultString = JSON.stringify(result, null, 2);
+            return resultString;
+        } catch (stringifyError: any) {
+            console.error(
+                `[browser_utils] Error stringifying result of debug command '${method}':`,
+                stringifyError
+            );
+            // Fallback to simple string conversion if stringify fails
+            return `[Stringified Error] Could not stringify result: ${String(result)}`;
+        }
     } catch (error: any) {
+        // Catch errors from session initialization or debugCommand execution
         const errorMessage = `[browser_utils] Error executing debug command '${method}': ${error?.message || String(error)}`;
         console.error(errorMessage, error?.details || '');
         return errorMessage; // Return error message string
     }
 }
 
+// --- Tool Definitions ---
+
 /**
- * Get all browser tools as an array of tool definitions
+ * Get common browser tools (navigation, typing, key presses).
+ * These are fundamental actions for basic web interaction.
  */
-export function getBrowserVisionTools(): ToolFunction[] {
+export function getCommonBrowserTools(): ToolFunction[] {
     return [
-        createToolFunction(scroll_to, 'Scroll the current tab.', {
-            mode: {
-                type: 'string',
-                description:
-                    "How to scroll the page. Use coordinates to go to a specific location. Prefer using page_down over coordinates so you don't miss anything.",
-                enum: ['page_down', 'page_up', 'bottom', 'top', 'coordinates'],
-            },
-            x: {
-                type: 'number',
-                description:
-                    'X coordinate to scroll to. Only used when mode=coordinates',
-                optional: true,
-            },
-            y: {
-                type: 'number',
-                description:
-                    'Y coordinate to scroll to. Only used when mode=coordinates',
-                optional: true,
-            },
-        }),
         createToolFunction(
-            click_at,
-            'Click at specific coordinates on the current page.',
+            navigate,
+            'Navigate the current browser tab to a specified URL.',
             {
-                x: { type: 'number', description: 'X coordinate to click at' },
-                y: { type: 'number', description: 'Y coordinate to click at' },
-                button: {
+                url: {
                     type: 'string',
-                    description: 'Mouse button to use for the click',
-                    enum: ['left', 'middle', 'right', 'back', 'forward'],
-                    optional: true,
+                    description:
+                        'The absolute URL to navigate to (e.g., "https://example.com").',
                 },
-            }
+            },
+            'Returns a status message indicating success or failure of the navigation attempt.'
+        ),
+        createToolFunction(
+            type,
+            'Simulate typing text using the keyboard into the currently focused element. This function correctly handles newline characters (\\n) by simulating an Enter key press.',
+            {
+                text: {
+                    type: 'string',
+                    description: 'The text to type. Use "\\n" for newlines.',
+                },
+            },
+            'Returns a status message indicating success or failure.'
+        ),
+        createToolFunction(
+            press_keys,
+            'Simulate pressing a single specific keyboard key (e.g., Enter, Tab, ArrowDown, Escape). This action affects the currently focused element on the page.',
+            {
+                key: {
+                    type: 'string',
+                    description:
+                        'The single key to press. Common values include "Enter", "Tab", "Escape", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Backspace", "Delete". For regular characters, use the character itself (e.g., "a", "A", "5"). Modifier keys (Ctrl, Shift, Alt, Meta) are not directly supported by this simplified function; use the `execute` tool with `debugCommand` and `Input.dispatchKeyEvent` for complex key combinations.',
+                },
+            },
+            'Returns a status message indicating success or failure.'
         ),
     ];
 }
 
+/**
+ * Get browser vision tools (scrolling, clicking, dragging, executing sequences).
+ * These tools are typically used by multimodal agents that can "see" the page layout.
+ * Coordinates are based on a standard 1024x768 CSS pixel viewport.
+ */
+export function getBrowserVisionTools(): ToolFunction[] {
+    return [
+        createToolFunction(
+            scroll_to,
+            'Scroll the current browser tab view. Use "page_down" or "page_up" for general scrolling, "top" or "bottom" to reach page ends, or "coordinates" for specific positioning.',
+            {
+                mode: {
+                    type: 'string',
+                    description:
+                        'The scrolling method. "page_down" is generally preferred over "coordinates" for exploration to avoid missing content.',
+                    enum: [
+                        'page_down',
+                        'page_up',
+                        'bottom',
+                        'top',
+                        'coordinates',
+                    ],
+                },
+                x: {
+                    type: 'number',
+                    description:
+                        'The target horizontal scroll coordinate (CSS pixel value). Required and only used when mode="coordinates". Must be between 0 and 1024.',
+                    optional: true, // Optional overall, but required for 'coordinates' mode
+                },
+                y: {
+                    type: 'number',
+                    description:
+                        'The target vertical scroll coordinate (CSS pixel value). Required and only used when mode="coordinates". Must be between 0 and 768.',
+                    optional: true, // Optional overall, but required for 'coordinates' mode
+                },
+            },
+            'Returns a status message indicating success or failure of the scroll operation.'
+        ),
+        createToolFunction(
+            click_at,
+            'Simulate a mouse click at specific coordinates (CSS pixels) within the current page viewport. The viewport is assumed to be 1024x768 pixels.',
+            {
+                x: {
+                    type: 'number',
+                    description:
+                        'The horizontal coordinate (X-axis) to click at (must be between 0 and 1024).',
+                },
+                y: {
+                    type: 'number',
+                    description:
+                        'The vertical coordinate (Y-axis) to click at (must be between 0 and 768).',
+                },
+                button: {
+                    type: 'string',
+                    description:
+                        'The mouse button to simulate for the click. Defaults to "left".',
+                    enum: ['left', 'middle', 'right'],
+                    optional: true,
+                },
+            },
+            'Returns a status message indicating success or failure of the click.'
+        ),
+        createToolFunction(
+            drag,
+            'Simulate a mouse drag operation from a starting coordinate to an ending coordinate (CSS pixels) within the viewport (1024x768).',
+            {
+                startX: {
+                    type: 'number',
+                    description:
+                        'The horizontal coordinate (X-axis) where the drag starts (0-1024).',
+                },
+                startY: {
+                    type: 'number',
+                    description:
+                        'The vertical coordinate (Y-axis) where the drag starts (0-768).',
+                },
+                endX: {
+                    type: 'number',
+                    description:
+                        'The horizontal coordinate (X-axis) where the drag ends (0-1024).',
+                },
+                endY: {
+                    type: 'number',
+                    description:
+                        'The vertical coordinate (Y-axis) where the drag ends (0-768).',
+                },
+                button: {
+                    type: 'string',
+                    description:
+                        'The mouse button to hold down during the drag. Defaults to "left".',
+                    enum: ['left', 'middle', 'right'],
+                    optional: true,
+                },
+            },
+            'Returns a status message indicating success or failure of the drag operation.'
+        ),
+        createToolFunction(
+            execute,
+            'Execute a sequence of browser actions efficiently in a single tool call. Actions run in the provided order. If any action fails, the sequence stops, and an error is returned. This is useful for chaining interactions like navigating, typing, and clicking.',
+            {
+                actionsJson: {
+                    type: 'string',
+                    description: `A **JSON string** representing an **array** of action objects. Each object in the array MUST have an 'action' property specifying the action name, and any required parameters for that action.
+
+Available actions and their parameters:
+- \`{"action": "navigate", "url": "string"}\`
+- \`{"action": "type", "text": "string"}\` (handles \\n)
+- \`{"action": "press", "key": "string"}\` (e.g., "Enter", "Tab")
+- \`{"action": "scroll_to", "mode": "string", "x"?: number, "y"?: number}\` (mode: 'page_down', 'page_up', 'bottom', 'top', 'coordinates')
+- \`{"action": "click_at", "x": number, "y": number, "button"?: "string"}\` (button: 'left', 'middle', 'right')
+- \`{"action": "drag", "startX": number, "startY": number, "endX": number, "endY": number, "button"?: "string"}\`
+- \`{"action": "js_evaluate", "code": "string"}\`
+- \`{"action": "get_page_url"}\` (no parameters)
+- \`{"action": "get_page_content", "type": "string"}\` (type: 'html', 'markdown', 'interactive' - currently only 'html' fully supported)
+- \`{"action": "browserStatus", "type"?: "string", "includeCoreTabs"?: boolean}\` (type: 'viewport' or 'fullpage' - currently only 'viewport')
+- \`{"action": "debugCommand", "method": "string", "commandParams"?: object}\` (Advanced CDP command)
+
+**Example JSON String:**
+\`'[{"action": "navigate", "url": "https://google.com"}, {"action": "type", "text": "large language models\\n"}, {"action": "click_at", "x": 500, "y": 400}]'\`
+Make sure the JSON string is valid and properly escaped if necessary within the parent JSON tool call.`,
+                },
+            },
+            'Returns a JSON string containing: `status` ("success" or "error"), `message` (summary or error details), and `lastResult` (the output of the last successfully executed action, or null on error/no actions).'
+        ),
+    ];
+}
+
+/**
+ * Get advanced/debug browser tools.
+ * These tools provide lower-level access and should be used with caution.
+ */
+export function getBrowserDebugTools(): ToolFunction[] {
+    return [
+        createToolFunction(
+            js_evaluate,
+            'Advanced: Execute arbitrary JavaScript code directly within the context of the current page. Returns the result of the execution.',
+            {
+                code: {
+                    type: 'string',
+                    description:
+                        'The JavaScript code string to execute. Example: "document.title" or "return document.querySelectorAll(\'.item\').length".',
+                },
+            },
+            'Returns the result of the JavaScript execution, converted to a string. Errors during execution will be returned as an error message string.'
+        ),
+        createToolFunction(
+            debug_command,
+            'Advanced: Send a raw Chrome DevTools Protocol (CDP) command directly to the browser tab. This allows for fine-grained control but requires knowledge of the CDP specification.',
+            {
+                method: {
+                    type: 'string',
+                    description:
+                        "The full CDP method name including the domain (e.g., 'Page.navigate', 'DOM.querySelector', 'Input.dispatchKeyEvent'). Refer to the Chrome DevTools Protocol documentation for available methods.",
+                },
+                commandParamsJson: {
+                    type: 'string',
+                    description:
+                        'Optional: A JSON string representing the parameters object for the CDP method. The structure must match the requirements of the specified CDP method. Example for Page.navigate: \'{"url": "https://example.com"}\'. Example for Input.dispatchKeyEvent: \'{"type": "keyDown", "key": "Enter", "code": "Enter", "windowsVirtualKeyCode": 13}\'.',
+                    optional: true,
+                },
+            },
+            'Returns the raw result object from the CDP command, serialized as a JSON string. If the command fails or parameters are invalid, an error message string is returned.'
+        ),
+    ];
+}
+
+// --- Agent Setup and Status ---
+
+/**
+ * Defines parameters typically used when initializing a browser agent.
+ */
 export function getBrowserParams(agentName: string): ToolParameterMap {
     return {
         url: {
             type: 'string',
-            description: `What URL should this ${agentName} start at?`,
+            description: `The initial URL the ${agentName} should navigate to upon starting. Can be omitted to start on 'about:blank'.`,
+            optional: true, // Make URL optional
         },
         task: {
             type: 'string',
-            description: `What should this ${agentName} work on? Generally you should leave the way the task is performed up to the agent unless the agent previously failed. Agents are expected to work mostly autonomously.`,
+            description: `A clear description of the primary task the ${agentName} should accomplish. Be specific about the objective but generally allow the agent to determine the steps.`,
         },
         context: {
             type: 'string',
-            description: `What else might this ${agentName} need to know? Explain why you are asking for this - summarize the task you were given or the project you are working on. Please make it comprehensive. A couple of paragraphs is ideal.`,
+            description:
+                'Provide background information relevant to the task. This could include the overall project goal, previous steps taken, constraints, or user preferences. A few sentences to a paragraph is helpful.',
             optional: true,
         },
         goal: {
             type: 'string',
-            description: `This is the final goal/output or result you expect from the task. Try to focus on the overall goal and allow this ${agentName} to make it's own decisions on how to get there. One sentence is ideal.`,
+            description:
+                'Define the final desired outcome or deliverable of the task. Focus on the end result, not the process. A single, concise sentence is ideal.',
             optional: true,
         },
         intelligence: {
             type: 'string',
-            description: `What level of intelligence do you recommend for this ${agentName}?
-      - low: (under 90 IQ) Mini model used.
-      - standard: (90 - 110 IQ)
-      - high: (110+ IQ) Reasoning used.`,
+            description: `Select the appropriate intelligence level for the ${agentName} based on task complexity. 'standard' is default. 'high' enables more complex reasoning but may be slower. 'low' uses smaller models, faster but less capable.`,
             enum: ['low', 'standard', 'high'],
             optional: true,
         },
     };
 }
 
+/**
+ * Processes the initial parameters for a browser agent, sets up its browser session,
+ * and formats the initial prompt.
+ *
+ * @param agent - The agent instance.
+ * @param params - The parameters provided for agent initialization.
+ * @returns An object containing the initial prompt and intelligence setting.
+ */
 export async function processBrowserParams(
     agent: AgentInterface,
     params: Record<string, any>
 ): Promise<{ prompt: string; intelligence?: 'low' | 'standard' | 'high' }> {
-    console.log('*** processBrowserParams ***', params);
-    // Setup agent-specific browser tools
-    await setupAgentBrowserTools(agent, params.url);
+    console.log('[browser_utils] Processing browser params:', params);
+    // Setup agent-specific browser tools and initialize session
+    // Pass startUrl only if provided in params
+    try {
+        await setupAgentBrowserTools(agent, params.url);
+    } catch (setupError: any) {
+        // If setup fails, report error clearly in the initial prompt
+        console.error(
+            `[browser_utils] Browser setup failed for agent ${agent.agent_id}: ${setupError.message}`
+        );
+        return {
+            prompt: `**CRITICAL ERROR:** Failed to initialize browser session: ${setupError.message}\n\nPlease report this issue. Cannot proceed with the task.`,
+            intelligence: params.intelligence || 'standard', // Keep intelligence level if provided
+        };
+    }
 
     const prompts: string[] = [];
+    // Confirmation message depends on whether a start URL was actually used
     if (params.url) {
         prompts.push(
-            `Your browser tab has been opened and navigated to ${params.url}`
+            `Your browser tab is ready and has been navigated to: ${params.url}`
         );
+    } else {
+        prompts.push("Your browser tab is ready (currently on 'about:blank').");
     }
+    prompts.push('You are now ready to begin the assigned task.');
+
     if (params.task) {
-        prompts.push(`**Task:** ${params.task}`);
+        prompts.push(`\n**Your Task:**\n${params.task}`);
     }
     if (params.context) {
-        prompts.push(`**Context:** ${params.context}`);
+        prompts.push(`\n**Background Context:**\n${params.context}`);
     }
     if (params.goal) {
-        prompts.push(`**Your Goal:** ${params.goal}`);
+        prompts.push(`\n**Final Goal:**\n${params.goal}`);
     }
 
     // Return the standard parameter object expected by runAgentTool
     return {
-        prompt: prompts.join('\n\n'),
+        prompt: prompts.join('\n'), // Use single newline for better readability in chat
         intelligence: params.intelligence,
     };
 }
 
+/**
+ * Determines the appropriate tab ID for a given agent, prioritizing the parent
+ * if it's a browser-type agent to maintain a single tab per browser agent hierarchy.
+ *
+ * @param agent - The agent interface.
+ * @returns The tab ID string to use for the browser session.
+ */
 function getAgentTabId(agent: AgentInterface): string {
-    // Use the agent ID as the tab ID for this agent
+    // Use the agent ID as the default tab ID
     let tabId = agent.agent_id;
+    // Check if parent exists, has an ID, and is one of the browser agent types
     if (
-        agent.parent &&
+        agent.parent?.agent_id && // Ensure parent and parent.agent_id exist
         (agent.parent.name === 'BrowserAgent' ||
             agent.parent.name === 'BrowserCodeAgent' ||
-            agent.parent.name === 'BrowserVisionAgent') &&
-        agent.parent.agent_id
+            agent.parent.name === 'BrowserVisionAgent')
     ) {
-        tabId = agent.parent.agent_id; // Use the parent agent ID if available
+        // Use the parent agent ID if it's a browser agent, ensuring consistency
+        tabId = agent.parent.agent_id;
+        console.log(
+            `[browser_utils] Using parent agent ID (${tabId}) for browser session for agent ${agent.agent_id} (${agent.name}).`
+        );
+    } else {
+        console.log(
+            `[browser_utils] Using own agent ID (${tabId}) for browser session for agent ${agent.agent_id} (${agent.name}).`
+        );
     }
     return tabId;
 }
 
-// Helper to set up tab-specific browser sessions
+/**
+ * Initializes the browser session for a given agent, ensuring the corresponding
+ * Chrome tab is ready and CDP connection is established.
+ *
+ * @param agent - The agent interface.
+ * @param startUrl - Optional URL to navigate to if the tab is newly created.
+ * @throws If session initialization fails.
+ */
 export async function setupAgentBrowserTools(
     agent: AgentInterface,
     startUrl?: string
 ): Promise<void> {
-    // Use the agent ID as the tab ID for this agent
     const tabId = getAgentTabId(agent);
-    const session = getAgentBrowserSession(tabId, startUrl);
-    await session.initialize();
-    console.log(`[browser_utils] Setting up browser tools for tab: ${tabId}`);
+    console.log(
+        `[browser_utils] Setting up browser tools for tab: ${tabId} ${startUrl ? `with start URL: ${startUrl}` : '(no start URL)'}`
+    );
+    try {
+        const session = getAgentBrowserSession(tabId, startUrl);
+        // Ensure the session is initialized (connects to CDP, creates/attaches to tab)
+        // This is idempotent, safe to call multiple times.
+        await session.initialize();
+        console.log(
+            `[browser_utils] Browser session initialized successfully for tab: ${tabId}`
+        );
+    } catch (error: any) {
+        console.error(
+            `[browser_utils] Failed to initialize browser session for tab ${tabId}:`,
+            error
+        );
+        // Re-throw the error to be handled by the caller (e.g., processBrowserParams)
+        throw new Error(
+            `Failed to set up browser tools for agent ${agent.agent_id}: ${error.message}`
+        );
+    }
 }
 
+/**
+ * Captures the current browser state (screenshot, URL, elements) for the agent's tab
+ * and adds it as a message to the agent's context. Also sends status via comms manager.
+ * Handles errors during status capture gracefully.
+ *
+ * @param agent - The agent instance.
+ * @param messages - The current array of messages to append to.
+ * @returns A promise resolving to the agent and the updated messages array.
+ */
 async function addScreenshot(
     agent: Agent,
     messages: ResponseInput
 ): Promise<[Agent, ResponseInput]> {
+    const tStart = Date.now();
+    const tabId = getAgentTabId(agent);
+    console.log(
+        `[browser_utils] Capturing browser status/screenshot for agent ${agent.name} (tab: ${tabId})`
+    );
+
+    let payload: BrowserStatusPayload | null = null; // Initialize payload as null
+    let statusError: string | null = null; // Store potential error message
+
     try {
-        console.log(
-            `[browser_utils] Taking automatic screenshot for ${agent.name}`
-        );
-        const tStart = Date.now();
-
         // Get the browser session associated with this agent
-        const tabId = getAgentTabId(agent);
         const session = getAgentBrowserSession(tabId);
+        // Ensure session is initialized before getting status
+        await session.initialize();
 
-        // Take a screenshot with core tabs included
-        const payload = await session.screenshot('viewport', {
-            includeCoreTabs: true,
-        });
-        console.log(
-            `[browser_utils] Screenshot capture took ${Date.now() - tStart}ms`
-        );
+        // Get browser status (includes screenshot)
+        const payloadOrError = await session.browserStatus('viewport'); // Returns payload or { error: string }
 
-        if (payload) {
-            // Build browser status section
-            const browserSection = `### Browser status
-URL: ${payload.url || 'Unknown'}
-Viewport: ${payload.view?.w || 0} × ${payload.view?.h || 0} CSS px Full page: ${payload.full?.w || 0} × ${payload.full?.h || 0} CSS px`;
-
-            // Build tabs section
-            let tabsSection = '';
-            if (
-                payload.coreTabs &&
-                Array.isArray(payload.coreTabs) &&
-                payload.coreTabs.length > 0
-            ) {
-                const importantTabs = payload.coreTabs;
-
-                tabsSection = `\n\n### Important tabs (${importantTabs.length})`;
-
-                // Format each tab with status indicators
-                const tabsList = importantTabs
-                    .map((tab: any) => {
-                        const indicators = [];
-                        if (tab.active) indicators.push('active');
-                        if (tab.pinned) indicators.push('pinned');
-                        if (tab.isMagiGroup) indicators.push('magi opened');
-
-                        const status =
-                            indicators.length > 0
-                                ? ` (${indicators.join(' · ')})`
-                                : '';
-                        return `• Tab ${tab.id}${status} — "${tab.title}"  \n  ${tab.url}`;
-                    })
-                    .join('\n');
-
-                tabsSection += `\n${tabsList}`;
-            }
-
-            // Build elements section with interactive elements sorted by score
-            let elementsSection = '';
-            if (payload.elementMap && Array.isArray(payload.elementMap)) {
-                // Copy and sort elements by score and visibility
-                const sortedElements = [...payload.elementMap];
-                sortedElements.sort((a, b) => {
-                    // Primary sort: offscreen (in viewport first)
-                    if (!!a.offscreen !== !!b.offscreen) {
-                        return a.offscreen ? 1 : -1;
-                    }
-                    // Secondary sort: score (descending)
-                    if ((b.score || 0) !== (a.score || 0)) {
-                        return (b.score || 0) - (a.score || 0);
-                    }
-                    // Tertiary sort: y-position (top elements first)
-                    return a.y - b.y;
-                });
-
-                // Limit to reasonable display size
-                const MAX_ELEMENTS_TO_SHOW = 40;
-                const elementsToShow = sortedElements.slice(0, MAX_ELEMENTS_TO_SHOW);
-                const inViewportCount = elementsToShow.filter(el => !el.offscreen).length;
-                const totalInViewport = sortedElements.filter(el => !el.offscreen).length;
-
-                elementsSection = `\n\n### Interactive elements (${inViewportCount} visible of ${totalInViewport} in viewport, ${sortedElements.length} total)
-| id | role | type | label | extras | position | vis |
-|----|------|------|-------|--------|----------|-----|`;
-
-                elementsToShow.forEach((el: any) => {
-                    // Format the label - trim and limit length
-                    const label = el.label
-                        ? el.label.length > 25
-                            ? `"${el.label.substring(0, 22)}..."`
-                            : `"${el.label}"`
-                        : '';
-
-                    // Format extras (href, type, etc.)
-                    let extras = '';
-                    if (el.href) {
-                        extras = el.href.length > 20 ? el.href.substring(0, 17) + '...' : el.href;
-                    } else if (el.type) {
-                        extras = `type=${el.type}`;
-                    }
-
-                    // Format position as center point for easier clicking
-                    const position = `${el.cx},${el.cy}`;
-
-                    // Visibility indicator
-                    const visibility = el.offscreen ? '▼' : '✓';
-
-                    // Create table row
-                    elementsSection += `\n| ${el.id || '?'} | ${el.role || '?'} | ${el.tag || '?'} | ${label} | ${extras} | ${position} | ${visibility} |`;
-                });
-
-                elementsSection += `\n\n*(✓ = visible now, ▼ = requires scrolling, coordinates are element centers)*`;
-            }
-
-            // Send screenshot data to visualization
-            let screenshotSection = '';
-            if (payload.screenshot) {
-                screenshotSection = `\n\n### Browser screenshot
-${payload.screenshot}`;
-                const comm = getCommunicationManager();
-                comm.send({
-                    agent: agent.export(),
-                    type: 'screenshot',
-                    data: payload.screenshot,
-                    timestamp: new Date().toISOString(),
-                    url: payload.url,
-                    viewport: {
-                        x: 0,
-                        y: 0,
-                        width: payload.view?.w ?? 0,
-                        height: payload.view?.h ?? 0,
-                    },
-                });
-            }
-
-            // Push the combined message
-            messages.push({
-                role: 'developer',
-                content: `${browserSection}${tabsSection}${elementsSection}${screenshotSection}`,
-            });
+        // Check if an error object was returned
+        if (
+            typeof payloadOrError === 'object' &&
+            payloadOrError !== null &&
+            'error' in payloadOrError
+        ) {
+            statusError = payloadOrError.error; // Store the error message
+            console.error(
+                `[browser_utils] Error getting browser status for tab ${tabId}: ${statusError}`
+            );
+        } else {
+            // Type assertion is safe here
+            payload = payloadOrError as BrowserStatusPayload;
+            console.log(
+                `[browser_utils] Browser status/screenshot capture took ${Date.now() - tStart}ms for tab ${tabId}`
+            );
         }
-        console.log(
-            `[browser_utils] Total addScreenshot processing took ${Date.now() - tStart}ms`
-        );
-    } catch (error) {
+    } catch (error: any) {
+        // Catch errors from session initialization or other unexpected issues
+        statusError = `An unexpected error occurred while retrieving browser status: ${error.message || String(error)}`;
         console.error(
-            `[browser_utils] Error in addScreenshot for ${agent.name}:`,
+            `[browser_utils] Unexpected error in addScreenshot for agent ${agent.name} (tab: ${tabId}):`,
             error
         );
     }
 
-    // Return the agent and messages unchanged
+    // --- Construct the message content ---
+    let messageContent = '';
+
+    if (statusError) {
+        // If there was an error, report it clearly
+        messageContent = `### Browser Status Error\nFailed to retrieve browser status: ${statusError}`;
+    } else if (payload) {
+        // If successful, build the detailed status message
+        const browserSection = `### Browser status
+URL: ${payload.url || 'Unknown'}
+Viewport: ${payload.view?.w || 0} × ${payload.view?.h || 0} CSS px | Full page: ${payload.full?.w || 0} × ${payload.full?.h || 0} CSS px`;
+
+        // Build tabs section (placeholder, as coreTabs isn't fully implemented yet)
+        let tabsSection = '';
+        if (
+            payload.coreTabs &&
+            Array.isArray(payload.coreTabs) &&
+            payload.coreTabs.length > 0
+        ) {
+            tabsSection =
+                '\n\n### Important tabs (Note: Data may be placeholder)';
+            // ... (tab formatting logic) ...
+        }
+
+        // Build elements section
+        let elementsSection = '';
+        if (payload.elementMap && Array.isArray(payload.elementMap)) {
+            // Sort elements
+            const sortedElements = [...payload.elementMap].sort(
+                (a, b) =>
+                    !!a.offscreen !== !!b.offscreen
+                        ? a.offscreen
+                            ? 1
+                            : -1 // Onscreen first
+                        : (b.score || 0) - (a.score || 0) || // Then by score desc
+                          (a.y || 0) - (b.y || 0) // Then by y-coord asc
+            );
+
+            // Limit and format
+            const MAX_ELEMENTS_TO_SHOW = 40;
+            const elementsToShow = sortedElements.slice(
+                0,
+                MAX_ELEMENTS_TO_SHOW
+            );
+            const inViewportCount = elementsToShow.filter(
+                el => !el.offscreen
+            ).length;
+            const totalInViewport = sortedElements.filter(
+                el => !el.offscreen
+            ).length;
+            const hiddenShownCount = elementsToShow.length - inViewportCount;
+
+            elementsSection = `\n\n### Interactive elements (${inViewportCount} visible + ${hiddenShownCount} hidden shown of ${totalInViewport} in viewport, ${sortedElements.length} total)`;
+            elementsSection +=
+                '\n| id | role | type | label | extras | position | vis | score |';
+            elementsSection +=
+                '\n|----|------|------|-------|--------|----------|-----|-------|';
+
+            elementsToShow.forEach((el: any) => {
+                const label = el.label
+                    ? `"${el.label.replace(/\s+/g, ' ').trim().substring(0, 22)}${el.label.length > 25 ? '...' : ''}"`
+                    : '';
+                let extras = '';
+                if (el.href)
+                    extras =
+                        el.href.length > 20
+                            ? el.href.substring(0, 17) + '...'
+                            : el.href;
+                else if (el.placeholder)
+                    extras = `placeholder="${el.placeholder.substring(0, 15)}${el.placeholder.length > 15 ? '...' : ''}"`;
+                else if (el.value)
+                    extras = `value="${el.value.substring(0, 15)}${el.value.length > 15 ? '...' : ''}"`;
+                else if (el.type) extras = `type=${el.type}`;
+                const posX = typeof el.cx === 'number' ? Math.round(el.cx) : 0;
+                const posY = typeof el.cy === 'number' ? Math.round(el.cy) : 0;
+                const position = `${posX},${posY}`;
+                const visibility = el.offscreen ? '▼' : '✓';
+                const score =
+                    typeof el.score === 'number' ? el.score.toFixed(1) : '-';
+                elementsSection += `\n| ${el.id || '?'} | ${el.role || '?'} | ${el.tag || '?'} | ${label} | ${extras} | ${position} | ${visibility} | ${score} |`;
+            });
+            elementsSection +=
+                '\n\n*(✓ = visible now, ▼ = requires scrolling, coords = element center [x,y], score = importance)*';
+        }
+
+        // Add screenshot directly to context message
+        const screenshotSection = payload.screenshot
+            ? `\n\n### Browser screenshot\n${payload.screenshot}`
+            : '';
+
+        // Combine sections for the message content
+        messageContent = `${browserSection}${tabsSection}${elementsSection}${screenshotSection}`;
+
+        // Send detailed status via communication manager if successful
+        const comm = getCommunicationManager();
+        comm.send({
+            agent: agent.export(),
+            type: 'screenshot',
+            data: payload.screenshot, // Include screenshot here too if needed by visualizer
+            timestamp: new Date().toISOString(),
+            url: payload.url,
+            viewport: {
+                x: 0,
+                y: 0,
+                width: payload.view.w,
+                height: payload.view.h,
+            },
+        });
+    } else {
+        // Fallback if payload is null and no error was caught (shouldn't happen often)
+        messageContent =
+            '### Browser Status Error\nCould not retrieve browser status (payload was null).';
+    }
+
+    // Push the constructed message to the messages array
+    messages.push({
+        role: 'developer', // Role indicating system-provided information
+        content: messageContent,
+    });
+
+    console.log(
+        `[browser_utils] Total addScreenshot processing took ${Date.now() - tStart}ms for tab ${tabId}`
+    );
+
+    // Return the agent and the modified messages array
     return [agent, messages];
 }
 
 /**
- * Adds current browser status information to the messages, including:
- * 1. A screenshot of the current page
- * 2. A list of important tabs (active, magi group, or pinned)
- * 3. A simplified summary of the current page structure
+ * Adds current browser status information (screenshot, URL, elements) to the agent's
+ * message context. This is typically called before requesting the agent's next action.
  *
- * @param agent The agent to use for browser operations
- * @param messages The messages array to append status to
- * @returns Promise resolving to tuple of agent and updated messages
+ * @param agent The agent instance.
+ * @param messages The current array of messages for the agent's context.
+ * @returns Promise resolving to a tuple of the agent and the updated messages array.
  */
 export async function addBrowserStatus(
     agent: Agent,
     messages: ResponseInput
 ): Promise<[Agent, ResponseInput]> {
-    // Single round-trip to get both the screenshot and the core tabs
+    // Delegate directly to addScreenshot, which now handles status fetching and message formatting.
     return await addScreenshot(agent, messages);
 }

@@ -21,6 +21,7 @@
         "@google/genai": "^0.7.0",
         "@types/turndown": "^5.0.5",
         "axios": "^1.6.8",
+        "chrome-remote-interface": "^0.33.3",
         "dotenv": "^16.4.7",
         "jsdom": "^26.0.0",
         "node-pty": "^1.0.0",

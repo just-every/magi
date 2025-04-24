@@ -3,8 +3,9 @@ import { useRef, useEffect, useState } from 'react';
 import { ClientMessage } from '../../context/SocketContext';
 import MessageList from '../message/MessageList';
 import ProcessHeader from '../ui/ProcessHeader';
-import { ProcessStatus } from '../../../../types/shared-types';
-import { useAutoScroll } from '../utils/ScrollUtils';
+import { ProcessStatus, ScreenshotEvent } from '../../../../types/shared-types';
+import AutoScrollContainer from '../ui/AutoScrollContainer';
+import BrowserAgentCard from '../ui/BrowserAgentCard';
 
 interface AgentBoxProps {
     id: string;
@@ -18,6 +19,7 @@ interface AgentBoxProps {
     agentName: string;
     messages: ClientMessage[];
     isTyping: boolean;
+    screenshots?: ScreenshotEvent[];
 }
 
 interface AgentBoxWithParentProcess extends AgentBoxProps {
@@ -38,14 +40,11 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
     isTyping,
     parentProcessId,
     onFocusAgent,
+    screenshots,
 }) => {
-    const logsRef = useRef<HTMLDivElement>(null);
     const clickTimeout = useRef<number | null>(null);
     const clickCount = useRef<number>(0);
     const [mounted, setMounted] = useState(false);
-
-    // Scroll to bottom when messages update
-    useAutoScroll(logsRef, messages);
 
     // Effect to handle mount animation
     useEffect(() => {
@@ -114,16 +113,19 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
             >
                 <ProcessHeader agentName={agentName} colors={colors} />
 
-                <div
-                    className="process-logs card-body overflow-auto"
-                    ref={logsRef}
+                {screenshots && screenshots.length > 0 && (
+                    <BrowserAgentCard screenshots={screenshots} />
+                )}
+
+                <AutoScrollContainer
+                    className="process-logs card-body"
                 >
                     <MessageList
                         messages={messages}
                         isTyping={isTyping}
                         colors={colors}
                     />
-                </div>
+                </AutoScrollContainer>
             </div>
         </div>
     );

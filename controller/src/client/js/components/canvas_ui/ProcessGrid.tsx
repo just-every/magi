@@ -409,6 +409,7 @@ const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
                                 agentName={agent.name || workerId}
                                 messages={agent.messages}
                                 isTyping={agent.isTyping}
+                                screenshots={agent.screenshots}
                                 parentProcessId={id}
                                 onFocusAgent={(
                                     agentId,

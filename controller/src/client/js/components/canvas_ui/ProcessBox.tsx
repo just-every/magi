@@ -8,7 +8,7 @@ import { ProcessStatus } from '../../../../types';
 import { useSocket } from '../../context/SocketContext';
 import MessageList from '../message/MessageList';
 import ProcessHeader from '../ui/ProcessHeader';
-import { useAutoScroll } from '../utils/ScrollUtils';
+import AutoScrollContainer from '../ui/AutoScrollContainer';
 
 interface ProcessBoxProps {
     id: string;
@@ -40,13 +40,11 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
     name,
     status,
     colors,
-    logs,
     focused,
     onFocus,
     onViewLogs,
 }) => {
     const { terminateProcess, processes } = useSocket();
-    const logsRef = useRef<HTMLDivElement>(null);
     const [mounted, setMounted] = useState(false);
 
     // Get data directly from the socket context
@@ -54,9 +52,6 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
     const messages = process ? process.agent.messages : [];
     const agentName = process?.agent.name;
     const isTyping = process?.agent.isTyping || false;
-
-    // Scroll to bottom when messages update
-    useAutoScroll(logsRef, messages);
 
     // Effect to handle mount animation
     useEffect(() => {
@@ -128,9 +123,8 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
                     onViewLogs={onViewLogs ? () => onViewLogs(id) : undefined}
                 />
 
-                <div
-                    className="process-logs card-body overflow-auto"
-                    ref={logsRef}
+                <AutoScrollContainer
+                    className="process-logs card-body"
                 >
                     <MessageList
                         agent={process?.agent}
@@ -138,7 +132,7 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
                         isTyping={isTyping}
                         colors={colors}
                     />
-                </div>
+                </AutoScrollContainer>
             </div>
         </div>
     );

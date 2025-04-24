@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
+import AutoScrollContainer from '../ui/AutoScrollContainer';
 import { ProcessData, ToolCallMessage } from '../../context/SocketContext';
 import { GlobalCostData } from '../../../../types';
 import CollapsibleSection from './CollapsibleSection';
@@ -268,7 +269,7 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
             </CollapsibleSection>
 
             {/* Messages */}
-            <div className="chat-messages flex-grow-1 overflow-auto mt-3 pe-2">
+            <AutoScrollContainer className="chat-messages flex-grow-1 mt-3 pe-2">
                 {messages.length > 0 &&
                     messages.map(message => {
                         const toolCallMessage =
@@ -286,21 +287,21 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                         ) {
                             document = (
                                 <div className={`mt-2`}>
-                                    <div
-                                        className={`d-inline-block p-3 pb-0 rounded-top-3 bg-white text-black border border-light-subtle rounded-end-3 font-monospace`}
-                                        style={{
-                                            textAlign: 'left',
-                                            fontSize: '0.8em',
-                                            backgroundColor:
-                                                'rgb(255 255 255 / 35%) !important',
-                                            borderColor:
-                                                'rgb(255 255 255 / 65%) !important',
-                                        }}
-                                        dangerouslySetInnerHTML={parseMarkdown(
-                                            toolCallMessage.toolParams
-                                                .document as string
-                                        )}
-                                    />
+                                    <div className={`d-inline-block p-3 rounded-top-3 bg-white text-black border border-light-subtle rounded-end-3 font-monospace`}>
+                                            <div style={{
+                                                    textAlign: 'left',
+                                                    fontSize: '0.8em',
+                                                    backgroundColor:
+                                                        'rgb(255 255 255 / 35%) !important',
+                                                    borderColor:
+                                                        'rgb(255 255 255 / 65%) !important',
+                                                }}
+                                                dangerouslySetInnerHTML={parseMarkdown(
+                                                    toolCallMessage.toolParams
+                                                        .document as string
+                                                )}
+                                            />
+                                    </div>
                                 </div>
                             );
                         }
@@ -376,7 +377,7 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                             </div>
                         );
                     })}
-            </div>
+            </AutoScrollContainer>
 
             {/* Chat Input */}
             <div className="mt-auto pt-3">

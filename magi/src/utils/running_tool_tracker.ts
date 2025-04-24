@@ -211,7 +211,7 @@ Running Time: ${readableTime(new Date().getTime() - fn.started.getTime())}`;
      */
     listActive(): string {
         if (this.functions.size === 0) {
-            return '- No running tools';
+            return '- No tools running in the background';
         }
 
         let result = '';

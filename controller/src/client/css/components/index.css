@@ -1,0 +1,9 @@
+/**
+ * Component styles index
+ * Import this file to include all component-specific styles at once
+ */
+
+/* Timeline Player component styles */
+@import './timeline-player.css';
+
+/* Add future component CSS imports below */

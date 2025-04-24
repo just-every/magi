@@ -398,82 +398,86 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
                     <div className="control-bar d-flex align-items-center p-2 bg-light border rounded-bottom">
                         {sortedPoints.length > 0 ? (
                             <div className="d-flex flex-column w-100">
+
                                 {/* --- Custom TimeSlider Implementation --- */}
-                                <div
-                                    ref={trackRef}
-                                    className="tsp-track-container" // Use prefixed class
-                                    onMouseDown={e =>
-                                        handleInteractionStart(e.clientX)
-                                    }
-                                    onTouchStart={e =>
-                                        handleInteractionStart(
-                                            e.touches[0].clientX
-                                        )
-                                    }
-                                    onMouseMove={handleTrackMouseMove}
-                                    onMouseLeave={handleTrackMouseLeave}
-                                >
-                                    {/* Track Background */}
-                                    <div className="tsp-track">
-                                        {' '}
-                                        {/* Use prefixed class */}
-                                        {/* Active Track Bar (width set inline) */}
-                                        <div
-                                            className="tsp-track-bar-active"
-                                            style={{
-                                                width: `${progressPercentage}%`,
-                                            }}
-                                        />{' '}
-                                        {/* Use prefixed class */}
-                                    </div>
-
-                                    {/* Knob Container (position calculated inline) */}
+                                <div className="px-2">
                                     <div
-                                        className="tsp-knob-container"
-                                        style={{
-                                            left: `${progressPercentage}%`,
-                                        }}
+                                        ref={trackRef}
+                                        className="tsp-track-container" // Use prefixed class
+                                        onMouseDown={e =>
+                                            handleInteractionStart(e.clientX)
+                                        }
+                                        onTouchStart={e =>
+                                            handleInteractionStart(
+                                                e.touches[0].clientX
+                                            )
+                                        }
+                                        onMouseMove={handleTrackMouseMove}
+                                        onMouseLeave={handleTrackMouseLeave}
                                     >
-                                        {' '}
-                                        {/* Use prefixed class */}
-                                        {/* The Knob (dragging class applied conditionally) */}
-                                        <div
-                                            className={`tsp-knob ${isDragging ? 'tsp-knob--dragging' : ''}`} // Use prefixed classes
-                                            role="slider"
-                                            aria-valuemin={startTime}
-                                            aria-valuemax={endTime}
-                                            aria-valuenow={currentTime}
-                                            aria-valuetext={formatTime(
-                                                currentTime
-                                            )}
-                                            tabIndex={0}
-                                        />
-                                    </div>
-
-                                    {/* Thumbnail Preview (conditionally rendered) */}
-                                    {hoverIndex !== null &&
-                                        sortedPoints[hoverIndex]?.thumbnail && (
+                                        {/* Track Background */}
+                                        <div className="tsp-track">
+                                            {' '}
+                                            {/* Use prefixed class */}
+                                            {/* Active Track Bar (width set inline) */}
                                             <div
-                                                className="tsp-thumbnail-preview"
+                                                className="tsp-track-bar-active"
                                                 style={{
-                                                    left: `${timeToPercentage(sortedPoints[hoverIndex].time)}%`,
+                                                    width: `${progressPercentage}%`,
                                                 }}
-                                            >
-                                                {' '}
-                                                {/* Use prefixed class */}
-                                                <img
-                                                    src={
-                                                        sortedPoints[hoverIndex]
-                                                            .thumbnail
-                                                    }
-                                                    className="tsp-thumbnail-image"
-                                                    alt="Preview"
-                                                />{' '}
-                                                {/* Use prefixed class */}
-                                            </div>
-                                        )}
-                                </div>{' '}
-                                {/* End tsp-track-container */}
+                                            />{' '}
+                                            {/* Use prefixed class */}
+                                        </div>
+
+                                        {/* Knob Container (position calculated inline) */}
+                                        <div
+                                            className="tsp-knob-container"
+                                            style={{
+                                                left: `${progressPercentage}%`,
+                                            }}
+                                        >
+                                            {' '}
+                                            {/* Use prefixed class */}
+                                            {/* The Knob (dragging class applied conditionally) */}
+                                            <div
+                                                className={`tsp-knob ${isDragging ? 'tsp-knob--dragging' : ''}`} // Use prefixed classes
+                                                role="slider"
+                                                aria-valuemin={startTime}
+                                                aria-valuemax={endTime}
+                                                aria-valuenow={currentTime}
+                                                aria-valuetext={formatTime(
+                                                    currentTime
+                                                )}
+                                                tabIndex={0}
+                                            />
+                                        </div>
+
+                                        {/* Thumbnail Preview (conditionally rendered) */}
+                                        {hoverIndex !== null &&
+                                            sortedPoints[hoverIndex]?.thumbnail && (
+                                                <div
+                                                    className="tsp-thumbnail-preview"
+                                                    style={{
+                                                        left: `${timeToPercentage(sortedPoints[hoverIndex].time)}%`,
+                                                    }}
+                                                >
+                                                    {' '}
+                                                    {/* Use prefixed class */}
+                                                    <img
+                                                        src={
+                                                            sortedPoints[hoverIndex]
+                                                                .thumbnail
+                                                        }
+                                                        className="tsp-thumbnail-image"
+                                                        alt="Preview"
+                                                    />{' '}
+                                                    {/* Use prefixed class */}
+                                                </div>
+                                            )}
+                                    </div>{' '}
+                                    {/* End tsp-track-container */}
+                                </div>
+
                                 {/* Time Labels */}
                                 <div className="tsp-labels">
                                     {' '}
@@ -481,7 +485,7 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
                                     <span>
                                         {formatTime(currentTime - startTime)}
                                     </span>
-                                    <span>
+                                    <span className={isLive ? 'tsp-labels-live' : ''}>
                                         {isLive
                                             ? 'LIVE'
                                             : `-${formatTime(endTime - currentTime)}`}

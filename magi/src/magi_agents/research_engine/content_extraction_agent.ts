@@ -7,7 +7,7 @@
 
 import { Agent } from '../../utils/agent.js';
 import { getFileTools } from '../../utils/file_utils.js';
-import { getBrowserTools } from '../../utils/browser_utils.js';
+import { getBrowserVisionTools } from '../../utils/browser_utils.js';
 import {
     COMMON_WARNINGS,
     DOCKER_ENV_TEXT,
@@ -43,15 +43,15 @@ EXTRACTED CONTENT:
 
 1. [Source Title] - [URL]
    Date Accessed: [Date]
-   
+
    Key Content:
    [Extracted text, facts, quotes, or code snippets with clear structure]
 
-   
+
    Summary: [Brief summary of the extracted content]
-   
+
    Relevance: [HIGH/MEDIUM/LOW]
-   
+
    Additional Notes: [Any observations about the source's reliability, biases, etc.]
 
 2. [Source Title] - [URL]
@@ -115,7 +115,7 @@ export function createContentExtractionAgent(search_results: any): Agent {
             '{{search_results}}',
             searchResultsStr
         ),
-        tools: [...getFileTools(), ...getBrowserTools()],
+        tools: [...getFileTools(), ...getBrowserVisionTools()],
         workers: [createBrowserAgent],
         modelClass: 'standard',
     });

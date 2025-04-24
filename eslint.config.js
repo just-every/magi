@@ -56,4 +56,24 @@ export default [
             'prettier/prettier': 'error',
         },
     },
+    // Node.js scripts configuration
+    {
+        languageOptions: {
+            ecmaVersion: 2022,
+            sourceType: 'module',
+            globals: {
+                // Add Node.js globals to prevent undefined warnings
+                process: 'readonly',
+                console: 'readonly',
+                setTimeout: 'readonly',
+                clearTimeout: 'readonly',
+                __dirname: 'readonly',
+                __filename: 'readonly',
+                require: 'readonly',
+                module: 'readonly',
+                exports: 'readonly'
+            }
+        },
+        files: ['scripts/**/*.js'],
+    },
 ];

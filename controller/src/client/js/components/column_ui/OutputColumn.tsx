@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
     ProcessData,
     AgentData,
@@ -8,10 +8,11 @@ import {
 import { useSocket } from '../../context/SocketContext';
 import { getStatusIcon, truncate } from '../utils/FormatUtils';
 import MessageList from '../message/MessageList';
-import { useAutoScroll } from '../utils/ScrollUtils';
+import AutoScrollContainer from '../ui/AutoScrollContainer';
 import LogsViewer from '../ui/LogsViewer';
 import { PRIMARY_RGB } from '../../utils/constants';
 import BrowserAgentCard from '../ui/BrowserAgentCard';
+import { ScreenshotEvent } from '../../../../types/shared-types';
 
 interface OutputColumnProps {
     selectedItemId: string | null;
@@ -27,10 +28,10 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
     } | null>(null);
 
     const [tab, setTab] = useState('output');
-    const outputRef = useRef<HTMLDivElement>(null);
 
     let name: string;
     let messages: ClientMessage[];
+    let screenshots: ScreenshotEvent[];
     let logs: string;
 
     if (selectedItem?.type === 'process') {
@@ -39,12 +40,14 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
             name = process.agent?.name;
             messages = process.agent?.messages || [];
             logs = process.logs || '';
+            screenshots = process.agent?.screenshots || [];
         }
     } else if (selectedItem?.type === 'agent') {
         const agent = selectedItem ? (selectedItem.data as AgentData) : null;
         if (agent) {
             name = agent.name || '';
             messages = agent.messages || [];
+            screenshots = agent.screenshots || [];
         }
     }
 
@@ -88,11 +91,6 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
         setSelectedItem(null);
     }, [selectedItemId, processes]);
 
-    // Scroll to bottom when messages update
-    useAutoScroll(
-        outputRef,
-        tab === 'docker' && selectedItem?.type === 'process' ? logs : messages
-    );
 
     // The MessageList component handles formatting of messages internally
 
@@ -111,7 +109,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
         return (
             <div className="process-output h-100 d-flex flex-column">
                 {/* Process Header */}
-                <div className="process-header p-3 pt-2">
+                <div className="process-header pb-4 pt-1">
                     <div className="d-flex gap-2 justify-content-between align-items-start mb-2">
                         <h4 className="mb-2">
                             {process.name || process.agent?.name || process.id}
@@ -145,17 +143,16 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                             <div>
                                 <i className="bi bi-hash me-1"></i> {process.id}
                             </div>
-
-                            <div className="mt-2">
-                                <i className="bi bi-code me-1"></i>{' '}
-                                {truncate(command, 200)}
-                            </div>
-
-                            {process.agent?.screenshots &&
-                                process.agent.screenshots.length > 0 && (
+                            { screenshots &&
+                                screenshots.length > 0 ? (
                                     <BrowserAgentCard
-                                        screenshots={process.agent.screenshots}
+                                        screenshots={screenshots}
                                     />
+                                ) : (
+                                    <div className="mt-2">
+                                        <i className="bi bi-code me-1"></i>{' '}
+                                        {truncate(command, 200)}
+                                    </div>
                                 )}
                         </div>
                     </div>
@@ -204,9 +201,8 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                 </ul>
 
                 {/* Process Content */}
-                <div
-                    className="process-content flex-grow-1 overflow-auto p-3"
-                    ref={outputRef}
+                <AutoScrollContainer
+                    className="process-content flex-grow-1 p-3"
                     style={{ backgroundColor: `rgba(${rbg} / 0.1)` }}
                 >
                     {tab === 'output' && <MessageList messages={messages} />}
@@ -225,7 +221,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                             </pre>
                         </div>
                     )}
-                </div>
+                </AutoScrollContainer>
             </div>
         );
     };
@@ -248,9 +244,9 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
         return (
             <div className="agent-output h-100 d-flex flex-column">
                 {/* Agent Header */}
-                <div className="agent-header p-3 border-bottom">
+                <div className="agent-header py-1">
                     <div className="d-flex justify-content-between align-items-start mb-2">
-                        <h4 className="mb-0">{name || selectedItem.id}</h4>
+                        <h5 className="mb-2">{name || selectedItem.id}</h5>
                         <div>
                             <i
                                 className={`bi ${statusInfo.icon} me-2`}
@@ -264,6 +260,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                     </div>
 
                     <div className="text-muted small">
+                        {/*
                         <div>
                             <i className="bi bi-hash me-1"></i>{' '}
                             {selectedItem.id}
@@ -278,37 +275,31 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                                 ({parentProcess.id})
                             </div>
                         )}
+                        */}
 
-                        {messages.length > 0 &&
-                            messages[0].content &&
-                            typeof messages[0].content === 'string' && (
-                                <div className="mt-2">
-                                    <i className="bi bi-code me-1"></i>{' '}
-                                    {truncate(messages[0].content, 200)}
-                                </div>
-                            )}
-
-                        {(selectedItem.data as AgentData).screenshots &&
-                            (selectedItem.data as AgentData).screenshots
-                                .length > 0 && (
+                        {screenshots &&
+                            screenshots.length > 0 ? (
                                 <BrowserAgentCard
-                                    screenshots={
-                                        (selectedItem.data as AgentData)
-                                            .screenshots
-                                    }
+                                    screenshots={screenshots}
                                 />
-                            )}
+                            ) : (messages.length > 0 &&
+                                messages[0].content &&
+                                typeof messages[0].content === 'string' && (
+                                    <div className="mt-2">
+                                        <i className="bi bi-code me-1"></i>{' '}
+                                        {truncate(messages[0].content, 200)}
+                                    </div>
+                                ))}
                     </div>
                 </div>
 
                 {/* Agent Content */}
-                <div
-                    className="agent-content flex-grow-1 overflow-auto p-3"
-                    ref={outputRef}
+                <AutoScrollContainer
+                    className="agent-content flex-grow-1 p-3"
                     style={{ backgroundColor: `rgba(${rbg} / 0.08)` }}
                 >
                     <MessageList messages={messages} />
-                </div>
+                </AutoScrollContainer>
             </div>
         );
     };

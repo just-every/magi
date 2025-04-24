@@ -62,19 +62,6 @@ npm run setup
 # 5. Setting up the browser extension
 ```
 
-### Browser Extension Setup
-
-The browser extension allows MAGI to control your Chrome browser. If you skipped this step during the main setup, you can run it separately:
-
-```bash
-npm run setup:browser
-```
-
-This will guide you through:
-
-1. Installing the Chrome extension from the browser/ directory
-2. Configuring the native messaging host for Chrome to communicate with MAGI
-
 ## Usage
 
 ### Starting the System
