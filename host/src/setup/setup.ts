@@ -18,10 +18,10 @@ const __dirname = path.dirname(__filename);
 // Determine the project root
 // When running from dist/setup/setup.js, we need to go up two levels
 // Check if we're running from dist or directly from setup
-const isRunningFromDist = __dirname.includes('setup/dist');
+const isRunningFromDist = __dirname.includes('host/dist/setup');
 const rootDir = isRunningFromDist
-    ? path.resolve(__dirname, '../..')
-    : path.resolve(__dirname, '..');
+    ? path.resolve(__dirname, '../../..')
+    : path.resolve(__dirname, '../..');
 
 const envPath = path.join(rootDir, '.env');
 const envExamplePath = path.join(rootDir, '.env.example');
