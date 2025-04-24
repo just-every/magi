@@ -35,7 +35,7 @@ try {
 
   // Now compile and run the TypeScript setup
   console.log('Compiling setup script...');
-  execSync('npx tsc -p setup', { stdio: 'inherit', cwd: rootDir });
+  execSync('npx tsc -p host', { stdio: 'inherit', cwd: rootDir });
 
   console.log('Running setup...');
   execSync('node setup/dist/setup.js', { stdio: 'inherit', cwd: rootDir });
