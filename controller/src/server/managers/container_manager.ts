@@ -125,6 +125,13 @@ async function prepareGitRepository(
     );
 
     try {
+        console.log(`Creating output path ${outputPath}`);
+        fs.mkdirSync(outputPath, { recursive: true });
+    } catch (mkdirError) {
+        console.log(`Error creating directory ${outputPath}: ${mkdirError}`);
+    }
+
+    try {
         // Skip if the path doesn't exist on the host
         if (!fs.existsSync(hostPath)) {
             console.error(
@@ -137,6 +144,14 @@ async function prepareGitRepository(
 
         // Check if it's a git repository
         try {
+            console.log('Adding safe.directory to git config', hostPath);
+            await execPromise(
+                `git config --global --add safe.directory ${hostPath}`
+            );
+            await execPromise(
+                `git config --global --add safe.directory ${hostPath}/.git`
+            );
+            console.log('Checking if git repository exists', hostPath);
             await execPromise(
                 `git -C "${hostPath}" rev-parse --is-inside-work-tree`
             );
@@ -151,6 +166,7 @@ async function prepareGitRepository(
         }
 
         // Clone the repository to the temp directory
+        console.log('Cloning git repository', hostPath, outputPath);
         await execPromise(`git clone "${hostPath}" "${outputPath}"`);
 
         // Create or checkout the branch

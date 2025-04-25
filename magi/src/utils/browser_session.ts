@@ -385,9 +385,9 @@ export class AgentBrowserSessionCDP {
                 snap,
                 viewWidth,        // Viewport width (CSS pixels)
                 viewHeight,       // Viewport height (CSS pixels)
-                devicePixelRatio, // Actual device pixel ratio
-                scrollX,          // Horizontal scroll offset (CSS pixels)
-                scrollY           // Vertical scroll offset (CSS pixels)
+                devicePixelRatio//, // Actual device pixel ratio
+                //scrollX,          // Horizontal scroll offset (CSS pixels)
+                //scrollY           // Vertical scroll offset (CSS pixels)
             );
 
             const currentUrl = urlResult?.result?.value || ''; // Get URL or use empty string

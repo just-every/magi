@@ -71,3 +71,5 @@ yarn-error.log
 !host/setup.js
 !controller/webpack.config.js
 !eslint.config.js
+
+/*google-chrome*
