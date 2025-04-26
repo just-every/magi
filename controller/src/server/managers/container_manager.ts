@@ -125,13 +125,6 @@ async function prepareGitRepository(
     );
 
     try {
-        console.log(`Creating output path ${outputPath}`);
-        fs.mkdirSync(outputPath, { recursive: true });
-    } catch (mkdirError) {
-        console.log(`Error creating directory ${outputPath}: ${mkdirError}`);
-    }
-
-    try {
         // Skip if the path doesn't exist on the host
         if (!fs.existsSync(hostPath)) {
             console.error(
