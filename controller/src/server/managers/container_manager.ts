@@ -138,9 +138,13 @@ async function prepareGitRepository(
         // Check if it's a git repository
         try {
             console.log('Checking if git repository exists', hostPath);
-            await execPromise(
-                `git -C "${hostPath}" rev-parse --is-inside-work-tree`
-            );
+            try {
+                await execPromise(`git -C "${hostPath}" rev-parse --is-inside-work-tree`);
+            } catch (error) {
+                await execPromise(`git config --global --add safe.directory "${hostPath}"`);
+                await execPromise(`git config --global --add safe.directory "${hostPath}/.git"`);
+                await execPromise(`git -C "${hostPath}" rev-parse --is-inside-work-tree`);
+            }
         } catch (error) {
             console.error(`Can not access git at ${hostPath}`);
             throw new Error(`Can not access git at ${hostPath}`);
