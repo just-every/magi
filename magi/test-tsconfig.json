@@ -1,0 +1,7 @@
+{
+    "extends": "./tsconfig.json",
+    "include": ["src/**/*", "test-grid-overlay.ts", "test-grid-overlay-simple.ts"],
+    "compilerOptions": {
+        "outDir": "./dist-test"
+    }
+}

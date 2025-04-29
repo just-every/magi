@@ -28,7 +28,7 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
             <div className="row h-100 g-0">
                 {/* Left Column: Chat Messages */}
                 <div
-                    className="col-md-4 h-100"
+                    className="col-md-3 h-100"
                     style={{
                         backgroundColor: `rgba(${PRIMARY_RGB} / 0.2)`,
                         padding: '0.5rem',
@@ -46,7 +46,7 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
 
                 {/* Middle Column: Process Tree */}
                 <div
-                    className="col-md-4 h-100"
+                    className="col-md-3 h-100"
                     style={{
                         padding: '1rem',
                     }}
@@ -59,7 +59,7 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
 
                 {/* Right Column: Output */}
                 <div
-                    className="col-md-4 h-100"
+                    className="col-md-6 h-100"
                     style={{
                         padding: '1rem',
                         paddingBottom: '0',

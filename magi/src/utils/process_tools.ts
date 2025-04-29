@@ -1,6 +1,4 @@
 import { ProcessToolType, ToolFunction } from '../types/shared-types.js';
-import { runGodelMachine } from '../magi_agents/godel_machine/index.js';
-import { runResearchEngine } from '../magi_agents/research_engine/index.js';
 import { runTask } from '../magi_agents/task_run/index.js';
 import { getCommunicationManager } from './communication.js';
 import { processTracker } from './process_tracker.js';
@@ -13,12 +11,6 @@ export async function runProcessTool(
     command: string
 ): Promise<void> {
     switch (tool) {
-        case 'research_engine':
-            await runResearchEngine(command);
-            break;
-        case 'godel_machine':
-            await runGodelMachine(command);
-            break;
         case 'run_task':
             await runTask(command);
             break;
@@ -172,26 +164,6 @@ export function listActiveProjects(): string {
  */
 export function getProcessTools(): ToolFunction[] {
     return [
-        /*createToolFunction(
-				startResearchEngine,
-				'Start a Research Engine process. Uses human level intelligence.',
-				{
-					'name': `Give this research a name - three words or less. Can be funny, like a fictional reference or a pun, or if none work make it descriptive. Visible in the UI for ${person}.`,
-					'command': 'What you would like to understand? Try to give both specific instructions as well an overview of the context for the task you are working on for better results.',
-				},
-				'A report on what was found during the search',
-				'Start Research'
-			),
-			createToolFunction(
-				startGodelMachine,
-				'Starts a new Godel Machine process to understand or improve your own code. Uses human level intelligence.',
-				{
-					'name': `Give this process a name - three words or less. Can be funny, like a fictional reference or a pun, or if none work make it descriptive. Visible in the UI for ${person}.`,
-					'command': 'What code would like to understand or improve? Try to provide context and details of the overall task rather than explicit instructions.',
-				},
-				'A description of what work has been completed',
-				'Start Godel'
-			),*/
         createToolFunction(
             start_task,
             'Starts a new Task. Uses human level intelligence.',

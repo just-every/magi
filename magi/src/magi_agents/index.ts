@@ -11,27 +11,7 @@ import { createCodeAgent } from './common_agents/code_agent.js';
 import { createBrowserAgent } from './common_agents/browser_agent.js';
 import { createSearchAgent } from './common_agents/search_agent.js';
 import { createShellAgent } from './common_agents/shell_agent.js';
-import {
-    createPlanningAgent,
-    createWritingAgent,
-    createTestingAgent,
-    createPRSubmissionAgent,
-    createPRReviewAgent,
-    createGodelMachine,
-    runGodelMachine,
-    GodelStage,
-} from './godel_machine/index.js';
-import {
-    createTaskDecompositionAgent,
-    createWebSearchAgent,
-    createContentExtractionAgent,
-    createSynthesisAgent,
-    createCodeGenerationAgent,
-    createValidationAgent,
-    createUnderstandingEngine,
-    runResearchEngine,
-    UnderstandingStage,
-} from './research_engine/index.js';
+import { createImageAgent } from './common_agents/image_agent.js';
 import { createOverseerAgent } from './overseer_agent.js';
 import { ModelClassID } from '../model_providers/model_data.js';
 import { createOperatorAgent } from './operator_agent.js';
@@ -53,6 +33,7 @@ export type AgentType =
     | 'browser_code'
     | 'search'
     | 'shell'
+    | 'image'
     | 'godel_planning'
     | 'godel_writing'
     | 'godel_testing'
@@ -107,51 +88,8 @@ export function createAgent(args: Record<string, unknown>): Agent {
         case 'shell':
             agent = createShellAgent();
             break;
-        case 'godel_planning':
-            agent = createPlanningAgent('Please provide an issue description.');
-            break;
-        case 'godel_writing':
-            agent = createWritingAgent('Please provide a plan document.');
-            break;
-        case 'godel_testing':
-            agent = createTestingAgent();
-            break;
-        case 'godel_pr_submission':
-            agent = createPRSubmissionAgent(
-                'Please provide an issue description.'
-            );
-            break;
-        case 'godel_pr_review':
-            agent = createPRReviewAgent('Please provide an issue description.');
-            break;
-        // Research Engine agents
-        case 'understanding_task_decomposition':
-            agent = createTaskDecompositionAgent(
-                'Please provide a research query.'
-            );
-            break;
-        case 'understanding_web_search':
-            agent = createWebSearchAgent('Please provide a research plan.');
-            break;
-        case 'understanding_content_extraction':
-            agent = createContentExtractionAgent([]);
-            break;
-        case 'understanding_synthesis':
-            agent = createSynthesisAgent(
-                'Please provide a research query.',
-                []
-            );
-            break;
-        case 'understanding_code_generation':
-            agent = createCodeGenerationAgent(
-                'Please provide synthesis results.'
-            );
-            break;
-        case 'understanding_validation':
-            agent = createValidationAgent(
-                'Please provide a research query.',
-                'Please provide synthesis results.'
-            );
+        case 'image':
+            agent = createImageAgent();
             break;
         default:
             throw new Error(`Unknown agent type: ${type}`);
@@ -185,23 +123,5 @@ export {
     createBrowserAgent,
     createSearchAgent,
     createShellAgent,
-    // Gödel Machine agents
-    createPlanningAgent,
-    createWritingAgent,
-    createTestingAgent,
-    createPRSubmissionAgent,
-    createPRReviewAgent,
-    createGodelMachine,
-    runGodelMachine,
-    GodelStage,
-    // Research Engine agents
-    createTaskDecompositionAgent,
-    createWebSearchAgent,
-    createContentExtractionAgent,
-    createSynthesisAgent,
-    createCodeGenerationAgent,
-    createValidationAgent,
-    createUnderstandingEngine,
-    runResearchEngine,
-    UnderstandingStage,
+    createImageAgent,
 };

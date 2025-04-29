@@ -51,10 +51,7 @@ export function clearFocus(): void {
  * @param opts Options for screenshot
  * @returns Screenshot data with URL, viewport info and base64 image
  */
-export async function screenshotTab(
-    tabId: string,
-    opts = { includeCoreTabs: false }
-): Promise<{
+export async function screenshotTab(tabId: string): Promise<{
     screenshot: string;
     url: string;
     view: any;
@@ -64,10 +61,7 @@ export async function screenshotTab(
     console.log(`[focus_utils] Taking screenshot of tab: ${tabId}`);
     try {
         const session = getAgentBrowserSession(tabId);
-        const result = await session.browserStatus(
-            'viewport',
-            opts.includeCoreTabs
-        );
+        const result = await session.browserStatus();
         if (!result) {
             throw new Error('No result from browser session');
         }
@@ -159,9 +153,7 @@ export async function buildFocusStatusBlock(): Promise<string> {
     try {
         // Handle browser tab focus
         if (focus.kind === 'browser_tab' && focus.tabId) {
-            const result = await screenshotTab(focus.tabId, {
-                includeCoreTabs: false,
-            });
+            const result = await screenshotTab(focus.tabId);
 
             if (!result || !result.screenshot) {
                 return `### Overseer focus (browser tab ${focus.tabId})\n\nUnable to get screenshot. Tab may be closed or inaccessible.`;

@@ -6,12 +6,10 @@
 
 import { Agent } from '../../utils/agent.js';
 import {
-    getBrowserVisionTools,
-    getCommonBrowserTools,
     addBrowserStatus,
     getBrowserParams,
     processBrowserParams,
-    getBrowserDebugTools,
+    getBrowserTools,
 } from '../../utils/browser_utils.js';
 import {
     MAGI_CONTEXT,
@@ -63,12 +61,7 @@ IMPORTANT:
 COMPLETION:
 - If you can mostly complete a task after a couple of attempts, that's fine. Just explain what you did and what you couldn't do.
 - Your may need to modify your goals based on what you find while browsing. Your requester does not know what you will find, so be flexible and adapt to the situation.`,
-        tools: [
-            ...getBrowserVisionTools(),
-            ...getCommonBrowserTools(),
-            ...getCommonTools(),
-            ...getBrowserDebugTools(),
-        ],
+        tools: [...getBrowserTools(), ...getCommonTools()],
         modelClass: 'vision',
         onRequest: addBrowserStatus,
         params: getBrowserParams('BrowserAgent'),

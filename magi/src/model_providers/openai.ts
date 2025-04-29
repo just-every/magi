@@ -5,6 +5,7 @@
  * for OpenAI's models and handles streaming responses.
  */
 
+import { BROWSER_WIDTH, BROWSER_HEIGHT } from '../constants.js';
 import {
     ModelProvider,
     ToolFunction,
@@ -14,13 +15,17 @@ import {
     ResponseInput,
     ResponseInputMessage,
 } from '../types/shared-types.js';
-import OpenAI from 'openai';
+import OpenAI, { toFile } from 'openai';
+import fetch from 'node-fetch';
 // import {v4 as uuidv4} from 'uuid';
 import { costTracker } from '../utils/cost_tracker.js';
 import { log_llm_request } from '../utils/file_utils.js';
 import { isPaused } from '../utils/communication.js';
 import { Agent } from '../utils/agent.js';
-import { extractBase64Image } from '../utils/image_utils.js';
+import {
+    extractBase64Image,
+    resizeAndSplitForOpenAI,
+} from '../utils/image_utils.js';
 
 // Convert our tool definition to OpenAI's format
 function convertToOpenAITools(requestParams: any): any {
@@ -37,75 +42,238 @@ function convertToOpenAITools(requestParams: any): any {
         const paramSchema = JSON.parse(
             JSON.stringify(tool.definition.function.parameters)
         );
+        // Keep a reference to the original properties for top-level required calculation
+        const originalToolProperties =
+            tool.definition.function.parameters.properties;
 
-        // Recursively:
-        // 1. Set additionalProperties: false ONLY for objects with defined properties.
-        // 2. Remove internal 'optional' flags.
+        // Recursively process the schema for OpenAI compatibility
         const processSchemaRecursively = (schema: any) => {
             if (!schema || typeof schema !== 'object') return;
 
-            // Remove optional flag if present at this level
+            // 1. Remove 'optional: true' flag
             if (schema.optional === true) {
                 delete schema.optional;
             }
 
-            if (schema.type === 'object') {
-                // Only add additionalProperties: false if properties are defined
-                if (
-                    schema.properties &&
-                    schema.additionalProperties === undefined
-                ) {
-                    schema.additionalProperties = false;
+            // 2. Convert 'oneOf' to 'anyOf'
+            if (Array.isArray(schema.oneOf)) {
+                schema.anyOf = schema.oneOf;
+                delete schema.oneOf;
+            }
+
+            // 3. Remove OpenAI-incompatible validation keywords
+            const unsupportedKeywords = [
+                'minimum',
+                'maximum',
+                'minItems',
+                'maxItems',
+                'minLength',
+                'maxLength',
+                'pattern',
+                'format',
+                'multipleOf',
+                'patternProperties',
+                'unevaluatedProperties',
+                'propertyNames',
+                'minProperties',
+                'maxProperties',
+                'unevaluatedItems',
+                'contains',
+                'minContains',
+                'maxContains',
+                'uniqueItems',
+            ];
+            unsupportedKeywords.forEach(keyword => {
+                if (schema[keyword] !== undefined) {
+                    delete schema[keyword];
                 }
-                // Recurse into properties if they exist
+            });
+
+            // Detect if it's an object-like schema
+            const isObject =
+                schema.type === 'object' ||
+                (schema.type === undefined && schema.properties !== undefined);
+
+            // 4. Recurse into nested structures first
+            // Process variants (anyOf, allOf)
+            for (const key of ['anyOf', 'allOf'] as const) {
+                if (Array.isArray(schema[key])) {
+                    schema[key].forEach((variantSchema: any) =>
+                        processSchemaRecursively(variantSchema)
+                    );
+                }
+            }
+            // Process properties
+            if (isObject && schema.properties) {
+                for (const propName in schema.properties) {
+                    processSchemaRecursively(schema.properties[propName]);
+                }
+            }
+            // Process array items
+            if (schema.type === 'array' && schema.items !== undefined) {
+                if (Array.isArray(schema.items)) {
+                    // Tuple validation
+                    schema.items.forEach((itemSchema: any) =>
+                        processSchemaRecursively(itemSchema)
+                    );
+                } else if (typeof schema.items === 'object') {
+                    // Single schema for all items
+                    processSchemaRecursively(schema.items);
+                }
+            }
+
+            // 5. AFTER recursion, process the current object level
+            if (isObject) {
+                // Set additionalProperties: false (required by OpenAI)
                 if (schema.properties) {
-                    for (const propName in schema.properties) {
-                        processSchemaRecursively(schema.properties[propName]);
-                    }
+                    // Only add if properties exist
+                    schema.additionalProperties = false;
+                } else {
+                    // If no properties, OpenAI might still require additionalProperties: false?
+                    // Let's assume it's only needed when properties are defined.
+                    // delete schema.additionalProperties; // Or keep it undefined
                 }
-                // DO NOT modify schema.required here
-            } else if (schema.type === 'array' && schema.items) {
-                // Recurse for array items
-                processSchemaRecursively(schema.items);
+
+                // Set 'required' array to include all current properties (required by OpenAI for strict mode)
+                if (schema.properties) {
+                    const currentRequired = Object.keys(schema.properties);
+                    // Only add required array if there are properties to require
+                    if (currentRequired.length > 0) {
+                        schema.required = currentRequired;
+                    } else {
+                        // If properties is an empty object {}, remove required
+                        delete schema.required;
+                    }
+                } else {
+                    // If no properties field, remove required
+                    delete schema.required;
+                }
             }
         };
 
-        // Apply the recursive processing
+        // Apply the recursive processing to the cloned schema
         processSchemaRecursively(paramSchema);
 
-        // Rebuild the top-level required array based on the *original* definition's optional flags
-        // This ensures 'commandParams' (optional: true) is correctly excluded.
+        // AFTER recursion, fix the top-level 'required' array based on the ORIGINAL tool definition.
+        // This ensures top-level optional parameters are correctly handled, overriding the
+        // potentially stricter 'required' array set during recursion for the top-level object.
         const topLevelRequired: string[] = [];
-        const originalProperties =
-            tool.definition.function.parameters.properties;
-        if (originalProperties) {
-            for (const propName in originalProperties) {
+        if (originalToolProperties) {
+            for (const propName in originalToolProperties) {
                 // Check the *original* property definition for the optional flag
-                if (!originalProperties[propName].optional) {
+                if (!originalToolProperties[propName].optional) {
                     topLevelRequired.push(propName);
                 }
             }
         }
-        paramSchema.required = topLevelRequired; // Overwrite required list
+        // Set the correct top-level required array on the processed schema
+        if (topLevelRequired.length > 0) {
+            paramSchema.required = topLevelRequired;
+        } else {
+            // Ensure the top-level object has no required array if no properties were originally required
+            delete paramSchema.required;
+        }
+
+        // Ensure top-level is object with additionalProperties: false if it has properties
+        if (
+            paramSchema.properties &&
+            paramSchema.additionalProperties === undefined
+        ) {
+            paramSchema.additionalProperties = false;
+        }
 
         return {
             type: 'function',
             name: tool.definition.function.name,
             description: tool.definition.function.description,
             parameters: paramSchema,
-            strict: true,
+            strict: true, // Keep strict mode enabled
         };
     });
     if (requestParams.model === 'computer-use-preview') {
         requestParams.tools.push({
             type: 'computer_use_preview',
-            display_width: 1024,
-            display_height: 768,
+            display_width: BROWSER_WIDTH,
+            display_height: BROWSER_HEIGHT,
             environment: 'browser',
         });
         requestParams.truncation = 'auto';
     }
     return requestParams;
+}
+
+/**
+ * Processes images and adds them to the input array for OpenAI
+ * Resizes images to max 1024px width and splits into sections if height > 768px
+ *
+ * @param input - The input array to add images to
+ * @param images - Record of image IDs to base64 image data
+ * @param source - Description of where the images came from
+ * @returns Updated input array with processed images
+ */
+async function addImagesToInput(
+    input: ResponseInput,
+    images: Record<string, string>,
+    source: string
+): Promise<ResponseInput> {
+    // Add developer messages for each image
+    for (const [image_id, imageData] of Object.entries(images)) {
+        try {
+            // Resize and split the image if needed
+            const processedImages = await resizeAndSplitForOpenAI(imageData);
+
+            // Create a content array for the message
+            const messageContent = [];
+
+            // Add description text first
+            if (processedImages.length === 1) {
+                // Single image (no splitting needed)
+                messageContent.push({
+                    type: 'input_text',
+                    text: `Image ${image_id} from ${source}`,
+                });
+            } else {
+                // Multiple segments - explain the splitting
+                messageContent.push({
+                    type: 'input_text',
+                    text: `Image ${image_id} from ${source} (split into ${processedImages.length} segments of up to 768px high)`,
+                });
+            }
+
+            // Add all image segments to the same message
+            for (const imageSegment of processedImages) {
+                messageContent.push({
+                    type: 'input_image',
+                    image_url: imageSegment,
+                    detail: 'high',
+                });
+            }
+
+            // Add the complete message with all segments
+            input.push({
+                role: 'user',
+                content: messageContent,
+            });
+        } catch (error) {
+            console.error(`Error processing image ${image_id}:`, error);
+            // If image processing fails, add the original image as a fallback
+            input.push({
+                role: 'user',
+                content: [
+                    {
+                        type: 'input_text',
+                        text: `Image ${image_id} from ${source} (unprocessed due to error)`,
+                    },
+                    {
+                        type: 'input_image',
+                        image_url: imageData,
+                        detail: 'high',
+                    },
+                ],
+            });
+        }
+    }
+    return input;
 }
 
 /**
@@ -127,6 +295,125 @@ export class OpenAIProvider implements ModelProvider {
     }
 
     /**
+     * Generate an image using OpenAI's GPT Image 1
+     *
+     * @param prompt - The text description of the image to generate
+     * @param model - The model to use (gpt-image-1 by default)
+     * @param size - The size of the image to generate
+     * @param quality - The quality of the image to generate
+     * @param image - Optional base64 image data to use as input (for image variations)
+     * @returns A promise that resolves to the base64 encoded image data
+     */
+    async generateImage(
+        prompt: string,
+        model: string = 'gpt-image-1',
+        background: 'transparent' | 'opaque' | 'auto' = 'auto',
+        quality: 'low' | 'medium' | 'high' | 'auto' = 'auto',
+        size: '1024x1024' | '1536x1024' | '1024x1536' | 'auto' = 'auto',
+        source_image?: string
+    ): Promise<string> {
+        try {
+            console.log(
+                `[OpenAI] Generating image with model ${model}, prompt: "${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}"`
+            );
+
+            let response;
+
+            if (source_image) {
+                console.log('[OpenAI] Using images.edit with source_image');
+
+                let imageFile;
+
+                // Check if source_image is a URL or base64 string
+                if (
+                    source_image.startsWith('http://') ||
+                    source_image.startsWith('https://')
+                ) {
+                    // Handle URL case - fetch the image
+                    const imageResponse = await fetch(source_image);
+                    const imageBuffer = await imageResponse.arrayBuffer();
+
+                    // Convert to OpenAI file format
+                    imageFile = await toFile(
+                        new Uint8Array(imageBuffer),
+                        'image.png',
+                        { type: 'image/png' }
+                    );
+                } else {
+                    // Handle base64 string case
+                    // Check if it's a data URL and extract the base64 part if needed
+                    let base64Data = source_image;
+                    if (source_image.startsWith('data:')) {
+                        base64Data = source_image.split(',')[1];
+                    }
+
+                    // Convert base64 to binary
+                    const binaryData = Buffer.from(base64Data, 'base64');
+
+                    // Convert to OpenAI file format
+                    imageFile = await toFile(
+                        new Uint8Array(binaryData),
+                        'image.png',
+                        { type: 'image/png' }
+                    );
+                }
+
+                // For images.edit, we need to use a size that's compatible with the API
+                // Valid sizes for edit are: '1024x1024' | '256x256' | '512x512'
+                let editSize: '1024x1024' | '256x256' | '512x512' = '1024x1024';
+
+                // If current size is already valid for edit, use it
+                if (size === '1024x1024') {
+                    editSize = size;
+                }
+
+                // Use images.edit API
+                response = await this.client.images.edit({
+                    model,
+                    image: imageFile,
+                    prompt,
+                    n: 1,
+                    quality,
+                    size: editSize,
+                });
+            } else {
+                // Use standard image generation
+                response = await this.client.images.generate({
+                    model,
+                    prompt,
+                    n: 1,
+                    background,
+                    quality,
+                    size,
+                    moderation: 'low',
+                    output_format: 'png',
+                });
+            }
+
+            // Track usage for cost calculation
+            if (response.data && response.data.length > 0) {
+                costTracker.addUsage({
+                    model,
+                    image_count: 1,
+                });
+            }
+
+            // Extract the base64 image data
+            const imageData = response.data[0]?.b64_json;
+
+            if (!imageData) {
+                throw new Error('No image data returned from OpenAI');
+            }
+
+            // Return the base64 image data as a data URL
+            return `data:image/png;base64,${imageData}`;
+        } catch (error) {
+            console.error('[OpenAI] Error generating image:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Create a streaming completion using OpenAI's API
      */
     async *createResponseStream(
@@ -139,7 +426,7 @@ export class OpenAIProvider implements ModelProvider {
 
         try {
             // Use a more compatible approach with reduce to build the array
-            const input: ResponseInput = [];
+            let input: ResponseInput = [];
 
             // Process all messages
             for (const message of messages) {
@@ -172,25 +459,12 @@ export class OpenAIProvider implements ModelProvider {
                                 output: extracted.replaceContent, // Already contains [image ID] placeholders
                             });
 
-                            // Add developer messages for each image
-                            for (const [image_id, imageData] of Object.entries(
-                                extracted.images
-                            )) {
-                                input.push({
-                                    role: 'user',
-                                    content: [
-                                        {
-                                            type: 'input_text',
-                                            text: `Image ${image_id} from function call output of ${message.name}`,
-                                        },
-                                        {
-                                            type: 'input_image',
-                                            image_url: imageData,
-                                            detail: 'high', // Add required 'detail' property
-                                        },
-                                    ],
-                                });
-                            }
+                            // Process the images and wait for the result
+                            input = await addImagesToInput(
+                                input,
+                                extracted.images,
+                                `function call output of ${message.name}`
+                            );
                         } else {
                             // Add the original message without modification
                             input.push(messageWithoutName);
@@ -220,25 +494,12 @@ export class OpenAIProvider implements ModelProvider {
                                 content: extracted.replaceContent, // Already contains [image ID] placeholders
                             });
 
-                            // Add developer messages for each image
-                            for (const [image_id, imageData] of Object.entries(
-                                extracted.images
-                            )) {
-                                input.push({
-                                    role: 'user',
-                                    content: [
-                                        {
-                                            type: 'input_text',
-                                            text: `Image ${image_id} from ${message.role} message`,
-                                        },
-                                        {
-                                            type: 'input_image',
-                                            image_url: imageData,
-                                            detail: 'high', // Add required 'detail' property
-                                        },
-                                    ],
-                                });
-                            }
+                            // Process the images and wait for the result
+                            input = await addImagesToInput(
+                                input,
+                                extracted.images,
+                                `${message.role} message`
+                            );
                         } else {
                             // Add the original message (ensure type is set only if it's a valid message)
                             if (
@@ -300,6 +561,12 @@ export class OpenAIProvider implements ModelProvider {
                 if (settings?.top_p !== undefined) {
                     requestParams.top_p = settings.top_p;
                 }
+            }
+            if (model.startsWith('o')) {
+                requestParams.reasoning = {
+                    effort: 'high',
+                    summary: 'detailed',
+                };
             }
 
             // Add other settings that work across models
@@ -529,8 +796,8 @@ export class OpenAIProvider implements ModelProvider {
                                         tools: [
                                             {
                                                 type: 'computer-preview',
-                                                display_width: 1024,
-                                                display_height: 768,
+                                                display_width: BROWSER_WIDTH,
+                                                display_height: BROWSER_HEIGHT,
                                                 environment: 'browser',
                                             },
                                         ],

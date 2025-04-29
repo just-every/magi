@@ -33,7 +33,10 @@ import { costTracker } from '../utils/cost_tracker.js'; // Adjust path as needed
 import { log_llm_request } from '../utils/file_utils.js'; // Adjust path as needed
 import { isPaused } from '../utils/communication.js'; // Import pause function
 import { Agent } from '../utils/agent.js'; // Adjust path as needed
-import { extractBase64Image } from '../utils/image_utils.js';
+import {
+    extractBase64Image,
+    resizeAndTruncateForGemini,
+} from '../utils/image_utils.js';
 
 // Convert our tool definition to Gemini's updated FunctionDeclaration format
 function convertToGeminiFunctionDeclarations(
@@ -133,7 +136,9 @@ function cleanBase64Data(imageData: string): string {
 }
 
 // Convert message history to Gemini's content format
-function convertToGeminiContents(messages: ResponseInput): Content[] {
+async function convertToGeminiContents(
+    messages: ResponseInput
+): Promise<Content[]> {
     const contents: Content[] = [];
 
     for (const msg of messages) {
@@ -177,10 +182,13 @@ function convertToGeminiContents(messages: ResponseInput): Content[] {
                 if (extracted.found && extracted.image_id !== null) {
                     // Extract image data and remaining text
                     const image_id = extracted.image_id;
-                    // Get the image data for the first image
-                    const imageData = extracted.images[image_id];
-                    const mimeType = getImageMimeType(imageData);
-                    const cleanedImageData = cleanBase64Data(imageData);
+                    // Get the image data for the first image and resize/truncate if needed
+                    const originalImageData = extracted.images[image_id];
+                    const processedImageData =
+                        await resizeAndTruncateForGemini(originalImageData);
+                    const mimeType = getImageMimeType(processedImageData);
+                    const cleanedImageData =
+                        cleanBase64Data(processedImageData);
 
                     const parts: Part[] = [];
 
@@ -248,9 +256,12 @@ function convertToGeminiContents(messages: ResponseInput): Content[] {
                 if (extracted.found && extracted.image_id !== null) {
                     // Process the image and any surrounding text
                     const image_id = extracted.image_id;
-                    const imageData = extracted.images[image_id];
-                    const mimeType = getImageMimeType(imageData);
-                    const cleanedImageData = cleanBase64Data(imageData);
+                    const originalImageData = extracted.images[image_id];
+                    const processedImageData =
+                        await resizeAndTruncateForGemini(originalImageData);
+                    const mimeType = getImageMimeType(processedImageData);
+                    const cleanedImageData =
+                        cleanBase64Data(processedImageData);
                     const parts: Part[] = [];
 
                     // Add remaining text if any
@@ -378,7 +389,7 @@ export class GeminiProvider implements ModelProvider {
 
         try {
             // --- Prepare Request ---
-            const contents = convertToGeminiContents(messages);
+            const contents = await convertToGeminiContents(messages);
 
             // Safety check for empty contents
             if (contents.length === 0) {

@@ -6,6 +6,7 @@
  * browser sessions to ensure each agent has its own tab.
  */
 
+import { BROWSER_WIDTH, BROWSER_HEIGHT } from '../constants.js';
 import {
     AgentInterface,
     ResponseInput,
@@ -142,18 +143,18 @@ export async function type(
  */
 export async function press_keys(
     inject_agent_id: string,
-    key: string // Expects a single key string
+    keys: string // Expects a single key string
 ): Promise<string> {
-    console.log(`[browser_utils] Requesting to press key: ${key}`);
+    console.log(`[browser_utils] Requesting to press keys: ${keys}`);
     try {
         const session = getAgentBrowserSession(inject_agent_id);
         // Ensure session is initialized before pressing keys
         await session.initialize();
         // Pass the single key string to session.press
-        const result = await session.press(key);
+        const result = await session.press_keys(keys);
         return String(result);
     } catch (error: any) {
-        const errorMessage = `[browser_utils] Error pressing key '${key}': ${error?.message || String(error)}`;
+        const errorMessage = `[browser_utils] Error pressing keys '${keys}': ${error?.message || String(error)}`;
         console.error(errorMessage, error?.details || '');
         return errorMessage; // Return error message string
     }
@@ -163,30 +164,34 @@ export async function press_keys(
  * Simulates scrolling the page in the agent's tab.
  *
  * @param inject_agent_id - The agent ID to use for the browser session
- * @param mode - How to scroll ('page_down', 'page_up', 'bottom', 'top', 'coordinates')
+ * @param location - How to scroll ('page_down', 'page_up', 'bottom', 'top', 'coordinates')
  * @param x - X coordinate to scroll to (only for 'coordinates' mode)
  * @param y - Y coordinate to scroll to (only for 'coordinates' mode)
  * @returns Result message or error string.
  */
 export async function scroll_to(
     inject_agent_id: string,
-    mode: 'page_down' | 'page_up' | 'bottom' | 'top' | 'coordinates',
+    location: 'page_down' | 'page_up' | 'bottom' | 'top' | 'coordinates',
     x?: number,
     y?: number
 ): Promise<string> {
     const coordString =
-        mode === 'coordinates' && typeof x === 'number' && typeof y === 'number'
+        location === 'coordinates' &&
+        typeof x === 'number' &&
+        typeof y === 'number'
             ? ` to ${x},${y}`
             : '';
-    console.log(`[browser_utils] Requesting to scroll (${mode})${coordString}`);
+    console.log(
+        `[browser_utils] Requesting to scroll (${location})${coordString}`
+    );
     try {
         const session = getAgentBrowserSession(inject_agent_id);
         // Ensure session is initialized before scrolling
         await session.initialize();
-        const result = await session.scroll_to(mode, x, y);
+        const result = await session.scroll_to(location, x, y);
         return String(result);
     } catch (error: any) {
-        const errorMessage = `[browser_utils] Error scrolling (${mode})${coordString}: ${error?.message || String(error)}`;
+        const errorMessage = `[browser_utils] Error scrolling (${location})${coordString}: ${error?.message || String(error)}`;
         console.error(errorMessage, error?.details || '');
         return errorMessage; // Return error message string
     }
@@ -196,8 +201,8 @@ export async function scroll_to(
  * Simulates clicking at coordinates in the agent's tab.
  *
  * @param inject_agent_id - The agent ID to use for the browser session
- * @param x X coordinate (CSS pixels, max 1024)
- * @param y Y coordinate (CSS pixels, max 768)
+ * @param x X coordinate (CSS pixels, max BROWSER_WIDTH)
+ * @param y Y coordinate (CSS pixels, max BROWSER_HEIGHT)
  * @param button Optional mouse button ('left', 'middle', 'right')
  * @returns Result message or error string.
  */
@@ -209,8 +214,8 @@ export async function click_at(
 ): Promise<string> {
     console.log(`[browser_utils] Requesting to click at: ${{ x, y, button }}`);
     // Validate coordinates against expected viewport size
-    if (x < 0 || y < 0 || x > 1024 || y > 768) {
-        return `Error: Invalid coordinates (${x}, ${y}) provided for click_at. The viewport size is 1024x768 and coordinates must be within this range (0-1024 for x, 0-768 for y).`;
+    if (x < 0 || y < 0 || x > BROWSER_WIDTH || y > BROWSER_HEIGHT) {
+        return `Error: Invalid coordinates (${x}, ${y}) provided for click_at. The viewport size is ${BROWSER_WIDTH}x${BROWSER_HEIGHT} and coordinates must be within this range (0-${BROWSER_WIDTH} for x, 0-${BROWSER_HEIGHT} for y).`;
     }
 
     try {
@@ -230,10 +235,10 @@ export async function click_at(
  * Simulates dragging from start to end coordinates in the agent's tab.
  *
  * @param inject_agent_id - The agent ID to use for the browser session
- * @param startX Starting X coordinate (CSS pixels, max 1024)
- * @param startY Starting Y coordinate (CSS pixels, max 768)
- * @param endX Ending X coordinate (CSS pixels, max 1024)
- * @param endY Ending Y coordinate (CSS pixels, max 768)
+ * @param startX Starting X coordinate (CSS pixels, max BROWSER_WIDTH)
+ * @param startY Starting Y coordinate (CSS pixels, max BROWSER_HEIGHT)
+ * @param endX Ending X coordinate (CSS pixels, max BROWSER_WIDTH)
+ * @param endY Ending Y coordinate (CSS pixels, max BROWSER_HEIGHT)
  * @param button Optional mouse button ('left', 'middle', 'right')
  * @returns Result message or error string.
  */
@@ -254,12 +259,12 @@ export async function drag(
         startY < 0 ||
         endX < 0 ||
         endY < 0 ||
-        startX > 1024 ||
-        endX > 1024 ||
-        startY > 768 ||
-        endY > 768
+        startX > BROWSER_WIDTH ||
+        endX > BROWSER_WIDTH ||
+        startY > BROWSER_HEIGHT ||
+        endY > BROWSER_HEIGHT
     ) {
-        return `Error: Invalid coordinates dragging from ${startX},${startY} to ${endX},${endY}. The viewport size is 1024x768 and coordinates must be within this range (0-1024 for x, 0-768 for y).`;
+        return `Error: Invalid coordinates dragging from ${startX},${startY} to ${endX},${endY}. The viewport size is ${BROWSER_WIDTH}x${BROWSER_HEIGHT} and coordinates must be within this range (0-${BROWSER_WIDTH} for x, 0-${BROWSER_HEIGHT} for y).`;
     }
 
     try {
@@ -276,16 +281,15 @@ export async function drag(
 }
 
 /**
- * Executes a sequence of browser actions provided as a JSON string.
+ * Executes a sequence of browser actions provided as an array.
  * This function is intended to be called by an LLM agent to perform multiple browser
  * interactions in a single step, improving efficiency and reducing round trips.
  * Actions are executed sequentially, and execution stops immediately if any action fails.
  *
  * @param inject_agent_id - The agent ID identifying the target browser session.
- * @param actionsJson - A JSON string representing an array of action objects. Each object
- * defines a single browser action and its parameters.
- * See the `getBrowserVisionTools` description for available actions and format.
- * Example: '[{"action": "navigate", "url": "https://example.com"}, {"action": "click_at", "x": 100, "y": 200}]'
+ * @param actions - An array of BrowserAction objects. Each object defines a single browser
+ * action and its parameters. See the `getBrowserVisionTools` description for available actions and format.
+ * Example: [{action: "navigate", url: "https://example.com"}, {action: "click_at", x: 100, y: 200}]
  * @returns A JSON string containing:
  * - `status`: "success" or "error".
  * - `message`: A summary of execution (e.g., "Successfully executed 2 actions." or error details).
@@ -293,61 +297,55 @@ export async function drag(
  * (could be a string, a BrowserStatusPayload object, etc., depending on the last action).
  * This is null if no actions were provided or if the first action failed.
  */
-export async function execute(
+export async function use_browser(
     inject_agent_id: string,
-    actionsJson: string
+    actions: BrowserAction[] | string
 ): Promise<string> {
+    if (typeof actions === 'string') {
+        try {
+            // Attempt to parse the string as JSON
+            actions = JSON.parse(actions);
+        } catch (error) {
+            const errorMsg = `[browser_utils] Error: Invalid actions parameter: ${error?.message || String(error)}`;
+            console.error(errorMsg);
+            // Return a structured error JSON consistent with the expected return format
+            return 'Error: Invalid actions parameter: not an array.';
+        }
+    }
+
     console.log(
-        `[browser_utils] Requesting to execute actions for agent ${inject_agent_id}: ${actionsJson.substring(0, 200)}${actionsJson.length > 200 ? '...' : ''}`
+        `[browser_utils] Requesting to perform use_browser for agent ${inject_agent_id}: ${JSON.stringify(actions).substring(0, 200)}${JSON.stringify(actions).length > 200 ? '...' : ''}`
     );
 
-    let actions: BrowserAction[];
-    try {
-        actions = JSON.parse(actionsJson);
-        // Basic validation: check if it's an array and not empty
-        if (!Array.isArray(actions)) {
-            throw new Error('Parsed JSON is not an array.');
-        }
-        // Optional: Add deeper validation for each action object structure if needed
-        // e.g., check for 'action' property, validate parameters per action type
-    } catch (parseError: any) {
-        const errorMsg = `[browser_utils] Error: Invalid JSON string provided for actionsJson: ${parseError?.message || String(parseError)}. JSON string was: ${actionsJson}`;
+    // Basic validation: check if it's an array
+    if (!Array.isArray(actions)) {
+        const errorMsg =
+            '[browser_utils] Error: Invalid actions parameter: not an array.';
         console.error(errorMsg);
         // Return a structured error JSON consistent with the expected return format
-        return JSON.stringify({
-            status: 'error',
-            message: `Invalid JSON for actions: ${parseError?.message || String(parseError)}`,
-            lastResult: null,
-        });
+        return 'Error: Invalid actions parameter: not an array.';
     }
 
     if (actions.length === 0) {
         // Return success but indicate no actions were performed
-        return JSON.stringify({
-            status: 'success',
-            message: 'No actions provided to execute.',
-            lastResult: null,
-        });
+        return 'No actions provided to perform.';
     }
 
     try {
         const session = getAgentBrowserSession(inject_agent_id);
         // Ensure session is initialized before executing actions
         await session.initialize();
-        // Call the session's executeActions method, which handles sequential execution and errors
-        const resultString = await session.executeActions(actions);
-        // executeActions already returns a JSON string with status, message, and lastResult
+        // Call the session's useBrowser method, which handles sequential execution and errors
+        const resultString = await session.useBrowser(actions);
+        // useBrowser already returns a JSON string with status, message, and lastResult
         return resultString;
     } catch (error: any) {
-        // Catch errors during session initialization or unexpected errors in executeActions itself
+        // Catch errors during session initialization or unexpected errors in useBrowser itself
         const errorMessage = `[browser_utils] Error executing actions sequence for agent ${inject_agent_id}: ${error?.message || String(error)}`;
         console.error(errorMessage, error?.details || '');
         // Return a structured error JSON
-        return JSON.stringify({
-            status: 'error',
-            message: `Error executing actions: ${error?.message || String(error)}`,
-            lastResult: null, // Indicate no successful result
-        });
+
+        return `Error executing actions: ${error?.message || String(error)}`;
     }
 }
 
@@ -421,65 +419,38 @@ export async function debug_command(
 
 // --- Tool Definitions ---
 
-/**
- * Get common browser tools (navigation, typing, key presses).
- * These are fundamental actions for basic web interaction.
- */
-export function getCommonBrowserTools(): ToolFunction[] {
+export function getBrowserTools(): ToolFunction[] {
     return [
-        createToolFunction(
-            navigate,
-            'Navigate the current browser tab to a specified URL.',
-            {
-                url: {
-                    type: 'string',
-                    description:
-                        'The absolute URL to navigate to (e.g., "https://example.com").',
-                },
+        createToolFunction(navigate, 'Navigate the active tab to a URL.', {
+            url: {
+                type: 'string',
+                description:
+                    'Absolute destination URL (e.g. "https://example.com").',
             },
-            'Returns a status message indicating success or failure of the navigation attempt.'
-        ),
-        createToolFunction(
-            type,
-            'Simulate typing text using the keyboard into the currently focused element. This function correctly handles newline characters (\\n) by simulating an Enter key press.',
-            {
-                text: {
-                    type: 'string',
-                    description: 'The text to type. Use "\\n" for newlines.',
-                },
+        }),
+        createToolFunction(type, 'Type text in focused element.', {
+            text: {
+                type: 'string',
+                description: 'Use "\\n" for new lines.',
             },
-            'Returns a status message indicating success or failure.'
-        ),
+        }),
         createToolFunction(
             press_keys,
-            'Simulate pressing a single specific keyboard key (e.g., Enter, Tab, ArrowDown, Escape). This action affects the currently focused element on the page.',
+            'Simulates pressing a keyboard key or key combination (supports modifiers).',
             {
-                key: {
+                keys: {
                     type: 'string',
                     description:
-                        'The single key to press. Common values include "Enter", "Tab", "Escape", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Backspace", "Delete". For regular characters, use the character itself (e.g., "a", "A", "5"). Modifier keys (Ctrl, Shift, Alt, Meta) are not directly supported by this simplified function; use the `execute` tool with `debugCommand` and `Input.dispatchKeyEvent` for complex key combinations.',
+                        "The key or combination to press (e.g., 'Enter', 'Ctrl+C')",
                 },
-            },
-            'Returns a status message indicating success or failure.'
+            }
         ),
-    ];
-}
-
-/**
- * Get browser vision tools (scrolling, clicking, dragging, executing sequences).
- * These tools are typically used by multimodal agents that can "see" the page layout.
- * Coordinates are based on a standard 1024x768 CSS pixel viewport.
- */
-export function getBrowserVisionTools(): ToolFunction[] {
-    return [
         createToolFunction(
             scroll_to,
             'Scroll the current browser tab view. Use "page_down" or "page_up" for general scrolling, "top" or "bottom" to reach page ends, or "coordinates" for specific positioning.',
             {
-                mode: {
+                location: {
                     type: 'string',
-                    description:
-                        'The scrolling method. "page_down" is generally preferred over "coordinates" for exploration to avoid missing content.',
                     enum: [
                         'page_down',
                         'page_up',
@@ -487,18 +458,24 @@ export function getBrowserVisionTools(): ToolFunction[] {
                         'top',
                         'coordinates',
                     ],
+                    description:
+                        'Scrolling method.  When "coordinates" is chosen, x & y become required.',
                 },
                 x: {
                     type: 'number',
+                    minimum: 0,
+                    maximum: BROWSER_WIDTH,
+                    optional: true,
                     description:
-                        'The target horizontal scroll coordinate (CSS pixel value). Required and only used when mode="coordinates". Must be between 0 and 1024.',
-                    optional: true, // Optional overall, but required for 'coordinates' mode
+                        'Horizontal scroll target (CSS pixels). **Required when location="coordinates".**',
                 },
                 y: {
                     type: 'number',
+                    minimum: 0,
+                    maximum: BROWSER_HEIGHT,
+                    optional: true,
                     description:
-                        'The target vertical scroll coordinate (CSS pixel value). Required and only used when mode="coordinates". Must be between 0 and 768.',
-                    optional: true, // Optional overall, but required for 'coordinates' mode
+                        'Vertical scroll target (CSS pixels). **Required when location="coordinates".**',
                 },
             },
             'Returns a status message indicating success or failure of the scroll operation.'
@@ -509,20 +486,19 @@ export function getBrowserVisionTools(): ToolFunction[] {
             {
                 x: {
                     type: 'number',
-                    description:
-                        'The horizontal coordinate (X-axis) to click at (must be between 0 and 1024).',
+                    minimum: 0,
+                    maximum: BROWSER_WIDTH,
                 },
                 y: {
                     type: 'number',
-                    description:
-                        'The vertical coordinate (Y-axis) to click at (must be between 0 and 768).',
+                    minimum: 0,
+                    maximum: BROWSER_HEIGHT,
                 },
                 button: {
                     type: 'string',
-                    description:
-                        'The mouse button to simulate for the click. Defaults to "left".',
                     enum: ['left', 'middle', 'right'],
                     optional: true,
+                    description: 'Defaults to **left** if omitted.',
                 },
             },
             'Returns a status message indicating success or failure of the click.'
@@ -533,71 +509,211 @@ export function getBrowserVisionTools(): ToolFunction[] {
             {
                 startX: {
                     type: 'number',
-                    description:
-                        'The horizontal coordinate (X-axis) where the drag starts (0-1024).',
+                    minimum: 0,
+                    maximum: BROWSER_WIDTH,
                 },
                 startY: {
                     type: 'number',
-                    description:
-                        'The vertical coordinate (Y-axis) where the drag starts (0-768).',
+                    minimum: 0,
+                    maximum: BROWSER_HEIGHT,
                 },
                 endX: {
                     type: 'number',
-                    description:
-                        'The horizontal coordinate (X-axis) where the drag ends (0-1024).',
+                    minimum: 0,
+                    maximum: BROWSER_WIDTH,
                 },
                 endY: {
                     type: 'number',
-                    description:
-                        'The vertical coordinate (Y-axis) where the drag ends (0-768).',
-                },
-                button: {
-                    type: 'string',
-                    description:
-                        'The mouse button to hold down during the drag. Defaults to "left".',
-                    enum: ['left', 'middle', 'right'],
-                    optional: true,
+                    minimum: 0,
+                    maximum: BROWSER_HEIGHT,
                 },
             },
             'Returns a status message indicating success or failure of the drag operation.'
         ),
-        createToolFunction(
-            execute,
-            'Execute a sequence of browser actions efficiently in a single tool call. Actions run in the provided order. If any action fails, the sequence stops, and an error is returned. This is useful for chaining interactions like navigating, typing, and clicking.',
+        /*createToolFunction(
+            use_browser,
+            `Perform one or more browser actions in a row:
+navigate(url)
+scroll_to(location, x, y)
+click_at(x, y, button)
+type(text)
+press_keys(keys)
+drag(startX, startY, endX, endY).
+
+Actions are run in the provided order. If any action fails, the sequence stops, and an error is returned. This is useful for chaining interactions like navigating, typing, and clicking.
+
+You should try to combine multiple actions into a single call to reduce round trips.
+For example, if you needed to fill in a form you might perform;
+1. use_browser('[{"action": "navigate", "url": "https://example.com"}]') - load the page and find the coordinates of the form fields
+2. use_browser('[{"action": "click_at", "x": 100, "y": 200, "button": "left"}, {"action": "type", "text": "Hello World!"}, {"action": "press_keys", "keys": "Enter"}, {"action": "click_at", "x": 300, "y": 400}]') - click the first field, type in the text, press enter, and click the submit button.
+
+If any action fails, you will see how far you got and can continue from there.`,
             {
-                actionsJson: {
-                    type: 'string',
-                    description: `A **JSON string** representing an **array** of action objects. Each object in the array MUST have an 'action' property specifying the action name, and any required parameters for that action.
+                actions: {
+                    description: `An **ordered list** of browser actions.  The executor will run them sequentially and stop on the first error.
+**Viewport is fixed at ${BROWSER_WIDTH} × ${BROWSER_HEIGHT} CSS pixels** — all coordinates and scroll positions must respect that range.`,
+                    type: 'array',
+                    minItems: 1,
+                    items: {
+                        type: 'object',
+                        oneOf: [
+                            {
+                                description:
+                                    'Navigate the active tab to a URL.',
+                                additionalProperties: false,
+                                properties: {
+                                    action: {
+                                        type: 'string',
+                                        enum: ['navigate'],
+                                    },
+                                    url: {
+                                        type: 'string',
+                                        description:
+                                            'Absolute destination URL (e.g. "https://example.com").',
+                                    },
+                                },
+                                required: ['action', 'url'],
+                            },
+                            {
+                                description: 'Type text in focused element.',
+                                additionalProperties: false,
+                                properties: {
+                                    action: { type: 'string', enum: ['type'] },
+                                    text: {
+                                        type: 'string',
+                                        description: 'Use "\\n" for new lines.',
+                                    },
+                                },
+                                required: ['action', 'text'],
+                            },
+                            {
+                                description:
+                                    'Press a single key (no modifiers).',
+                                additionalProperties: false,
+                                properties: {
+                                    action: {
+                                        type: 'string',
+                                        enum: ['press_keys'],
+                                    },
+                                    keys: {
+                                        type: 'string',
+                                        description:
+                                            "The key or combination to press (e.g., 'Enter', 'Ctrl+C')",
+                                    },
+                                },
+                                required: ['action', 'keys'],
+                            },
+                            {
+                                description:
+                                    'Scroll the page.  Prefer "page_down" / "page_up" for exploration; ' +
+                                    '"coordinates" is only for surgical jumps.',
+                                additionalProperties: false,
+                                properties: {
+                                    action: {
+                                        type: 'string',
+                                        enum: ['scroll_to'],
+                                    },
+                                    location: {
+                                        type: 'string',
+                                        enum: [
+                                            'page_down',
+                                            'page_up',
+                                            'bottom',
+                                            'top',
+                                            'coordinates',
+                                        ],
+                                        description:
+                                            'Scrolling method.  When "coordinates" is chosen, x & y become required.',
+                                    },
+                                    x: {
+                                        type: 'number',
+                                        minimum: 0,
+                                        maximum: BROWSER_WIDTH,
+                                        optional: true,
+                                        description:
+                                            'Horizontal scroll target (CSS pixels). **Required when location="coordinates".**',
+                                    },
+                                    y: {
+                                        type: 'number',
+                                        minimum: 0,
+                                        maximum: BROWSER_HEIGHT,
+                                        optional: true,
+                                        description:
+                                            'Vertical scroll target (CSS pixels). **Required when location="coordinates".**',
+                                    },
+                                },
+                                required: ['action', 'location'],
+                            },
 
-Available actions and their parameters:
-- \`{"action": "navigate", "url": "string"}\`
-- \`{"action": "type", "text": "string"}\` (handles \\n)
-- \`{"action": "press", "key": "string"}\` (e.g., "Enter", "Tab")
-- \`{"action": "scroll_to", "mode": "string", "x"?: number, "y"?: number}\` (mode: 'page_down', 'page_up', 'bottom', 'top', 'coordinates')
-- \`{"action": "click_at", "x": number, "y": number, "button"?: "string"}\` (button: 'left', 'middle', 'right')
-- \`{"action": "drag", "startX": number, "startY": number, "endX": number, "endY": number, "button"?: "string"}\`
-- \`{"action": "js_evaluate", "code": "string"}\`
-- \`{"action": "get_page_url"}\` (no parameters)
-- \`{"action": "get_page_content", "type": "string"}\` (type: 'html', 'markdown', 'interactive' - currently only 'html' fully supported)
-- \`{"action": "browserStatus", "type"?: "string", "includeCoreTabs"?: boolean}\` (type: 'viewport' or 'fullpage' - currently only 'viewport')
-- \`{"action": "debugCommand", "method": "string", "commandParams"?: object}\` (Advanced CDP command)
-
-**Example JSON String:**
-\`'[{"action": "navigate", "url": "https://google.com"}, {"action": "type", "text": "large language models\\n"}, {"action": "click_at", "x": 500, "y": 400}]'\`
-Make sure the JSON string is valid and properly escaped if necessary within the parent JSON tool call.`,
+                            {
+                                description: 'Click at viewport coordinates.',
+                                additionalProperties: false,
+                                properties: {
+                                    action: {
+                                        type: 'string',
+                                        enum: ['click_at'],
+                                    },
+                                    x: {
+                                        type: 'number',
+                                        minimum: 0,
+                                        maximum: BROWSER_WIDTH,
+                                    },
+                                    y: {
+                                        type: 'number',
+                                        minimum: 0,
+                                        maximum: BROWSER_HEIGHT,
+                                    },
+                                    button: {
+                                        type: 'string',
+                                        enum: ['left', 'middle', 'right'],
+                                        optional: true,
+                                        description:
+                                            'Defaults to **left** if omitted.',
+                                    },
+                                },
+                                required: ['action', 'x', 'y'],
+                            },
+                            {
+                                description:
+                                    'Drag from (startX,startY) to (endX,endY).',
+                                additionalProperties: false,
+                                properties: {
+                                    action: { type: 'string', enum: ['drag'] },
+                                    startX: {
+                                        type: 'number',
+                                        minimum: 0,
+                                        maximum: BROWSER_WIDTH,
+                                    },
+                                    startY: {
+                                        type: 'number',
+                                        minimum: 0,
+                                        maximum: BROWSER_HEIGHT,
+                                    },
+                                    endX: {
+                                        type: 'number',
+                                        minimum: 0,
+                                        maximum: BROWSER_WIDTH,
+                                    },
+                                    endY: {
+                                        type: 'number',
+                                        minimum: 0,
+                                        maximum: BROWSER_HEIGHT,
+                                    },
+                                },
+                                required: [
+                                    'action',
+                                    'startX',
+                                    'startY',
+                                    'endX',
+                                    'endY',
+                                ],
+                            },
+                        ],
+                    },
                 },
             },
             'Returns a JSON string containing: `status` ("success" or "error"), `message` (summary or error details), and `lastResult` (the output of the last successfully executed action, or null on error/no actions).'
-        ),
-    ];
-}
-
-/**
- * Get advanced/debug browser tools.
- * These tools provide lower-level access and should be used with caution.
- */
-export function getBrowserDebugTools(): ToolFunction[] {
-    return [
+        ),*/
         createToolFunction(
             js_evaluate,
             'Advanced: Execute arbitrary JavaScript code directly within the context of the current page. Returns the result of the execution.',
@@ -630,8 +746,6 @@ export function getBrowserDebugTools(): ToolFunction[] {
         ),
     ];
 }
-
-// --- Agent Setup and Status ---
 
 /**
  * Defines parameters typically used when initializing a browser agent.
@@ -819,7 +933,7 @@ async function addScreenshot(
         await session.initialize();
 
         // Get browser status (includes screenshot)
-        const payloadOrError = await session.browserStatus('viewport'); // Returns payload or { error: string }
+        const payloadOrError = await session.browserStatus(); // Returns payload or { error: string }
 
         // Check if an error object was returned
         if (
@@ -857,88 +971,85 @@ async function addScreenshot(
         // If successful, build the detailed status message
         const browserSection = `### Browser status
 URL: ${payload.url || 'Unknown'}
-Viewport: ${payload.view?.w || 0} × ${payload.view?.h || 0} CSS px | Full page: ${payload.full?.w || 0} × ${payload.full?.h || 0} CSS px`;
-
-        // Build tabs section (placeholder, as coreTabs isn't fully implemented yet)
-        let tabsSection = '';
-        if (
-            payload.coreTabs &&
-            Array.isArray(payload.coreTabs) &&
-            payload.coreTabs.length > 0
-        ) {
-            tabsSection =
-                '\n\n### Important tabs (Note: Data may be placeholder)';
-            // ... (tab formatting logic) ...
-        }
+Viewport: ${payload.view?.w || 0} × ${payload.view?.h || 0} CSS px
+Full page: ${payload.full?.w || 0} × ${payload.full?.h || 0} CSS px`;
 
         // Build elements section
         let elementsSection = '';
         if (payload.elementMap && Array.isArray(payload.elementMap)) {
-            // Sort elements
+            // Sort elements simply by y-coordinate (top-to-bottom)
+            // The complex sorting based on score/offscreen is removed as those fields no longer exist
             const sortedElements = [...payload.elementMap].sort(
-                (a, b) =>
-                    !!a.offscreen !== !!b.offscreen
-                        ? a.offscreen
-                            ? 1
-                            : -1 // Onscreen first
-                        : (b.score || 0) - (a.score || 0) || // Then by score desc
-                          (a.y || 0) - (b.y || 0) // Then by y-coord asc
+                (a, b) => (a.y || 0) - (b.y || 0) // Sort by y-coord asc
             );
 
             // Limit and format
-            const MAX_ELEMENTS_TO_SHOW = 40;
+            const MAX_ELEMENTS_TO_SHOW = 40; // Keep limit
             const elementsToShow = sortedElements.slice(
                 0,
                 MAX_ELEMENTS_TO_SHOW
             );
-            const inViewportCount = elementsToShow.filter(
-                el => !el.offscreen
-            ).length;
-            const totalInViewport = sortedElements.filter(
-                el => !el.offscreen
-            ).length;
-            const hiddenShownCount = elementsToShow.length - inViewportCount;
 
-            elementsSection = `\n\n### Interactive elements (${inViewportCount} visible + ${hiddenShownCount} hidden shown of ${totalInViewport} in viewport, ${sortedElements.length} total)`;
-            elementsSection +=
-                '\n| id | role | type | label | extras | position | vis | score |';
-            elementsSection +=
-                '\n|----|------|------|-------|--------|----------|-----|-------|';
+            elementsSection = `
+### Interactive elements
+Type, center position (x,y) and key details of the first ${elementsToShow.length} interactive DOM nodes found on the page.
+`;
 
-            elementsToShow.forEach((el: any) => {
-                const label = el.label
-                    ? `"${el.label.replace(/\s+/g, ' ').trim().substring(0, 22)}${el.label.length > 25 ? '...' : ''}"`
-                    : '';
-                let extras = '';
-                if (el.href)
-                    extras =
-                        el.href.length > 20
-                            ? el.href.substring(0, 17) + '...'
-                            : el.href;
-                else if (el.placeholder)
-                    extras = `placeholder="${el.placeholder.substring(0, 15)}${el.placeholder.length > 15 ? '...' : ''}"`;
-                else if (el.value)
-                    extras = `value="${el.value.substring(0, 15)}${el.value.length > 15 ? '...' : ''}"`;
-                else if (el.type) extras = `type=${el.type}`;
-                const posX = typeof el.cx === 'number' ? Math.round(el.cx) : 0;
-                const posY = typeof el.cy === 'number' ? Math.round(el.cy) : 0;
-                const position = `${posX},${posY}`;
-                const visibility = el.offscreen ? '▼' : '✓';
-                const score =
-                    typeof el.score === 'number' ? el.score.toFixed(1) : '-';
-                elementsSection += `\n| ${el.id || '?'} | ${el.role || '?'} | ${el.tag || '?'} | ${label} | ${extras} | ${position} | ${visibility} | ${score} |`;
+            elementsToShow.forEach(el => {
+                // Use inferred type InteractiveElement
+
+                // Format the info object concisely
+                const infoParts: string[] = [];
+                if (el.info.text)
+                    infoParts.push(
+                        `text: "${el.info.text.substring(0, 50)}${el.info.text.length > 50 ? '...' : ''}"`
+                    );
+                if (el.info.label)
+                    infoParts.push(
+                        `label: "${el.info.label.substring(0, 50)}${el.info.label.length > 50 ? '...' : ''}"`
+                    );
+                if (el.info.name) infoParts.push(`name: ${el.info.name}`);
+                if (el.info.value)
+                    infoParts.push(
+                        `value: "${el.info.value.substring(0, 50)}${el.info.value.length > 50 ? '...' : ''}"`
+                    );
+                if (el.info.href)
+                    infoParts.push(
+                        `href: ${el.info.href.substring(0, 200)}${el.info.href.length > 200 ? '...' : ''}`
+                    );
+                if (el.info.inputType)
+                    infoParts.push(`input_type: ${el.info.inputType}`);
+                if (el.info.role) infoParts.push(`role: ${el.info.role}`);
+                // Add class sparingly if other fields are empty? Maybe not needed for brevity.
+                if (el.info.class && infoParts.length < 2)
+                    infoParts.push(
+                        `class: ${el.info.class.substring(0, 30)}...`
+                    );
+
+                const infoString = infoParts.slice(0, 3).join(', '); // Show max 3 key info parts
+
+                const cx = Math.round(el.x + el.w / 2);
+                const cy = Math.round(el.y + el.h / 2);
+                const position = `{x:${cx},y:${cy}}`;
+
+                elementsSection += `\n${el.type} at ${position} - ${infoString}`;
             });
-            elementsSection +=
-                '\n\n*(✓ = visible now, ▼ = requires scrolling, coords = element center [x,y], score = importance)*';
+
+            if (sortedElements.length > MAX_ELEMENTS_TO_SHOW) {
+                elementsSection += `\n(${sortedElements.length - MAX_ELEMENTS_TO_SHOW} more elements not shown)`;
+            }
         }
 
         // Add screenshot directly to context message
         const screenshotSection = payload.screenshot
-            ? `\n\n### Browser screenshot\n${payload.screenshot}`
+            ? `\n\n### Browser screenshot
+A grid has been overlaid on the screenshot to help with positioning. There are minor grid lines every 50px (dashed) and major lines every 200px (solid). The grid does not show on the real web page. It has been added to improve your accuracy when choosing coordinates.
+
+${payload.screenshot}`
             : '';
 
         // Combine sections for the message content
-        messageContent = `${browserSection}${tabsSection}${elementsSection}${screenshotSection}`;
+        messageContent = `${browserSection}${elementsSection}${screenshotSection}`;
 
         // Send detailed status via communication manager if successful
         const comm = getCommunicationManager();

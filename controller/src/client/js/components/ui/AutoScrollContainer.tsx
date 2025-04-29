@@ -5,6 +5,7 @@ interface AutoScrollContainerProps {
   children: React.ReactNode; // Content to be rendered inside the scrollable container
   className?: string; // Optional CSS classes for the container
   threshold?: number; // Optional threshold (in pixels) to re-enable auto-scroll when near the bottom
+  style?: React.CSSProperties; // Optional inline styles for the container
 }
 
 /**
@@ -18,6 +19,7 @@ const AutoScrollContainer: React.FC<AutoScrollContainerProps> = ({
   children,
   className = '',
   threshold = 20, // Default threshold of 20px
+  style = {}, // Default to empty style object
 }) => {
   // Ref to the scrollable div element
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -42,7 +44,7 @@ const AutoScrollContainer: React.FC<AutoScrollContainerProps> = ({
    */
   useEffect(() => {
     if (scrollRef.current) {
-      const { scrollHeight, clientHeight, scrollTop } = scrollRef.current;
+      const { scrollHeight } = scrollRef.current;
 
       // Check if new content might have been added by comparing scroll heights
       const hasContentChanged = prevScrollHeight !== scrollHeight;
@@ -110,7 +112,7 @@ const AutoScrollContainer: React.FC<AutoScrollContainerProps> = ({
       ref={scrollRef}
       onScroll={handleScroll}
       className={`overflow-y-auto ${className}`} // Ensure vertical scrolling is enabled
-      style={{ WebkitOverflowScrolling: 'touch' }} // Optional: Improve scrolling momentum on iOS
+      style={{ WebkitOverflowScrolling: 'touch', ...style }} // Merge default styles with custom styles
     >
       {children}
     </div>

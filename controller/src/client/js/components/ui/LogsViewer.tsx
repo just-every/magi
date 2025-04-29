@@ -195,10 +195,7 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
                         ))}
                     </div>
                 </div>
-                <div
-                    className="col-md-9"
-                    style={{ maxHeight: '100%', overflowY: 'auto' }}
-                >
+                <div className="col-md-9">
                     {selectedLogFile ? (
                         <div>
                             <h5 className="mb-3">Request Details</h5>
@@ -223,7 +220,7 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
                                         selectedLogFile.request,
                                         null,
                                         2
-                                    )}
+                                    ).replace(/\\n/g, '\n')}
                                 </pre>
                             </div>
                         </div>

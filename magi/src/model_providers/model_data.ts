@@ -146,7 +146,7 @@ export const MODEL_CLASSES = {
             'o4-mini', // OpenAI
             'claude-3-7-sonnet-latest', // Anthropic
             'grok-3', // X.AI
-            'deepseek-reasoner', // DeepSeek
+            //'deepseek-reasoner', // DeepSeek
             'meta-llama/llama-4-maverick', // Meta/OpenRouter
             'qwen/qwen-max', // Qwen/OpenRouter
         ],
@@ -204,10 +204,10 @@ export const MODEL_CLASSES = {
     vision: {
         models: [
             //'computer-use-preview',     // OpenAI
+            'o4-mini', // OpenAI
             'o3', // OpenAI
             'gemini-2.5-pro-exp-03-25', // Google
             'claude-3-7-sonnet-latest', // Anthropic
-            'o4-mini', // OpenAI
             'grok-2-vision', // X.AI
             'gpt-4.1', // OpenAI
         ],
@@ -235,7 +235,7 @@ export const MODEL_CLASSES = {
     },
 
     image_generation: {
-        models: ['imagen-3'], // Including test model
+        models: ['gpt-image-1'], // OpenAI DALL-E 3 model
     },
 
     embedding: {
@@ -841,6 +841,23 @@ export const MODEL_REGISTRY: ModelEntry[] = [
         },
         description:
             'Balanced multimodal model with large context, built for Agents.',
+    },
+
+    // Image generation models
+    {
+        id: 'gpt-image-1',
+        provider: 'openai',
+        cost: {
+            per_image: 0.042, // Medium quality, 1024x1024 pricing
+        },
+        features: {
+            input_modality: ['text', 'image'],
+            output_modality: ['image'],
+            streaming: false,
+        },
+        class: 'image_generation',
+        description:
+            "OpenAI's GPT-Image-1 model for text-to-image generation. Supports quality levels (low: $0.011-0.016, medium: $0.042-0.063, high: $0.167-0.25) and sizes (1024x1024, 1024x1536, 1536x1024).",
     },
 
     // Code-specific models

@@ -3,24 +3,36 @@
  * to extract browser information like element maps and interactive elements
  */
 
-// Element map type definitions - matching original extension format
+import { BROWSER_WIDTH, BROWSER_HEIGHT } from '../../constants.js';
+
+// Element map type definitions
 export type Viewport = { w: number; h: number };
 
-export type ElementJSON = {
-    id: number; // index in array for click reference
-    role: string; // aria role or tag fallback
-    tag: string; // original tag name (e.g. 'a', 'button')
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-    cx: number; // center point x
-    cy: number; // center point y
-    label?: string; // human-readable text label
-    href?: string; // for links/buttons with navigation
-    type?: string; // input/button type
-    score?: number; // interaction priority score
-    offscreen?: boolean; // element is outside the viewport
+// More concise element representation for LLM processing
+export type InteractiveElementInfo = {
+    href?: string; // Absolute URL for links
+    name?: string; // Input name attribute
+    text?: string; // Visible text or fallback label
+    value?: string; // Input value attribute
+    label?: string; // aria-label or associated label text
+    class?: string; // CSS classes (consider filtering common ones later)
+    // Add other relevant attributes as needed, e.g., 'placeholder'
+    placeholder?: string;
+    alt?: string; // Alt text for images
+    title?: string; // Title attribute
+    role?: string; // Explicit ARIA role
+    tag?: string; // Original HTML tag
+    inputType?: string; // Specific type for <input> elements
+};
+
+export type InteractiveElement = {
+    type: string; // Simplified type (e.g., 'link', 'button', 'input', 'textarea')
+    x: number; // CSS pixels
+    y: number; // CSS pixels
+    w: number; // CSS pixels
+    h: number; // CSS pixels
+    info: InteractiveElementInfo; // Dictionary of important attributes/details
+    // Removed: id, cx, cy, score, offscreen to minimize tokens
 };
 
 export type BrowserStatusPayload = {
@@ -28,7 +40,7 @@ export type BrowserStatusPayload = {
     view: Viewport; // current viewport (CSS px)
     full: { w: number; h: number }; // full‑page scroll size (CSS px)
     url: string; // current page URL
-    elementMap: ElementJSON[]; // human‑readable element list
+    elementMap: InteractiveElement[]; // Updated element list type
     coreTabs?: any[]; // Optional core tabs for multi-tab scenarios
 };
 
@@ -39,14 +51,17 @@ export type BrowserStatusPayload = {
  * @param viewportWidth The width of the viewport in CSS pixels
  * @param viewportHeight The height of the viewport in CSS pixels
  * @param devicePixelRatio The actual device pixel ratio of the screen/emulation
+ * @param baseUrl The base URL of the current page, needed for resolving relative links.
  * @returns Array of interactive elements with properties needed for interaction (CSS pixels)
  */
 export function buildElementArray(
     snap: any,
-    viewportWidth = 1024,
-    viewportHeight = 768,
-    devicePixelRatio = 1 // Default to 1 if not provided
-): ElementJSON[] {
+    viewportWidth = BROWSER_WIDTH,
+    viewportHeight = BROWSER_HEIGHT,
+    devicePixelRatio = 1, // Default to 1 if not provided
+    baseUrl: string = '' // Added baseUrl parameter
+): InteractiveElement[] {
+    // Updated return type
     const doc = snap.documents?.[0];
     const strings: string[] = snap.strings ?? [];
     const { nodes, layout } = doc ?? {};
@@ -62,20 +77,28 @@ export function buildElementArray(
     const nodeNames: number[] = nodes.nodeName ?? [];
     const nodeAttrs: any[] = nodes.attributes ?? [];
 
-    type RawEl = {
+    // Temporary structure to hold extracted data before final formatting
+    type TempElementData = {
         role: string;
         tag: string;
-        x: number; // Will store corrected CSS pixels
-        y: number; // Will store corrected CSS pixels
-        w: number; // Will store corrected CSS pixels
-        h: number; // Will store corrected CSS pixels
-        label?: string;
+        x: number;
+        y: number;
+        w: number;
+        h: number;
         href?: string;
-        type?: string;
-        score?: number;
-        offscreen?: boolean;
+        ariaLabel?: string;
+        title?: string;
+        alt?: string;
+        placeholder?: string;
+        name?: string; // Added
+        value?: string; // Added
+        className?: string; // Added (using className to avoid conflict with 'class' keyword)
+        inputType?: string; // Renamed from 'type'
+        visibleText?: string; // Extracted text content
+        score?: number; // Keep score for intermediate sorting/filtering
+        offscreen?: boolean; // Keep offscreen for intermediate filtering
     };
-    let elements: RawEl[] = [];
+    let elements: TempElementData[] = [];
 
     // Allowed roles and tags (keep as is)
     const allowedRoles = new Set([
@@ -190,28 +213,83 @@ export function buildElementArray(
         // Get tag name
         const tagStr = strings[nodeNames[nodeIdx]] || '';
 
-        // Extract attributes (role, href, labels, etc.) - This logic remains the same
+        // Extract attributes (role, href, labels, etc.)
         let roleStr = '';
         let href = '';
         let ariaLabel = '';
         let title = '';
         let alt = '';
         let placeholder = '';
+        let name = ''; // Added
+        let value = ''; // Added
+        let className = ''; // Added
+        let inputType = ''; // Added (for input type)
+
         const attrs = nodeAttrs[nodeIdx] ?? [];
         for (let j = 0; j < attrs.length; j += 2) {
             const attrName = strings[attrs[j]] || '';
             const attrValue = strings[attrs[j + 1]] || '';
-            // ... (attribute extraction logic as before) ...
-            if (attrName === 'role') roleStr = attrValue;
-            else if (attrName === 'href' && tagStr === 'A') href = attrValue;
-            else if (attrName === 'aria-label') ariaLabel = attrValue;
-            else if (attrName === 'title') title = attrValue;
-            else if (attrName === 'alt' && tagStr === 'IMG') alt = attrValue;
-            else if (
-                attrName === 'placeholder' &&
-                (tagStr === 'INPUT' || tagStr === 'TEXTAREA')
-            )
-                placeholder = attrValue;
+
+            switch (attrName) {
+                case 'role':
+                    roleStr = attrValue;
+                    break;
+                case 'href': // Keep collecting href for any tag initially
+                    href = attrValue;
+                    break;
+                case 'aria-label':
+                    ariaLabel = attrValue;
+                    break;
+                case 'title':
+                    title = attrValue;
+                    break;
+                case 'alt': // Keep collecting alt for any tag initially
+                    alt = attrValue;
+                    break;
+                case 'placeholder':
+                    placeholder = attrValue;
+                    break;
+                case 'name': // Capture name attribute
+                    name = attrValue;
+                    break;
+                case 'value': // Capture value attribute
+                    value = attrValue;
+                    break;
+                case 'class': // Capture class attribute
+                    className = attrValue;
+                    break;
+                case 'type': // Capture type attribute (often for input/button)
+                    if (tagStr === 'INPUT' || tagStr === 'BUTTON') {
+                        inputType = attrValue;
+                    }
+                    break;
+            }
+        }
+
+        // Resolve absolute URL for href if baseUrl is provided
+        if (href && baseUrl) {
+            try {
+                href = new URL(href, baseUrl).toString();
+            } catch (e) {
+                // console.warn(`[browser_helpers] Invalid URL encountered: ${href} with base ${baseUrl}`);
+                // Keep original href if URL parsing fails
+            }
+        } else if (href && !baseUrl) {
+            // console.warn(`[browser_helpers] Cannot resolve relative href '${href}' without baseUrl.`);
+            // Keep potentially relative href
+        }
+
+        // Only keep href for actual link tags ('A' or role='link')
+        if (tagStr !== 'A' && roleStr !== 'link') {
+            href = '';
+        }
+        // Only keep alt for IMG tags
+        if (tagStr !== 'IMG') {
+            alt = '';
+        }
+        // Only keep placeholder for relevant input types
+        if (tagStr !== 'INPUT' && tagStr !== 'TEXTAREA') {
+            placeholder = '';
         }
 
         // Filter by role/tag - Remains the same
@@ -219,27 +297,18 @@ export function buildElementArray(
         if (roleStr === 'presentation' && !ariaLabel && !title && !alt)
             continue;
 
-        // Determine label - Remains the same
-        let label = ariaLabel || alt || title || placeholder || '';
-        if (!label && texts && texts[i] !== undefined) {
+        // Determine visible text content
+        let visibleText = '';
+        if (texts && texts[i] !== undefined) {
             const textIndex = texts[i];
             if (textIndex >= 0 && textIndex < strings.length) {
-                label = strings[textIndex] || '';
-                label = label.trim().substring(0, 50);
-                if (label.length === 50) label += '...';
+                visibleText = strings[textIndex] || '';
+                visibleText = visibleText.trim().substring(0, 100); // Limit length
+                // Consider adding ellipsis if truncated: if (visibleText.length === 100) visibleText += '...';
             }
         }
 
-        // Extract type - Remains the same
-        let type = '';
-        if (tagStr === 'INPUT' || tagStr === 'BUTTON') {
-            for (let j = 0; j < attrs.length; j += 2) {
-                if (strings[attrs[j]] === 'type') {
-                    type = strings[attrs[j + 1]] || '';
-                    break;
-                }
-            }
-        }
+        // Note: inputType was already extracted in the attribute loop
 
         // Check if element is in viewport (using CSS pixel coordinates and viewport dimensions)
         const inViewport =
@@ -299,9 +368,16 @@ export function buildElementArray(
             y, // CSS pixels
             w, // CSS pixels
             h, // CSS pixels
-            label,
             href: href || undefined,
-            type: type || undefined,
+            ariaLabel: ariaLabel || undefined,
+            title: title || undefined,
+            alt: alt || undefined,
+            placeholder: placeholder || undefined,
+            name: name || undefined,
+            value: value || undefined,
+            className: className || undefined,
+            inputType: inputType || undefined,
+            visibleText: visibleText || undefined,
             score,
             offscreen: !inViewport,
         });
@@ -350,39 +426,73 @@ export function buildElementArray(
     /* ----- Sort by score (descending), then y-position (ascending CSS pixels) ----- */
     elements.sort((a, b) => {
         if ((b.score || 0) !== (a.score || 0)) {
-            return (b.score || 0) - (a.score || 0);
+            return (b.score || 0) - (a.score || 0); // Primary sort: score descending
         }
-        return a.y - b.y; // Sort by CSS pixel y-coordinate
+        return a.y - b.y; // Secondary sort: y-position ascending (CSS pixels)
     });
 
-    /* ----- build final JSON list (using CSS pixel coordinates) ----- */
-    const elementJson: ElementJSON[] = elements.map((el, index) => {
-        // Calculate center point using CSS pixel coordinates
-        const cx = Math.round(el.x + el.w / 2);
-        const cy = Math.round(el.y + el.h / 2);
+    /* ----- Build final InteractiveElement list ----- */
+    const interactiveElements: InteractiveElement[] = elements.map(el => {
+        // Determine simplified type
+        let simpleType = el.role || el.tag.toLowerCase();
+        // You might want more sophisticated mapping here, e.g.,
+        if (el.tag === 'A' && el.href) simpleType = 'link';
+        else if (
+            el.tag === 'BUTTON' ||
+            (el.tag === 'INPUT' && el.inputType === 'button')
+        )
+            simpleType = 'button';
+        else if (el.tag === 'INPUT')
+            simpleType = 'input'; // Could refine based on el.inputType
+        else if (el.tag === 'TEXTAREA') simpleType = 'textarea';
+        else if (el.tag === 'SELECT') simpleType = 'select';
+        else if (el.tag === 'IMG') simpleType = 'image';
+        // Add more mappings as needed
+
+        // Consolidate info fields, prioritizing specific labels/text
+        const info: InteractiveElementInfo = {
+            text:
+                el.visibleText ||
+                el.ariaLabel ||
+                el.alt ||
+                el.title ||
+                el.placeholder ||
+                undefined,
+            label: el.ariaLabel || undefined, // Explicit aria-label
+            href: el.href,
+            name: el.name,
+            value: el.value,
+            class: el.className,
+            placeholder: el.placeholder,
+            alt: el.alt,
+            title: el.title,
+            role: el.role || undefined,
+            tag: el.tag || undefined,
+            inputType: el.inputType || undefined,
+        };
+
+        // Remove undefined fields from info to keep it clean
+        Object.keys(info).forEach(
+            key =>
+                info[key as keyof InteractiveElementInfo] === undefined &&
+                delete info[key as keyof InteractiveElementInfo]
+        );
 
         return {
-            id: index + 1,
-            role: el.role,
-            tag: el.tag,
+            type: simpleType,
             x: Math.round(el.x), // Final CSS pixels
             y: Math.round(el.y), // Final CSS pixels
             w: Math.round(el.w), // Final CSS pixels
             h: Math.round(el.h), // Final CSS pixels
-            cx, // Center X in CSS pixels
-            cy, // Center Y in CSS pixels
-            label: el.label,
-            href: el.href,
-            type: el.type,
-            score: el.score,
-            offscreen: el.offscreen,
+            info: info,
+            // Removed id, cx, cy, score, offscreen
         };
     });
 
-    const inViewport = elementJson.filter(el => !el.offscreen).length;
+    const inViewportCount = elements.filter(el => !el.offscreen).length; // Count before final mapping
     console.log(
-        `[browser_helpers] Scored ${elementJson.length} elements (${inViewport} in viewport) using CSS pixels after DPR correction.`
+        `[browser_helpers] Processed ${interactiveElements.length} interactive elements (${inViewportCount} in viewport) using CSS pixels after DPR correction.`
     );
 
-    return elementJson;
+    return interactiveElements;
 }

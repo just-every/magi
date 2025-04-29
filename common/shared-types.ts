@@ -84,12 +84,14 @@ export const validToolParameterTypes: ToolParameterType[] = [
  * Tool parameter type definitions using strict schema format for OpenAI function calling
  */
 export interface ToolParameter {
-    type: ToolParameterType;
+    type?: ToolParameterType;
     description?: string;
     enum?: string[];
     items?: ToolParameter | { type: ToolParameterType; enum?: string[] };
     properties?: Record<string, ToolParameter>;
     required?: string[];
+    optional?: boolean;
+    minItems?: number;
 
     [key: string]: any;
 }
@@ -130,13 +132,7 @@ export type ToolImplementationFn = (...args: any[]) => any | Promise<any>;
 export type ToolParameterMap = {
     [key: string]:
         | string
-        | {
-              name?: string;
-              description?: string;
-              type?: ToolParameterType;
-              enum?: string[];
-              optional?: boolean;
-          };
+        | ToolParameter;
 };
 
 /**

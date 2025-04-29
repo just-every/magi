@@ -9,7 +9,6 @@ import * as chromeLauncher from 'chrome-launcher';
 import CDP from 'chrome-remote-interface';
 import type { Client as CDPClient } from 'chrome-remote-interface';
 import * as fs from 'fs';
-import * as path from 'path';
 import {
     setupChromeProfile,
     getDefaultChromeUserDataDir,
@@ -19,8 +18,7 @@ import {
 interface ChromeInstance {
     chrome: chromeLauncher.LaunchedChrome;
     endpoint: string;
-    userDataDir: string;
-    originalProfileDir?: string;
+    userDataDir?: string;
     shutdownCallbacks: Array<() => Promise<void> | void>;
     cdpClients: Set<CDPClient>;
 }
@@ -34,8 +32,6 @@ export interface ChromeLaunchOptions {
     userDataDir?: string; // Chrome user data directory path
     profileName?: string; // Profile name within user data dir
     headless?: boolean; // Run in headless mode
-    useTemp?: boolean; // Force use of a temp profile
-    skipClone?: boolean; // Skip profile cloning (use original)
     mergeOnExit?: boolean; // Merge profile changes back on exit
     port?: number; // Port for CDP
     chromeFlags?: string[]; // Additional Chrome flags
@@ -86,7 +82,7 @@ async function checkExistingChromeInstance(port: number): Promise<boolean> {
  */
 async function connectToExistingChrome(
     port: number,
-    userDataDir: string
+    userDataDir?: string
 ): Promise<ChromeInstance | null> {
     try {
         // Get process ID using lsof (works on macOS and Linux)
@@ -177,12 +173,7 @@ export async function launchChrome(
 
     // Extract options with defaults
     const {
-        userDataDir = process.env.MAGI_USER_DATA_DIR ||
-            getDefaultChromeUserDataDir(),
-        profileName = process.env.MAGI_PROFILE_NAME || 'Default',
         headless = process.env.MAGI_CHROME_HEADLESS !== 'false',
-        useTemp = process.env.MAGI_FORCE_TEMP_PROFILE === 'true',
-        skipClone = process.env.MAGI_SKIP_PROFILE_CLONE === 'true',
         port = parseInt(process.env.HOST_CDP_PORT || '0', 10),
         chromeFlags = [],
         attachExitHandlers = true,
@@ -197,7 +188,7 @@ export async function launchChrome(
             );
             const existingInstance = await connectToExistingChrome(
                 port,
-                userDataDir
+                options.userDataDir
             );
             if (existingInstance) {
                 // Store the instance
@@ -225,15 +216,9 @@ export async function launchChrome(
     // Note: We already extracted options at the top of the function, no need to do it again
 
     // Set up Chrome profile
-    const originalProfileDir = path.join(userDataDir, profileName);
-    const profileDir = setupChromeProfile({
-        userDataDir,
-        profileName,
-        useTemp,
-        skipClone,
-    });
+    const chromeProfileDir = setupChromeProfile();
 
-    console.log(`Launching Chrome with profile at ${profileDir}`);
+    console.log(`Launching Chrome with profile at ${chromeProfileDir}`);
 
     // Default flags for Chrome
     const defaultFlags = [
@@ -243,11 +228,13 @@ export async function launchChrome(
         '--disable-background-networking',
         '--silent-debugger-extension-api',
         '--remote-allow-origins=*',
-        // '--enable-automation' flag removed to hide automation infobar
         '--no-first-run', // Suppress first-run dialog
         '--no-default-browser-check',
+        '--disable-background-timer-throttling', // Disable background timer throttling
         '--disable-features=ChromeWhatsNewUI,TriggerFirstRunUI',
-        '--disable-sync', // Don't prompt for sync
+        //'--disable-sync', // Don't prompt for sync
+        '--window-name=magi', // Set window name for easier identification
+        //'--no-startup-window', // Don't open a window
     ];
 
     if (headless) {
@@ -266,7 +253,7 @@ export async function launchChrome(
     try {
         // Debug output for launch parameters
         console.log('Chrome launch configuration:');
-        console.log(`  - User Data Dir: ${profileDir}`);
+        console.log(`  - User Data Dir: ${chromeProfileDir}`);
         console.log(`  - Port: ${port > 0 ? port : 'auto-select'}`);
         console.log(`  - Flags: ${allFlags.join(' ')}`);
 
@@ -294,7 +281,7 @@ export async function launchChrome(
         // Now use chrome-launcher as normal
         const chrome = await chromeLauncher.launch({
             chromeFlags: allFlags,
-            userDataDir: profileDir,
+            userDataDir: chromeProfileDir,
             startingUrl: 'about:blank',
             ignoreDefaultFlags: true, // We're providing all flags we need
             port: port, // Always use explicit port
@@ -309,8 +296,7 @@ export async function launchChrome(
         instance = {
             chrome,
             endpoint: `http://localhost:${chrome.port}`,
-            userDataDir: profileDir,
-            originalProfileDir: skipClone ? undefined : originalProfileDir,
+            userDataDir: chromeProfileDir,
             shutdownCallbacks: [],
             cdpClients: new Set(),
         };
@@ -335,72 +321,6 @@ export async function launchChrome(
     // Store the instance
     globalChromeInstance = instance;
     return instance;
-}
-
-/**
- * Get a CDP client connected to the Chrome instance
- * Launches Chrome automatically if not already running
- */
-export async function getCdpClient(
-    options: ChromeLaunchOptions = {}
-): Promise<CDPClient> {
-    const instance = globalChromeInstance || (await launchChrome(options));
-
-    // Try to connect with more robust retry logic - Chrome sometimes needs a moment to initialize the CDP endpoint
-    let retries = 5;
-    let client: CDPClient | undefined;
-
-    console.log(`Connecting to Chrome on port ${instance.chrome.port}...`);
-
-    // First check if the port is actually open
-    try {
-        const { execSync } = await import('child_process');
-        console.log('Checking if port is open...');
-        execSync(
-            `nc -z localhost ${instance.chrome.port} || echo "Port ${instance.chrome.port} is not open"`
-        );
-        console.log(`Port check completed for ${instance.chrome.port}`);
-    } catch (e) {
-        console.log(
-            `Port check error: ${e instanceof Error ? e.message : String(e)}`
-        );
-    }
-
-    while (retries > 0) {
-        try {
-            client = await CDP({ port: instance.chrome.port });
-            break; // Connection successful
-        } catch (error) {
-            retries--;
-            if (retries === 0) {
-                console.error(
-                    'Failed to connect to Chrome after multiple attempts'
-                );
-                throw error; // Re-throw after all retries failed
-            }
-
-            // Wait before retrying
-            console.log(
-                `CDP connection failed, retrying in 1000ms... (${retries} attempts left)`
-            );
-            await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-    }
-
-    if (!client) {
-        throw new Error('Failed to connect to Chrome - client is undefined');
-    }
-
-    instance.cdpClients.add(client);
-
-    // Remove from tracked clients when closed
-    client.on('disconnect', () => {
-        if (client) {
-            instance.cdpClients.delete(client);
-        }
-    });
-
-    return client;
 }
 
 /**
@@ -531,6 +451,7 @@ export async function shutdownChrome(
 
     // Remove temp directories if needed
     if (
+        instance.userDataDir &&
         instance.userDataDir.includes('magi-chrome-') &&
         fs.existsSync(instance.userDataDir)
     ) {

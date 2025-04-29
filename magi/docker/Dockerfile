@@ -6,9 +6,9 @@ FROM node:23-slim AS builder
 # Install latest npm globally
 RUN npm install -g npm
 
-# Install build dependencies required for native addons (like node-pty)
+# Install build dependencies required for native addons (like node-pty and canvas)
 RUN apt-get update && \
-    apt-get install -y python3 make g++ --no-install-recommends && \
+    apt-get install -y python3 make g++ pkg-config libpixman-1-dev libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 
 # Set working directory for the build stage
@@ -42,8 +42,10 @@ RUN npm install -g @anthropic-ai/claude-code@latest @openai/codex@latest
 
 # Install system dependencies required at runtime, including sudo and git
 # Also install gosu for switching users in the entrypoint
+# And include dependencies for canvas package
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git gosu sudo && \
+    apt-get install -y --no-install-recommends git gosu sudo \
+    libpixman-1-0 libcairo2 libpango1.0-0 libjpeg62-turbo libgif7 librsvg2-2 && \
     # Clean up apt cache
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*

@@ -181,7 +181,7 @@ export function getPersistentProfileDir(
 export function cloneProfile(
     sourceProfileDir: string,
     targetDir: string
-): string {
+): void {
     console.log(
         `Cloning Chrome profile from ${sourceProfileDir} to ${targetDir}`
     );
@@ -197,10 +197,8 @@ export function cloneProfile(
         'Cookies',
         'Login Data',
         'Web Data',
-        'History',
         'Bookmarks',
         'Preferences',
-        'Favicons',
         'Extension Cookies',
         'Network',
         'Platform Notifications',
@@ -208,10 +206,6 @@ export function cloneProfile(
         'Local Storage',
         'IndexedDB',
         'Service Worker',
-        'Current Session',
-        'Current Tabs',
-        'Last Session',
-        'Last Tabs',
         'Extension State',
         'Extension Rules',
     ];
@@ -237,8 +231,6 @@ export function cloneProfile(
             }
         }
     }
-
-    return targetDir;
 }
 
 /**
@@ -298,25 +290,9 @@ export function isChromeRunning(): boolean {
  * Get the profile directory for use with Chrome CDP
  * Handles detection, cloning, and setup of a Chrome profile
  */
-export function setupChromeProfile(options: {
-    userDataDir?: string; // Custom user data directory
-    profileName?: string; // Profile name within user data dir (Default, Profile 1, etc.)
-    useTemp?: boolean; // Force use of a temp profile
-    skipClone?: boolean; // Skip cloning (use the original profile directly)
-}): string {
-    const {
-        userDataDir = getDefaultChromeUserDataDir(),
-        profileName = DEFAULT_PROFILE_NAME,
-        useTemp = false,
-        skipClone = false,
-    } = options;
-
-    // If useTemp is true, use a temporary profile
-    if (useTemp) {
-        const tempProfileDir = createTempProfileDir();
-        console.log(`Using temporary profile at ${tempProfileDir}`);
-        return tempProfileDir;
-    }
+export function setupChromeProfile(): string {
+    const userDataDir = getDefaultChromeUserDataDir();
+    const profileName = DEFAULT_PROFILE_NAME;
 
     // Get the persistent profile directory in the project
     const persistentProfileDir = path.join(
@@ -327,33 +303,14 @@ export function setupChromeProfile(options: {
     // Check if the persistent profile exists
     const persistentProfileExists = fs.existsSync(persistentProfileDir);
 
-    // If skipClone is true, use the original profile directly
-    // Or if user explicitly set a different userDataDir in options, use that directly
-    if (skipClone || options.userDataDir) {
-        // Use the original profile if skipClone is true
-        const profileDir = path.join(userDataDir, profileName);
-        console.log(`Using original profile directory directly: ${profileDir}`);
-
-        // Make sure the "First Run" file exists to prevent welcome dialog
-        const firstRunFile = path.join(userDataDir, 'First Run');
-        if (!fs.existsSync(firstRunFile)) {
-            console.log('Creating "First Run" file to prevent welcome dialog');
-            fs.writeFileSync(firstRunFile, '');
-        }
-
-        return profileDir;
-    }
-
     // If the persistent profile doesn't exist, clone from default profile
     if (!persistentProfileExists) {
         const sourceProfilePath = path.join(userDataDir, profileName);
         console.log(
             `Creating initial persistent profile by cloning from ${sourceProfilePath}`
         );
-        return cloneProfile(sourceProfilePath, persistentProfileDir);
+        cloneProfile(sourceProfilePath, persistentProfileDir);
     }
 
-    // Otherwise, use the existing persistent profile
-    console.log(`Using existing persistent profile at ${persistentProfileDir}`);
-    return path.dirname(persistentProfileDir); // Return the parent directory (.chrome)
+    return path.dirname(persistentProfileDir);
 }

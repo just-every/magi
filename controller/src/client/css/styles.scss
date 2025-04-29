@@ -1063,3 +1063,8 @@ header {
 .process-item {
     cursor: pointer;
 }
+
+.screenshot-container  {
+    max-height:40vh;
+    overflow:scroll;
+}

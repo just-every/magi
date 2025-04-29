@@ -285,6 +285,80 @@ export function getFileTools(): ToolFunction[] {
 }
 
 /**
+ * Recursively processes an object to truncate base64 image data strings.
+ *
+ * @param obj The object to process
+ * @returns A new object with truncated image data strings
+ */
+function truncateImageData(obj: any): any {
+    if (obj === null || obj === undefined) {
+        return obj;
+    }
+
+    if (typeof obj === 'string') {
+        // Check if string contains image data anywhere within it
+        const dataImgPattern = /data:image\/[^;]+;base64,/g;
+        let match;
+        let resultString = obj;
+
+        // Find all occurrences of data:image pattern
+        while ((match = dataImgPattern.exec(resultString)) !== null) {
+            const startPos = match.index;
+            const prefixEndPos = startPos + match[0].length;
+
+            // Determine where to truncate (keep prefix + 50 chars of base64 data)
+            const truncateAfter = prefixEndPos + 50;
+
+            // Only truncate if there's enough content after the prefix
+            if (resultString.length > truncateAfter) {
+                // Find a comma or other delimiter after the truncation point if possible
+                let endPos = resultString.indexOf(',', truncateAfter);
+                if (endPos === -1 || endPos > truncateAfter + 100) {
+                    endPos = truncateAfter;
+                }
+
+                // Calculate how many characters will be removed
+                const charsToRemove = resultString.length - endPos - 1;
+
+                if (charsToRemove > 0) {
+                    // Find where the current base64 data likely ends - look for the next data:image pattern or end of string
+                    let nextImgStart = resultString.indexOf(
+                        'data:image/',
+                        endPos
+                    );
+                    if (nextImgStart === -1) nextImgStart = resultString.length;
+
+                    // Create truncated string - keep content before truncation point, add truncation message, then include rest of string
+                    resultString =
+                        resultString.substring(0, endPos) +
+                        `... [${charsToRemove} characters removed]` +
+                        resultString.substring(nextImgStart);
+
+                    // Reset regex to continue from new position
+                    dataImgPattern.lastIndex = endPos + 5;
+                }
+            }
+        }
+
+        return resultString;
+    }
+
+    if (typeof obj === 'object') {
+        if (Array.isArray(obj)) {
+            return obj.map(item => truncateImageData(item));
+        } else {
+            const result: Record<string, any> = {};
+            for (const [key, value] of Object.entries(obj)) {
+                result[key] = truncateImageData(value);
+            }
+            return result;
+        }
+    }
+
+    return obj;
+}
+
+/**
  * Log LLM request data to a file in the output directory.
  *
  * @param providerName Name of the LLM provider (e.g., 'openai', 'claude')
@@ -306,7 +380,7 @@ export function log_llm_request(
             console.dir(
                 {
                     model,
-                    request: requestData,
+                    request: truncateImageData(requestData),
                 },
                 { depth: 10, colors: true }
             );
@@ -326,7 +400,7 @@ export function log_llm_request(
             timestamp: timestamp.toISOString(),
             provider: providerName,
             model,
-            request: requestData,
+            request: truncateImageData(requestData),
         };
 
         // Write the log file

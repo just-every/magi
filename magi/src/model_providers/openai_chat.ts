@@ -19,10 +19,8 @@ import { costTracker } from '../utils/cost_tracker.js'; // Adjust path as needed
 import { log_llm_request } from '../utils/file_utils.js'; // Adjust path as needed
 import { Agent } from '../utils/agent.js'; // Adjust path as needed
 import { ModelProviderID } from './model_data.js'; // Adjust path as needed
-import {
-    extractBase64Image,
-    convertImageToTextIfNeeded,
-} from '../utils/image_utils.js';
+import { extractBase64Image } from '../utils/image_utils.js';
+import { convertImageToTextIfNeeded } from '../utils/image_to_text.js';
 
 // --- Constants for Simulated Tool Call Handling ---
 // Regex to find the MULTIPLE simulated tool call pattern (TOOL_CALLS: [ ... ]) at the end

@@ -7,27 +7,18 @@
 // fs module is only used for type definition
 import { Buffer } from 'buffer';
 import sharp from 'sharp';
-import { findModel } from '../model_providers/model_data.js';
-import { claudeProvider } from '../model_providers/claude.js';
 import { randomUUID } from 'node:crypto';
+import { createCanvas, loadImage } from '@napi-rs/canvas';
 
-// Cache for image descriptions
-interface ImageDescriptionCache {
-    [imageHash: string]: string;
-}
-
-// In-memory cache for image descriptions
-const imageDescriptionCache: ImageDescriptionCache = {};
-
-/**
- * Maximum height for images to prevent excessively large files
- */
-const MAX_IMAGE_HEIGHT = 2000;
-
-/**
- * Default image quality for JPEG compression
- */
-const DEFAULT_QUALITY = 80;
+// Constants for image processing
+export const MAX_IMAGE_HEIGHT = 2000;
+export const DEFAULT_QUALITY = 80;
+export const OPENAI_MAX_WIDTH = 1024;
+export const OPENAI_MAX_HEIGHT = 768;
+export const CLAUDE_MAX_WIDTH = 1024;
+export const CLAUDE_MAX_HEIGHT = 1120;
+export const GEMINI_MAX_WIDTH = 1024;
+export const GEMINI_MAX_HEIGHT = 1536;
 
 /**
  * Result type for extractBase64Image function
@@ -125,169 +116,269 @@ export function createBase64FromImage(imageBuffer: Buffer): string {
 }
 
 /**
- * Process an image to optimize it for use
- *
- * @param imageBuffer - Buffer containing the image data
- * @param shortSide - Target size for the short side of the image (default: 768px)
- * @param longSideMax - Maximum size for the long side of the image (default: 2000px)
- * @param quality - JPEG quality (default: 80)
- * @returns Buffer containing the processed image
+ * Options for grid overlay
  */
-
-/**
- * Generate a hash for an image to use as a cache key
- *
- * @param imageData - Base64 encoded image data
- * @returns A string hash that can be used as a cache key
- */
-function generateImageHash(imageData: string): string {
-    // Simple hash function for cache key - using first 100 chars + length should be sufficient
-    // for our needs while being much faster than a full hash
-    const sample = imageData.substring(0, 100);
-    const length = imageData.length;
-    return `${sample}_${length}`;
+export interface GridOptions {
+    spacing?: number; // spacing between grid lines in CSS pixels
+    majorSpacing?: number; // spacing between major grid lines in CSS pixels (null for no major lines)
+    color?: string; // line color (RGBA)
+    labelColor?: string; // label color (RGBA)
+    lineWidth?: number; // width of minor grid lines
+    majorLineWidth?: number; // width of major grid lines
+    labelAxes?: boolean; // draw axis labels at edges
+    dashWidth?: number; // width of minor grid dashes
+    majorDashWidth?: number; // width of major grid dashes
 }
 
-/**
- * Converts an image to a text description if the model doesn't support image input
- * Uses a mini vision model and caches the results
- *
- * @param imageData - Base64 encoded image data
- * @param modelId - ID of the model being used
- * @returns The image description or original image data if model supports images
- */
-export async function convertImageToTextIfNeeded(
-    imageData: string,
-    modelId: string
+export async function addGrid(
+    base64ImageData: string,
+    dpr: number = 1,
+    options: GridOptions = {}
 ): Promise<string> {
-    // Skip if not an image
-    if (!imageData.startsWith('data:image/')) {
-        return imageData;
-    }
+    const {
+        spacing = 50,
+        majorSpacing = 200,
+        color = 'rgba(128,128,128,0.5)',
+        labelColor = 'rgba(128,128,128,1)',
+        lineWidth = 1,
+        majorLineWidth = 1,
+        labelAxes = true,
+        dashWidth = 5,
+        majorDashWidth = 0,
+    } = options;
 
-    // Check if model supports image input
-    const model = findModel(modelId);
-    if (model?.features?.input_modality?.includes('image')) {
-        // Model supports images, return original
-        return imageData;
-    }
+    // 1) strip data-url & re-build for loadImage
+    const m = base64ImageData.match(/^data:image\/([^;]+);base64,(.+)$/);
+    if (!m) throw new Error('Invalid data-URL');
+    const [, format, base64] = m;
+    const dataUrl = `data:image/${format};base64,${base64}`;
 
-    console.log(
-        `Model ${modelId} doesn't support images, converting to text description`
-    );
+    // 2) load and get true pixel size
+    const img = await loadImage(dataUrl);
+    const widthPx = img.width;
+    const heightPx = img.height;
 
-    // Generate hash for caching
-    const imageHash = generateImageHash(imageData);
+    // 3) make canvas at *pixel* size
+    const canvas = createCanvas(widthPx, heightPx);
+    const ctx = canvas.getContext('2d');
 
-    // Check cache
-    if (imageDescriptionCache[imageHash]) {
-        console.log(`Using cached image description for ${modelId}`);
-        return imageDescriptionCache[imageHash];
-    }
+    // 4) draw the image
+    ctx.drawImage(img, 0, 0);
 
-    // Use Claude to describe the image
-    try {
-        // Use a simplified approach to directly ask Claude to describe the image
-        const prompt =
-            'Please describe this image in a few sentences. Focus on the main visual elements and key details that someone would need to understand what is shown in the image.';
+    // 5) prepare for grid
+    ctx.strokeStyle = color;
 
-        // Create a simple set of messages compatible with our Claude provider
-        const messages = [
-            {
-                role: 'user',
-                content: prompt + '\n\n' + imageData,
-            },
-        ];
+    // compute pixel-spacing
+    const pxStep = spacing * dpr;
+    const pxMajorStep = majorSpacing !== null ? majorSpacing * dpr : null;
 
-        // Use claude-3-5-haiku-latest as our image-to-text model
-        const stream = claudeProvider.createResponseStream(
-            'claude-3-5-haiku-latest',
-            messages as any
+    // 6) vertical lines
+    for (let x = 0; x <= widthPx; x += pxStep) {
+        const isMajor =
+            pxMajorStep !== null && Math.abs(x % pxMajorStep) < 0.001;
+        ctx.lineWidth = (isMajor ? majorLineWidth : lineWidth) * dpr;
+        const xi = Math.round(x) + 0.5;
+        const thisDashWidth = isMajor ? majorDashWidth : dashWidth;
+        ctx.setLineDash(
+            thisDashWidth ? [thisDashWidth * dpr, thisDashWidth * dpr * 2] : []
         );
+        ctx.beginPath();
+        ctx.moveTo(xi, 0);
+        ctx.lineTo(xi, heightPx);
+        if (x > 0) {
+            ctx.stroke();
+        }
+    }
 
-        let description = '';
-        for await (const chunk of stream) {
-            if (chunk.type === 'message_delta' && chunk.content) {
-                description += chunk.content;
-            }
+    // 7) horizontal lines
+    for (let y = 0; y <= heightPx; y += pxStep) {
+        const isMajor =
+            pxMajorStep !== null && Math.abs(y % pxMajorStep) < 0.001;
+        ctx.lineWidth = (isMajor ? majorLineWidth : lineWidth) * dpr;
+        const thisDashWidth = isMajor ? majorDashWidth : dashWidth;
+        ctx.setLineDash(
+            thisDashWidth ? [thisDashWidth * dpr, thisDashWidth * dpr * 2] : []
+        );
+        const yi = Math.round(y) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, yi);
+        ctx.lineTo(widthPx, yi);
+        if (y > 0) {
+            ctx.stroke();
+        }
+    }
+
+    // 8) optional labels
+    if (labelAxes) {
+        ctx.setLineDash([]);
+        ctx.fillStyle = labelColor;
+        ctx.textBaseline = 'top';
+        ctx.font = `${12 * dpr}px sans-serif`;
+
+        // X labels
+        for (let x = 0; x <= widthPx; x += pxStep) {
+            const xi = Math.round(x);
+            ctx.fillText(`${(x / dpr) | 0}`, xi + 2 * dpr, 2 * dpr);
         }
 
-        // Format the result
-        const formattedDescription = `[Image description: ${description.trim()}]`;
-
-        // Cache the result
-        imageDescriptionCache[imageHash] = formattedDescription;
-
-        console.log('Generated new image description and cached it');
-        return formattedDescription;
-    } catch (error) {
-        console.error('Error generating image description:', error);
-        return '[Image could not be processed]';
+        // Y labels
+        ctx.textAlign = 'right';
+        for (let y = 0; y <= heightPx; y += pxStep) {
+            const yi = Math.round(y);
+            ctx.fillText(`${(y / dpr) | 0}`, widthPx - 2 * dpr, yi + 2 * dpr);
+        }
     }
+
+    // 9) export
+    const outBuf = canvas.toBuffer('image/png');
+    return `data:image/png;base64,${outBuf.toString('base64')}`;
 }
-export async function processImage(
-    imageBuffer: Buffer,
-    shortSide: number = 768,
-    longSideMax: number = MAX_IMAGE_HEIGHT,
-    quality: number = DEFAULT_QUALITY
-): Promise<Buffer> {
-    try {
-        // Create a sharp instance
-        const image = sharp(imageBuffer);
 
-        // Get image metadata
-        const metadata = await image.metadata();
+/**
+ * Resizes and splits an image to meet OpenAI's size requirements:
+ * - Maximum width of 1024px
+ * - Maximum height of 768px per segment
+ *
+ * @param imageData - Base64 encoded image data (with data URL prefix)
+ * @returns Array of base64 image strings, split into sections if needed
+ */
+export async function resizeAndSplitForOpenAI(
+    imageData: string
+): Promise<string[]> {
+    const MAX_WIDTH = 1024;
+    const MAX_HEIGHT = 768;
 
-        // Skip processing if we can't get metadata
-        if (!metadata.width || !metadata.height) {
-            console.log(
-                'Unable to get image metadata, returning original image buffer'
-            );
-            return imageBuffer;
-        }
+    // Strip the data-URL prefix and grab format
+    const base64Image = imageData.replace(/^data:image\/\w+;base64,/, '');
+    const imageFormat = imageData.match(/data:image\/(\w+);/)?.[1] || 'png';
 
-        // Determine if image is portrait or landscape
-        const isPortrait = metadata.height > metadata.width;
-        const aspectRatio = metadata.width / metadata.height;
+    // Convert to a Buffer
+    const imageBuffer = Buffer.from(base64Image, 'base64');
 
-        // Calculate new dimensions based on orientation
-        let newWidth: number;
-        let newHeight: number;
-
-        if (isPortrait) {
-            // For portrait: width is the short side
-            newWidth = shortSide;
-            newHeight = Math.round(shortSide / aspectRatio);
-
-            // Ensure height doesn't exceed max
-            if (newHeight > longSideMax) {
-                newHeight = longSideMax;
-                newWidth = Math.round(longSideMax * aspectRatio);
-            }
-        } else {
-            // For landscape: height is the short side
-            newHeight = shortSide;
-            newWidth = Math.round(shortSide * aspectRatio);
-
-            // Ensure width doesn't exceed max
-            if (newWidth > longSideMax) {
-                newWidth = longSideMax;
-                newHeight = Math.round(longSideMax / aspectRatio);
-            }
-        }
-
-        console.log(
-            `Resizing image from ${metadata.width}x${metadata.height} to ${newWidth}x${newHeight}`
-        );
-
-        // Resize the image
-        image.resize(newWidth, newHeight);
-
-        // Convert to JPEG with specified quality
-        return await image.jpeg({ quality }).toBuffer();
-    } catch (error) {
-        console.error('Error processing image:', error);
-        // Return original buffer if processing fails
-        return imageBuffer;
+    // Quick-exit if already small enough
+    const { width: origW = 0, height: origH = 0 } =
+        await sharp(imageBuffer).metadata();
+    if (origW <= MAX_WIDTH && origH <= MAX_HEIGHT) {
+        return [imageData];
     }
+
+    // 1) Resize *with* flatten so no transparency becomes grey
+    const newWidth = Math.min(origW, MAX_WIDTH);
+    const resizedBuffer = await sharp(imageBuffer)
+        .resize({ width: newWidth })
+        .flatten({ background: '#fff' }) // white background
+        .toFormat(imageFormat as keyof sharp.FormatEnum)
+        .toBuffer();
+
+    // 2) Read the real resized height
+    const { height: resizedH = 0 } = await sharp(resizedBuffer).metadata();
+
+    const result: string[] = [];
+
+    // 3) If still too tall, slice it
+    if (resizedH > MAX_HEIGHT) {
+        const segments = Math.ceil(resizedH / MAX_HEIGHT);
+        for (let i = 0; i < segments; i++) {
+            const top = i * MAX_HEIGHT;
+            const height = Math.min(MAX_HEIGHT, resizedH - top);
+            if (height <= 0) continue;
+
+            const segmentBuf = await sharp(resizedBuffer)
+                .extract({ left: 0, top, width: newWidth, height })
+                .toFormat(imageFormat as keyof sharp.FormatEnum)
+                .toBuffer();
+
+            const segmentDataUrl = `data:image/${imageFormat};base64,${segmentBuf.toString('base64')}`;
+            result.push(segmentDataUrl);
+        }
+    } else {
+        // single slice fits
+        const singleUrl = `data:image/${imageFormat};base64,${resizedBuffer.toString('base64')}`;
+        result.push(singleUrl);
+    }
+
+    return result;
+}
+
+// Utility to strip and re-prefix data-URLs
+function stripDataUrl(dataUrl: string) {
+    const match = dataUrl.match(/^data:image\/([^;]+);base64,(.+)$/);
+    if (!match) throw new Error('Invalid data-URL');
+    return { format: match[1], base64: match[2] };
+}
+
+async function processAndTruncate(
+    imageBuffer: Buffer,
+    format: string,
+    maxW: number,
+    maxH: number
+): Promise<Buffer> {
+    // 1) Auto-orient, resize to max width, flatten transparency
+    const resized = await sharp(imageBuffer)
+        .rotate()
+        .resize({ width: maxW, withoutEnlargement: true })
+        .flatten({ background: '#fff' })
+        .toFormat(format as keyof sharp.FormatEnum)
+        .toBuffer();
+
+    // 2) Pull actual size
+    const { width, height } = await sharp(resized).metadata();
+
+    // 3) If too tall, crop bottom off
+    if (height! > maxH) {
+        return await sharp(resized)
+            .extract({ left: 0, top: 0, width: width!, height: maxH })
+            .toFormat(format as keyof sharp.FormatEnum)
+            .toBuffer();
+    }
+
+    return resized;
+}
+
+/**
+ * Claude: resize to ≤1024px wide, then truncate at 1120px tall.
+ */
+export async function resizeAndTruncateForClaude(
+    imageData: string
+): Promise<string> {
+    const { format, base64 } = stripDataUrl(imageData);
+    const buf = Buffer.from(base64, 'base64');
+
+    // early-exit if already fits
+    const meta = await sharp(buf).metadata();
+    if (meta.width! <= CLAUDE_MAX_WIDTH && meta.height! <= CLAUDE_MAX_HEIGHT) {
+        return imageData;
+    }
+
+    const outBuf = await processAndTruncate(
+        buf,
+        format,
+        CLAUDE_MAX_WIDTH,
+        CLAUDE_MAX_HEIGHT
+    );
+    return `data:image/${format};base64,${outBuf.toString('base64')}`;
+}
+
+/**
+ * Gemini: resize to ≤1024px wide, then truncate at 1536px tall.
+ */
+export async function resizeAndTruncateForGemini(
+    imageData: string
+): Promise<string> {
+    const { format, base64 } = stripDataUrl(imageData);
+    const buf = Buffer.from(base64, 'base64');
+
+    // early-exit if already fits
+    const meta = await sharp(buf).metadata();
+    if (meta.width! <= GEMINI_MAX_WIDTH && meta.height! <= GEMINI_MAX_HEIGHT) {
+        return imageData;
+    }
+
+    const outBuf = await processAndTruncate(
+        buf,
+        format,
+        GEMINI_MAX_WIDTH,
+        GEMINI_MAX_HEIGHT
+    );
+    return `data:image/${format};base64,${outBuf.toString('base64')}`;
 }

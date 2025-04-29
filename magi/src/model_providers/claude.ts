@@ -27,8 +27,9 @@ import { Agent } from '../utils/agent.js';
 import { ModelClassID } from './model_data.js';
 import {
     extractBase64Image,
-    convertImageToTextIfNeeded,
+    resizeAndTruncateForClaude,
 } from '../utils/image_utils.js';
+import { convertImageToTextIfNeeded } from '../utils/image_to_text.js';
 
 // Convert our tool definition to Claude's format
 function convertToClaudeTools(tools: ToolFunction[]): any[] {
@@ -76,16 +77,16 @@ function cleanBase64Data(imageData: string): string {
  * @param msg The detailed message object (ResponseInputItem).
  * @returns A Claude message object or null if conversion is not applicable (e.g., system message, empty content).
  */
-function convertToClaudeMessage(
+async function convertToClaudeMessage(
     role: string,
     content: string,
     msg: ResponseInputItem,
     result?: any[]
-): ClaudeMessage {
+): Promise<ClaudeMessage> {
     if (!msg) return null;
 
     // --- Handle Tool Use (Function Call) ---
-    if (msg.type && msg.type === 'function_call') {
+    if (msg.type === 'function_call') {
         let inputArgs: Record<string, unknown> = {};
         try {
             // Claude expects 'input' as an object
@@ -106,7 +107,7 @@ function convertToClaudeMessage(
         };
 
         return { role: 'assistant', content: [toolUseBlock] };
-    } else if (msg.type && msg.type === 'function_call_output') {
+    } else if (msg.type === 'function_call_output') {
         // Check if output contains a base64 image
         if (typeof msg.output === 'string') {
             const extracted = extractBase64Image(msg.output);
@@ -115,38 +116,51 @@ function convertToClaudeMessage(
                 // Use the image ID from the extracted result
                 const image_id = extracted.image_id;
 
-                // Get the first image data
-                const imageData = extracted.images[image_id];
-                const mediaType = getImageMediaType(imageData);
-                const cleanedImageData = cleanBase64Data(imageData);
+                try {
+                    // Get the first image data and resize/truncate for Claude
+                    const originalImageData = extracted.images[image_id];
+                    const processedImageData =
+                        await resizeAndTruncateForClaude(originalImageData);
+                    const mediaType = getImageMediaType(processedImageData);
+                    const cleanedImageData =
+                        cleanBase64Data(processedImageData);
 
-                const toolResultBlock = {
-                    type: 'tool_result',
-                    tool_use_id: msg.call_id,
-                    content: extracted.replaceContent.trim() || '', // Text with image placeholders
-                    ...(msg.status === 'incomplete' ? { is_error: true } : {}),
-                };
+                    const toolResultBlock = {
+                        type: 'tool_result',
+                        tool_use_id: msg.call_id,
+                        content: extracted.replaceContent.trim() || '', // Text with image placeholders
+                        ...(msg.status === 'incomplete'
+                            ? { is_error: true }
+                            : {}),
+                    };
 
-                // Content blocks for Claude message
-                const contentBlocks = [
-                    toolResultBlock,
-                    // Add image after the tool result
-                    {
-                        type: 'image',
-                        source: {
-                            type: 'base64',
-                            media_type: mediaType,
-                            data: cleanedImageData,
+                    // Content blocks for Claude message
+                    const contentBlocks = [
+                        toolResultBlock,
+                        // Add image after the tool result
+                        {
+                            type: 'image',
+                            source: {
+                                type: 'base64',
+                                media_type: mediaType,
+                                data: cleanedImageData,
+                            },
                         },
-                    },
-                    // Add a text description for the image
-                    {
-                        type: 'text',
-                        text: `Image from function call output of ${msg.name} (ID: ${image_id})`,
-                    },
-                ];
+                        // Add a text description for the image
+                        {
+                            type: 'text',
+                            text: `Image from function call output of ${msg.name} (ID: ${image_id})`,
+                        },
+                    ];
 
-                return { role: 'user', content: contentBlocks };
+                    return { role: 'user', content: contentBlocks };
+                } catch (error) {
+                    console.error(
+                        'Error processing image in function call output:',
+                        error
+                    );
+                    // If there's an error, continue with just the text content
+                }
             }
         }
 
@@ -160,12 +174,12 @@ function convertToClaudeMessage(
 
         // Anthropic expects role: 'user' for tool_result
         return { role: 'user', content: [toolResultBlock] };
-    } else if (msg.type && msg.type === 'thinking') {
-        if (!content || !msg.signature) {
-            return null; // Can't process thinking without content and signature
+    } else if (msg.type === 'thinking') {
+        if (!content) {
+            return null; // Can't process thinking without content
         }
 
-        if (msg.signature) {
+        if ('signature' in msg && msg.signature) {
             // Return a thinking message with the content and signature
             return {
                 role: 'assistant',
@@ -198,37 +212,45 @@ function convertToClaudeMessage(
             if (extracted.found && extracted.image_id !== null) {
                 messageRole = 'user'; // System messages are not supported for images
 
-                // Get the first image
-                const image_id = extracted.image_id;
-                const imageData = extracted.images[image_id];
-                const mediaType = getImageMediaType(imageData);
-                const cleanedImageData = cleanBase64Data(imageData);
+                try {
+                    // Get the first image and resize/truncate for Claude
+                    const image_id = extracted.image_id;
+                    const originalImageData = extracted.images[image_id];
+                    const processedImageData =
+                        await resizeAndTruncateForClaude(originalImageData);
+                    const mediaType = getImageMediaType(processedImageData);
+                    const cleanedImageData =
+                        cleanBase64Data(processedImageData);
 
-                // Build content array with text and image
-                const contentBlocks = [];
+                    // Build content array with text and image
+                    const contentBlocks = [];
 
-                // Add image block
-                contentBlocks.push({
-                    type: 'image',
-                    source: {
-                        type: 'base64',
-                        media_type: mediaType,
-                        data: cleanedImageData,
-                    },
-                });
-
-                // Add text block with text (now using replaceContent)
-                if (extracted.replaceContent.trim()) {
+                    // Add image block
                     contentBlocks.push({
-                        type: 'text',
-                        text: extracted.replaceContent.trim(),
+                        type: 'image',
+                        source: {
+                            type: 'base64',
+                            media_type: mediaType,
+                            data: cleanedImageData,
+                        },
                     });
-                }
 
-                return {
-                    role: messageRole,
-                    content: contentBlocks,
-                };
+                    // Add text block with text (now using replaceContent)
+                    if (extracted.replaceContent.trim()) {
+                        contentBlocks.push({
+                            type: 'text',
+                            text: extracted.replaceContent.trim(),
+                        });
+                    }
+
+                    return {
+                        role: messageRole,
+                        content: contentBlocks,
+                    };
+                } catch (error) {
+                    console.error('Error processing image in message:', error);
+                    // If there's an error, continue with just the text content
+                }
             }
         }
 
@@ -477,7 +499,7 @@ export class ClaudeProvider implements ModelProvider {
                 await this.preprocessMessagesForImageSupport(messages, model);
 
             // Convert messages format for Claude using the generic converter and Claude-specific map
-            const claudeMessages = convertHistoryFormat(
+            const claudeMessages = await convertHistoryFormat(
                 processedMessages,
                 convertToClaudeMessage
             );
@@ -514,6 +536,23 @@ export class ClaudeProvider implements ModelProvider {
             // Add tools if provided, using the corrected conversion function
             if (tools && tools.length > 0) {
                 requestParams.tools = convertToClaudeTools(tools); // Uses the corrected function
+            }
+
+            // --- Pre-flight Check: Ensure messages are not empty, add default if needed ---
+            if (
+                !requestParams.messages ||
+                requestParams.messages.length === 0
+            ) {
+                console.warn(
+                    'Claude API Warning: No user or assistant messages provided after filtering. Adding default message.'
+                );
+                // Add the default user message
+                requestParams.messages = [
+                    {
+                        role: 'user',
+                        content: "Let's think this through step by step.",
+                    },
+                ];
             }
 
             // Log the request before sending
@@ -815,69 +854,32 @@ export class ClaudeProvider implements ModelProvider {
                 console.error('Error processing Claude stream:', streamError);
                 yield {
                     type: 'error',
-                    error:
-                        'Claude processing stream error: ' +
-                        String(streamError),
+                    error: 'Claude stream error: ' + String(streamError),
                 };
-                streamCompletedSuccessfully = false; // Mark as failed
-
-                // If we have accumulated content but no message_complete was sent
-                // due to an error, still try to send it (optional, might be partial)
-                /* if ((accumulatedContent || accumulatedThinking) && !messageCompleteYielded) {
-				   yield {
-					  type: 'message_complete',
-						message_id: messageId,
-						content: accumulatedContent,
-						thinking_content: accumulatedThinking,
-						thinking_signature: accumulatedSignature,
-				   };
-				} */
             }
         } catch (error) {
             console.error('Error in Claude streaming completion setup:', error);
             yield {
                 type: 'error',
-                error:
-                    'Claude streaming setup error: ' +
-                    (error instanceof Error ? error.stack : String(error)),
+                error: 'Claude streaming setup error: ' + String(error),
             };
-            streamCompletedSuccessfully = false; // Mark as failed
         } finally {
-            // --- Track Cost ---
-            // Only track cost if the stream completed (or partially completed with some usage)
-            // and we have accumulated some token counts.
-            if (
-                totalInputTokens > 0 ||
-                totalOutputTokens > 0 ||
-                totalCacheReadInputTokens > 0 ||
-                totalCacheCreationInputTokens > 0
-            ) {
-                // Combine cache tokens as per the user's desired structure
+            // Track cost if we have token usage data
+            if (totalInputTokens > 0 || totalOutputTokens > 0) {
                 const cachedTokens =
                     totalCacheCreationInputTokens + totalCacheReadInputTokens;
-
                 costTracker.addUsage({
                     model,
                     input_tokens: totalInputTokens,
                     output_tokens: totalOutputTokens,
-                    // Map accumulated Claude cache tokens to the 'cached_tokens' field
                     cached_tokens: cachedTokens,
                     metadata: {
-                        // Add specific cache breakdown if needed
                         cache_creation_input_tokens:
                             totalCacheCreationInputTokens,
                         cache_read_input_tokens: totalCacheReadInputTokens,
-                        // Add other potential metadata if available/needed
-                        // reasoning_tokens: 0, // Not directly available from Claude usage object
-                        // tool_tokens: 0, // Not directly available from Claude usage object
-                        total_tokens: totalInputTokens + totalOutputTokens, // Calculate total
+                        total_tokens: totalInputTokens + totalOutputTokens,
                     },
                 });
-            } else if (streamCompletedSuccessfully) {
-                // Log if stream completed but no tokens were recorded (might indicate an issue)
-                console.warn(
-                    `Claude stream for model ${model} completed successfully but no token usage was recorded.`
-                );
             }
         }
     }

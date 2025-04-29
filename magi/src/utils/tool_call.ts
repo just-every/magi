@@ -670,15 +670,26 @@ export function createToolFunction(
         };
 
         if (paramType === 'array') {
-            // If the parameter is an array, set the items type
-            properties[apiParamName].items = {
-                type: 'string',
-            };
-
-            if (paramInfo?.enum) {
+            // If the parameter is an array, prioritize the items definition from paramInfo if available
+            if (paramInfo?.items) {
+                properties[apiParamName].items = paramInfo.items;
+            } else {
+                // Fallback to default string items if not specified in paramInfo
+                properties[apiParamName].items = {
+                    type: 'string',
+                };
+            }
+            // Note: Enum handling inside items might need refinement if enums are defined within paramInfo.items itself.
+            // The current logic assumes enum applies directly to items if items is just {type: 'string'}.
+            // If paramInfo.items is complex, its internal structure should define enums.
+            if (
+                paramInfo?.enum &&
+                properties[apiParamName].items.type === 'string'
+            ) {
                 properties[apiParamName].items.enum = paramInfo.enum;
             }
         } else if (paramInfo?.enum) {
+            // Handle enum for non-array types
             properties[apiParamName].enum = paramInfo.enum;
         }
 

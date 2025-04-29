@@ -23,6 +23,7 @@ import { dateFormat, readableTime } from '../utils/date_tools.js';
 import { runningToolTracker } from '../utils/running_tool_tracker.js';
 import { listActiveProjects } from '../utils/process_tools.js';
 import { getThoughtDelay } from '../utils/thought_utils.js';
+import { getImageGenerationTools } from '../utils/image_generation.js';
 
 export const startTime = new Date();
 async function addOperatorStatus(
@@ -84,7 +85,11 @@ COMPLETION
 If you think you're complete, review your work and make sure you have not missed anything. If you are not sure, ask the other agents for their opinion.
 
 When you are done, please use the task_complete(result) tool to report that the task has been completed successfully. If you encounter an error that you can not recover from, use the task_fatal_error(error) tool to report that you were not able to complete the task. You should only use task_fatal_error() once you have made many attempts to resolve the issue and you are sure that you can not complete the task.`,
-        tools: [...getCommonTools(), ...getRunningToolTools()],
+        tools: [
+            ...getCommonTools(),
+            ...getRunningToolTools(),
+            ...getImageGenerationTools(),
+        ],
         workers: [
             createSearchAgent,
             createBrowserAgent,

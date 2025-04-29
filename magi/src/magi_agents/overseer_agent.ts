@@ -29,6 +29,7 @@ import { MAGI_CONTEXT } from './constants.js';
 import { sendStreamEvent } from '../utils/communication.js';
 import { getCommonTools } from '../utils/index.js';
 import { getRunningToolTools } from '../utils/running_tools.js';
+import { getImageGenerationTools } from '../utils/image_generation.js';
 
 export const startTime = new Date();
 // Track when we last checked task health
@@ -346,6 +347,7 @@ You are your own user. Your messages will be sent back to you to continue your t
             ...getThoughtTools(),
             ...getCommonTools(),
             ...getRunningToolTools(),
+            ...getImageGenerationTools(),
             ...getFocusTools(),
         ],
         modelClass: 'monologue',

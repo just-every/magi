@@ -19,6 +19,7 @@
     "dependencies": {
         "@anthropic-ai/sdk": "^0.17.1",
         "@google/genai": "^0.7.0",
+        "@napi-rs/canvas": "^0.1.69",
         "@types/turndown": "^5.0.5",
         "axios": "^1.6.8",
         "chrome-remote-interface": "^0.33.3",
