@@ -1,0 +1,15 @@
+services:
+  server:
+    build:
+      context: .
+    ports:
+      - '3000:3000'
+      - '3001:3001'
+      - '9229:9229'
+    environment:
+      - PORT=3000
+      - NODE_ENV=development
+    volumes:
+      - ./:/app
+#    command: [ "node", "--inspect=0.0.0.0:9229", "--watch", "./dist/server.js" ]
+    command: [ "npx", "npm-run-all", "--parallel", "watch:*" ]

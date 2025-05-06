@@ -1,0 +1,18 @@
+@use "sass:color";
+
+@use "bootstrap/scss/bootstrap" as bs with (
+  // Vaporwave Color Scheme
+  $body-bg: #0091ea,        // Bright Blue
+  $primary: #ff6ad5,        // Neon Pink
+  $secondary: #ffdb58,      // Bright Yellow
+  $success: #00f764,        // Neon Green
+  $info: #01cdfe,           // Bright Cyan
+  $warning: #ff61a6,        // Pinkish
+  $danger: #ff2965,         // Neon Red
+  $light: #9A83D4,          // Pastel Purple
+  $dark: #260e37,           // Dark Blueish Purple
+  
+  // Link Colors
+  $link-color: #01cdfe,
+  $link-hover-color: color.scale(#01cdfe, $lightness: -10%)
+);
