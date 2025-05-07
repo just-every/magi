@@ -9,9 +9,10 @@ import { getCommonTools } from '../../utils/index.js';
 import {
     MAGI_CONTEXT,
     COMMON_WARNINGS,
-    DOCKER_ENV_TEXT,
     SELF_SUFFICIENCY_TEXT,
     FILE_TOOLS_TEXT,
+    getDockerEnvText,
+    CUSTOM_TOOLS_TEXT,
 } from '../constants.js';
 
 /**
@@ -24,7 +25,7 @@ export function createManagerAgent(): Agent {
             'Versatile problem solver - handles research, coding, planning, and coordination',
         instructions: `${MAGI_CONTEXT}
 ---
-				
+
 Your role in MAGI is to be a ManagerAgent. You are an advanced autonomous problem-solving agent that can handle a wide range of tasks.
 
 Your capabilities include:
@@ -44,9 +45,11 @@ PROBLEM-SOLVING APPROACH:
 
 ${COMMON_WARNINGS}
 
-${DOCKER_ENV_TEXT}
+${getDockerEnvText()}
 
 ${FILE_TOOLS_TEXT}
+
+${CUSTOM_TOOLS_TEXT}
 
 ${SELF_SUFFICIENCY_TEXT}
 

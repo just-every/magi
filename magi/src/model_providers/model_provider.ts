@@ -5,7 +5,40 @@
  * to get the appropriate provider implementation.
  */
 
-import { ModelProvider } from '../types/shared-types.js';
+import { ModelProvider as BaseModelProvider } from '../types/shared-types.js';
+
+// Extend the base ModelProvider interface to add embedding support
+export interface ModelProvider extends BaseModelProvider {
+    /**
+     * Creates embeddings for text input
+     * @param modelId ID of the embedding model to use
+     * @param input Text to embed (string or array of strings)
+     * @param opts Optional parameters for embedding generation
+     * @returns Promise resolving to embedding vector(s)
+     */
+    createEmbedding?(
+        modelId: string,
+        input: string | string[],
+        opts?: EmbedOpts
+    ): Promise<number[] | number[][]>;
+}
+
+/**
+ * Optional parameters for embeddings
+ */
+export interface EmbedOpts {
+    /**
+     * A task-specific hint to the model for optimization
+     * For Gemini models: 'SEMANTIC_SIMILARITY', 'CLASSIFICATION', 'CLUSTERING', 'RETRIEVAL_DOCUMENT', etc.
+     */
+    taskType?: string;
+
+    /** Dimension of vector if model supports variable dimensions */
+    dimensions?: number;
+
+    /** Whether to normalize vectors to unit length */
+    normalize?: boolean;
+}
 import { openaiProvider } from './openai.js';
 import { claudeProvider } from './claude.js';
 import { geminiProvider } from './gemini.js';
@@ -20,11 +53,17 @@ import { MODEL_CLASSES, ModelClassID, ModelProviderID } from './model_data.js';
 
 // Provider mapping by model prefix
 const MODEL_PROVIDER_MAP: Record<string, ModelProvider> = {
+    // Coding models
+    codex: codexProvider,
+    'claude-code': claudeCodeProvider,
+    'cline-cli': clineCliProvider,
+
     // OpenAI models
     'gpt-': openaiProvider,
     o1: openaiProvider,
     o3: openaiProvider,
     o4: openaiProvider,
+    'text-': openaiProvider,
     'computer-use-preview': openaiProvider,
 
     // Claude/Anthropic models
@@ -38,11 +77,6 @@ const MODEL_PROVIDER_MAP: Record<string, ModelProvider> = {
 
     // DeepSeek models
     'deepseek-': deepSeekProvider,
-
-    // Coding models
-    codex: codexProvider,
-    'claude-code': claudeCodeProvider,
-    'cline-cli': clineCliProvider,
 
     // Test provider for testing
     'test-': testProvider,
@@ -94,6 +128,7 @@ export function getProviderFromModel(model: string): ModelProviderID {
         model.startsWith('o1') ||
         model.startsWith('o3') ||
         model.startsWith('o4') ||
+        model.startsWith('text-') ||
         model.startsWith('computer-use-preview')
     ) {
         return 'openai';

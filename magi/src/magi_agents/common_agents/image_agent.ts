@@ -6,7 +6,11 @@
 
 import { Agent } from '../../utils/agent.js';
 import { getCommonTools } from '../../utils/index.js';
-import { MAGI_CONTEXT, SELF_SUFFICIENCY_TEXT } from '../constants.js';
+import {
+    CUSTOM_TOOLS_TEXT,
+    MAGI_CONTEXT,
+    SELF_SUFFICIENCY_TEXT,
+} from '../constants.js';
 import { openaiProvider } from '../../model_providers/openai.js';
 
 /**
@@ -71,6 +75,8 @@ IMAGE GENERATION TOOLS:
   - url (optional): A URL to an image that should be used as reference
 
 ${SELF_SUFFICIENCY_TEXT}
+
+${CUSTOM_TOOLS_TEXT}
 
 IMPORTANT:
 - Be precise in interpreting the user's image requests

@@ -11,6 +11,7 @@ import {
     MAGI_CONTEXT,
     AGENT_DESCRIPTIONS,
     SELF_SUFFICIENCY_TEXT,
+    CUSTOM_TOOLS_TEXT,
 } from '../constants.js';
 import { createBrowserAgent } from './browser_agent.js';
 
@@ -24,9 +25,9 @@ export function createSearchAgent(): Agent {
             'Performs web searches for current information from various sources',
         instructions: `${MAGI_CONTEXT}
 ---
-				
+
 Your role in MAGI is to be a SearchAgent. You are a specialized search agent with the ability to find information on the web.
-		
+
 You will be given a search task to work on. Your job is to find the most relevant and accurate information available online.
 
 STANDARD APPROACH:
@@ -40,6 +41,8 @@ STANDARD APPROACH:
 SEARCH TOOLS:
 - web_search: Perform a web search and get results
 - ${AGENT_DESCRIPTIONS['BrowserAgent']}
+
+${CUSTOM_TOOLS_TEXT}
 
 ${SELF_SUFFICIENCY_TEXT}
 

@@ -5,9 +5,16 @@
  * It provides a central state container and methods to modify the system's behavior at runtime.
  */
 
-import { set_thought_delay } from './thought_utils.js';
+import { ToolFunction, type ModelClassID } from '../types/shared-types.js';
+import { createToolFunction } from './tool_call.js';
+import { addHistory } from './history.js';
+import { spawnMetaThought } from './meta_cognition.js';
+import { findModel, MODEL_CLASSES } from '../model_providers/model_data.js';
+import { Agent } from './agent.js';
+import { getThoughtTools } from './thought_utils.js';
 
-export type MetaFrequency = 5 | 10 | 20 | 40;
+export type MetaFrequency = '5' | '10' | '20' | '40';
+export const validFrequencies: string[] = ['5', '10', '20', '40'];
 
 /**
  * State container for the MECH system
@@ -34,32 +41,45 @@ export interface MECHState {
  */
 export const mechState: MECHState = {
     llmRequestCount: 0,
-    metaFrequency: 5,
+    metaFrequency: '5',
     disabledModels: new Set<string>(),
     modelScores: {},
 };
+
+export function listDisabledModels(): string {
+    if (mechState.disabledModels.size === 0) {
+        return '- No models disabled';
+    } else {
+        return `- ${Array.from(mechState.disabledModels).join('\n- ')}`;
+    }
+}
+
+export function listModelScores(modelClass?: ModelClassID): string {
+    if (modelClass && MODEL_CLASSES[modelClass]?.models?.length > 0) {
+        return MODEL_CLASSES[modelClass].models
+            .map(
+                modelId => `- ${modelId}: ${getModelScore(modelId, modelClass)}`
+            )
+            .join('\n');
+    }
+    if (Object.keys(mechState.modelScores).length === 0) {
+        return '- No model scores set';
+    }
+    return Object.entries(mechState.modelScores)
+        .map(([modelId, score]) => `- ${modelId}: ${score}`)
+        .join('\n');
+}
 
 /**
  * Set how often meta-cognition should run (every N LLM requests)
  * @param frequency - The frequency to set (5, 10, 20, or 40)
  * @returns The new frequency
  */
-export function setMetaFrequency(frequency: MetaFrequency): MetaFrequency {
-    mechState.metaFrequency = frequency;
-    console.log(
-        `[MECH] Meta-cognition frequency set to every ${frequency} LLM requests`
-    );
-    return frequency;
-}
-
-/**
- * Set the delay between thoughts (proxies to thought_utils)
- * @param delaySeconds - Delay in seconds as a string (valid values: '0', '2', '4', '8', '16', '32', '64', '128')
- * @returns Message indicating success or failure
- */
-export function setMechThoughtDelay(delaySeconds: string): string {
-    console.log(`[MECH] Setting thought delay to ${delaySeconds} seconds`);
-    return set_thought_delay(delaySeconds);
+export function set_meta_frequency(frequency: string): MetaFrequency {
+    if (validFrequencies.includes(frequency)) {
+        mechState.metaFrequency = frequency as MetaFrequency; // Cast to MetaFrequency type
+    }
+    return mechState.metaFrequency;
 }
 
 /**
@@ -68,34 +88,34 @@ export function setMechThoughtDelay(delaySeconds: string): string {
  * @param score - Score between 0-100, higher is better
  * @returns The new score
  */
-export function setModelScore(modelId: string, score: number): number {
+export function set_model_score(modelId: string, score: number): string {
     // Ensure score is within valid range
     score = Math.max(0, Math.min(100, score));
     mechState.modelScores[modelId] = score;
     console.log(`[MECH] Model ${modelId} score set to ${score}`);
-    return score;
+    return String(score);
 }
 
 /**
  * Disable a model so it won't be selected
  * @param modelId - The model ID to disable
  */
-export function disableModel(modelId: string): void {
+export function disable_model(modelId: string, disabled?: boolean): string {
+    if (disabled === false) {
+        return enableModel(modelId);
+    }
     mechState.disabledModels.add(modelId);
-    console.log(`[MECH] Model ${modelId} disabled`);
+    return `Model ${modelId} disabled`;
 }
 
 /**
  * Enable a previously disabled model
  * @param modelId - The model ID to enable
  */
-export function enableModel(modelId: string): void {
+export function enableModel(modelId: string): string {
     mechState.disabledModels.delete(modelId);
-    console.log(`[MECH] Model ${modelId} enabled`);
+    return `Model ${modelId} enabled`;
 }
-
-// Import findModel from model_data at the top of the file
-import { findModel } from '../model_providers/model_data.js';
 
 /**
  * Get the score for a model, optionally for a specific model class
@@ -138,7 +158,7 @@ export function incrementLLMRequestCount(): {
 } {
     mechState.llmRequestCount++;
     const shouldTriggerMeta =
-        mechState.llmRequestCount % mechState.metaFrequency === 0;
+        mechState.llmRequestCount % parseInt(mechState.metaFrequency) === 0;
 
     if (shouldTriggerMeta) {
         console.log(
@@ -150,4 +170,99 @@ export function incrementLLMRequestCount(): {
         count: mechState.llmRequestCount,
         shouldTriggerMeta,
     };
+}
+
+export async function spawnMetaThoughtIfNeeded(agent: Agent): Promise<void> {
+    // Check if we need to trigger meta-cognition
+    const { shouldTriggerMeta } = incrementLLMRequestCount();
+    if (shouldTriggerMeta) {
+        console.log(
+            `[MECH] Triggering meta-cognition after ${mechState.llmRequestCount} LLM requests`
+        );
+        try {
+            await spawnMetaThought(agent);
+        } catch (error) {
+            console.error('[MECH] Error in meta-cognition:', error);
+        }
+    }
+}
+
+/**
+ * Create a thought that will be injected into the history
+ * @param content - The thought content to inject
+ * @returns Message indicating success
+ */
+function inject_thought(content: string): string {
+    addHistory({
+        type: 'message',
+        role: 'developer',
+        content: `**IMPORTANT - METACOGNITION:** ${content}`,
+    });
+
+    console.log(`[MECH] metacognition injected thought: ${content}`);
+    return `Successfully injected metacognition thought at ${new Date().toISOString()}`;
+}
+
+function no_changes_needed(): string {
+    console.log('[MECH] metacognition no change');
+    return 'No changes made';
+}
+
+/**
+ * Get all metacognition tools as an array of tool definitions
+ * These are available only to the metacognition agent, not the main agent
+ */
+export function getMetaCognitionTools(): ToolFunction[] {
+    return [
+        createToolFunction(
+            inject_thought,
+            'Your core tool for altering the thought process of the agent. Injects a thought with high priority into the next loop for the agent. The agent will see this before choosing their next thought or action.',
+            {
+                content:
+                    'The thought to inject. Be detailed and explain why this is important.',
+            }
+        ),
+        ...getThoughtTools(),
+        createToolFunction(
+            set_meta_frequency,
+            'Change how often metacognition should run (every N LLM requests)',
+            {
+                frequency: {
+                    // Wrap enum in a ToolParameter object
+                    type: 'string',
+                    description:
+                        'Frequency value (5, 10, 20, or 40 LLM requests)',
+                    enum: validFrequencies,
+                },
+            },
+            'Confirmation message' // Added return description
+        ),
+        createToolFunction(
+            set_model_score,
+            'Set a score for a specific model (affects selection frequency)',
+            {
+                modelId: 'The model ID to score',
+                score: 'Score between 0-100, higher means the model is selected more often',
+            },
+            'The new score for the model' // Added return description
+        ),
+        createToolFunction(
+            disable_model,
+            'Temporarily disable a model from being selected. Pass disabled=false to enable it again.',
+            {
+                modelId: 'The model ID to change',
+                disabled: {
+                    type: 'boolean',
+                    description:
+                        'Whether to disable the model (true) or enable it (false)',
+                    optional: true,
+                    default: true,
+                },
+            }
+        ),
+        createToolFunction(
+            no_changes_needed,
+            'Everything is perfect. Use when no other tools are needed.'
+        ),
+    ];
 }

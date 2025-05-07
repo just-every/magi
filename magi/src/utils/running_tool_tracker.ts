@@ -97,7 +97,7 @@ class RunningToolTracker {
 
         // Add system message with final output
         await addSystemMessage(
-            `RunningTool ${fn.name} (id: ${id}) completed after ${readableTime(fn.duration)}.\nOutput:\n${output}`
+            `RunningTool ${fn.name} (id: ${id}) completed after ${readableTime(fn.duration)} with output: ${output}`
         );
 
         // Remove from tracking
@@ -126,7 +126,7 @@ class RunningToolTracker {
 
         // Add system message with error
         await addSystemMessage(
-            `RunningTool ${fn.name} (id: ${id}) failed after ${readableTime(fn.duration)}.\nError:\n${error}`
+            `RunningTool ${fn.name} (id: ${id}) failed after ${readableTime(fn.duration)} with error: ${error}`
         );
 
         // Remove from tracking

@@ -8,8 +8,9 @@ import { Agent } from '../../utils/agent.js';
 import {
     MAGI_CONTEXT,
     COMMON_WARNINGS,
-    DOCKER_ENV_TEXT,
     SELF_SUFFICIENCY_TEXT,
+    getDockerEnvText,
+    CUSTOM_TOOLS_TEXT,
 } from '../constants.js';
 import { getSearchTools } from '../../utils/search_utils.js';
 import { createBrowserAgent } from './browser_agent.js';
@@ -30,7 +31,7 @@ export function createReasoningAgent(instructions?: string): Agent {
             instructions ||
             `${MAGI_CONTEXT}
 ---
-		
+
 Your role in MAGI is to be a ReasoningAgent. You are an advanced reasoning engine specialized in complex problem-solving.
 
 Your cognitive capabilities include:
@@ -52,7 +53,9 @@ APPROACH TO PROBLEMS:
 
 ${COMMON_WARNINGS}
 
-${DOCKER_ENV_TEXT}
+${getDockerEnvText()}
+
+${CUSTOM_TOOLS_TEXT}
 
 ${SELF_SUFFICIENCY_TEXT}
 
@@ -64,10 +67,5 @@ IMPORTANT:
         tools: [...getSearchTools(), ...getCommonTools()],
         workers: [createBrowserAgent],
         modelClass: 'reasoning',
-        modelSettings: {
-            enableDiverseEnsemble: true,
-            ensembleSamples: 5,
-            enableRefinement: true,
-        },
     });
 }

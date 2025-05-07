@@ -680,6 +680,71 @@ export class ServerManager {
             }
         });
 
+        // Set up API route for LLM logs filtered by agent_id
+        this.app.get('/api/llm-logs/:processId/:agentId', (req, res, next) => {
+            try {
+                const processId = req.params.processId;
+                const agentId = req.params.agentId;
+
+                // Check if this is actually a log file request (for backward compatibility)
+                if (agentId.endsWith('.json')) {
+                    // Let the next route handler take care of this request
+                    return next();
+                }
+
+                const containerName = `magi-${processId}`;
+
+                // Get Docker logs with agent filtering
+                exec(
+                    `docker exec ${containerName} node -e "const fs = require('fs'); const path = require('path'); const dir = '/magi_output/${processId}/logs/llm'; if (fs.existsSync(dir)) { const files = fs.readdirSync(dir).filter(f => f.endsWith('.json')); const agentLogs = []; for (const file of files) { try { const content = fs.readFileSync(path.join(dir, file), 'utf8'); const log = JSON.parse(content); if (log.agent_id === '${agentId}') { agentLogs.push(file); } } catch (e) {} } console.log(JSON.stringify(agentLogs.sort())); } else { console.log('[]'); }"`,
+                    (err, stdout) => {
+                        if (err) {
+                            console.error(
+                                `Error getting LLM logs for ${processId}/${agentId}:`,
+                                err
+                            );
+                            res.status(500).json({
+                                error: 'Error retrieving logs',
+                                details: String(err),
+                            });
+                            return;
+                        }
+
+                        // Parse the list of log files
+                        let logFiles;
+                        try {
+                            logFiles = JSON.parse(stdout.trim());
+                        } catch (parseErr) {
+                            console.error(
+                                'Error parsing log files list:',
+                                parseErr
+                            );
+                            res.status(500).json({
+                                error: 'Error parsing log files',
+                                details: String(parseErr),
+                            });
+                            return;
+                        }
+
+                        res.json({
+                            processId,
+                            agentId,
+                            logFiles,
+                        });
+                    }
+                );
+            } catch (error) {
+                console.error(
+                    'Error handling LLM logs by agent request:',
+                    error
+                );
+                res.status(500).json({
+                    error: 'Server error',
+                    details: String(error),
+                });
+            }
+        });
+
         // Set up API route to get a specific log file
         this.app.get('/api/llm-logs/:processId/:logFile', (req, res) => {
             try {
@@ -688,7 +753,7 @@ export class ServerManager {
                 const containerName = `magi-${processId}`;
 
                 // Validate log file name to prevent injection
-                if (!logFile.match(/^[\w-]+\.json$/)) {
+                if (!logFile.match(/^[\w-.]+\.json$/)) {
                     res.status(400).json({ error: 'Invalid log file name' });
                     return;
                 }

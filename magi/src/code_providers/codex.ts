@@ -11,6 +11,7 @@ import {
     StreamingEvent,
 } from '../types/shared-types.js';
 import { get_working_dir, log_llm_request } from '../utils/file_utils.js';
+import type { Agent } from '../utils/agent.js';
 
 // Define interfaces for parsing Codex CLI JSON output
 interface CodexContentPart {
@@ -31,7 +32,8 @@ interface CodexJsonLine {
 export class CodexProvider implements ModelProvider {
     async *createResponseStream(
         model: string, // e.g., 'codex'
-        messages: ResponseInput
+        messages: ResponseInput,
+        agent: Agent
     ): AsyncGenerator<StreamingEvent> {
         const messageId = uuidv4();
         let order = 0;
@@ -69,7 +71,10 @@ export class CodexProvider implements ModelProvider {
 
         // Log the request
         const cwd = get_working_dir() || process.cwd();
-        log_llm_request('openai', model, { prompt, working_directory: cwd });
+        log_llm_request(agent.agent_id, 'openai', model, {
+            prompt,
+            working_directory: cwd,
+        });
 
         // Spawn the codex CLI process
         const child = spawn('codex', ['-q', prompt], {

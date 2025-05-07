@@ -76,7 +76,7 @@ This will:
 1. Start the browser bridge for Chrome extension communication
 2. Build the Docker images for the controller and MAGI base
 3. Start the system with Docker Compose
-4. Make the web interface available at http://localhost:3011
+4. Make the web interface available at http://localhost:3010
 
 #### Additional Start Options
 

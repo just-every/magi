@@ -4,14 +4,14 @@
  * This module provides tools for shell command execution and system operations.
  */
 
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import { ToolFunction } from '../types/shared-types.js';
 import { createToolFunction } from './tool_call.js';
 
 // Promisify exec for async/await usage
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 /**
  * Execute a shell command and get the output
@@ -19,25 +19,41 @@ const execAsync = promisify(exec);
  * @param command - The shell command to execute
  * @returns Command output and error if any
  */
-export async function execute_command(command: string): Promise<string> {
+export async function execute_command(rawCommand: string): Promise<string> {
+    // Reject dangerous patterns (token-wise)
+    // @todo add a more sophisticated parser to detect dangerous commands
+    const killList = [/^\s*rm\s+-rf\s+/i, /^\s*shutdown\b/i, /\b:(){:|:&};:/]; // fork bomb
+    if (killList.some(rx => rx.test(rawCommand))) {
+        return JSON.stringify({
+            ok: false,
+            exitCode: -1,
+            stdout: '',
+            stderr: '',
+            message: `Refused: dangerous command "${rawCommand}"`,
+        });
+    }
+
     try {
-        // Check for potentially dangerous commands
-        const dangerousCommands = ['rm -rf'];
-
-        for (const dangerous of dangerousCommands) {
-            if (command.includes(dangerous)) {
-                return `Potentially dangerous command detected: "${dangerous}". Command execution aborted.`;
-            }
-        }
-
-        // Execute the command
-        const { stdout } = await execAsync(command, { maxBuffer: 1024 * 1024 });
-
-        const output = stdout.trim();
-        return output || `Command executed: ${command} (no output)`;
-    } catch (error: any) {
-        console.error(`Error executing command "${command}":`, error);
-        return `Error executing command: ${error?.message || String(error)}${error?.stderr ? '\nStderr: ' + error.stderr : ''}`;
+        const { stdout, stderr } = await execFileAsync(
+            '/bin/bash',
+            ['-c', rawCommand],
+            { timeout: 300_000, maxBuffer: 1024 * 1024 }
+        );
+        return JSON.stringify({
+            ok: true,
+            exitCode: 0,
+            stdout: stdout.trim(),
+            stderr: stderr.trim(),
+            message: 'ok',
+        });
+    } catch (err: any) {
+        return JSON.stringify({
+            ok: false,
+            exitCode: err.code ?? -1,
+            stdout: err.stdout?.trim() ?? '',
+            stderr: err.stderr?.trim() ?? '',
+            message: `Command failed: ${err.message ?? String(err)}`,
+        });
     }
 }
 

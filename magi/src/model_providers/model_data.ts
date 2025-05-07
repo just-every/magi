@@ -61,6 +61,8 @@ export interface ModelEntry {
     description?: string; // Short description of the model's capabilities
     rate_limit_fallback?: string; // Fallback model ID in case of rate limit errors
     openrouter_id?: string; // OpenRouter model ID for this model (if available)
+    embedding?: boolean; // Whether this is an embedding model
+    dim?: number; // Dimension of the embedding vector (for embedding models)
     score?: number; // Legacy overall MECH model score (0-100)
     scores?: {
         // Class-specific scores from artificialanalysis.ai benchmarks
@@ -116,11 +118,10 @@ export const MODEL_CLASSES = {
     standard: {
         models: [
             'gpt-4.1', // OpenAI
-            'gemini-2.0-flash', // Google
+            'gemini-2.5-flash-preview-04-17', // Google
             'claude-3-5-haiku-latest', // Anthropic
-            'grok-3-mini', // X.AI
+            'grok-3-mini-fast', // X.AI
             'deepseek-chat', // DeepSeek
-            'meta-llama/llama-4-maverick', // Meta/OpenRouter
         ],
         random: true,
     },
@@ -143,12 +144,17 @@ export const MODEL_CLASSES = {
         models: [
             'gemini-2.5-pro-exp-03-25', // Google
             'o3', // OpenAI
-            'o4-mini', // OpenAI
             'claude-3-7-sonnet-latest', // Anthropic
-            'grok-3', // X.AI
-            //'deepseek-reasoner', // DeepSeek
-            'meta-llama/llama-4-maverick', // Meta/OpenRouter
-            'qwen/qwen-max', // Qwen/OpenRouter
+            'grok-3-mini-fast', // X.AI
+        ],
+        random: true,
+    },
+
+    // Fast, cheap reasoning models
+    reasoning_mini: {
+        models: [
+            'gemini-2.5-flash-preview-04-17', // Google
+            'grok-3-mini-fast', // X.AI
         ],
         random: true,
     },
@@ -158,15 +164,15 @@ export const MODEL_CLASSES = {
         models: [
             'gemini-2.5-pro-exp-03-25', // Google
             'o4-mini', // OpenAI
-            //'gpt-4.1', // OpenAI
+            //'gpt-4.1',                // OpenAI
             'claude-3-7-sonnet-latest', // Anthropic
-            'grok-3', // X.AI
-            //'grok-3-mini', // X.AI
-            //'deepseek-reasoner', // DeepSeek
-            'meta-llama/llama-4-maverick', // Meta/OpenRouter
-            'qwen/qwen-max', // Qwen/OpenRouter
+            //'grok-3',                 // X.AI
+            'grok-3-mini-fast', // X.AI
+            //'deepseek-reasoner',      // DeepSeek
+            //'meta-llama/llama-4-maverick', // Meta/OpenRouter
+            'qwen/qwen3-235b-a22b', // Qwen/OpenRouter
         ],
-        // Remove random: true, as we're using weighted selection based on scores
+        random: true,
     },
 
     // Programming models
@@ -182,20 +188,20 @@ export const MODEL_CLASSES = {
     // Writing models - optimized for conversation and text generation
     writing: {
         models: [
+            'gemini-2.5-flash-preview-04-17', // Google
             'gpt-4.1-mini', // OpenAI
-            'gemini-2.0-flash', // Google
-            'meta-llama/llama-4-scout', // Meta/OpenRouter
         ],
+        random: true,
     },
 
     // Summary models - optimized for extracting information from text
     // High quality, low cost allows this to be used heavily and reduce token usage for other models
     summary: {
         models: [
-            'meta-llama/llama-4-scout', // Meta/OpenRouter
-            'gemini-2.0-flash', // Google
-            'gpt-4.1-nano', // OpenAI
-            'mistral/ministral-8b', // Mistral/OpenRouter
+            //'meta-llama/llama-4-scout', // Meta/OpenRouter
+            'gemini-2.5-flash-preview-04-17', // Google
+            'gpt-4.1-mini', // OpenAI
+            //'mistral/ministral-8b', // Mistral/OpenRouter
         ],
         random: true,
     },
@@ -204,14 +210,15 @@ export const MODEL_CLASSES = {
     vision: {
         models: [
             //'computer-use-preview',     // OpenAI
-            'o4-mini', // OpenAI
-            'o3', // OpenAI
+            //'o4-mini', // OpenAI
+            //'o3', // OpenAI
+            'gemini-2.5-flash-preview-04-17', // Google
             'gemini-2.5-pro-exp-03-25', // Google
             'claude-3-7-sonnet-latest', // Anthropic
-            'grok-2-vision', // X.AI
+            //'grok-2-vision', // X.AI
             'gpt-4.1', // OpenAI
         ],
-        //random: true,
+        random: true,
     },
 
     // Mini models with vision capabilities
@@ -229,22 +236,85 @@ export const MODEL_CLASSES = {
             'gpt-4o', // OpenAI
             'o4-mini', // OpenAI
             'deepseek-reasoner', // DeepSeek
-            'gemini-2.5-pro-exp-03-25', // Google
+            'gemini-2.5-flash-preview-04-17', // Google
         ],
         random: true,
     },
 
     image_generation: {
-        models: ['gpt-image-1'], // OpenAI DALL-E 3 model
+        models: ['gpt-image-1'],
     },
 
     embedding: {
-        models: ['text-embedding-004'], // Including test model
+        models: [
+            'gemini-embedding-exp-03-07', // Google's Gemini embedding model (768d) - FREE
+            'text-embedding-3-small', // OpenAI's standard embedding model (1536d)
+        ],
+        description: 'Vector embedding models for semantic search and RAG',
     },
+};
+
+// Add supported embedding dimensions for various models
+export const EMBEDDING_DIMENSIONS: Record<string, number> = {
+    'text-embedding-3-small': 1536,
+    'text-embedding-3-large': 3072,
+    'gemini-embedding-exp-03-07': 768,
 };
 
 // Main model registry with all supported models
 export const MODEL_REGISTRY: ModelEntry[] = [
+    // Embedding models
+    {
+        id: 'text-embedding-3-small',
+        provider: 'openai',
+        cost: {
+            input_per_million: 0.02, // $0.02 per million tokens
+            output_per_million: 0, // No output tokens for embeddings
+        },
+        features: {
+            input_modality: ['text'],
+            output_modality: ['embedding'],
+        },
+        embedding: true,
+        dim: 1536,
+        class: 'embedding',
+        description:
+            "OpenAI's small embedding model, good balance of performance and cost",
+    },
+    {
+        id: 'text-embedding-3-large',
+        provider: 'openai',
+        cost: {
+            input_per_million: 0.13, // $0.13 per million tokens
+            output_per_million: 0, // No output tokens for embeddings
+        },
+        features: {
+            input_modality: ['text'],
+            output_modality: ['embedding'],
+        },
+        embedding: true,
+        dim: 3072,
+        class: 'embedding',
+        description:
+            "OpenAI's large embedding model, good balance of performance and cost",
+    },
+    {
+        id: 'gemini-embedding-exp-03-07',
+        provider: 'google',
+        cost: {
+            input_per_million: 0, // Free during experimental period
+            output_per_million: 0,
+        },
+        features: {
+            input_modality: ['text'],
+            output_modality: ['embedding'],
+        },
+        embedding: true,
+        dim: 768,
+        class: 'embedding',
+        description:
+            "Google's experimental embedding model optimized for semantic similarity",
+    },
     // Models used via OpenRouter
     // Note: Specific pricing/features via OpenRouter can fluctuate. Validation based on general model info & provider docs.
     {
@@ -293,6 +363,31 @@ export const MODEL_REGISTRY: ModelEntry[] = [
             'Llama 4 Scout 17B Instruct (16E) is a mixture-of-experts (MoE) language model developed by Meta, activating 17 billion parameters out of a total of 109B.',
     },
     {
+        id: 'qwen/qwen3-235b-a22b',
+        provider: 'openrouter',
+        cost: {
+            input_per_million: 0.1,
+            output_per_million: 0.1,
+        },
+        features: {
+            context_length: 40960,
+            input_modality: ['text'],
+            output_modality: ['text'],
+            tool_use: true,
+            streaming: true,
+            json_output: true,
+        },
+        class: 'reasoning', // High-capability model suitable for complex tasks.
+        score: 83, // Legacy overall score
+        scores: {
+            monologue: 73, // Humanity's Last Exam
+            code: 62, // HumanEval
+            reasoning: 57, // GPQA Diamond
+        },
+        description:
+            'Qwen3-235B-A22B is a 235B parameter mixture-of-experts (MoE) model developed by Qwen, activating 22B parameters per forward pass.',
+    },
+    {
         id: 'qwen/qwen-max',
         provider: 'openrouter',
         cost: {
@@ -336,6 +431,116 @@ export const MODEL_REGISTRY: ModelEntry[] = [
         score: 55, // Lower score due to smaller size, but still useful
         description:
             'Ministral 8B is a state-of-the-art language model optimized for on-device and edge computing. Designed for efficiency in knowledge-intensive tasks, commonsense reasoning, and function-calling.',
+    },
+
+    //
+    // XAI models
+    //
+
+    {
+        id: 'grok-3',
+        aliases: ['grok-3-2025-02-11'],
+        provider: 'xai',
+        cost: {
+            input_per_million: 3.0,
+            output_per_million: 15.0,
+        },
+        features: {
+            context_length: 131_072,
+            input_modality: ['text', 'image'],
+            output_modality: ['text'],
+            tool_use: true,
+            streaming: true,
+            json_output: true,
+        },
+        class: 'standard',
+        score: 78, // Aggregate (MMLU ≈ 0.80)
+        scores: {
+            monologue: 80, // Humanity’s Last Exam ≈ correlates with MMLU
+            code: 70, // HumanEval – xAI hasn’t published; estimate from AA
+            reasoning: 65, // GPQA Diamond – estimate
+        },
+        description:
+            'Flagship Grok-3 model for complex reasoning and generation',
+    },
+
+    {
+        id: 'grok-3-fast',
+        aliases: ['grok-3-fast-2025-04-11'],
+        provider: 'xai',
+        cost: {
+            input_per_million: 5.0,
+            output_per_million: 25.0,
+        },
+        features: {
+            context_length: 131_072,
+            input_modality: ['text', 'image'],
+            output_modality: ['text'],
+            tool_use: true,
+            streaming: true,
+            json_output: true,
+        },
+        class: 'standard',
+        score: 78,
+        scores: {
+            monologue: 80,
+            code: 70,
+            reasoning: 65,
+        },
+        description: 'Same Grok-3 weights on premium infra for lower latency',
+    },
+
+    {
+        id: 'grok-3-mini',
+        aliases: ['grok-3-mini-2025-04-11'],
+        provider: 'xai',
+        cost: {
+            input_per_million: 0.3,
+            output_per_million: 0.5,
+        },
+        features: {
+            context_length: 131_072,
+            input_modality: ['text', 'image'],
+            output_modality: ['text'],
+            tool_use: true,
+            streaming: true,
+            json_output: true,
+        },
+        class: 'mini',
+        score: 60,
+        scores: {
+            monologue: 62,
+            code: 55,
+            reasoning: 50,
+        },
+        description: 'Lightweight Grok-3 Mini—budget model for logic tasks',
+    },
+
+    {
+        id: 'grok-3-mini-fast',
+        aliases: ['grok-3-mini-fast-2025-04-11'],
+        provider: 'xai',
+        cost: {
+            input_per_million: 0.6,
+            output_per_million: 4.0,
+        },
+        features: {
+            context_length: 131_072,
+            input_modality: ['text', 'image'],
+            output_modality: ['text'],
+            tool_use: true,
+            streaming: true,
+            json_output: true,
+        },
+        class: 'mini',
+        score: 60,
+        scores: {
+            monologue: 62,
+            code: 55,
+            reasoning: 50,
+        },
+        description:
+            'Grok-3 Mini on accelerated hardware for latency-critical use',
     },
 
     //
@@ -785,6 +990,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
     // Gemini 2.5 Pro (Paid Preview)
     {
         id: 'gemini-2.5-pro-preview-03-25',
+        aliases: ['gemini-2.5-pro'],
         provider: 'google',
         cost: {
             // Tiered pricing
@@ -812,6 +1018,61 @@ export const MODEL_REGISTRY: ModelEntry[] = [
         score: 80, // High score for paid preview version
         description:
             'Paid preview of Gemini 2.5 Pro. State-of-the-art multipurpose model.',
+    },
+    {
+        id: 'gemini-2.5-flash-preview-04-17',
+        aliases: ['gemini-2.5-flash-preview-04-17'],
+        provider: 'google',
+        cost: {
+            input_per_million: 0.15,
+            output_per_million: 3.5, // 0.6 for non thinking - need to add a way to specify this
+        },
+        features: {
+            context_length: 1048576,
+            input_modality: ['text', 'image', 'video', 'audio'],
+            output_modality: ['text'],
+            tool_use: true,
+            streaming: true,
+            json_output: true,
+            max_output_tokens: 65536,
+        },
+        class: 'reasoning',
+        score: 75, // Legacy overall score
+        scores: {
+            monologue: 12, // Humanity's Last Exam
+            code: 63, // HumanEval
+            reasoning: 78, // GPQA Diamond
+        },
+        description:
+            'Balanced multimodal model with large context, built for Agents.',
+    },
+
+    // Gemini 2.0 Flash Lite
+    {
+        id: 'gemini-2.0-flash-lite',
+        provider: 'google',
+        cost: {
+            input_per_million: 0.075,
+            output_per_million: 0.3,
+        },
+        features: {
+            context_length: 1048576,
+            input_modality: ['text', 'image', 'video', 'audio'],
+            output_modality: ['text'],
+            tool_use: true,
+            streaming: true,
+            json_output: true,
+            max_output_tokens: 8192,
+        },
+        class: 'standard',
+        score: 75, // Legacy overall score
+        scores: {
+            monologue: 70, // Humanity's Last Exam
+            code: 55, // HumanEval
+            reasoning: 56, // GPQA Diamond
+        },
+        description:
+            'Lite multimodal model with large context, built for Agents.',
     },
 
     // Gemini 2.0 Flash

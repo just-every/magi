@@ -252,12 +252,16 @@ export function getMemoryTools(): ToolFunction[] {
             save_memory,
             'Saves information to your short term or long term memory.',
             {
-                term: {
+                term_type: {
+                    name: 'term', // Map to the actual parameter name in the implementation
                     description:
                         'Short term or long term memory. Short term memory is like your active memory. It will be included with every thought, but only a certain number of memories are stored. Long term memory must be retrieved with find_memory(). For short term, limit to a sentence or two. Each long term memory can be up to 2000 characters.',
                     enum: ['short', 'long'],
                 },
-                memory: 'The memory to save.',
+                memory_content: {
+                    name: 'memory', // Map to the actual parameter name in the implementation
+                    description: 'The memory to save.',
+                },
             },
             'If the memory was saved correctly and the ID it was given.'
         ),
@@ -266,6 +270,7 @@ export function getMemoryTools(): ToolFunction[] {
             'Find information in your long term memory.',
             {
                 query: {
+                    name: 'query', // Map to the actual parameter name in the implementation
                     type: 'array',
                     description:
                         'A list of terms to search your long term memory for. The search will return all memories that match any of the terms.',
@@ -277,6 +282,11 @@ export function getMemoryTools(): ToolFunction[] {
             delete_memory,
             'Deletes a specific memory by its ID.',
             {
+                key: {
+                    name: 'term', // Map to the actual parameter name in the implementation
+                    description: 'Term type, either "short" or "long"',
+                    enum: ['short', 'long'],
+                },
                 memoryId: {
                     type: 'number',
                     description: 'The ID of the memory to delete.',

@@ -17,6 +17,7 @@ import {
     GlobalCostData,
     AppSettings,
     ScreenshotEvent,
+    AgentStatusEvent,
 } from '../../../types/shared-types';
 // Comment out direct import - we'll use simpler approach to avoid TypeScript errors
 // import { ContainerConnection, MagiMessage } from '../../../server/managers/communication_manager';
@@ -123,6 +124,7 @@ export interface AgentData {
     messages: ClientMessage[]; // Store structured messages
     isTyping?: boolean; // Indicates if the agent is in "thinking" state
     screenshots?: ScreenshotEvent[]; // Store screenshots for this agent
+    statusEvent?: AgentStatusEvent; // Store the last status event for this agent
 }
 
 // Define the process data structure
@@ -345,9 +347,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
             if (
                 event.message &&
                 (!event.message.event.type ||
-                    event.message.event.type !== 'message_delta')
+                    !['message_delta', 'tool_delta', 'quota_update', 'cost_update'].includes(event.message.event.type))
             ) {
-                console.log(`process:message`, event.id, event.message);
+                console.log(`process:message`, event.id, event.message.event.type, event.message);
             }
 
             setProcesses(prevProcesses => {
@@ -654,8 +656,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     // Assistant message
                     if ('message_id' in streamingEvent) {
                         const content = streamingEvent.content || '';
-                        const thinking_content =
-                            streamingEvent.thinking_content || '';
+                        const thinking_content = streamingEvent.thinking_content && streamingEvent.thinking_content !== '{empty}' ? streamingEvent.thinking_content  : '';
                         const message_id = streamingEvent.message_id || '';
 
                         if ((content || thinking_content) && message_id) {
@@ -910,6 +911,11 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     eventType === 'tool_done'
                 ) {
                     updateAgent({ isTyping: false });
+                }
+                else if (
+                    eventType === 'agent_status'
+                ) {
+                    updateAgent({ statusEvent: streamingEvent }, streamingEvent.agent_id);
                 }
 
                 // Update the process with the new messages

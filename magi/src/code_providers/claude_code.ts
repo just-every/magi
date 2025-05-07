@@ -41,6 +41,7 @@ import { get_working_dir, log_llm_request } from '../utils/file_utils.js';
 import pty from 'node-pty';
 // Import strip-ansi - Use dynamic import if your project uses ES Modules strictly
 import stripAnsi from 'strip-ansi';
+import type { Agent } from '../utils/agent.js';
 // Example for strict ESM: const { default: stripAnsi } = await import('strip-ansi');
 
 /**
@@ -71,8 +72,8 @@ function isNoiseLine(line: string): boolean {
     if (line.includes('Press Ctrl-C again to exit')) return true;
 
     // Dynamic Status/Progress Lines (specific patterns)
-    // Matches "* Brewing... (Xs · esc to interrupt)" etc.
-    if (/^\s*\p{S}\s*\w+…\s*\(\d+s\s*·\s*esc to interrupt\)$/u.test(line))
+    // Matches dynamic status lines like "* Action... (Xs · esc to interrupt)" or "* Action... (Xs · details · esc to interrupt)"
+    if (/^\s*\p{S}\s*\w+…\s*\(\d+s(?:\s*·\s*.+?)?\s*·\s*esc to interrupt\)$/u.test(line))
         return true;
     // Note: Thinking/Task/Call/Bash/Read lines are handled by isProcessingStartSignal or history dedupe
     if (line === '⎿  Running…') return true; // Specific running message
@@ -156,7 +157,8 @@ export class ClaudeCodeProvider implements ModelProvider {
      */
     async *createResponseStream(
         model: string, // e.g., 'claude-code-cli-streaming'
-        messages: ResponseInput
+        messages: ResponseInput,
+        agent: Agent
     ): AsyncGenerator<StreamingEvent> {
         const messageId = uuidv4();
         let deltaPosition = 0; // Order for events (start, delta)
@@ -354,7 +356,7 @@ export class ClaudeCodeProvider implements ModelProvider {
             console.log(
                 `[ClaudeCodeProvider] Executing streaming Claude CLI for model '${model}' in dir '${cwd}'...`
             );
-            log_llm_request('anthropic', model, {
+            log_llm_request(agent.agent_id, 'anthropic', model, {
                 // Assumes this function exists
                 prompt:
                     prompt.substring(0, 100) +
@@ -734,6 +736,11 @@ export class ClaudeCodeProvider implements ModelProvider {
                     metadata.apiDuration = finalApiDuration;
                 if (finalWallDuration !== null)
                     metadata.wallDuration = finalWallDuration;
+
+                console.log(
+                    `[ClaudeCodeProvider] **FINAL OUTPUT** for message ${messageId}:`,
+                    finalContent
+                );
 
                 // Create the final 'message_complete' event
                 const completeEvent: MessageEvent & {

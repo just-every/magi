@@ -96,6 +96,8 @@ const renderMessage = (
 ) => {
     const lastMessage: ClientMessage | undefined =
         filteredMessages[index - 1] || undefined;
+    const nextMessage: ClientMessage | undefined =
+        filteredMessages[index + 1] || undefined;
     switch (message.type) {
         case 'user':
             return <UserMessage key={message.id} message={message} />;
@@ -110,7 +112,7 @@ const renderMessage = (
                 />
             );
 
-        case 'tool_call':
+        case 'tool_call': {
             const toolCallMessage = message as ToolCallMessageType;
             let complete = false;
             for (let i = index + 1; i < filteredMessages.length; i++) {
@@ -124,16 +126,26 @@ const renderMessage = (
                     break;
                 }
             }
+            const nextToolResultMessage =
+                nextMessage && nextMessage.type === 'tool_call'
+                        ? (nextMessage as ToolResultMessageType)
+                        : undefined;
             return (
                 <ToolCallMessage
                     key={toolCallMessage.id}
                     message={toolCallMessage}
                     rgb={rgb}
                     complete={complete}
+                    callFollows={
+                        nextToolResultMessage &&
+                        nextToolResultMessage.toolCallId ===
+                            toolCallMessage.toolCallId
+                    }
                 />
             );
+        }
 
-        case 'tool_result':
+        case 'tool_result': {
             const toolResultMessage = message as ToolResultMessageType;
             const lastToolCallMessage =
                 lastMessage && lastMessage.type === 'tool_call'
@@ -150,6 +162,7 @@ const renderMessage = (
                     message={toolResultMessage}
                 />
             );
+        }
 
         default: // system or unknown type
             return <SystemMessage key={message.id} message={message} />;

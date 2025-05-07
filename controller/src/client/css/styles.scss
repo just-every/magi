@@ -184,13 +184,7 @@ header {
     overflow: hidden;
     /*background-color: #ff8f00;*/
     /*background-color: #00b7ff;*/
-    background: linear-gradient(
-        110deg,
-        #31b2ff,
-        #31b2ff 20%,
-        #007dd9 60%,
-        #0072c6
-    );
+    background: linear-gradient(110deg, #16324e, #000b17 20%, #032546 60%, #000d1a);
     z-index: 0;
 }
 
@@ -593,14 +587,24 @@ header {
         margin-bottom: 0.4em;
     }
 
-    .tool-message + .tool-result-message {
-        margin-top: -2em !important;
+    .tool-result-message.follows-tool {
+        margin-top: -26px !important;
+
+        .message-bubble {
+            border-top-right-radius: 0 !important;
+            border-top-left-radius: 0 !important;
+        }
     }
 
     .tool-call-command {
         font-size: 0.8em;
         padding: 1em 1.3em;
         background-color: rgba(0, 0, 0, 0.05);
+
+        &.call-follows {
+            border-bottom-right-radius: 0 !important;
+            border-bottom-left-radius: 0 !important;
+        }
     }
 
     .tool-result-content {
@@ -695,7 +699,10 @@ header {
     padding: 1em 1.3em;
     background-color: #fff;
     color: #000;
-    border-bottom-left-radius: 2px;
+
+    :not(.tool-result-content) {
+        border-bottom-left-radius: 2px;
+    }
 
     a {
         color: #000;
@@ -1065,6 +1072,11 @@ header {
 }
 
 .screenshot-container  {
-    max-height:40vh;
-    overflow:scroll;
+    max-height: 35vh;
+    overflow: scroll;
+}
+
+.browser-agent-card {
+    max-width: 512px;
+    margin: 0 auto;
 }

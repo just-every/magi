@@ -22,9 +22,14 @@ const BRAVE_SEARCH_ENDPOINT = 'https://api.search.brave.com/res/v1/web/search';
  * @returns Search results from Brave API
  */
 async function braveSearch(
-    query: string,
+    query: string | any,
     numResults: number = DEFAULT_RESULTS_COUNT
 ): Promise<string> {
+    // Ensure query is a string
+    if (typeof query !== 'string') {
+        return `Error: Search query must be a string, received ${typeof query}: ${JSON.stringify(query)}`;
+    }
+
     console.log(`Performing Brave API search for: ${query}`);
 
     if (!BRAVE_API_KEY) {

@@ -33,18 +33,7 @@ export type AgentType =
     | 'browser_code'
     | 'search'
     | 'shell'
-    | 'image'
-    | 'godel_planning'
-    | 'godel_writing'
-    | 'godel_testing'
-    | 'godel_pr_submission'
-    | 'godel_pr_review'
-    | 'understanding_task_decomposition'
-    | 'understanding_web_search'
-    | 'understanding_content_extraction'
-    | 'understanding_synthesis'
-    | 'understanding_code_generation'
-    | 'understanding_validation';
+    | 'image';
 
 /**
  * Create an agent of the specified type with optional model override and agent_id

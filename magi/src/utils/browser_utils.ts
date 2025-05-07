@@ -19,6 +19,7 @@ import { getAgentBrowserSession, BrowserAction } from './browser_session.js'; //
 import type { BrowserStatusPayload } from './cdp/browser_helpers.js'; // Added import
 import type { Agent } from './agent.js';
 import { getCommunicationManager } from './communication.js';
+import { addGrid } from './image_utils.js';
 
 /**
  * Navigate the agent's browser tab to a URL via the extension bridge.
@@ -29,8 +30,13 @@ import { getCommunicationManager } from './communication.js';
  */
 export async function navigate(
     inject_agent_id: string,
-    url: string
+    url: string | any
 ): Promise<string> {
+    // Ensure url is a string
+    if (typeof url !== 'string') {
+        return `Error: URL must be a string, received ${typeof url}: ${String(url)}`;
+    }
+
     // Validate URL: if it's just a domain name, add https:// prefix
     if (
         url &&
@@ -91,8 +97,13 @@ export async function navigate(
  */
 export async function js_evaluate(
     inject_agent_id: string,
-    code: string
+    code: string | any
 ): Promise<string> {
+    // Ensure code is a string
+    if (typeof code !== 'string') {
+        return `Error: JavaScript code must be a string, received ${typeof code}: ${String(code)}`;
+    }
+
     console.log(
         `[browser_utils] Requesting JavaScript evaluation: ${code.substring(0, 100)}${code.length > 100 ? '...' : ''}`
     );
@@ -164,34 +175,34 @@ export async function press_keys(
  * Simulates scrolling the page in the agent's tab.
  *
  * @param inject_agent_id - The agent ID to use for the browser session
- * @param location - How to scroll ('page_down', 'page_up', 'bottom', 'top', 'coordinates')
+ * @param method - How to scroll ('page_down', 'page_up', 'bottom', 'top', 'coordinates')
  * @param x - X coordinate to scroll to (only for 'coordinates' mode)
  * @param y - Y coordinate to scroll to (only for 'coordinates' mode)
  * @returns Result message or error string.
  */
 export async function scroll_to(
     inject_agent_id: string,
-    location: 'page_down' | 'page_up' | 'bottom' | 'top' | 'coordinates',
+    method: 'page_down' | 'page_up' | 'bottom' | 'top' | 'coordinates',
     x?: number,
     y?: number
 ): Promise<string> {
     const coordString =
-        location === 'coordinates' &&
+        method === 'coordinates' &&
         typeof x === 'number' &&
         typeof y === 'number'
             ? ` to ${x},${y}`
             : '';
     console.log(
-        `[browser_utils] Requesting to scroll (${location})${coordString}`
+        `[browser_utils] Requesting to scroll (${method})${coordString}`
     );
     try {
         const session = getAgentBrowserSession(inject_agent_id);
         // Ensure session is initialized before scrolling
         await session.initialize();
-        const result = await session.scroll_to(location, x, y);
+        const result = await session.scroll_to(method, x, y);
         return String(result);
     } catch (error: any) {
-        const errorMessage = `[browser_utils] Error scrolling (${location})${coordString}: ${error?.message || String(error)}`;
+        const errorMessage = `[browser_utils] Error scrolling (${method})${coordString}: ${error?.message || String(error)}`;
         console.error(errorMessage, error?.details || '');
         return errorMessage; // Return error message string
     }
@@ -203,29 +214,67 @@ export async function scroll_to(
  * @param inject_agent_id - The agent ID to use for the browser session
  * @param x X coordinate (CSS pixels, max BROWSER_WIDTH)
  * @param y Y coordinate (CSS pixels, max BROWSER_HEIGHT)
- * @param button Optional mouse button ('left', 'middle', 'right')
  * @returns Result message or error string.
  */
-export async function click_at(
+export async function move(
     inject_agent_id: string,
     x: number,
-    y: number,
-    button?: 'left' | 'middle' | 'right'
+    y: number
 ): Promise<string> {
-    console.log(`[browser_utils] Requesting to click at: ${{ x, y, button }}`);
+    console.log(`[browser_utils] Requesting to move cursor: ${{ x, y }}`);
     // Validate coordinates against expected viewport size
     if (x < 0 || y < 0 || x > BROWSER_WIDTH || y > BROWSER_HEIGHT) {
-        return `Error: Invalid coordinates (${x}, ${y}) provided for click_at. The viewport size is ${BROWSER_WIDTH}x${BROWSER_HEIGHT} and coordinates must be within this range (0-${BROWSER_WIDTH} for x, 0-${BROWSER_HEIGHT} for y).`;
+        return `Error: Invalid coordinates (${x}, ${y}) provided for move. The viewport size is ${BROWSER_WIDTH}x${BROWSER_HEIGHT} and coordinates must be within this range (0-${BROWSER_WIDTH} for x, 0-${BROWSER_HEIGHT} for y).`;
     }
 
     try {
         const session = getAgentBrowserSession(inject_agent_id);
         // Ensure session is initialized before clicking
         await session.initialize();
-        const result = await session.click_at(x, y, button);
+        const result = await session.move(x, y);
         return String(result);
     } catch (error: any) {
-        const errorMessage = `[browser_utils] Error clicking at '${x},${y}': ${error?.message || String(error)}`;
+        const errorMessage = `[browser_utils] Error moving cursor to '${x},${y}': ${error?.message || String(error)}`;
+        console.error(errorMessage, error?.details || '');
+        return errorMessage; // Return error message string
+    }
+}
+
+/**
+ * Simulates clicking at coordinates in the agent's tab.
+ *
+ * @param inject_agent_id - The agent ID to use for the browser session
+ * @param button Optional mouse button ('left', 'middle', 'right')
+ * @param event Optional mouse event ('click', 'mousedown', 'mouseup')
+ * @param x X coordinate (CSS pixels, max BROWSER_WIDTH)
+ * @param y Y coordinate (CSS pixels, max BROWSER_HEIGHT)
+ * @returns Result message or error string.
+ */
+export async function click(
+    inject_agent_id: string,
+    button?: 'left' | 'middle' | 'right',
+    event?: 'click' | 'mousedown' | 'mouseup',
+    x?: number,
+    y?: number
+): Promise<string> {
+    console.log(`[browser_utils] Requesting to click: ${{ button, event }}`);
+
+    // Validate coordinates against expected viewport size
+    if (
+        (typeof x === 'number' && (x < 0 || x > BROWSER_WIDTH)) ||
+        (typeof y === 'number' && (y > BROWSER_HEIGHT || y < 0))
+    ) {
+        return `Error: Invalid coordinates (${x}, ${y}) provided for move. The viewport size is ${BROWSER_WIDTH}x${BROWSER_HEIGHT} and coordinates must be within this range (0-${BROWSER_WIDTH} for x, 0-${BROWSER_HEIGHT} for y).`;
+    }
+
+    try {
+        const session = getAgentBrowserSession(inject_agent_id);
+        // Ensure session is initialized before clicking
+        await session.initialize();
+        const result = await session.click(button, event, x, y);
+        return String(result);
+    } catch (error: any) {
+        const errorMessage = `[browser_utils] Error clicking: ${error?.message || String(error)}`;
         console.error(errorMessage, error?.details || '');
         return errorMessage; // Return error message string
     }
@@ -357,7 +406,7 @@ export async function use_browser(
  * @param commandParamsJson Optional parameters for the CDP method, as a JSON string.
  * @returns Result of the command execution as a JSON string, or an error message string if parsing/execution fails.
  */
-export async function debug_command(
+export async function cdp_command(
     inject_agent_id: string,
     method: string,
     commandParamsJson?: string
@@ -367,7 +416,7 @@ export async function debug_command(
     );
     if (!method || typeof method !== 'string') {
         const errorMsg =
-            "[browser_utils] Error: Valid method name string is required for 'debug_command'.";
+            "[browser_utils] Error: Valid method name string is required for 'cdp_command'.";
         console.error(errorMsg);
         return errorMsg; // Return simple error string
     }
@@ -422,113 +471,106 @@ export async function debug_command(
 export function getBrowserTools(): ToolFunction[] {
     return [
         createToolFunction(navigate, 'Navigate the active tab to a URL.', {
-            url: {
-                type: 'string',
-                description:
-                    'Absolute destination URL (e.g. "https://example.com").',
-            },
-        }),
-        createToolFunction(type, 'Type text in focused element.', {
-            text: {
-                type: 'string',
-                description: 'Use "\\n" for new lines.',
-            },
+            url: 'Absolute destination URL (e.g. "https://example.com").',
         }),
         createToolFunction(
-            press_keys,
-            'Simulates pressing a keyboard key or key combination (supports modifiers).',
+            type,
+            'Type text in the currently focused element. First use click() on the element to focus it.',
             {
-                keys: {
-                    type: 'string',
-                    description:
-                        "The key or combination to press (e.g., 'Enter', 'Ctrl+C')",
-                },
+                text: 'Use "\\n" for new lines.',
+            }
+        ),
+        createToolFunction(
+            press_keys,
+            'Simulate pressing a key or key combination (supports Ctrl/Alt/Shift/Meta).',
+            {
+                keys: 'Key or combo to press. e.g. "Enter", "a", "Ctrl+C", "Shift+Tab".',
             }
         ),
         createToolFunction(
             scroll_to,
-            'Scroll the current browser tab view. Use "page_down" or "page_up" for general scrolling, "top" or "bottom" to reach page ends, or "coordinates" for specific positioning.',
+            'Scroll the page up/down, to top/bottom, or to specific coordinates.',
             {
-                location: {
+                method: {
                     type: 'string',
                     enum: [
                         'page_down',
                         'page_up',
-                        'bottom',
                         'top',
+                        'bottom',
                         'coordinates',
                     ],
-                    description:
-                        'Scrolling method.  When "coordinates" is chosen, x & y become required.',
+                    description: 'Scroll action; use "coordinates" with x & y.',
                 },
                 x: {
                     type: 'number',
-                    minimum: 0,
-                    maximum: BROWSER_WIDTH,
                     optional: true,
                     description:
-                        'Horizontal scroll target (CSS pixels). **Required when location="coordinates".**',
+                        'Horizontal CSS pixel position (ignored if not "coordinates")',
                 },
                 y: {
                     type: 'number',
-                    minimum: 0,
-                    maximum: BROWSER_HEIGHT,
                     optional: true,
                     description:
-                        'Vertical scroll target (CSS pixels). **Required when location="coordinates".**',
+                        'Vertical CSS pixel position (required if method="coordinates")',
                 },
-            },
-            'Returns a status message indicating success or failure of the scroll operation.'
+            }
         ),
         createToolFunction(
-            click_at,
-            'Simulate a mouse click at specific coordinates (CSS pixels) within the current page viewport. The viewport is assumed to be 1024x768 pixels.',
+            move,
+            `Move the mouse cursor to specific CSS-pixel coordinates within the viewport (${BROWSER_WIDTH}x${BROWSER_HEIGHT}). Do this before clicking or to hover over elements. You will see the updated mouse position in the browser window which you can use to validate the position.`,
             {
                 x: {
                     type: 'number',
                     minimum: 0,
                     maximum: BROWSER_WIDTH,
+                    description:
+                        'The x (horizontal) position to move the mouse to.',
                 },
                 y: {
                     type: 'number',
                     minimum: 0,
                     maximum: BROWSER_HEIGHT,
+                    description:
+                        'The y (vertical) position to move the mouse to.',
                 },
+            }
+        ),
+        createToolFunction(
+            click,
+            'Trigger a mouse click at current cursor position.',
+            {
                 button: {
                     type: 'string',
                     enum: ['left', 'middle', 'right'],
+                    description:
+                        'Which mouse button to click; defaults to "left".',
                     optional: true,
-                    description: 'Defaults to **left** if omitted.',
                 },
-            },
-            'Returns a status message indicating success or failure of the click.'
-        ),
-        createToolFunction(
-            drag,
-            'Simulate a mouse drag operation from a starting coordinate to an ending coordinate (CSS pixels) within the viewport (1024x768).',
-            {
-                startX: {
+                event: {
+                    type: 'string',
+                    enum: ['click', 'mousedown', 'mouseup'],
+                    description:
+                        'What type of mouse event; defaults to "click". You can use click("left", "mousedown") move(x, y) click("left", "mouseup") to drag.',
+                    optional: true,
+                },
+                x: {
                     type: 'number',
                     minimum: 0,
                     maximum: BROWSER_WIDTH,
+                    description:
+                        'The x (horizontal) position to click at. If not provided, the current cursor position is used.',
+                    optional: true,
                 },
-                startY: {
+                y: {
                     type: 'number',
                     minimum: 0,
                     maximum: BROWSER_HEIGHT,
+                    description:
+                        'The y (vertical) position to click at. If not provided, the current cursor position is used.',
+                    optional: true,
                 },
-                endX: {
-                    type: 'number',
-                    minimum: 0,
-                    maximum: BROWSER_WIDTH,
-                },
-                endY: {
-                    type: 'number',
-                    minimum: 0,
-                    maximum: BROWSER_HEIGHT,
-                },
-            },
-            'Returns a status message indicating success or failure of the drag operation.'
+            }
         ),
         /*createToolFunction(
             use_browser,
@@ -716,33 +758,45 @@ If any action fails, you will see how far you got and can continue from there.`,
         ),*/
         createToolFunction(
             js_evaluate,
-            'Advanced: Execute arbitrary JavaScript code directly within the context of the current page. Returns the result of the execution.',
+            'Advanced: Execute arbitrary JavaScript in the page context to read or modify the DOM.',
             {
                 code: {
                     type: 'string',
-                    description:
-                        'The JavaScript code string to execute. Example: "document.title" or "return document.querySelectorAll(\'.item\').length".',
+                    description: `JavaScript to run. Use \`return\` or \`console.log\` to emit results.
+
+Examples:
+// Get all titles from the page
+'return Array.from(document.querySelectorAll('h1, h2, h3'));'
+
+// Modify all textareas and log changes
+'document.querySelectorAll('textarea').forEach(ta => { console.log('before', ta.value); ta.value = ta.value.toUpperCase(); console.log('after', ta.value);});'`,
                 },
             },
-            'Returns the result of the JavaScript execution, converted to a string. Errors during execution will be returned as an error message string.'
+            'Any final return statement (stringified), console.log messages or an error message on failure.'
         ),
         createToolFunction(
-            debug_command,
-            'Advanced: Send a raw Chrome DevTools Protocol (CDP) command directly to the browser tab. This allows for fine-grained control but requires knowledge of the CDP specification.',
+            cdp_command,
+            'Advanced: Send raw Chrome DevTools Protocol (CDP) commands for low-level browser control.',
             {
                 method: {
                     type: 'string',
                     description:
-                        "The full CDP method name including the domain (e.g., 'Page.navigate', 'DOM.querySelector', 'Input.dispatchKeyEvent'). Refer to the Chrome DevTools Protocol documentation for available methods.",
+                        'Full CDP method name, including domain (e.g. Emulation.setGeolocationOverride, Input.synthesizePinchGesture).',
                 },
                 commandParamsJson: {
                     type: 'string',
-                    description:
-                        'Optional: A JSON string representing the parameters object for the CDP method. The structure must match the requirements of the specified CDP method. Example for Page.navigate: \'{"url": "https://example.com"}\'. Example for Input.dispatchKeyEvent: \'{"type": "keyDown", "key": "Enter", "code": "Enter", "windowsVirtualKeyCode": 13}\'.',
+                    description: `Optional JSON string of parameters matching the chosen CDP method.
+
+Examples:
+// Spoof geolocation to San Francisco with Emulation.setGeolocationOverride
+'{"latitude":37.7749,"longitude":-122.4194,"accuracy":1}'
+
+// Pinch gesture (zoom out) at page center with Input.synthesizePinchGesture
+'{"x":400,"y":300,"scaleFactor":0.5,"relativeSpeed":800}'`,
                     optional: true,
                 },
             },
-            'Returns the raw result object from the CDP command, serialized as a JSON string. If the command fails or parameters are invalid, an error message string is returned.'
+            'The response as a JSON string, or an error message if it fails.'
         ),
     ];
 }
@@ -913,7 +967,7 @@ export async function setupAgentBrowserTools(
  * @param messages - The current array of messages to append to.
  * @returns A promise resolving to the agent and the updated messages array.
  */
-async function addScreenshot(
+export async function addBrowserStatus(
     agent: Agent,
     messages: ResponseInput
 ): Promise<[Agent, ResponseInput]> {
@@ -956,7 +1010,7 @@ async function addScreenshot(
         // Catch errors from session initialization or other unexpected issues
         statusError = `An unexpected error occurred while retrieving browser status: ${error.message || String(error)}`;
         console.error(
-            `[browser_utils] Unexpected error in addScreenshot for agent ${agent.name} (tab: ${tabId}):`,
+            `[browser_utils] Unexpected error in addBrowserStatus for agent ${agent.name} (tab: ${tabId}):`,
             error
         );
     }
@@ -971,26 +1025,22 @@ async function addScreenshot(
         // If successful, build the detailed status message
         const browserSection = `### Browser status
 URL: ${payload.url || 'Unknown'}
-Viewport: ${payload.view?.w || 0} × ${payload.view?.h || 0} CSS px
-Full page: ${payload.full?.w || 0} × ${payload.full?.h || 0} CSS px`;
+Viewport: ${payload.view?.w || 0} × ${payload.view?.h || 0} px
+Full page: ${payload.full?.w || 0} × ${payload.full?.h || 0} px
+Cursor position: ${payload.cursor?.x || 0} × ${payload.cursor?.y || 0} px`;
 
         // Build elements section
         let elementsSection = '';
         if (payload.elementMap && Array.isArray(payload.elementMap)) {
-            // Sort elements simply by y-coordinate (top-to-bottom)
-            // The complex sorting based on score/offscreen is removed as those fields no longer exist
-            const sortedElements = [...payload.elementMap].sort(
-                (a, b) => (a.y || 0) - (b.y || 0) // Sort by y-coord asc
-            );
-
             // Limit and format
-            const MAX_ELEMENTS_TO_SHOW = 40; // Keep limit
-            const elementsToShow = sortedElements.slice(
+            const MAX_ELEMENTS_TO_SHOW = 50; // Keep limit
+            const elementsToShow = [...payload.elementMap].slice(
                 0,
                 MAX_ELEMENTS_TO_SHOW
             );
 
             elementsSection = `
+
 ### Interactive elements
 Type, center position (x,y) and key details of the first ${elementsToShow.length} interactive DOM nodes found on the page.
 `;
@@ -1032,20 +1082,36 @@ Type, center position (x,y) and key details of the first ${elementsToShow.length
                 const cy = Math.round(el.y + el.h / 2);
                 const position = `{x:${cx},y:${cy}}`;
 
-                elementsSection += `\n${el.type} at ${position} - ${infoString}`;
+                elementsSection += `\n${el.type} ${position} ${infoString}`;
             });
-
-            if (sortedElements.length > MAX_ELEMENTS_TO_SHOW) {
-                elementsSection += `\n(${sortedElements.length - MAX_ELEMENTS_TO_SHOW} more elements not shown)`;
-            }
         }
+
+        const baseScreenshot = payload.screenshot || '';
+
+        // Add grid overlay using the addGrid function
+        const screenshotWithGrid = await addGrid(
+            baseScreenshot,
+            payload.devicePixelRatio
+        );
+
+        // Add crosshairs to key elements to help with click targeting
+        /*const screenshotWithCrosshairs = await addCrosshairs(
+            screenshotWithGrid,
+            elementMap,
+            devicePixelRatio,
+            10 // Display crosshairs for the top 10 elements
+        );*/
 
         // Add screenshot directly to context message
         const screenshotSection = payload.screenshot
             ? `\n\n### Browser screenshot
-A grid has been overlaid on the screenshot to help with positioning. There are minor grid lines every 50px (dashed) and major lines every 200px (solid). The grid does not show on the real web page. It has been added to improve your accuracy when choosing coordinates.
+Below is a screenshot of your current browser tab. The screenshot is a capture of the current viewport. You can scroll to see the rest of the page.
 
-${payload.screenshot}`
+A grid has been overlaid on the screenshot to help you position your cursor. There are minor grid lines every 100px (dashed) and major lines every 200px (solid). The grid does not show on the real web page.
+
+Your mouse is at {x: ${payload.cursor?.x || 0}, y: ${payload.cursor?.y || 0}} and is shown on the screenshot as a large cursor. Use move(x, y) to refine your position if you move to the wrong spot or click the wrong element.
+
+${screenshotWithGrid}`
             : '';
 
         // Combine sections for the message content
@@ -1056,7 +1122,7 @@ ${payload.screenshot}`
         comm.send({
             agent: agent.export(),
             type: 'screenshot',
-            data: payload.screenshot, // Include screenshot here too if needed by visualizer
+            data: baseScreenshot, // Include screenshot here too if needed by visualizer
             timestamp: new Date().toISOString(),
             url: payload.url,
             viewport: {
@@ -1065,6 +1131,7 @@ ${payload.screenshot}`
                 width: payload.view.w,
                 height: payload.view.h,
             },
+            cursor: payload.cursor,
         });
     } else {
         // Fallback if payload is null and no error was caught (shouldn't happen often)
@@ -1074,30 +1141,15 @@ ${payload.screenshot}`
 
     // Push the constructed message to the messages array
     messages.push({
+        type: 'message',
         role: 'developer', // Role indicating system-provided information
         content: messageContent,
     });
 
     console.log(
-        `[browser_utils] Total addScreenshot processing took ${Date.now() - tStart}ms for tab ${tabId}`
+        `[browser_utils] Total addBrowserStatus processing took ${Date.now() - tStart}ms for tab ${tabId}`
     );
 
     // Return the agent and the modified messages array
     return [agent, messages];
-}
-
-/**
- * Adds current browser status information (screenshot, URL, elements) to the agent's
- * message context. This is typically called before requesting the agent's next action.
- *
- * @param agent The agent instance.
- * @param messages The current array of messages for the agent's context.
- * @returns Promise resolving to a tuple of the agent and the updated messages array.
- */
-export async function addBrowserStatus(
-    agent: Agent,
-    messages: ResponseInput
-): Promise<[Agent, ResponseInput]> {
-    // Delegate directly to addScreenshot, which now handles status fetching and message formatting.
-    return await addScreenshot(agent, messages);
 }

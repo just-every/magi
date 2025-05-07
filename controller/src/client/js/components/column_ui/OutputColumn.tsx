@@ -103,8 +103,21 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
         const rbg =
             process.id === coreProcessId ? PRIMARY_RGB : process.colors.rgb;
 
-        const { id, command, status } = process;
+        const { id, command } = process;
         const statusInfo = getStatusIcon(process);
+        let status: string = process.status || 'unknown';
+        let metaDataString = '';
+        if (process.agent?.statusEvent) {
+            if (process.agent.statusEvent.status) {
+                status = process.agent.statusEvent.status;
+            }
+            if (process.agent.statusEvent.meta_data && Object.keys(process.agent.statusEvent.meta_data).length > 0) {
+                metaDataString = ` (${Object.entries(process.agent.statusEvent.meta_data)
+                    .map(([key, value]) => `${key}: ${value}`)
+                    .join(', ')})`;
+            }
+        }
+        status += metaDataString;
 
         return (
             <div className="process-output h-100 d-flex flex-column">
@@ -202,7 +215,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
 
                 {/* Process Content */}
                 <AutoScrollContainer
-                    className="process-content flex-grow-1 p-3"
+                    className="process-content flex-grow-1 p-3 pb-0"
                     style={{ backgroundColor: `rgba(${rbg} / 0.1)` }}
                 >
                     {tab === 'output' && <MessageList messages={messages} />}
@@ -234,12 +247,24 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
         const parentProcess = selectedItem.parentId
             ? (processes.get(selectedItem.parentId) as ProcessData | undefined)
             : null;
-        const status = parentProcess?.status || 'unknown';
         const statusInfo = getStatusIcon(parentProcess);
         const rbg =
             parentProcess && parentProcess.id === coreProcessId
                 ? PRIMARY_RGB
                 : parentProcess?.colors.rgb;
+        let status: string = parentProcess?.status || 'unknown';
+        let metaDataString = '';
+        if (selectedItem.data?.statusEvent) {
+            if (selectedItem.data.statusEvent.status) {
+                status = selectedItem.data.statusEvent.status;
+            }
+            if (selectedItem.data.statusEvent.meta_data && Object.keys(selectedItem.data.statusEvent.meta_data).length > 0) {
+                metaDataString = ` (${Object.entries(selectedItem.data.statusEvent.meta_data)
+                    .map(([key, value]) => `${key}: ${value}`)
+                    .join(', ')})`;
+            }
+        }
+        status += metaDataString;
 
         return (
             <div className="agent-output h-100 d-flex flex-column">
@@ -294,11 +319,47 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                 </div>
 
                 {/* Agent Content */}
+                <ul className="nav nav-tabs small border-0">
+                    <li className="nav-item" onClick={() => setTab('output')}>
+                        <a
+                            className={
+                                'nav-link border-0 m-0' +
+                                (tab === 'output' ? ' active' : '')
+                            }
+                            style={{
+                                backgroundColor: `rgba(${tab === 'output' ? rbg : '255 255 255'} / 0.1)`,
+                            }}
+                        >
+                            Output
+                        </a>
+                    </li>
+                    <li className="nav-item" onClick={() => setTab('llm')}>
+                        <a
+                            className={
+                                'nav-link border-0 m-0' +
+                                (tab === 'llm' ? ' active' : '')
+                            }
+                            style={{
+                                backgroundColor: `rgba(${tab === 'llm' ? rbg : '255 255 255'} / 0.1)`,
+                            }}
+                        >
+                            Requests
+                        </a>
+                    </li>
+                </ul>
+
                 <AutoScrollContainer
                     className="agent-content flex-grow-1 p-3"
                     style={{ backgroundColor: `rgba(${rbg} / 0.08)` }}
                 >
-                    <MessageList messages={messages} />
+                    {tab === 'output' && <MessageList messages={messages} />}
+                    {tab === 'llm' && selectedItem && (
+                        <LogsViewer
+                            processId={selectedItem.parentId || ''}
+                            agentId={selectedItem.id}
+                            inlineTab={tab}
+                        />
+                    )}
                 </AutoScrollContainer>
             </div>
         );

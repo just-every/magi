@@ -35,27 +35,41 @@ export const COMMON_WARNINGS = `IMPORTANT WARNINGS:
 5. Call a tool only once you have all the required parameters
 6. Where possible, validate your results before reporting them`;
 
-// Project context for agents
-export const PROJECTS_CONTEXT =
-    getAllProjects().length === 0
+/**
+ * Returns the project context for agents.
+ */
+export function getProjectsContext(): string {
+    const projects = getAllProjects();
+    const projectDir = projects.length > 0 ? `projects/${projects[0]}` : '';
+    const startingDir = get_output_dir(projectDir);
+
+    return projects.length === 0
         ? 'You can read/write to /magi_output which is a virtual volume shared with all MAGI agents.'
         : `You can read/write to /magi_output which is a virtual volume shared with all MAGI agents. You have access to projects which are git repositories with files you are working on. You will receive a read/write clone of the project git repo at /magi_output/${process.env.PROCESS_ID}/projects/{project} and your default branch is "magi-${process.env.PROCESS_ID}"
 
 YOUR PROJECTS:
-- ${getAllProjects().join('\n- ')}
+- ${projects.join('\n- ')}
 
-Your starting directory is: ${get_output_dir(getAllProjects().length > 0 ? `projects/${getAllProjects()[0]}` : '')}
+Your starting directory is: ${startingDir}
 Your taskID is: ${process.env.PROCESS_ID}`;
+}
 
-// Docker environment information
-export const DOCKER_ENV_TEXT = `ENVIRONMENT INFO:
+/**
+ * Returns the Docker environment information text.
+ */
+export function getDockerEnvText(): string {
+    const outputDir = get_output_dir();
+    const projectsContext = getProjectsContext();
+
+    return `ENVIRONMENT INFO:
 - You are running in a Docker container with Debian Bookworm
 - You can run programs and modify you environment without fear of permanent damage
 - You have full network access for web searches and browsing
-- Both you and whoever receives your response has read/write access to all files in ${get_output_dir()}
+- Both you and whoever receives your response has read/write access to all files in ${outputDir}
 
-${PROJECTS_CONTEXT}
+${projectsContext}
 `;
+}
 
 // Self-sufficiency guidance
 export const SELF_SUFFICIENCY_TEXT = `SELF-SUFFICIENCY:
@@ -71,12 +85,27 @@ Assume you have been given all the information necessary to complete the task.
 Complete your task using any resources available to you without requesting additional information.
 Return your final outcome and include any educated guesses you had to make.`;
 
+// Custom tools text
+export const CUSTOM_TOOLS_TEXT = `RESOLVE AND OPTIMIZE WITH CUSTOM TOOLS:
+When your hit up against a problem which you can not immediately solve, or is taking too long, you have access to a very special tool called "custom_tool".
+**Custom tools allow you to create and run new tools on the fly, which can be used to solve any problem.**
+Use a custom tool like this;
+\`\`\`
+CUSTOM_TOOL(problem: 'I have a large amount of text I need to translate', input: '{ file_path: "/magi_output/XYZ/en.txt" }', result: 'Translated text from English to French in a new file')
+\`\`\`
+CUSTOM_TOOL() will then write whatever code it needed to resolve the problem. In this case, it might use the Google Translate API to translate the text in the file. Under the hood a specialized human-like coding agent will create and run the tool.
+Custom tools are *incredibly powerful*, because once they are built, they will be automatically included in the list of available tools for other agents solving similar problems. You'll also have access to the tool for future tool calls. This means you can build a library of tools that are useful and optimize your work.`;
+
 // File tools text
 export const FILE_TOOLS_TEXT = `FILE TOOLS:
 - read_file: Read files from the file system (provide absolute path)
 - write_file: Write content to files (provide absolute path and content)`;
 
-export const TASK_CONTEXT = `You operate in a shared browsing session with a human overseeing your operation. This allows you to interact with websites together. You can access accounts this person is already logged into and perform actions for them.
+/**
+ * Returns the task context string.
+ */
+export function getTaskContext(): string {
+    return `You operate in a shared browsing session with a human overseeing your operation. This allows you to interact with websites together. You can access accounts this person is already logged into and perform actions for them.
 
 The agents in your system are;
 - ${AGENT_DESCRIPTIONS['SearchAgent']}
@@ -85,9 +114,10 @@ The agents in your system are;
 - ${AGENT_DESCRIPTIONS['ShellAgent']}
 - ${AGENT_DESCRIPTIONS['ReasoningAgent']}
 
-${DOCKER_ENV_TEXT}
+${getDockerEnvText()}
 
 ${SIMPLE_SELF_SUFFICIENCY_TEXT}`;
+}
 
 export const MAGI_CONTEXT = `You are part of MAGI (Mostly Autonomous Generative Intelligence), a multi-agent orchestration framework designed to solve complex tasks with minimal human intervention. A central Overseer AI coordinates specialized agents, dynamically creating them as needed, using a persistent "chain of thought". MAGI prioritizes solution quality, robustness, fault tolerance, and self-improvement over speed. It intelligently uses multiple LLMs to avoid common failure modes like reasoning loops and ensure effectiveness, with components operating within secure, isolated Docker containers. You work with a human called ${YOUR_NAME}.
 

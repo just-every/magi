@@ -3,7 +3,7 @@
 services:
     # Postgres database service - shared among all projects/containers
     db:
-        image: postgres:15
+        image: pgvector/pgvector:pg16
         container_name: magi-postgres
         restart: always
         environment:
@@ -16,6 +16,7 @@ services:
             - postgres_data:/var/lib/postgresql/data
         networks:
             - magi-network
+
     # Controller service - the main web interface and container manager
     controller:
         container_name: magi-controller
@@ -27,13 +28,13 @@ services:
                 BUILDKIT_INLINE_CACHE: 1
         ports:
             - '3010:3010' # Expose web interface port
-            - '3011:3011' # Expose additional port
         volumes:
             - claude_credentials:/claude_shared:rw # For Claude auth
             - magi_output:/magi_output:rw # For output storage
             - ../:/external/host:rw # Mount parent directory for repo management
             - ./.env:/.env:ro # Mount .env file in parent directory (where server expects it)
             - /var/run/docker.sock:/var/run/docker.sock # Allow Docker-in-Docker
+            - ./db:/app/db:ro # Mount migrations directory
         env_file:
             - ./.env
         environment:
@@ -66,7 +67,6 @@ services:
             - HOST_HOSTNAME=controller # Use service name instead of host.docker.internal
             - CONTROLLER_PORT=3010
             - TZ=$(date +%Z) # Get host timezone - conversion handled in code
-            - RUNNING_IN_DOCKER=true # Flag to indicate we're running in Docker
         networks:
             - magi-network
         profiles:

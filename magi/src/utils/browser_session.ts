@@ -11,7 +11,6 @@ import {
     BrowserStatusPayload,
 } from './cdp/browser_helpers.js';
 import { BROWSER_WIDTH, BROWSER_HEIGHT } from '../constants.js';
-import { addGrid } from './image_utils.js';
 
 // --- Define Action Types ---
 
@@ -42,11 +41,15 @@ interface ScrollToAction {
     x?: number;
     y?: number;
 }
-interface ClickAtAction {
-    action: 'click_at';
+interface MoveAction {
+    action: 'move';
     x: number;
     y: number;
+}
+interface ClickAtAction {
+    action: 'click';
     button?: 'left' | 'middle' | 'right';
+    event?: 'click' | 'mousedown' | 'mouseup';
 }
 interface DragAction {
     action: 'drag';
@@ -70,6 +73,10 @@ interface DebugCommandAction {
     commandParams?: object;
 }
 
+function randomInt(min: number, max: number): number {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
 // Union type for all possible actions used by executeActions
 export type BrowserAction =
     | NavigateAction
@@ -78,6 +85,7 @@ export type BrowserAction =
     | BrowserStatusAction
     | JsEvaluateAction
     | ScrollToAction
+    | MoveAction
     | ClickAtAction
     | DragAction
     | TypeAction
@@ -97,7 +105,13 @@ export class AgentBrowserSessionCDP {
     private navigationRequested = false; // Flag to track if navigation was requested
     private navigationStarted = false; // Flag to track if navigation started
     private navigationEventHandlersAdded = false; // Flag to track if navigation event handlers are added
-    private cursorPosition: { x: number; y: number } | null = null; // Added for virtual cursor
+    private cursorPosition: {
+        x: number;
+        y: number;
+        button?: 'none' | 'left' | 'middle' | 'right';
+    } | null = null; // Added for virtual cursor
+    private lastScrollX: number = 0; // Track last known scroll X position
+    private lastScrollY: number = 0; // Track last known scroll Y position
 
     /**
      * Creates a new browser session manager for a tab.
@@ -149,13 +163,54 @@ export class AgentBrowserSessionCDP {
             });
 
             try {
+                // Look for an existing window containing the UI (localhost:3010)
+                // to reuse its browser context for tabs
+                let existingCtx: string | undefined;
+                try {
+                    const { targetInfos } =
+                        await rootClient.Target.getTargets();
+                    const uiTarget = targetInfos.find(
+                        target =>
+                            target.type === 'page' &&
+                            target.url.includes('localhost:3010')
+                    );
+
+                    if (uiTarget && uiTarget.browserContextId) {
+                        existingCtx = uiTarget.browserContextId;
+                        console.log(
+                            `[browser_session_cdp] Found UI page in browserContextId: ${existingCtx}`
+                        );
+                    } else {
+                        console.log(
+                            '[browser_session_cdp] No UI context found - creating tab with default context'
+                        );
+                    }
+                } catch (targetsError) {
+                    console.error(
+                        '[browser_session_cdp] Error getting targets:',
+                        targetsError
+                    );
+                    // Continue without the context ID - will fall back to default behavior
+                }
+
                 // Create a new target (browser tab) - always starting with about:blank
                 // This ensures we can attach listeners before any real navigation starts
-                const { targetId } = await rootClient.Target.createTarget({
+                const createParams: any = {
                     url: 'about:blank', // Always start with blank page, we'll navigate after client setup
                     newWindow: false, // Create a tab in the existing window
                     background: true, // Create the tab in the background without stealing focus
-                });
+                };
+
+                // Add browserContextId if we found the UI context
+                if (existingCtx) {
+                    createParams.browserContextId = existingCtx;
+                    console.log(
+                        `[browser_session_cdp] Reusing UI browserContextId ${existingCtx} for new tab`
+                    );
+                }
+
+                const { targetId } =
+                    await rootClient.Target.createTarget(createParams);
 
                 this.chromeTabId = targetId; // Store the CDP ID for our tab
                 console.log(
@@ -343,18 +398,22 @@ export class AgentBrowserSessionCDP {
 
         // Listen for frameRequestedNavigation event (when navigation is requested)
         client.Page.on('frameRequestedNavigation', () => {
-            console.log(
-                `[browser_session_cdp] Tab ${this.tabId}: Navigation requested`
-            );
-            this.navigationRequested = true;
+            if (!this.navigationRequested) {
+                console.log(
+                    `[browser_session_cdp] Tab ${this.tabId}: Navigation requested`
+                );
+                this.navigationRequested = true;
+            }
         });
 
         // Listen for frameNavigated event (when navigation starts)
         client.Page.on('frameNavigated', () => {
-            console.log(
-                `[browser_session_cdp] Tab ${this.tabId}: Navigation started`
-            );
-            this.navigationStarted = true;
+            if (!this.navigationStarted) {
+                console.log(
+                    `[browser_session_cdp] Tab ${this.tabId}: Navigation started`
+                );
+                this.navigationStarted = true;
+            }
         });
 
         this.navigationEventHandlersAdded = true;
@@ -380,7 +439,7 @@ export class AgentBrowserSessionCDP {
      * @returns A promise that resolves when page is loaded or timeout occurs
      */
     private async waitForPageLoad(): Promise<void> {
-        await new Promise(r => setTimeout(r, 100)); // 100ms delay to allow navigation events to settle
+        await new Promise(r => setTimeout(r, randomInt(90, 130))); // delay to allow navigation events to settle
         await this.waitForPageLoadComplete();
     }
 
@@ -604,6 +663,7 @@ export class AgentBrowserSessionCDP {
             `[browser_session_cdp] Tab ${this.tabId}: Setting virtual cursor at ${cursorX},${cursorY}`
         );
         try {
+            const cursorWidth = 20; // Width of the cursor in pixels
             await client.Runtime.evaluate({
                 expression: `
                   (function(x, y) {
@@ -615,8 +675,7 @@ export class AgentBrowserSessionCDP {
                       c.id = '__virtualCursor';
                       Object.assign(c.style, {
                         position:      'fixed',
-                        width:         '14px',
-                        height:        '22px',
+                        width:         '${cursorWidth}px',
                         pointerEvents: 'none',
                         zIndex:        '2147483647'
                       });
@@ -624,8 +683,7 @@ export class AgentBrowserSessionCDP {
                       // 2) Inline SVG
                       const svg = document.createElementNS(ns, 'svg');
                       svg.setAttribute('xmlns', ns);
-                      svg.setAttribute('width',  '14px');
-                      svg.setAttribute('height', '22px');
+                      svg.setAttribute('width',  '${cursorWidth}px');
                       svg.setAttribute('viewBox','0 0 14 21.844');
 
                       // Stroke path
@@ -635,7 +693,7 @@ export class AgentBrowserSessionCDP {
                       );
                       p1.setAttribute('style',
                         'stroke-miterlimit:10.71;stroke-width:7px;stroke-opacity:0.72;' +
-                        'fill-rule:nonzero;paint-order:stroke;transform-origin:0px 0px;'
+                        'fill-rule:nonzero;paint-order:stroke;fill:rgb(0,0,0);transform-origin:0px 0px;'
                       );
 
                       // Fill path
@@ -704,14 +762,13 @@ export class AgentBrowserSessionCDP {
                 );
             }
 
-            // 2. Perform CDP operations concurrently for efficiency.
+            // 2. Perform CDP operations concurrently for efficiency, but without separate scroll evaluation
             const [
                 metrics, // Page layout metrics (CSS pixels)
                 screenshotResult, // Screenshot data
                 snap, // DOM snapshot (includes raw element rects)
                 urlResult, // Current page URL
                 dprResult, // Actual device pixel ratio
-                scrollResult, // Current scroll offsets (X and Y)
             ] = await Promise.all([
                 client.Page.getLayoutMetrics(),
                 client.Page.captureScreenshot({
@@ -734,26 +791,44 @@ export class AgentBrowserSessionCDP {
                     expression: 'window.devicePixelRatio',
                     returnByValue: true,
                 }),
-                client.Runtime.evaluate({
-                    expression:
-                        '{ scrollX: window.scrollX, scrollY: window.scrollY }',
-                    returnByValue: true,
-                }),
             ]);
 
             // 3. Extract results, providing defaults if necessary.
-            const devicePixelRatio: number = dprResult?.result?.value ?? 1; // Default DPR to 1
-            const scrollX: number = scrollResult?.result?.value?.scrollX ?? 0; // Default scroll to 0
-            const scrollY: number = scrollResult?.result?.value?.scrollY ?? 0;
-            console.log(
-                `[browser_session_cdp] Detected DPR: ${devicePixelRatio}, Scroll: X=${scrollX}, Y=${scrollY}`
-            );
+            let devicePixelRatio: number = dprResult?.result?.value ?? 1; // Default DPR to 1
 
-            // Extract viewport and content dimensions (in CSS pixels).
+            // Use cached scroll position - these are updated after each scroll operation
+            const scrollX: number = this.lastScrollX;
+            const scrollY: number = this.lastScrollY;
+
+            // Extract viewport dimensions from metrics
             const viewWidth =
                 metrics.cssLayoutViewport?.clientWidth ?? BROWSER_WIDTH;
             const viewHeight =
                 metrics.cssLayoutViewport?.clientHeight ?? BROWSER_HEIGHT;
+
+            // Verify DPR by comparing actual screenshot dimensions with expected viewport size
+            // If we have a mismatch, recalculate DPR
+            const imgWidth = screenshotResult.data
+                ? Buffer.from(screenshotResult.data, 'base64').readUInt32BE(16)
+                : 0; // PNG width at offset 16
+
+            if (
+                imgWidth > 0 &&
+                Math.abs(imgWidth - viewWidth * devicePixelRatio) > 10
+            ) {
+                // Large discrepancy detected; recalculate DPR using actual screenshot dimensions
+                const correctedDpr = imgWidth / viewWidth;
+                console.log(
+                    `[browser_session_cdp] DPR correction: reported=${devicePixelRatio}, actual=${correctedDpr} (screenshot width=${imgWidth}px, viewport=${viewWidth}px)`
+                );
+                devicePixelRatio = correctedDpr;
+            }
+
+            console.log(
+                `[browser_session_cdp] Using DPR: ${devicePixelRatio}, Scroll position: X=${scrollX}, Y=${scrollY}`
+            );
+
+            // Extract content dimensions (in CSS pixels) - viewport dims already extracted above
             const fullWidth = metrics.cssContentSize?.width ?? viewWidth;
             const fullHeight = metrics.cssContentSize?.height ?? viewHeight;
 
@@ -764,27 +839,20 @@ export class AgentBrowserSessionCDP {
                 snap,
                 viewWidth, // Viewport width (CSS pixels)
                 viewHeight, // Viewport height (CSS pixels)
-                devicePixelRatio //, // Actual device pixel ratio
-                //scrollX,          // Horizontal scroll offset (CSS pixels)
-                //scrollY           // Vertical scroll offset (CSS pixels)
+                devicePixelRatio, // Actual device pixel ratio
+                scrollX, // Horizontal scroll offset (CSS pixels)
+                scrollY // Vertical scroll offset (CSS pixels)
             );
 
             const currentUrl = urlResult?.result?.value || ''; // Get URL or use empty string
 
-            // Create base64 data URL from screenshot data
-            const baseScreenshot = `data:image/png;base64,${screenshotResult.data}`;
-
-            // Add grid overlay using the addGrid function
-            const screenshotWithGrid = await addGrid(
-                baseScreenshot,
-                devicePixelRatio
-            );
-
             // 5. Assemble the final payload.
             const payload: BrowserStatusPayload = {
-                screenshot: screenshotWithGrid, // Base64 encoded screenshot with grid
+                screenshot: `data:image/png;base64,${screenshotResult.data}`, // Base64 encoded screenshot with grid and crosshairs
+                devicePixelRatio: devicePixelRatio, // Actual device pixel ratio
                 view: { w: viewWidth, h: viewHeight }, // Viewport dimensions (CSS pixels)
                 full: { w: fullWidth, h: fullHeight }, // Full page dimensions (CSS pixels)
+                cursor: this.cursorPosition, // Full page dimensions (CSS pixels)
                 url: currentUrl,
                 elementMap, // Array of elements with corrected coordinates
             };
@@ -814,50 +882,211 @@ export class AgentBrowserSessionCDP {
             `[browser_session_cdp] Tab ${this.tabId}: Evaluating JS: ${code.substring(0, 100)}${code.length > 100 ? '...' : ''}`
         );
         try {
-            // Reset navigation tracking flags before the action
             this.trackPageLoad();
 
-            // Execute JavaScript using Runtime.evaluate.
+            // Enhanced heuristic to auto-wrap expressions with return
+
+            // Helper to check if a line looks like an expression that should be returned
+            const isExpressionLine = (line: string): boolean => {
+                line = line.trim();
+                if (!line) return false;
+
+                // Skip lines that are already returns or start with control keywords
+                const controlKeywordPattern =
+                    /^\s*(?:return|const|let|var|class|function|async|if|for|while|switch|try|catch|finally|throw|import|export|yield|await|break|continue|debugger)\b/;
+                if (controlKeywordPattern.test(line)) return false;
+
+                // Skip lines that end with block closures or semicolons for block-ending statements
+                if (/^\s*}\s*(?:else|catch|finally)?\s*(?:$|\/[/*])/.test(line))
+                    return false;
+
+                // Simple test for lines that look like expressions
+                // - Doesn't start with a keyword
+                // - Doesn't start with a closing brace (likely end of a block)
+                // - Has some content
+                return /\S/.test(line) && !/^\s*[{}]/.test(line);
+            };
+
+            // Helper to detect if code contains an IIFE pattern
+            const looksLikeIIFE = (fullCode): boolean => {
+                // Simple heuristic: Look for IIFE patterns - functions invoked immediately
+                const iifePatterns = [
+                    /\(\s*function\s*\(.*\)\s*\{[\s\S]*\}\s*\)\s*\([^)]*\)\s*;/,
+                    /\(\s*async\s+function\s*\(.*\)\s*\{[\s\S]*\}\s*\)\s*\([^)]*\)\s*;/,
+                    /\(\s*\(\s*.*\)\s*=>\s*\{[\s\S]*\}\s*\)\s*\([^)]*\)\s*;/,
+                    /\(\s*async\s*\(\s*.*\)\s*=>\s*\{[\s\S]*\}\s*\)\s*\([^)]*\)\s*;/,
+                ];
+
+                return iifePatterns.some(pattern => pattern.test(fullCode));
+            };
+
+            // Analyze the code
+            const lines = code.split(/\r?\n/);
+            let lastExprLine = -1;
+            let hasExplicitReturn = false;
+
+            // Check if this might be an IIFE
+            const isIIFEPattern = looksLikeIIFE(code);
+
+            // Only scan for significant lines if this isn't an IIFE
+            if (!isIIFEPattern) {
+                // Scan for significant lines from the end
+                for (let i = lines.length - 1; i >= 0; i--) {
+                    const line = lines[i].trim();
+                    if (!line || line.startsWith('//')) continue; // Skip empty and comment-only lines
+
+                    // Check if there's already an explicit return
+                    if (/^\s*return\b/.test(line)) {
+                        hasExplicitReturn = true;
+                        break;
+                    }
+
+                    // Remember the last expression-looking line
+                    if (lastExprLine === -1 && isExpressionLine(line)) {
+                        lastExprLine = i;
+                        // Break early if it's clearly an expression (doesn't end with ; or })
+                        if (!line.endsWith(';') && !line.endsWith('}')) {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // For declaration-only snippets, try to capture the last variable defined
+            let captureVar: string | null = null;
+            const declMatch = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/.exec(
+                code
+            );
+            if (declMatch) captureVar = declMatch[1];
+
+            // Decide how to build the function body
+            let body: string;
+
+            // For IIFE patterns, use a direct evaluation approach
+            if (isIIFEPattern) {
+                try {
+                    // Directly execute the IIFE to get its value
+                    // This is run inside a try-catch because it might fail in certain environments
+                    // or if the IIFE uses browser-specific APIs
+
+                    // Use Function constructor instead of eval for potentially safer execution
+                    // This still executes in the current scope but isolates variable declarations
+                    const directValue = new Function(`return ${code}`)();
+
+                    // Create a function body that just returns this value
+                    body = `return ${JSON.stringify(directValue)};`;
+                } catch (err) {
+                    console.warn(
+                        'IIFE direct execution failed, falling back to original mode:',
+                        err
+                    );
+                    // If direct execution fails, fall back to code as-is
+                    body = code;
+                }
+            } else if (hasExplicitReturn) {
+                // Already has a return, use code as-is
+                body = code;
+            } else if (lastExprLine !== -1) {
+                // Regular expression line - inject return
+                const prefix = lines.slice(0, lastExprLine).join('\n');
+                const exprLine = lines[lastExprLine].trim();
+                const suffix = lines.slice(lastExprLine + 1).join('\n');
+
+                // Handle object literals and array literals specially - make sure to wrap them in parentheses
+                const needsWrapping =
+                    exprLine.startsWith('{') || exprLine.startsWith('[');
+                const wrappedExpr = needsWrapping ? `(${exprLine})` : exprLine;
+
+                body = `${prefix}\nreturn ${wrappedExpr};\n${suffix}`;
+            } else if (captureVar) {
+                // Fall back to the original variable capture logic
+                body = `${code}; return typeof ${captureVar} !== 'undefined' ? ${captureVar} : undefined;`;
+            } else {
+                // No expression detected, use code as-is
+                body = code;
+            }
+
+            const wrapped = `(async () => {
+    // Capture console.log output as fallback for undefined returns
+    const __logs = [];
+    const __origLog = console.log;
+
+    // Safe serializer for console.log arguments
+    function safe(arg) {
+        if (arg === null || typeof arg !== 'object') return String(arg);
+        try { return JSON.stringify(arg); } catch { return '[Circular]'; }
+    }
+
+    console.log = function(...args) {
+        __logs.push(args.map(safe).join(' '));
+        __origLog.apply(console, args);
+    };
+
+    try {
+        const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+        const fn = new AsyncFunction(${JSON.stringify(body)});
+        const value = await fn();
+        return {
+            success: true,
+            value: (value === undefined && __logs.length > 0) ? __logs[__logs.length-1] : value,
+            logs: __logs
+        };
+    } catch (err) {
+        return {
+            success: false,
+            error: err.toString(),
+            logs: __logs
+        };
+    } finally {
+        console.log = __origLog;
+    }
+})()`;
+
             const { result, exceptionDetails } =
                 await this.cdpClient!.Runtime.evaluate({
-                    expression: code,
-                    returnByValue: true, // Attempt to return simple values directly
-                    awaitPromise: true, // Wait for promises returned by the script to resolve
-                    userGesture: true, // Simulate execution within a user gesture context
-                    timeout: 30000, // Set a timeout for long-running scripts
+                    expression: wrapped,
+                    returnByValue: true,
+                    awaitPromise: true,
+                    userGesture: true,
+                    timeout: 30000,
                 });
 
-            // Check if the script threw an exception.
             if (exceptionDetails) {
                 throw new Error(
-                    `JS exception: ${exceptionDetails.exception?.description || exceptionDetails.text}`
+                    `CDP eval error: ${exceptionDetails.exception?.description || exceptionDetails.text}`
                 );
             }
 
-            // Wait for page load if navigation was triggered
+            const payload = result.value as any;
+
             await this.waitForPageLoad();
 
-            // Convert the result object to a string representation.
-            let resultString = '';
-            if (result.type === 'undefined') resultString = 'undefined';
-            else if (result.subtype === 'null') resultString = 'null';
-            else if (result.type === 'string') resultString = result.value;
-            else if (result.type === 'number' || result.type === 'boolean')
-                resultString = String(result.value);
-            else if (result.type === 'object') {
-                // Try to JSON stringify objects/arrays.
-                try {
-                    resultString = JSON.stringify(result.value);
-                } catch (stringifyError: any) {
-                    // Fallback if stringification fails (e.g., circular references).
-                    console.warn(
-                        `[browser_session_cdp] Could not JSON.stringify JS result for tab ${this.tabId}: ${stringifyError.message}`
-                    );
-                    resultString = result.description || '[object]';
-                }
-            } else resultString = result.description || String(result.value); // Use description or simple string conversion as fallback
+            // 4) Read your Node-side flags
+            const navigated =
+                this.navigationRequested || this.navigationStarted;
+            if (navigated) {
+                const { result: urlRes } =
+                    await this.cdpClient!.Runtime.evaluate({
+                        expression: 'window.location.href',
+                        returnByValue: true,
+                    });
+                const final_url = urlRes.value as string;
 
-            return resultString;
+                payload.metadata = {
+                    navigated,
+                    final_url,
+                };
+            }
+
+            // Ensure value is always present in the payload (even if null)
+            if (
+                payload.success === true &&
+                (payload.value === undefined || !('value' in payload))
+            ) {
+                payload.value = null;
+            }
+
+            return JSON.stringify(payload, null, 2);
         } catch (error: any) {
             console.error(
                 `[browser_session_cdp] Error evaluating JS for tab ${this.tabId}:`,
@@ -872,62 +1101,68 @@ export class AgentBrowserSessionCDP {
     }
 
     /**
-     * Scrolls the page according to the specified mode and coordinates.
+     * Scrolls the page according to the specified method and coordinates.
      * Coordinates are expected in CSS pixels.
-     * @param mode How to scroll ('page_down', 'page_up', 'bottom', 'top', 'coordinates').
-     * @param x Target horizontal coordinate (CSS pixels), required for 'coordinates' mode.
-     * @param y Target vertical coordinate (CSS pixels), required for 'coordinates' mode.
+     * @param method How to scroll ('page_down', 'page_up', 'bottom', 'top', 'coordinates').
+     * @param x Target horizontal coordinate (CSS pixels), required for 'coordinates' method.
+     * @param y Target vertical coordinate (CSS pixels), required for 'coordinates' method.
      * @returns A promise resolving to a success or error message string.
      */
     async scroll_to(
-        mode: 'page_down' | 'page_up' | 'bottom' | 'top' | 'coordinates',
+        method: 'page_down' | 'page_up' | 'bottom' | 'top' | 'coordinates',
         x?: number,
         y?: number
     ): Promise<string> {
         await this.ensureInitialized();
         const coordString =
-            mode === 'coordinates' &&
+            method === 'coordinates' &&
             typeof x === 'number' &&
             typeof y === 'number'
                 ? ` to ${x},${y}`
                 : '';
         console.log(
-            `[browser_session_cdp] Tab ${this.tabId}: Scrolling (${mode})${coordString}`
+            `[browser_session_cdp] Tab ${this.tabId}: Scrolling (${method})${coordString}`
         );
         try {
             let script = '';
-            // Determine the JavaScript scroll command based on the mode.
-            switch (mode) {
+            // Determine the JavaScript scroll command based on the method.
+            switch (method) {
                 case 'page_down':
-                    script = 'window.scrollBy(0, window.innerHeight * 0.8)';
+                    script =
+                        'window.scrollBy({ top: window.innerHeight * 0.8, behavior: "instant" })';
                     break; // Scroll down 80% of viewport height
                 case 'page_up':
-                    script = 'window.scrollBy(0, -window.innerHeight * 0.8)';
+                    script =
+                        'window.scrollBy({ top: -window.innerHeight * 0.8, behavior: "instant" })';
                     break; // Scroll up 80% of viewport height
                 case 'bottom':
-                    script = 'window.scrollTo(0, document.body.scrollHeight)';
+                    script =
+                        'window.scrollTo({ top: document.body.scrollHeight, left: 0, behavior: "instant" })';
                     break; // Scroll to the bottom of the page
                 case 'top':
-                    script = 'window.scrollTo(0, 0)';
+                    script =
+                        'window.scrollTo({ top: 0, left: 0, behavior: "instant" })';
                     break; // Scroll to the top of the page
                 case 'coordinates': {
-                    if (typeof x !== 'number' || typeof y !== 'number') {
+                    if (typeof x !== 'number' && typeof y !== 'number') {
                         return 'Error scrolling: Coordinates (x, y) are required for "coordinates" scroll mode.';
+                    }
+                    if (typeof x !== 'number') {
+                        x = 0;
+                    }
+                    if (typeof y !== 'number') {
+                        y = 0;
                     }
                     // Ensure coordinates are non-negative integers (CSS pixels).
                     const scrollX = Math.max(0, Math.floor(x));
                     const scrollY = Math.max(0, Math.floor(y));
-                    script = `window.scrollTo(${scrollX}, ${scrollY})`;
+                    script = `window.scrollTo({ left: ${scrollX}, top: ${scrollY}, behavior: "instant" })`;
                     // Update cursor position when scrolling to specific coordinates
-                    this.cursorPosition = { x: scrollX, y: scrollY };
-                    console.log(
-                        `[browser_session_cdp] Tab ${this.tabId}: Updated cursor position to ${scrollX},${scrollY} after scroll_to coordinates`
-                    );
                     break;
                 }
                 default:
                     // Should not happen with TypeScript validation.
-                    return `Error scrolling: Unsupported scroll mode: ${mode}`;
+                    return `Error scrolling: Unsupported scroll method: ${method}`;
             }
 
             // Ensure viewport dimensions are set, especially if using window.innerHeight.
@@ -946,10 +1181,30 @@ export class AgentBrowserSessionCDP {
                 );
             }
 
-            // Wait briefly for rendering to potentially catch up after scroll.
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // Wait for the scroll to settle
+            await new Promise(resolve => setTimeout(resolve, 200));
 
-            return `Successfully scrolled (${mode})${coordString}`;
+            // After scrolling settles, update the cached scroll position
+            const scrollPositionResult = await this.cdpClient!.Runtime.evaluate(
+                {
+                    expression:
+                        '({ scrollX: window.scrollX, scrollY: window.scrollY })',
+                    returnByValue: true,
+                }
+            );
+
+            // Update cached scroll values
+            if (scrollPositionResult?.result?.value) {
+                this.lastScrollX =
+                    scrollPositionResult.result.value.scrollX || 0;
+                this.lastScrollY =
+                    scrollPositionResult.result.value.scrollY || 0;
+                console.log(
+                    `[browser_session_cdp] Tab ${this.tabId}: Updated cached scroll position to X=${this.lastScrollX}, Y=${this.lastScrollY} after scrolling`
+                );
+            }
+
+            return `Successfully scrolled (${method}). New scroll position is {x: ${this.lastScrollX}, y: ${this.lastScrollY}}`;
         } catch (error: any) {
             console.error(
                 `[browser_session_cdp] Error scrolling tab ${this.tabId}:`,
@@ -960,32 +1215,27 @@ export class AgentBrowserSessionCDP {
     }
 
     /**
-     * Simulates a mouse click at the specified coordinates (CSS pixels relative to the viewport).
+     * Simulates a mouse move to specified coordinates (CSS pixels relative to the viewport).
      * @param x The horizontal coordinate (CSS pixels).
      * @param y The vertical coordinate (CSS pixels).
-     * @param button The mouse button to use ('left', 'middle', 'right'). Defaults to 'left'.
      * @returns A promise resolving to a success or error message string.
      */
-    async click_at(
-        x: number,
-        y: number,
-        button: 'left' | 'middle' | 'right' = 'left'
-    ): Promise<string> {
+    async move(x: number, y: number): Promise<string> {
         await this.ensureInitialized();
         // Floor coordinates to integers, as CDP expects integer pixel values.
-        let clickX = Math.floor(x);
-        let clickY = Math.floor(y);
+        let moveX = Math.floor(x);
+        let moveY = Math.floor(y);
         console.log(
-            `[browser_session_cdp] Tab ${this.tabId}: Clicking at CSS coords: ${clickX},${clickY} with ${button} button`
+            `[browser_session_cdp] Tab ${this.tabId}: Moving cursor to CSS coords: ${moveX},${moveY}`
         );
 
-        // Clamp negative coordinates to 0, as clicks outside the viewport might be problematic.
-        if (clickX < 0 || clickY < 0) {
+        // Clamp negative coordinates to 0, as outside the viewport might be problematic.
+        if (moveX < 0 || moveY < 0) {
             console.warn(
-                `[browser_session_cdp] Tab ${this.tabId}: Click coordinates (${clickX},${clickY}) are negative. Clamping to 0.`
+                `[browser_session_cdp] Tab ${this.tabId}: Move coordinates (${moveX},${moveY}) are negative. Clamping to 0.`
             );
-            clickX = Math.max(0, clickX);
-            clickY = Math.max(0, clickY);
+            moveX = Math.max(0, moveX);
+            moveY = Math.max(0, moveY);
         }
         // Note: Upper bounds (e.g., BROWSER_WIDTHxBROWSER_HEIGHT) are not explicitly checked here. CDP might handle clicks
         // slightly outside the viewport, or the agent should use browserStatus info to provide valid coords.
@@ -998,29 +1248,141 @@ export class AgentBrowserSessionCDP {
             // Reset navigation tracking flags before the action
             this.trackPageLoad();
 
-            // Dispatch mouse pressed event.
+            /*const steps = randomInt(6, 16);
+            const delay = randomInt(8, 18);
+            const startX = Math.floor(this.cursorPosition?.x) || 0;
+            const startY = Math.floor(this.cursorPosition?.y) || 0;
+
+            // Simulate moves from start to end.
+            for (let i = 1; i <= steps; i++) {
+                const intermediateX = Math.floor(
+                    startX + ((moveX - startX) * i) / steps
+                );
+                const intermediateY = Math.floor(
+                    startY + ((moveY - startY) * i) / steps
+                );
+                // We add a small random offset to the intermediate coordinates to simulate more natural movement.
+                await client.Input.dispatchMouseEvent({
+                    type: 'mouseMoved',
+                    x: randomInt(intermediateX-3, intermediateX+3),
+                    y: randomInt(intermediateY-3, intermediateY+3),
+                    button: this.cursorPosition?.button || 'none',
+                });
+                await new Promise(resolve => setTimeout(resolve, randomInt(delay-2, delay+2))); // Small delay between moves
+            }*/
+
+            // Ensure the final move event is exactly at the end coordinates
             await client.Input.dispatchMouseEvent({
-                type: 'mousePressed',
-                x: clickX,
-                y: clickY,
-                button: button,
-                clickCount: 1,
+                type: 'mouseMoved',
+                x: moveX,
+                y: moveY,
+                button: this.cursorPosition?.button || 'none',
             });
-            // Wait briefly between press and release.
-            await new Promise(resolve => setTimeout(resolve, 50));
-            // Dispatch mouse released event.
-            await client.Input.dispatchMouseEvent({
-                type: 'mouseReleased',
-                x: clickX,
-                y: clickY,
-                button: button,
-                clickCount: 1,
-            });
+            await new Promise(resolve =>
+                setTimeout(resolve, randomInt(30, 40))
+            );
+
+            // Update cursor position after click (retain button state)
+            this.cursorPosition.x = moveX;
+            this.cursorPosition.y = moveY;
+
+            console.log(
+                `[browser_session_cdp] Tab ${this.tabId}: Updated cursor position to ${moveX},${moveY}`
+            );
+
+            // Wait for page load if navigation was triggered
+            await this.waitForPageLoad();
+
+            return `Successfully moved cursor. New cursor position is {x: ${moveX}, y: ${moveY}}. The screenshot shows the new cursor position.`;
+        } catch (error: any) {
+            console.error(
+                `[browser_session_cdp] Error moving mouse to ${moveX},${moveY} for tab ${this.tabId}:`,
+                error
+            );
+            return `Error moving mouse to ${moveX},${moveY}: ${error.message || error}`;
+        }
+    }
+
+    /**
+     * Simulates a mouse click at the current coordinates (CSS pixels relative to the viewport).
+     * @param button The mouse button to use ('left', 'middle', 'right'). Defaults to 'left'.
+     * @param button Type of click event ('click', 'mousedown', 'mouseup'). Defaults to 'click'.
+     * @returns A promise resolving to a success or error message string.
+     */
+    async click(
+        button: 'left' | 'middle' | 'right' = 'left',
+        event: 'click' | 'mousedown' | 'mouseup' = 'click',
+        x?: number,
+        y?: number
+    ): Promise<string> {
+        await this.ensureInitialized();
+
+        const useParamCoords =
+            (typeof x === 'number' && x > 0) ||
+            (typeof y === 'number' && y > 0);
+
+        // Floor coordinates to integers, as CDP expects integer pixel values.
+        const clickX = Math.floor(
+            (typeof x === 'number' && useParamCoords
+                ? x
+                : this.cursorPosition?.x) || 0
+        );
+        const clickY = Math.floor(
+            (typeof y === 'number' && useParamCoords
+                ? y
+                : this.cursorPosition?.y) || 0
+        );
+
+        console.log(
+            `[browser_session_cdp] Tab ${this.tabId}: Clicking at CSS coords: ${clickX},${clickY} with ${button} button`
+        );
+
+        try {
+            const client = this.cdpClient!;
+            // Ensure viewport dimensions are set before interaction.
+            await this.ensureViewportSize();
+
+            // Reset navigation tracking flags before the action
+            this.trackPageLoad();
+
+            if (event === 'click' || event === 'mousedown') {
+                // Dispatch mouse pressed event.
+                await client.Input.dispatchMouseEvent({
+                    type: 'mousePressed',
+                    x: clickX,
+                    y: clickY,
+                    button: button,
+                    clickCount: 1,
+                });
+            }
+            if (event === 'click') {
+                // Wait briefly between press and release.
+                await new Promise(resolve =>
+                    setTimeout(resolve, randomInt(30, 60))
+                );
+            }
+            if (event === 'click' || event === 'mouseup') {
+                // Dispatch mouse released event.
+                await client.Input.dispatchMouseEvent({
+                    type: 'mouseReleased',
+                    x: clickX,
+                    y: clickY,
+                    button: button,
+                    clickCount: 1,
+                });
+            }
+
             // Wait briefly to allow potential event handlers (like navigation) to trigger.
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise(resolve =>
+                setTimeout(resolve, randomInt(100, 150))
+            );
 
             // Update cursor position after click
             this.cursorPosition = { x: clickX, y: clickY };
+            if (event === 'mousedown') {
+                // If we are in mousedown mode, we need to keep the button pressed
+                this.cursorPosition.button = button;
+            }
             console.log(
                 `[browser_session_cdp] Tab ${this.tabId}: Updated cursor position to ${clickX},${clickY} after click`
             );
@@ -1028,7 +1390,7 @@ export class AgentBrowserSessionCDP {
             // Wait for page load if navigation was triggered
             await this.waitForPageLoad();
 
-            return `Successfully clicked at ${clickX},${clickY} with ${button} button`;
+            return `Successfully clicked at {x: ${clickX}, y: ${clickY}} with the ${button} mouse button. The screenshot shows the updated page state.`;
         } catch (error: any) {
             console.error(
                 `[browser_session_cdp] Error clicking at ${clickX},${clickY} for tab ${this.tabId}:`,
@@ -1143,7 +1505,7 @@ export class AgentBrowserSessionCDP {
             // Wait for page load if navigation was triggered
             await this.waitForPageLoad();
 
-            return `Successfully dragged from ${dragStartX},${dragStartY} to ${dragEndX},${dragEndY} with ${button} button`;
+            return `Successfully dragged from ${dragStartX},${dragStartY} to ${dragEndX},${dragEndY} with ${button} button. The screen shows the final cursor position.`;
         } catch (error: any) {
             console.error(
                 `[browser_session_cdp] Error dragging for tab ${this.tabId}:`,
@@ -1154,52 +1516,187 @@ export class AgentBrowserSessionCDP {
     }
 
     /**
+     * Ensures an editable element is focused.
+     * 1. Keep current focus if already on an editable element.
+     * 2. If a virtual-cursor position is known, prefer element under that point.
+     * 3. Else pick the visible editable element that is closest to the viewport
+     *    center, preferring larger area on ties.
+     * @private
+     * @returns true when focus is on an editable element, false otherwise.
+     */
+    private async ensureEditableFocused(): Promise<boolean> {
+        const pos = this.cursorPosition; // May be null
+        const { result } = await this.cdpClient!.Runtime.evaluate({
+            expression: `
+                (function(cursorX, cursorY) {
+                    const editable = el => el && (
+                        el.tagName === 'INPUT' ||
+                        el.tagName === 'TEXTAREA' ||
+                        el.isContentEditable
+                    );
+
+                    // 1) Keep current focus if editable
+                    if (editable(document.activeElement)) return true;
+
+                    // 2) Try element at cursor point
+                    if (Number.isFinite(cursorX) && Number.isFinite(cursorY)) {
+                        let el = document.elementFromPoint(cursorX, cursorY);
+                        while (el && !editable(el)) el = el.parentElement;
+                        if (editable(el)) { el.focus(); return true; }
+                    }
+
+                    // 3) Find best visible candidate (closest to center, then bigger)
+                    const cx = window.innerWidth/2, cy = window.innerHeight/2;
+                    const candidates = [...document.querySelectorAll('input,textarea,[contenteditable],[contenteditable=""],[contenteditable="true"]')]
+                        .filter(n => editable(n) &&
+                                n.offsetWidth > 0 &&
+                                n.offsetHeight > 0 &&
+                                getComputedStyle(n).visibility !== 'hidden' &&
+                                getComputedStyle(n).display !== 'none')
+                        .map(n => {
+                            const r = n.getBoundingClientRect();
+                            const dx = r.left + r.width/2 - cx;
+                            const dy = r.top + r.height/2 - cy;
+                            return {
+                                node: n,
+                                dist: dx*dx + dy*dy,
+                                area: r.width * r.height
+                            };
+                        })
+                        .sort((a, b) => a.dist - b.dist || b.area - a.area);
+
+                    if (candidates.length) {
+                        candidates[0].node.focus();
+                        return true;
+                    }
+                    return false;
+                })(${pos?.x ?? 'undefined'}, ${pos?.y ?? 'undefined'})
+            `,
+            returnByValue: true,
+            awaitPromise: true,
+        });
+        return Boolean(result?.value);
+    }
+
+    /**
      * Simulates typing text into the currently focused element in the page.
      * Handles newline characters ('\n') by simulating an 'Enter' key press.
+     * First checks if an editable element has focus, or tries to focus one.
+     * Optimized for different text lengths:
+     * - Short text (≤20 chars): Types character by character for natural feel
+     * - Medium text (≤1000 chars): Types in small chunks for better performance while maintaining reliability
+     * - Long text (>1000 chars): Uses a direct value insertion method for instant typing
+     *
      * @param text The text string to type.
      * @returns A promise resolving to a success or error message string.
      */
     async type(text: string): Promise<string> {
         await this.ensureInitialized();
+
+        // First ensure there's an editable element focused
+        if (!(await this.ensureEditableFocused())) {
+            return 'Error typing text: no editable element focused.';
+        }
+
         // Normalize line endings to '\n'.
         const normalizedText = text.replace(/\r\n/g, '\n');
         console.log(
             `[browser_session_cdp] Tab ${this.tabId}: Typing text (length ${normalizedText.length}): "${normalizedText.substring(0, 50)}${normalizedText.length > 50 ? '...' : ''}"`
         );
+
         try {
             const client = this.cdpClient!;
-            // Small delay to allow element focus to settle.
-            await new Promise(resolve => setTimeout(resolve, 50));
 
-            // Process each character in the text.
-            for (const char of normalizedText) {
-                if (char === '\n') {
-                    // Simulate Enter key press for newline characters.
-                    await client.Input.dispatchKeyEvent({
-                        type: 'keyDown',
-                        key: 'Enter',
-                        code: 'Enter',
-                        windowsVirtualKeyCode: 13,
-                        text: '\r',
-                    }); // Send key down
-                    await new Promise(resolve => setTimeout(resolve, 20)); // Brief pause
-                    await client.Input.dispatchKeyEvent({
-                        type: 'keyUp',
-                        key: 'Enter',
-                        code: 'Enter',
-                        windowsVirtualKeyCode: 13,
-                    }); // Send key up
-                } else {
-                    // For regular characters, use Input.insertText for better reliability than simulating key events.
-                    await client.Input.insertText({ text: char });
+            // Helper functions
+            const sleep = (ms: number) =>
+                new Promise(resolve => setTimeout(resolve, ms));
+            const pressEnter = async () => {
+                await client.Input.dispatchKeyEvent({
+                    type: 'keyDown',
+                    key: 'Enter',
+                    code: 'Enter',
+                    windowsVirtualKeyCode: 13,
+                    text: '\n',
+                });
+                await sleep(20);
+                await client.Input.dispatchKeyEvent({
+                    type: 'keyUp',
+                    key: 'Enter',
+                    code: 'Enter',
+                    windowsVirtualKeyCode: 13,
+                });
+            };
+
+            // Strategy constants
+            const SHORT = 20; // Character-by-character threshold
+            const MEDIUM = 1000; // Chunk-based threshold
+            const CHUNK_MEDIUM = 10; // Chunk size for medium text
+            const CHUNK_LONG = 50; // Chunk size for long text fallback
+
+            // Type in chunks helper (used for medium text and long fallback)
+            const typeChunks = async (
+                text: string,
+                chunkSize: number,
+                delay: number
+            ): Promise<void> => {
+                const lines = text.split('\n');
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    // Process line in chunks of specified size
+                    for (let j = 0; j < line.length; j += chunkSize) {
+                        const chunk = line.substring(j, j + chunkSize);
+                        await client.Input.insertText({ text: chunk });
+                        if (delay > 0) {
+                            await sleep(delay);
+                        }
+                    }
+                    // Add Enter between lines (except for the last line)
+                    if (i < lines.length - 1) {
+                        await pressEnter();
+                    }
+                    // Brief delay between lines
+                    await sleep(10);
                 }
-                // Small delay between characters/actions for more natural simulation.
-                await new Promise(resolve => setTimeout(resolve, 30));
-            }
-            // Small delay after typing finishes.
-            await new Promise(resolve => setTimeout(resolve, 100));
+            };
 
-            return `Successfully typed text (length ${normalizedText.length})`;
+            let strategy = '';
+
+            // Choose typing strategy based on text length
+            if (normalizedText.length <= SHORT) {
+                // For short text: use character-by-character approach for natural typing
+                strategy = 'character-by-character';
+                console.log(
+                    `[browser_session_cdp] Tab ${this.tabId}: Using ${strategy} typing for short text`
+                );
+
+                for (const char of normalizedText) {
+                    if (char === '\n') {
+                        await pressEnter();
+                    } else {
+                        await client.Input.insertText({ text: char });
+                    }
+                    await sleep(20); // Delay between characters
+                }
+            } else if (normalizedText.length <= MEDIUM) {
+                // For medium text: process in small chunks
+                strategy = 'chunk-based';
+                console.log(
+                    `[browser_session_cdp] Tab ${this.tabId}: Using ${strategy} typing for medium text`
+                );
+                await typeChunks(normalizedText, CHUNK_MEDIUM, 5);
+            } else {
+                // For long text: attempt direct insertion first, fallback to chunks
+                strategy = 'large chunk-based';
+                console.log(
+                    `[browser_session_cdp] Tab ${this.tabId}: Attempting direct value insertion for long text`
+                );
+                await typeChunks(normalizedText, CHUNK_LONG, 1);
+            }
+
+            // Small delay after typing finishes.
+            await sleep(100);
+
+            return `Successfully typed ${normalizedText.length} chars using ${strategy} strategy`;
         } catch (error: any) {
             console.error(
                 `[browser_session_cdp] Error typing text for tab ${this.tabId}:`,
@@ -1447,12 +1944,11 @@ export class AgentBrowserSessionCDP {
                             action.y
                         );
                         break;
-                    case 'click_at':
-                        result = await this.click_at(
-                            action.x,
-                            action.y,
-                            action.button
-                        );
+                    case 'move':
+                        result = await this.move(action.x, action.y);
+                        break;
+                    case 'click':
+                        result = await this.click(action.button, action.event);
                         break;
                     case 'drag':
                         result = await this.drag(

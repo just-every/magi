@@ -29,6 +29,7 @@
         "bootstrap-icons": "^1.11.3",
         "child_process": "^1.0.2",
         "chrome-remote-interface": "^0.33.3",
+        "config": "^3.3.12",
         "dockerode": "^4.0.4",
         "dotenv": "^16.4.7",
         "ef-infinite-canvas": "^0.6.7",

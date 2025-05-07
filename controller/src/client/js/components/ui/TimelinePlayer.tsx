@@ -13,8 +13,16 @@ import '../../../css/components/timeline-player.css'; // Import from centralized
 export interface TimelinePoint {
     time: number; // seconds (monotonic, ascending preferred but not required)
     screenshot: string; // full-size image (data URL or remote URL)
-    thumbnail?: string; // optional smaller preview shown on hover
+    thumbnail: string; // optional smaller preview shown on hover
     url: string; // url displayed in the header bar
+    viewport: {
+        // Optional viewport rectangle for cropping/highlighting
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+    };
+    cursor: { x: number; y: number, button?: 'none' | 'left' | 'middle' | 'right' };
 }
 
 interface TimelinePlayerProps {
@@ -62,6 +70,7 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
     // --- Refs ---
     const trackRef = useRef<HTMLDivElement>(null);
     const isDraggingRef = useRef(false); // Ref to track dragging state for listeners
+    const screenshotContainerRef = useRef<HTMLDivElement>(null); // Ref for screenshot container scrolling
 
     // --- Memoized Derived Data ---
     const sortedPoints = useMemo(
@@ -78,7 +87,73 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
         [startTime, endTime]
     );
 
+    // --- Current Item Data ---
+    const currentPoint = useMemo(
+        () =>
+            currentIndex >= 0 && currentIndex < sortedPoints.length
+                ? sortedPoints[currentIndex]
+                : null,
+        [currentIndex, sortedPoints]
+    );
+
+    // Helper function to calculate scaling and perform scrolling
+    const calculateAndScroll = (
+        container: HTMLDivElement,
+        img: HTMLImageElement,
+        point: TimelinePoint
+    ) => {
+        const containerHeight = container.clientHeight;
+
+        // Get original dimensions from viewport or fallback to natural image dimensions
+        const naturalHeight = point.viewport?.height ?? img.naturalHeight;
+
+        // Get actual displayed height after CSS scaling
+        const displayedHeight = img.clientHeight || containerHeight;
+
+        // Calculate scale factor between original and displayed dimensions
+        const scale = displayedHeight / naturalHeight;
+
+        // Apply scaling to cursor position
+        const displayedY = point.cursor.y * scale;
+
+        // Calculate ideal scroll position to center cursor
+        // Subtract half the container height to center the cursor vertically
+        const targetScrollTop = Math.max(0, displayedY - (containerHeight / 2));
+
+        // Scroll the container to center the cursor
+        container.scrollTo({
+            top: targetScrollTop,
+            behavior: 'smooth'
+        });
+    };
+
     // --- Effects ---
+
+    // Effect to center cursor in view when currentPoint changes
+    useEffect(() => {
+        if (!currentPoint || !screenshotContainerRef.current) return;
+
+        // Get cursor position from current point
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { x, y } = currentPoint.cursor; // x extracted for reference but only y is used for vertical centering
+
+        // Get container dimensions
+        const container = screenshotContainerRef.current;
+        const img = container.querySelector('img');
+        if (!img) return;
+
+        // Wait for the image to be fully loaded to get accurate dimensions
+        if (!img.complete) {
+            const handleImageLoad = () => {
+                calculateAndScroll(container, img, currentPoint);
+                img.removeEventListener('load', handleImageLoad);
+            };
+            img.addEventListener('load', handleImageLoad);
+            return;
+        }
+
+        calculateAndScroll(container, img, currentPoint);
+    }, [currentPoint]);
 
     // Effect to initialize or update state when points array changes (Live follow logic)
     useEffect(() => {
@@ -321,15 +396,6 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
     const handleTrackMouseLeave = () => setHoverIndex(null);
     const toggleCollapse = () => setCollapsed(c => !c);
 
-    // --- Current Item Data ---
-    const currentPoint = useMemo(
-        () =>
-            currentIndex >= 0 && currentIndex < sortedPoints.length
-                ? sortedPoints[currentIndex]
-                : null,
-        [currentIndex, sortedPoints]
-    );
-
     // --- Render Calculations ---
     const progressPercentage = timeToPercentage(currentTime);
 
@@ -375,7 +441,7 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
             {!collapsed && (
                 <>
                     {/* --- Screenshot Area (Bootstrap) --- */}
-                    <div className="screenshot-container position-relative border-start border-end bg-white">
+                    <div ref={screenshotContainerRef} className="screenshot-container position-relative border-start border-end bg-white">
                         {currentPoint ? (
                             <img
                                 key={currentPoint.time}

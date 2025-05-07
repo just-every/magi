@@ -9,6 +9,7 @@
  */
 import { ServerManager } from './managers/server_manager';
 import { initColorManager } from './managers/color_manager';
+import { ensureMigrations } from './utils/db_migrations';
 
 /**
  * Initialize and start the MAGI System server
@@ -18,6 +19,10 @@ async function main(): Promise<void> {
     if (!process.env.OPENAI_API_KEY) {
         console.warn('\n⚠ OPENAI_API_KEY not set. Voice disabled.\n');
     }
+
+    // Run database migrations before starting the server
+    await ensureMigrations();
+
     // Initialize color manager
     initColorManager();
 

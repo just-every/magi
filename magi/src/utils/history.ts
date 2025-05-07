@@ -15,6 +15,8 @@ import {
 } from '../types/shared-types.js';
 import { setDelayInterrupted } from './thought_utils.js';
 import { formatHistoryForSummary, createSummary } from './summary_utils.js';
+import { truncateLargeValues } from './file_utils.js';
+import { readableTime } from './date_tools.js';
 
 const COMPACT_TOKENS_AT = 50000;
 
@@ -312,6 +314,7 @@ async function compactHistory(): Promise<void> {
         const newMessages: ResponseInput = [];
         // Add the summary message first
         newMessages.push({
+            type: 'message',
             role: 'system',
             content: `Summary of previous messages:\n\n${summary}`,
         });
@@ -354,8 +357,14 @@ export async function addHistory(
         | ResponseOutputMessage
         | ResponseInputFunctionCall
         | ResponseInputFunctionCallOutput,
-    thread?: ResponseInput
+    thread?: ResponseInput,
+    model?: string
 ): Promise<void> {
+    message.timestamp = new Date().getTime(); // Add timestamp to the message
+    if (model) {
+        message.model = model;
+    }
+
     if (thread) {
         // If a thread is provided, add the message to that thread
         thread.push(message);
@@ -439,6 +448,7 @@ export async function addMonologue(
 ): Promise<void> {
     return addHistory(
         {
+            type: 'message',
             role: 'user',
             content: `${aiName} thoughts: ${removePrefix(content)}`,
         },
@@ -451,7 +461,8 @@ export async function addMonologue(
  */
 export async function addHumanMessage(
     content: string,
-    thread?: ResponseInput
+    thread?: ResponseInput,
+    source?: string
 ): Promise<void> {
     // Interrupt any active delay
     setDelayInterrupted(true);
@@ -459,8 +470,9 @@ export async function addHumanMessage(
     const person = process.env.YOUR_NAME || 'User';
     return addHistory(
         {
+            type: 'message',
             role: 'developer',
-            content: `${person} said:\n${content}`,
+            content: `${source || person} said:\n${content}`,
         },
         thread
     );
@@ -478,11 +490,71 @@ export async function addSystemMessage(
 
     return addHistory(
         {
+            type: 'message',
             role: 'developer',
             content: `System update: ${content}`,
         },
         thread
     );
+}
+
+/**
+ * Format history messages for display, including readable timestamps and truncated images
+ *
+ * @param history Array of history messages to format
+ * @returns JSON string representation of the messages with timestamps and truncated images
+ */
+export function describeHistoryMessages(history: ResponseInput): string {
+    const timeNow = new Date().getTime();
+    return JSON.stringify(
+        history.map(item => {
+            const result: any = truncateLargeValues({ ...item });
+            if (item.timestamp) {
+                result.timestamp =
+                    readableTime(timeNow - item.timestamp) + ' ago';
+            }
+            return result;
+        }),
+        null,
+        2
+    ).trim();
+}
+
+export function describeHistory(
+    count: number,
+    messages?: ResponseInput
+): ResponseInput {
+    messages = messages || [];
+
+    const history = getHistory();
+
+    // Only add initial input if history has at least one message
+    if (history.length > 0) {
+        messages.push({
+            type: 'message',
+            role: 'user',
+            content: `Initial Command: ${describeHistoryMessages([history[0]])}`,
+        });
+    }
+
+    // For recent history, ensure we don't include history[0] and handle edge cases
+    if (history.length > 1) {
+        // Get recent messages excluding the first one
+        // If history is smaller than or equal to count+1, this will get all except history[0]
+        // If history is more than count+1 messages, this will get the count most recent
+        const recentMessages =
+            history.length <= count + 1
+                ? history.slice(1)
+                : history.slice(-count);
+
+        messages.push({
+            type: 'message',
+            role: 'user',
+            content: `Recent History (${recentMessages.length} out of ${history.length} total): ${describeHistoryMessages(recentMessages)}`,
+        });
+    }
+
+    return messages;
 }
 
 /**

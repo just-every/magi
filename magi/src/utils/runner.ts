@@ -18,17 +18,11 @@ import type {
     ResponseInputFunctionCallOutput,
     ResponseInputMessage,
     ResponseThinkingMessage,
-    ResponseOutputMessage,
     StreamEventType,
-    LLMResponse,
     ErrorEvent,
 } from '../types/shared-types.js';
 import { Agent } from './agent.js';
-import {
-    getModelProvider,
-    getProviderFromModel,
-    isProviderKeyValid,
-} from '../model_providers/model_provider.js';
+import { getModelProvider } from '../model_providers/model_provider.js';
 import {
     findModel,
     MODEL_CLASSES,
@@ -38,17 +32,11 @@ import {
 import { getModelFromClass } from '../model_providers/model_provider.js';
 import { processToolCall } from './tool_call.js';
 import { capitalize } from './llm_utils.js';
-import { getCommunicationManager } from './communication.js';
+import { getCommunicationManager, sendComms } from './communication.js';
 import { isPaused, sleep } from './communication.js';
-import {
-    mechState,
-    incrementLLMRequestCount,
-    getModelScore,
-} from './mech_state.js';
-import { spawnMetaThought } from './meta_cognition.js';
+import { mechState, getModelScore } from './mech_state.js';
 
 const EVENT_TIMEOUT_MS = 300000; // 5 min timeout for events
-const ALLOW_DIVERSE_ENSEMBLE = false; // Flag to enable diverse ensemble generation
 
 // Define a specific error type for clarity
 class TimeoutError extends Error {
@@ -57,32 +45,6 @@ class TimeoutError extends Error {
         this.name = 'TimeoutError';
     }
 }
-
-const DEFAULT_JUDGE_PROMPT = `
-You are evaluating a response to the following question/task:
-
-Question/Task: {question}
-
-Response:
-{response}
-
-Rate this response on a scale of 0-100 based on the following criteria:
-1. Correctness: Is the information accurate and the reasoning valid?
-2. Completeness: Does it fully address all aspects of the question/task?
-3. Clarity: Is the response well-structured and easy to understand?
-4. Relevance: Is the content directly relevant to the question/task?
-
-Provide ONLY a numerical score between 0-100. Do not include any explanation.
-Score:`;
-const DEFAULT_REFINEMENT_PROMPT = `Original Question: {question}
-
-Initial Winning Response:
-{initial_response}
-
-Alternative High-Scoring Responses:
-{alternatives}
-
-Instructions: Refine the 'Initial Winning Response' based on the 'Original Question'. Incorporate any superior elements, correct inaccuracies, or add missing information found in the 'Alternative High-Scoring Responses'. Ensure the final response is coherent, accurate, complete, and directly addresses the question. Output *only* the refined response text, ready for the user.`;
 
 /**
  * Wraps an async generator stream to add inactivity timeout detection.
@@ -174,589 +136,6 @@ async function* createTimeoutProxyStream<T>(
  */
 export class Runner {
     /**
-     * Helper function to run the diverse ensemble with LLM-as-Judge and optional refinement.
-     * * Generates multiple responses, judges them, selects a winner via weighted voting,
-     * and optionally refines the winner using other top responses before returning.
-     */
-    private static async runDiverseEnsemble(
-        agent: Agent,
-        messages: ResponseInput,
-        ensembleSettings: {
-            samples: number;
-            temperature: number; // Temperature for Softmax normalization of judge scores
-            judgeClass?: ModelClassID;
-            judgePrompt?: string;
-            modelPool?: string[];
-            enableRefinement?: boolean; // <-- New flag
-            refinementModel?: string; // Optional model for refinement
-            refinementPrompt?: string; // Optional custom prompt for refinement
-        }
-    ): Promise<{
-        response: LLMResponse | null;
-        events: StreamingEvent[];
-        error?: string;
-    }> {
-        // Destructure settings, including new refinement flags
-        const {
-            samples: m,
-            temperature: tempT,
-            judgePrompt,
-            modelPool,
-            enableRefinement = false, // Default refinement to false
-            refinementModel: customRefinementModel,
-            refinementPrompt: customRefinementPrompt,
-        } = ensembleSettings;
-
-        const judgePromptTemplate = judgePrompt || DEFAULT_JUDGE_PROMPT;
-        const refinementPromptTemplate =
-            customRefinementPrompt || DEFAULT_REFINEMENT_PROMPT;
-        const comm = getCommunicationManager();
-
-        // Helper function to check if a message has role and content properties
-        const isMessageWithContent = (
-            msg: ResponseInputItem
-        ): msg is
-            | ResponseInputMessage
-            | ResponseOutputMessage
-            | ResponseThinkingMessage => {
-            return (
-                typeof msg === 'object' &&
-                msg !== null &&
-                'role' in msg &&
-                'content' in msg
-            );
-        };
-
-        // Get the original question/task from messages
-        const userMsg = messages.find(
-            msg => isMessageWithContent(msg) && msg.role === 'user'
-        );
-        const msgWithContent = userMsg as
-            | (
-                  | ResponseInputMessage
-                  | ResponseOutputMessage
-                  | ResponseThinkingMessage
-              )
-            | undefined;
-        const questionMessage = msgWithContent
-            ? msgWithContent.content
-            : undefined;
-        let question = 'Unknown question';
-
-        // Extract question text (handling string or array content)
-        if (typeof questionMessage === 'string') {
-            question = questionMessage;
-        } else if (Array.isArray(questionMessage)) {
-            const textParts: string[] = [];
-            for (const item of questionMessage) {
-                if (
-                    typeof item === 'object' &&
-                    item !== null &&
-                    'text' in item &&
-                    typeof item.text === 'string'
-                ) {
-                    textParts.push(item.text);
-                }
-            }
-            if (textParts.length > 0) {
-                question = textParts.join(' ');
-            }
-        }
-
-        // Step 1: Model Selection - Select m different models
-        console.log(`[Ensemble] Selecting ${m} models for diverse ensemble...`);
-        const selectedModels: string[] = [];
-
-        // --- Model Selection Logic (simplified for brevity - assume it works as before) ---
-        // Priority: modelPool -> agent.modelClass -> standard
-        // Ensure isProviderKeyValid checks are performed
-        const potentialModels = [
-            ...(modelPool || []),
-            ...((agent.modelClass &&
-                MODEL_CLASSES[agent.modelClass as keyof typeof MODEL_CLASSES]
-                    ?.models) ||
-                []),
-            ...(MODEL_CLASSES['standard']?.models || []),
-        ];
-        const uniquePotentialModels = [...new Set(potentialModels)];
-
-        for (const model of uniquePotentialModels) {
-            if (selectedModels.length >= m) break;
-            const provider = getProviderFromModel(model);
-            if (isProviderKeyValid(provider)) {
-                selectedModels.push(model);
-            }
-        }
-        // --- End Simplified Model Selection ---
-
-        if (selectedModels.length === 0) {
-            return {
-                response: null,
-                events: [],
-                error: 'No valid models available for ensemble generation',
-            };
-        }
-        console.log(`[Ensemble] Selected models: ${selectedModels.join(', ')}`);
-
-        // Step 2: Parallel Generation - Generate responses from each selected model
-        console.log('[Ensemble] Generating responses in parallel...');
-        const generateSingleResponse = async (
-            modelId: string
-        ): Promise<{
-            model: string;
-            response: LLMResponse | null;
-            error?: string;
-        }> => {
-            try {
-                const provider = getModelProvider(modelId);
-                const streamWithTimeout = provider.createResponseStream(
-                    modelId,
-                    messages,
-                    agent
-                );
-                let content = '';
-                let toolCalls: ToolCall[] | undefined = undefined;
-
-                for await (const event of streamWithTimeout) {
-                    if (event.type === 'cost_update') {
-                        comm.send(event); // Always send cost update events
-                    }
-                    if (
-                        event.type === 'message_delta' ||
-                        event.type === 'message_complete'
-                    ) {
-                        const messageEvent = event as MessageEvent;
-                        if (messageEvent.content) {
-                            content += messageEvent.content;
-                        }
-                    } else if (event.type === 'tool_start') {
-                        const toolEvent = event as ToolEvent;
-                        toolCalls = toolEvent.tool_calls;
-                        // If a tool call starts, we likely don't expect further text content for this response
-                        break;
-                    } else if (event.type === 'error') {
-                        const errorEvent = event as ErrorEvent;
-                        throw new Error(errorEvent.error);
-                    }
-                }
-
-                const response: LLMResponse = {
-                    role: 'assistant',
-                    content: content || null,
-                    tool_calls: toolCalls,
-                };
-                return { model: modelId, response };
-            } catch (error) {
-                console.error(
-                    `[Ensemble] Error generating response from model ${modelId}:`,
-                    error
-                );
-                return {
-                    model: modelId,
-                    response: null,
-                    error:
-                        error instanceof Error ? error.message : String(error),
-                };
-            }
-        };
-
-        const generationResults = await Promise.allSettled(
-            selectedModels.map(model => generateSingleResponse(model))
-        );
-        const successfulGenerations: {
-            model: string;
-            response: LLMResponse;
-            score?: number;
-            normalizedScore?: number;
-        }[] = []; // Added normalizedScore
-
-        generationResults.forEach((result, index) => {
-            if (result.status === 'fulfilled' && result.value.response) {
-                successfulGenerations.push({
-                    model: result.value.model,
-                    response: result.value.response,
-                });
-            } else {
-                const reason =
-                    result.status === 'rejected'
-                        ? result.reason instanceof Error
-                            ? result.reason.message
-                            : String(result.reason)
-                        : result.value.error;
-                console.warn(
-                    `[Ensemble] Model ${selectedModels[index]} failed to generate response: ${reason}`
-                );
-            }
-        });
-
-        if (successfulGenerations.length === 0) {
-            return {
-                response: null,
-                events: [],
-                error: 'All ensemble model generations failed',
-            };
-        }
-        console.log(
-            `[Ensemble] Successfully generated ${successfulGenerations.length} responses`
-        );
-
-        // Step 3: Judging - Use an LLM to judge each response
-        console.log('[Ensemble] Judging responses...');
-        const judgeModel = await getModelFromClass(
-            ensembleSettings.judgeClass ||
-                agent.modelClass ||
-                ('reasoning' as ModelClassID)
-        );
-
-        const judgeResponse = async (generation: {
-            model: string;
-            response: LLMResponse;
-        }): Promise<number> => {
-            try {
-                const responseContent = generation.response.tool_calls
-                    ? `Function Call: ${generation.response.tool_calls.map(call => `${call.function.name}(${JSON.stringify(call.function.arguments)})`).join('\n')}` // Safer argument handling
-                    : generation.response.content || '';
-
-                const judgePromptContent = judgePromptTemplate
-                    .replaceAll('{question}', question)
-                    .replaceAll('{response}', responseContent);
-                const judgeMessages: ResponseInput = [
-                    { role: 'user', content: judgePromptContent },
-                ];
-                const provider = getModelProvider(judgeModel);
-                const judgeStream = provider.createResponseStream(
-                    judgeModel,
-                    judgeMessages,
-                    agent
-                );
-                let judgeOutput = '';
-
-                for await (const event of judgeStream) {
-                    if (event.type === 'cost_update') {
-                        comm.send(event); // Always send cost update events
-                    }
-                    if (
-                        event.type === 'message_delta' ||
-                        event.type === 'message_complete'
-                    ) {
-                        if ((event as MessageEvent).content)
-                            judgeOutput += (event as MessageEvent).content;
-                    } else if (event.type === 'error')
-                        throw new Error((event as ErrorEvent).error);
-                }
-
-                const scoreMatch = judgeOutput.match(/(\d{1,3})/);
-                if (scoreMatch) {
-                    const score = parseInt(scoreMatch[1], 10);
-                    if (score >= 0 && score <= 100) {
-                        console.log(
-                            `[Ensemble] Model ${generation.model} received score: ${score}`
-                        );
-                        return score;
-                    }
-                }
-                console.warn(
-                    `[Ensemble] Could not parse valid score from judge output for model ${generation.model}: "${judgeOutput}"`
-                );
-                return 0;
-            } catch (error) {
-                console.error(
-                    `[Ensemble] Error judging response from model ${generation.model}:`,
-                    error
-                );
-                return 0;
-            }
-        };
-
-        const judgingResults = await Promise.allSettled(
-            successfulGenerations.map(generation => judgeResponse(generation))
-        );
-
-        judgingResults.forEach((result, index) => {
-            if (result.status === 'fulfilled') {
-                successfulGenerations[index].score = result.value;
-            } else {
-                console.warn(
-                    `[Ensemble] Failed to judge response from model ${successfulGenerations[index].model}:`,
-                    result.reason instanceof Error
-                        ? result.reason.message
-                        : String(result.reason)
-                );
-                successfulGenerations[index].score = 0;
-            }
-        });
-
-        // Step 4: Normalization & Voting - Normalize scores and select winner
-        console.log('[Ensemble] Normalizing scores and selecting winner...');
-        const scores = successfulGenerations.map(g => g.score || 0);
-
-        // Softmax calculation (with temperature and stability offset)
-        const maxScore = scores.length > 0 ? Math.max(...scores) : 0;
-        const expScores = scores.map(score =>
-            Math.exp((score - maxScore) / (tempT || 1.0))
-        ); // Use tempT, default to 1 if 0 or undefined
-        const sumExpScores = expScores.reduce((sum, exp) => sum + exp, 0);
-        const normalizedScores =
-            sumExpScores > 0
-                ? expScores.map(exp => exp / sumExpScores)
-                : scores.map(() => 1 / scores.length); // Handle sum=0 case (e.g., all scores 0)
-
-        successfulGenerations.forEach((generation, index) => {
-            generation.normalizedScore = normalizedScores[index]; // Store normalized score
-        });
-
-        const responseGroups: {
-            key: string;
-            responses: typeof successfulGenerations;
-            totalScore: number;
-        }[] = [];
-        const serializeResponse = (response: LLMResponse): string => {
-            if (response.tool_calls && response.tool_calls.length > 0) {
-                // Sort tool calls and arguments for consistent serialization
-                const sortedCalls = response.tool_calls
-                    .map(call => ({
-                        ...call,
-                        function: {
-                            ...call.function,
-                            arguments: JSON.stringify(
-                                JSON.parse(call.function.arguments || '{}'),
-                                Object.keys(
-                                    JSON.parse(call.function.arguments || '{}')
-                                ).sort()
-                            ),
-                        },
-                    }))
-                    .sort((a, b) =>
-                        a.function.name.localeCompare(b.function.name)
-                    );
-                return JSON.stringify(
-                    sortedCalls.map(call => ({
-                        name: call.function.name,
-                        arguments: call.function.arguments,
-                    }))
-                );
-            } else {
-                return response.content?.trim() || ''; // Trim whitespace for comparison
-            }
-        };
-
-        successfulGenerations.forEach(generation => {
-            const key = serializeResponse(generation.response);
-            let group = responseGroups.find(g => g.key === key);
-            if (!group) {
-                group = { key, responses: [], totalScore: 0 };
-                responseGroups.push(group);
-            }
-            group.responses.push(generation);
-            group.totalScore += generation.normalizedScore || 0; // Sum normalized scores
-        });
-
-        responseGroups.sort((a, b) => b.totalScore - a.totalScore);
-
-        const winnerGroup = responseGroups[0];
-        if (!winnerGroup) {
-            return {
-                response: null,
-                events: [],
-                error: 'Failed to determine a winning response group from the ensemble',
-            };
-        }
-
-        // The initial winner is the first response in the highest-scoring group
-        let winningResponse = winnerGroup.responses[0].response;
-        let winningModelId = winnerGroup.responses[0].model; // Keep track of the original winning model
-
-        console.log(
-            `[Ensemble] Initial winner selected with combined score ${winnerGroup.totalScore.toFixed(4)} from model ${winningModelId} (Response key: ${winnerGroup.key.substring(0, 50)}...)`
-        );
-
-        // Step 4.5: Optional Refinement Step
-        if (
-            enableRefinement &&
-            winnerGroup.responses[0].response.content &&
-            !winnerGroup.responses[0].response.tool_calls
-        ) {
-            // Only refine text responses for now
-            console.log(
-                '[Ensemble] Refinement enabled. Attempting to refine the winning response...'
-            );
-
-            // Identify other high-scoring *distinct* responses to use as alternatives
-            const alternativeResponses = responseGroups
-                .slice(1) // Exclude the winning group
-                .filter(group => group.totalScore > 0.05) // Heuristic: only consider groups with some significant score
-                .slice(0, 2) // Take top 2 distinct alternatives
-                .map(group => group.responses[0].response.content || ''); // Get their content
-
-            if (
-                alternativeResponses.length > 0 &&
-                typeof winningResponse.content === 'string'
-            ) {
-                try {
-                    const refinementModel = customRefinementModel || judgeModel; // Use specified, judge, or fallback
-                    console.log(
-                        `[Ensemble] Using refinement model: ${refinementModel}`
-                    );
-
-                    // Format the refinement prompt
-                    const alternativesString = alternativeResponses
-                        .map(
-                            (alt, i) => `Alternative Response ${i + 1}:\n${alt}`
-                        )
-                        .join('\n\n');
-                    const refinementPromptContent = refinementPromptTemplate
-                        .replaceAll('{question}', question)
-                        .replaceAll(
-                            '{initial_response}',
-                            winningResponse.content
-                        )
-                        .replaceAll('{alternatives}', alternativesString);
-
-                    const refinementMessages: ResponseInput = [
-                        { role: 'user', content: refinementPromptContent },
-                    ];
-                    const provider = getModelProvider(refinementModel);
-                    const refinementStream = provider.createResponseStream(
-                        refinementModel,
-                        refinementMessages,
-                        agent
-                    );
-
-                    let refinedContent = '';
-                    for await (const event of refinementStream) {
-                        if (event.type === 'cost_update') {
-                            comm.send(event); // Always send cost update events
-                        }
-                        if (
-                            event.type === 'message_delta' ||
-                            event.type === 'message_complete'
-                        ) {
-                            if ((event as MessageEvent).content)
-                                refinedContent += (event as MessageEvent)
-                                    .content;
-                        } else if (event.type === 'error')
-                            throw new Error((event as ErrorEvent).error);
-                    }
-
-                    if (refinedContent.trim()) {
-                        console.log('[Ensemble] Refinement successful.');
-                        // Create a new response object with the refined content
-                        winningResponse = {
-                            ...winningResponse, // Keep role, potentially other metadata
-                            content: refinedContent.trim(),
-                            tool_calls: undefined, // Ensure tool calls are cleared if we refined text
-                        };
-                        winningModelId = refinementModel; // Update model ID to reflect the refiner
-                    } else {
-                        console.warn(
-                            '[Ensemble] Refinement model returned empty content.'
-                        );
-                    }
-                } catch (error) {
-                    console.error(
-                        '[Ensemble] Error during refinement step:',
-                        error
-                    );
-                    // Fallback to the original winner if refinement fails
-                }
-            } else {
-                console.log(
-                    '[Ensemble] No suitable alternative responses found for refinement or winner was not text.'
-                );
-            }
-        } else if (enableRefinement) {
-            console.log(
-                '[Ensemble] Refinement skipped (not enabled, winner was tool call, or winner had no content).'
-            );
-        }
-
-        // Step 5: Construct output events for the (potentially refined) winning response
-        console.log('[Ensemble] Constructing final output events...');
-        const finalWinningResponse = winningResponse; // Use the potentially updated response
-        const finalModelId = winningModelId; // Use the potentially updated model ID
-        const events: StreamingEvent[] = [];
-
-        events.push({
-            type: 'agent_start',
-            agent: {
-                agent_id: agent.agent_id,
-                name: agent.name,
-                model: finalModelId,
-            },
-        });
-
-        if (
-            finalWinningResponse.tool_calls &&
-            finalWinningResponse.tool_calls.length > 0
-        ) {
-            events.push({
-                type: 'tool_start',
-                agent: {
-                    agent_id: agent.agent_id,
-                    name: agent.name,
-                    model: finalModelId,
-                },
-                tool_calls: finalWinningResponse.tool_calls,
-            });
-        } else if (finalWinningResponse.content) {
-            const message_id = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-            events.push({
-                type: 'message_start',
-                agent: {
-                    agent_id: agent.agent_id,
-                    name: agent.name,
-                    model: finalModelId,
-                },
-                message_id,
-                content: '',
-            });
-            events.push({
-                type: 'message_complete',
-                agent: {
-                    agent_id: agent.agent_id,
-                    name: agent.name,
-                    model: finalModelId,
-                },
-                message_id,
-                content: finalWinningResponse.content,
-            });
-        } else {
-            // Handle case where the winning response somehow has neither content nor tool calls
-            console.warn(
-                '[Ensemble] Winning response has neither content nor tool calls.'
-            );
-            // Optionally add an error event or a minimal message event
-            events.push({
-                type: 'message_start',
-                agent: {
-                    agent_id: agent.agent_id,
-                    name: agent.name,
-                    model: finalModelId,
-                },
-                message_id: `msg-${Date.now()}`,
-                content: '',
-            });
-            events.push({
-                type: 'message_complete',
-                agent: {
-                    agent_id: agent.agent_id,
-                    name: agent.name,
-                    model: finalModelId,
-                },
-                message_id: `msg-${Date.now()}`,
-                content: '',
-            }); // Empty response
-        }
-
-        // Add refinement status to the final output object if needed (optional)
-        // return { response: finalWinningResponse, events, refinement_status: refinementPerformed };
-        return {
-            response: finalWinningResponse,
-            events,
-        };
-    }
-
-    /**
      * Helper function to get the next fallback model, avoiding already tried ones.
      * Special handling for rate-limited models to try paid alternatives.
      */
@@ -813,8 +192,6 @@ export class Runner {
 
     /**
      * Run an agent with streaming responses, including timeout handling and model fallbacks.
-     * If enableDiverseEnsemble is true in modelSettings, this will use multiple models
-     * with an LLM-as-Judge approach.
      */
     static async *runStreamed(
         agent: Agent,
@@ -823,90 +200,16 @@ export class Runner {
     ): AsyncGenerator<StreamingEvent> {
         // Prepare initial messages
         let messages: ResponseInput = [
-            { role: 'developer', content: agent.instructions },
+            { type: 'message', role: 'developer', content: agent.instructions },
             ...conversationHistory,
         ];
         if (input) {
-            messages.push({ role: 'user', content: input });
+            messages.push({ type: 'message', role: 'user', content: input });
         }
 
         // Allow agent onRequest hook
         if (agent.onRequest) {
             [agent, messages] = await agent.onRequest(agent, messages);
-        }
-
-        // Check if diverse ensemble mode is enabled
-        if (
-            ALLOW_DIVERSE_ENSEMBLE &&
-            agent.modelSettings?.enableDiverseEnsemble
-        ) {
-            agent.modelSettings = agent.modelSettings || {};
-            // Get ensemble settings with defaults
-            const ensembleSettings = {
-                samples: agent.modelSettings.ensembleSamples || 3,
-                temperature: agent.modelSettings.ensembleTemperature || 1.0,
-                judgeClass:
-                    agent.modelSettings.ensembleJudgeClass ||
-                    (agent.modelClass === ('reasoning' as ModelClassID)
-                        ? agent.modelClass
-                        : ('standard' as ModelClassID)),
-                judgePrompt: agent.modelSettings.ensembleJudgePrompt,
-                modelPool: agent.modelSettings.ensembleModelPool,
-                enableRefinement: agent.modelSettings.enableRefinement || false,
-            };
-
-            /*if(agent.verification === 'advanced') {
-				// Force advanced verification settings
-				if(ensembleSettings.samples < 4) ensembleSettings.samples = 4;
-				ensembleSettings.judgeClass = 'reasoning' as ModelClassID;
-				ensembleSettings.enableRefinement = true;
-			}*/
-
-            console.log(
-                `[Runner] Using diverse ensemble with ${ensembleSettings.samples} models and judge model ${ensembleSettings.judgeClass || '(auto)'}`
-            );
-
-            try {
-                // Run the diverse ensemble and get the events for the winning model/response
-                const ensembleResult = await this.runDiverseEnsemble(
-                    agent,
-                    messages,
-                    ensembleSettings as any
-                );
-
-                // Handle errors
-                if (ensembleResult.error) {
-                    console.error(
-                        `[Runner] Ensemble error: ${ensembleResult.error}`
-                    );
-                    yield {
-                        type: 'error',
-                        agent: agent.export(),
-                        error: ensembleResult.error,
-                    };
-                    // Fall back to standard execution below
-                } else if (ensembleResult.events.length > 0) {
-                    // Yield all the events from the winning model/response
-                    for (const event of ensembleResult.events) {
-                        yield event;
-                    }
-                    // Success - exit the generator
-                    return;
-                }
-                // If we reach here, the ensemble didn't return valid events - fall back to standard execution
-                console.log(
-                    '[Runner] Ensemble did not return valid events, falling back to standard execution'
-                );
-            } catch (error) {
-                console.error('[Runner] Error in ensemble execution:', error);
-                yield {
-                    type: 'error',
-                    agent: agent.export(),
-                    error:
-                        error instanceof Error ? error.message : String(error),
-                };
-                // Fall back to standard execution below
-            }
         }
 
         // Standard execution path (either ensemble is disabled or it failed)
@@ -981,26 +284,21 @@ export class Runner {
                     };
                 }
 
-                // Increment the LLM request counter and check if meta-cognition should be triggered
-                const { shouldTriggerMeta } = incrementLLMRequestCount();
-
+                sendComms({
+                    type: 'agent_status',
+                    agent_id: agent.agent_id,
+                    status: 'started_stream',
+                    meta_data: {
+                        model: selectedModel,
+                    },
+                });
+                agent.model = selectedModel; // Update agent's selected model
                 // Create the original stream from the provider
                 const originalStream = provider.createResponseStream(
                     selectedModel,
                     sequencedMessages,
                     agent
                 );
-
-                // If meta-cognition should be triggered, do it asynchronously (don't await)
-                if (shouldTriggerMeta) {
-                    console.log(
-                        `[MECH] Triggering meta-cognition after ${mechState.llmRequestCount} LLM requests`
-                    );
-                    // Don't await - let it run in background while the main response is processing
-                    spawnMetaThought().catch(error => {
-                        console.error('[MECH] Error in meta-cognition:', error);
-                    });
-                }
 
                 // Wrap the stream with our timeout proxy
                 const streamWithTimeout = createTimeoutProxyStream(
@@ -1018,8 +316,7 @@ export class Runner {
                     streamEvent.agent = streamEvent.agent
                         ? streamEvent.agent
                         : agent.export();
-                    if (!streamEvent.agent.model)
-                        streamEvent.agent.model = selectedModel;
+                    streamEvent.agent.model = selectedModel;
 
                     // Check for errors explicitly yielded *by the stream content*
                     if (streamEvent.type === 'error') {
@@ -1041,6 +338,15 @@ export class Runner {
                 console.log(
                     `[Runner] Model ${selectedModel} completed successfully.`
                 );
+
+                sendComms({
+                    type: 'agent_status',
+                    agent_id: agent.agent_id,
+                    status: 'stream_completed',
+                    meta_data: {
+                        model: selectedModel,
+                    },
+                });
                 return; // Success: exit the generator function normally.
             } catch (error) {
                 // --- Catch block for the current model attempt ---
@@ -1088,6 +394,16 @@ export class Runner {
                     lastModelEntry
                 ); // Find the next model to try
 
+                sendComms({
+                    type: 'agent_status',
+                    agent_id: agent.agent_id,
+                    status: 'stream_error',
+                    meta_data: {
+                        model: selectedModel,
+                        error: error,
+                    },
+                });
+
                 if (!selectedModel) {
                     console.error(
                         '[Runner] All models tried or no fallbacks available. Run failed.'
@@ -1124,20 +440,36 @@ export class Runner {
         conversationHistory: ResponseInput = [],
         handlers: ToolCallHandler = {},
         allowedEvents: StreamEventType[] | null = null,
-        toolCallCount = 0 // Track the number of tool call iterations across recursive calls
+        toolCallCount = 0, // Track the number of tool call iterations across recursive calls
+        communicationManager?: any // Add optional communicationManager parameter
     ): Promise<string> {
         let fullResponse = '';
-        let thinkingResponse = '';
-        let thinkingSignature = '';
         let collectedToolCalls: ToolCall[] = [];
-        const collectedToolResults: { call_id: string; output: string }[] = [];
+        const collectedToolResults: {
+            id?: string;
+            call_id: string;
+            output: string;
+        }[] = [];
 
         try {
             conversationHistory = [...conversationHistory]; // Clone so that additional messages don't affect the original
 
             const stream = this.runStreamed(agent, input, conversationHistory);
 
-            const comm = getCommunicationManager();
+            // Start with initial messages - convert standard message format to responses format
+            const messageItems: ResponseInput = [...conversationHistory];
+
+            if (input) {
+                // Add the user input message
+                messageItems.push({
+                    type: 'message',
+                    role: 'user',
+                    content: input,
+                });
+            }
+
+            // Use the provided communicationManager if available, otherwise get the global one
+            const comm = communicationManager || getCommunicationManager();
             for await (const event of stream) {
                 // Handle different event types
                 const eventType = event.type as StreamEventType;
@@ -1160,14 +492,36 @@ export class Runner {
                     case 'message_complete': {
                         // Accumulate the message content
                         const message = event as MessageEvent;
+
+                        if (message.thinking_content) {
+                            // Add the assistant's thinking
+                            const thinkingMessage: ResponseThinkingMessage = {
+                                type: 'thinking',
+                                role: 'assistant',
+                                content:
+                                    message.thinking_content &&
+                                    message.thinking_content !== '{empty}'
+                                        ? message.thinking_content
+                                        : '',
+                                signature: message.thinking_signature || '',
+                                thinking_id: message.message_id || '',
+                                status: 'completed',
+                            };
+                            messageItems.push(thinkingMessage);
+                            if (agent.onThinking) {
+                                await agent.onThinking(thinkingMessage);
+                            }
+                        }
+
                         if (message.content) {
                             fullResponse = message.content;
-                        }
-                        if (message.thinking_content) {
-                            thinkingResponse = message.thinking_content;
-                        }
-                        if (message.thinking_signature) {
-                            thinkingSignature = message.thinking_signature;
+                            // Add the assistant's response
+                            messageItems.push({
+                                type: 'message',
+                                role: 'assistant',
+                                content: message.content,
+                                status: 'completed',
+                            });
                         }
                         break;
                     }
@@ -1218,11 +572,27 @@ export class Runner {
                         // Process all tool calls in parallel, catching signals
                         let toolResult: string | null = null; // Initialize to null
                         try {
+                            sendComms({
+                                type: 'agent_status',
+                                agent_id: agent.agent_id,
+                                status: 'tool_start',
+                                meta_data: {
+                                    name: toolEvent.tool_calls[0].function.name,
+                                },
+                            });
                             toolResult = await processToolCall(
                                 toolEvent,
                                 agent,
                                 handlers
                             );
+                            sendComms({
+                                type: 'agent_status',
+                                agent_id: agent.agent_id,
+                                status: 'tool_done',
+                                meta_data: {
+                                    name: toolEvent.tool_calls[0].function.name,
+                                },
+                            });
                         } catch (error) {
                             // Handle other tool execution errors
                             console.error(
@@ -1253,7 +623,10 @@ export class Runner {
                                 // Associate result with the tool call ID
                                 if (i < toolEvent.tool_calls.length) {
                                     collectedToolResults.push({
-                                        call_id: toolEvent.tool_calls[i].id,
+                                        id: toolEvent.tool_calls[i].id,
+                                        call_id:
+                                            toolEvent.tool_calls[i].call_id ||
+                                            toolEvent.tool_calls[i].id,
                                         output:
                                             typeof result === 'string'
                                                 ? result
@@ -1271,7 +644,10 @@ export class Runner {
                             // Associate with the first tool call
                             if (toolEvent.tool_calls.length > 0) {
                                 collectedToolResults.push({
-                                    call_id: toolEvent.tool_calls[0].id,
+                                    id: toolEvent.tool_calls[0].id,
+                                    call_id:
+                                        toolEvent.tool_calls[0].call_id ||
+                                        toolEvent.tool_calls[0].id,
                                     output: resultStr,
                                 });
                             }
@@ -1388,64 +764,27 @@ export class Runner {
                 // Create tool call messages for the next model request
                 let toolCallMessages: ResponseInput = [];
 
-                // Start with initial messages - convert standard message format to responses format
-                const messageItems: ResponseInput = [...conversationHistory];
-
-                if (input) {
-                    // Add the user input message
-                    messageItems.push({
-                        type: 'message',
-                        role: 'user',
-                        content: input,
-                    });
-                }
-
-                if (thinkingResponse) {
-                    // Add the assistant's thinking
-                    const thinkingMessage: ResponseThinkingMessage = {
-                        type: 'thinking',
-                        role: 'assistant',
-                        content: thinkingResponse,
-                        signature: thinkingSignature,
-                        status: 'completed',
-                    };
-                    messageItems.push(thinkingMessage);
-                    if (agent.onThinking) {
-                        await agent.onThinking(thinkingMessage);
-                    }
-                }
-
-                if (fullResponse) {
-                    // Add the assistant's response
-                    messageItems.push({
-                        type: 'message',
-                        role: 'assistant',
-                        content: fullResponse,
-                        status: 'completed',
-                    });
-                }
-
                 // Add the function calls
                 for (const toolCall of collectedToolCalls) {
                     // Skip adding to messageItems if the agent has onToolCall handler
                     // The agent's onToolCall will use addHistory instead
                     messageItems.push({
                         type: 'function_call',
-                        call_id: toolCall.id,
+                        id: toolCall.id,
+                        call_id: toolCall.call_id || toolCall.id,
                         name: toolCall.function.name,
                         arguments: toolCall.function.arguments,
                     });
 
                     // Add the corresponding tool result
                     const result = collectedToolResults.find(
-                        r => r.call_id === toolCall.id
+                        r => r.call_id === toolCall.call_id || toolCall.id
                     );
                     if (result) {
-                        // Skip adding to messageItems if the agent has onToolResult handler
-                        // The agent's onToolResult will use addHistory instead
                         messageItems.push({
                             type: 'function_call_output',
-                            call_id: toolCall.id,
+                            id: toolCall.id,
+                            call_id: toolCall.call_id || toolCall.id,
                             name: toolCall.function.name,
                             output: result.output,
                         });
@@ -1535,6 +874,7 @@ export class Runner {
             if (agent.onResponse) {
                 fullResponse = await agent.onResponse(fullResponse);
             }
+
             agent.model = undefined; // Allow a new model to be selected for the next run
 
             return fullResponse;
@@ -1563,7 +903,9 @@ export class Runner {
         maxRetries: number = 3,
         maxTotalRetries: number = 10
     ): Promise<string> {
-        const history: ResponseInput = [{ role: 'user', content: input }];
+        const history: ResponseInput = [
+            { type: 'message', role: 'user', content: input },
+        ];
         const lastOutput: Record<string, string> = {};
         let agent_id: string = '';
 
@@ -1794,7 +1136,7 @@ export class Runner {
                     const regularMessage: ResponseInputMessage = {
                         role: 'user',
                         type: 'message',
-                        content: `Tool result (${funcOutput.name}): ${funcOutput.output}`,
+                        content: `Tool result (${funcOutput.name || 'unknown_tool'}): ${funcOutput.output}`, // Added fallback for optional name
                         status: 'completed',
                     };
 
@@ -1820,6 +1162,7 @@ export class Runner {
                     // Assert type now that we've checked it
                     const functionCallMsg =
                         currentMsg as ResponseInputFunctionCall;
+                    const targetId = functionCallMsg.id;
                     const targetCallId = functionCallMsg.call_id;
                     const nextMsgIndex = i + 1;
                     const nextMsg: ResponseInputItem | null =
@@ -1883,6 +1226,7 @@ export class Runner {
                             const errorOutput: ResponseInputFunctionCallOutput =
                                 {
                                     type: 'function_call_output',
+                                    id: targetId,
                                     call_id: targetCallId,
                                     // Use the name from the original function call
                                     name: functionCallMsg.name,

@@ -461,7 +461,7 @@ export class ClineCliProvider implements ModelProvider {
     async *createResponseStream(
         model: string,
         messages: ResponseInput,
-        agent?: Agent
+        agent: Agent
     ): AsyncGenerator<StreamingEvent> {
         // --- Usage Accumulators ---
         let totalInputTokens = 0;
@@ -575,7 +575,12 @@ export class ClineCliProvider implements ModelProvider {
                     }
 
                     // Log the request before sending
-                    log_llm_request('anthropic', model, requestParams);
+                    log_llm_request(
+                        agent.agent_id,
+                        'anthropic',
+                        model,
+                        requestParams
+                    );
 
                     // Track current tool call info
                     let currentToolCall: any = null;

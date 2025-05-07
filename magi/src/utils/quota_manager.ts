@@ -8,49 +8,67 @@ import { ModelProviderID } from '../model_providers/model_data.js';
 import { QuotaUpdateEvent } from '../types/shared-types.js';
 import { sendStreamEvent } from './communication.js';
 
-// Main interface for tracking quota and credit information
-export interface ProviderQuota {
-    provider: ModelProviderID;
+// Interface for tracking model-specific quota information
+export interface ModelSpecificQuota {
+    // Model identifier
+    model: string;
     // Daily limits in tokens
-    dailyLimit: number;
-    dailyUsed: number;
+    dailyTokenLimit: number;
+    dailyTokensUsed: number;
+    // Daily limits in requests
+    dailyRequestLimit: number;
+    dailyRequestsUsed: number;
     // Rate limits
     rateLimit?: {
         requestsPerMinute: number;
         tokensPerMinute: number;
-        requestsPerDay: number;
     };
-    // Monthly credit balances (in USD)
-    creditBalance?: number;
-    creditLimit?: number;
-    // Specific provider information
-    info?: Record<string, any>;
     // Reset dates/tracking
     lastResetDate?: Date;
 }
 
-// Helper for tracking OpenAI free tier quotas
+// Main interface for tracking provider-level quota information
+export interface ProviderQuota {
+    provider: ModelProviderID;
+    // Provider-level limits and credits
+    creditBalance?: number;
+    creditLimit?: number;
+    // Provider-specific information (like OpenAI free tier quotas)
+    info?: Record<string, any>;
+    // Model-specific quotas
+    models: Record<string, ModelSpecificQuota>;
+    // Last reset date for the provider (used to trigger daily reset check)
+    lastResetDate?: Date;
+}
+
+/**
+ * Helper for tracking OpenAI free daily usage quotas.
+ *
+ * - Up to 1 million tokens per day across: gpt-4.5-preview, gpt-4.1, gpt-4o, o1, o3
+ * - Up to 10 million tokens per day across: gpt-4.1-mini, gpt-4.1-nano, gpt-4o-mini, o1-mini, o3-mini, o4-mini
+ */
 interface OpenAIFreeQuota {
-    // 1M GPT-4o/4.5 family tokens per day
+    // 1M tokens/day for main models
     gpt4Family: {
         limit: number;
         used: number;
     };
-    // 10M GPT-4o-mini/o1-mini family tokens per day
+    // 10M tokens/day for mini/nano models
     gptMiniFamily: {
         limit: number;
         used: number;
     };
-    // Models that count against the GPT-4o/4.5 quota
+    // Models that count against the 1M token quota
     gpt4Models: string[];
-    // Models that count against the GPT-4o-mini quota
+    // Models that count against the 10M token quota
     gptMiniModels: string[];
 }
 
 /**
- * QuotaManager class to track and manage API quotas across providers
+ * QuotaManager class to track and manage API quotas across providers and models
  */
 export class QuotaManager {
+    // Main storage structure: provider -> model -> quota
     private quotas: Record<string, ProviderQuota> = {};
 
     // Provider-specific tracking
@@ -64,24 +82,15 @@ export class QuotaManager {
             used: 0,
         },
         // Models counting against the 1M token limit
-        gpt4Models: [
-            'gpt-4.5-preview',
-            'gpt-4.5-preview-2025-02-27',
-            'gpt-4o',
-            'gpt-4o-2024-05-13',
-            'gpt-4o-2024-08-06',
-            'gpt-4o-2024-11-20',
-            'o1-preview-2024-09-12',
-            'o1-2024-12-17',
-        ],
+        gpt4Models: ['gpt-4.5-preview', 'gpt-4.1', 'gpt-4o', 'o1', 'o3'],
         // Models counting against the 10M token limit
         gptMiniModels: [
+            'gpt-4.1-mini',
+            'gpt-4.1-nano',
             'gpt-4o-mini',
-            'gpt-4o-mini-2024-07-18',
             'o1-mini',
-            'o1-mini-2024-09-12',
             'o3-mini',
-            'o3-mini-2025-01-31',
+            'o4-mini',
         ],
     };
 
@@ -90,73 +99,126 @@ export class QuotaManager {
     }
 
     /**
-     * Initialize the quota information for all supported providers
+     * Initialize the quota information for all supported providers and their models
      */
     private initializeProviderQuotas() {
-        // Google/Gemini
+        // Google/Gemini with per-model quotas
         this.quotas['google'] = {
             provider: 'google',
-            dailyLimit: 25, // 25 requests per day for gemini-2.5-pro-exp
-            dailyUsed: 0,
-            rateLimit: {
-                requestsPerMinute: 5,
-                tokensPerMinute: 1000000,
-                requestsPerDay: 25,
+            creditBalance: 0,
+            creditLimit: 0,
+            lastResetDate: new Date(), // Initialize provider reset date
+            models: {
+                // Gemini 2.5 Pro Experimental 03-25
+                'gemini-2.5-pro-exp-03-25': {
+                    model: 'gemini-2.5-pro-exp-03-25',
+                    dailyTokenLimit: 1000000, // 1M tokens per day
+                    dailyTokensUsed: 0,
+                    dailyRequestLimit: 25, // 25 requests per day
+                    dailyRequestsUsed: 0,
+                    rateLimit: {
+                        requestsPerMinute: 5,
+                        tokensPerMinute: 250000, // 250K tokens per minute
+                    },
+                    lastResetDate: new Date(),
+                },
+                // Gemini 2.5 Flash Preview 04-17
+                'gemini-2.5-flash-preview-04-17': {
+                    model: 'gemini-2.5-flash-preview-04-17',
+                    dailyTokenLimit: 0, // No explicit TPD limit, relying on RPD
+                    dailyTokensUsed: 0,
+                    dailyRequestLimit: 500, // 500 requests per day
+                    dailyRequestsUsed: 0,
+                    rateLimit: {
+                        requestsPerMinute: 10,
+                        tokensPerMinute: 250000,
+                    },
+                    lastResetDate: new Date(),
+                },
+                // Gemini 2.0 Flash
+                'gemini-2.0-flash': {
+                    model: 'gemini-2.0-flash',
+                    dailyTokenLimit: 0, // No explicit TPD limit, relying on RPD
+                    dailyTokensUsed: 0,
+                    dailyRequestLimit: 1500, // 1,500 requests per day
+                    dailyRequestsUsed: 0,
+                    rateLimit: {
+                        requestsPerMinute: 15,
+                        tokensPerMinute: 1000000,
+                    },
+                    lastResetDate: new Date(),
+                },
+                // Gemini 2.0 Flash
+                'gemini-2.0-flash-lite': {
+                    model: 'gemini-2.0-flash-lite',
+                    dailyTokenLimit: 0, // No explicit TPD limit, relying on RPD
+                    dailyTokensUsed: 0,
+                    dailyRequestLimit: 1500, // 1,500 requests per day
+                    dailyRequestsUsed: 0,
+                    rateLimit: {
+                        requestsPerMinute: 30,
+                        tokensPerMinute: 1000000,
+                    },
+                    lastResetDate: new Date(),
+                },
             },
-            lastResetDate: new Date(),
         };
 
-        // OpenAI
+        // OpenAI - Uses free tier family quotas
         this.quotas['openai'] = {
             provider: 'openai',
-            dailyLimit: 0, // No generic daily limit, tracking per tier
-            dailyUsed: 0,
-            creditBalance: 150, // $150 credit per month
-            creditLimit: 150,
+            creditBalance: 0,
+            creditLimit: 0,
+            lastResetDate: new Date(), // Initialize provider reset date
             info: {
                 freeQuota: this.openAIFreeQuota,
             },
-            lastResetDate: new Date(),
+            models: {
+                // Note: No default quota needed for OpenAI as family quotas are used.
+            },
         };
 
         // X.AI/Grok
         this.quotas['xai'] = {
             provider: 'xai',
-            dailyLimit: 0,
-            dailyUsed: 0,
             creditBalance: 150, // $150 credit per month
             creditLimit: 150,
-            lastResetDate: new Date(),
-        };
-
-        // Anthropic/Claude
-        this.quotas['anthropic'] = {
-            provider: 'anthropic',
-            dailyLimit: 0,
-            dailyUsed: 0,
-            lastResetDate: new Date(),
-        };
-
-        // DeepSeek
-        this.quotas['deepseek'] = {
-            provider: 'deepseek',
-            dailyLimit: 0,
-            dailyUsed: 0,
-            lastResetDate: new Date(),
+            lastResetDate: new Date(), // Initialize provider reset date
+            models: {
+                // Note: No default quota. Only explicitly listed models (if any) would be tracked.
+            },
         };
     }
 
     /**
-     * Get quota information for a specific provider
+     * Get provider quota information
      */
-    getQuota(provider: ModelProviderID): ProviderQuota {
+    getProviderQuota(provider: ModelProviderID): ProviderQuota {
         return (
             this.quotas[provider] || {
                 provider,
-                dailyLimit: 0,
-                dailyUsed: 0,
+                models: {},
             }
         );
+    }
+
+    /**
+     * Get model-specific quota information
+     * If model doesn't exist, returns null
+     */
+    getModelQuota(
+        provider: ModelProviderID,
+        model: string
+    ): ModelSpecificQuota | null {
+        const providerQuota = this.getProviderQuota(provider);
+
+        // Return the specific model quota if it exists
+        if (providerQuota.models[model]) {
+            return providerQuota.models[model];
+        }
+
+        // Otherwise, return null as no specific quota exists
+        return null;
     }
 
     /**
@@ -174,68 +236,47 @@ export class QuotaManager {
             return true; // Assume quota is available if we don't track it
         }
 
-        const quota = this.quotas[provider];
+        // Get provider quota
+        const providerQuota = this.quotas[provider];
         let significantChange = false;
+        const totalTokens = inputTokens + outputTokens;
 
-        // Check if we need to reset daily counters
+        // Check if daily reset is needed based on provider-level last reset date
         const today = new Date();
         if (
-            quota.lastResetDate &&
-            (today.getUTCDate() !== quota.lastResetDate.getUTCDate() ||
-                today.getUTCMonth() !== quota.lastResetDate.getUTCMonth() ||
-                today.getUTCFullYear() !== quota.lastResetDate.getUTCFullYear())
+            providerQuota.lastResetDate &&
+            (today.getUTCDate() !== providerQuota.lastResetDate.getUTCDate() ||
+                today.getUTCMonth() !==
+                    providerQuota.lastResetDate.getUTCMonth() ||
+                today.getUTCFullYear() !==
+                    providerQuota.lastResetDate.getUTCFullYear())
         ) {
-            // Reset daily counters
-            quota.dailyUsed = 0;
-            quota.lastResetDate = today;
-
-            // Reset OpenAI free tier quotas if applicable
-            if (provider === 'openai' && quota.info?.freeQuota) {
-                quota.info.freeQuota.gpt4Family.used = 0;
-                quota.info.freeQuota.gptMiniFamily.used = 0;
+            // Reset all model-specific quotas for this provider
+            for (const modelKey in providerQuota.models) {
+                const modelQuota = providerQuota.models[modelKey];
+                modelQuota.dailyTokensUsed = 0;
+                modelQuota.dailyRequestsUsed = 0;
+                modelQuota.lastResetDate = today; // Update model's reset date
             }
 
+            // Reset OpenAI free tier family quotas specifically
+            if (provider === 'openai' && providerQuota.info?.freeQuota) {
+                const freeQuota = providerQuota.info
+                    .freeQuota as OpenAIFreeQuota;
+                freeQuota.gpt4Family.used = 0;
+                freeQuota.gptMiniFamily.used = 0;
+            }
+
+            // Update the provider-level last reset date
+            providerQuota.lastResetDate = today;
             significantChange = true; // Daily reset is significant
         }
 
-        // Track general usage
-        const totalTokens = inputTokens + outputTokens;
-        const previousDailyUsed = quota.dailyUsed;
-        quota.dailyUsed += totalTokens;
+        // Track OpenAI free tier usage separately as it's family-based
+        if (provider === 'openai' && providerQuota.info?.freeQuota) {
+            const freeQuota = providerQuota.info.freeQuota as OpenAIFreeQuota;
 
-        // Check if this usage significantly changes our daily usage percentage
-        if (quota.dailyLimit > 0) {
-            const previousPercent = Math.floor(
-                (previousDailyUsed / quota.dailyLimit) * 10
-            ); // Percentage in tenths
-            const currentPercent = Math.floor(
-                (quota.dailyUsed / quota.dailyLimit) * 10
-            );
-
-            if (previousPercent !== currentPercent) {
-                significantChange = true; // 10% increment in usage
-            }
-        }
-
-        // Provider-specific tracking
-        if (provider === 'google') {
-            // Track Gemini rate limits
-            if (model === 'gemini-2.5-pro-exp-03-25') {
-                // Check if we've exceeded daily limit
-                if (quota.dailyUsed >= quota.dailyLimit) {
-                    console.log(
-                        `[QuotaManager] Gemini experimental model daily limit reached: ${quota.dailyUsed} > ${quota.dailyLimit}`
-                    );
-                    significantChange = true; // Exceeding quota is significant
-                    this.sendQuotaUpdate(); // Update immediately when quota is exceeded
-                    return false; // Exceeded quota
-                }
-            }
-        } else if (provider === 'openai' && quota.info?.freeQuota) {
-            // Track OpenAI free tier usage
-            const freeQuota = quota.info.freeQuota as OpenAIFreeQuota;
-
-            // Track GPT-4o/4.5 family usage
+            // Track GPT-4 family usage
             if (freeQuota.gpt4Models.includes(model)) {
                 const prevUsed = freeQuota.gpt4Family.used;
                 freeQuota.gpt4Family.used += totalTokens;
@@ -254,9 +295,19 @@ export class QuotaManager {
                 if (prevPercent !== currPercent) {
                     significantChange = true;
                 }
+
+                // Check if exceeded limit
+                if (freeQuota.gpt4Family.used >= freeQuota.gpt4Family.limit) {
+                    console.log(
+                        `[QuotaManager] OpenAI GPT-4 family daily limit reached: ${freeQuota.gpt4Family.used} > ${freeQuota.gpt4Family.limit}`
+                    );
+                    significantChange = true; // Exceeding quota is significant
+                    this.sendQuotaUpdate(); // Update immediately when quota is exceeded
+                    return false; // Exceeded quota
+                }
             }
 
-            // Track GPT-4o-mini family usage
+            // Track GPT-Mini family usage
             if (freeQuota.gptMiniModels.includes(model)) {
                 const prevUsed = freeQuota.gptMiniFamily.used;
                 freeQuota.gptMiniFamily.used += totalTokens;
@@ -276,6 +327,96 @@ export class QuotaManager {
                 if (prevPercent !== currPercent) {
                     significantChange = true;
                 }
+
+                // Check if exceeded limit
+                if (
+                    freeQuota.gptMiniFamily.used >=
+                    freeQuota.gptMiniFamily.limit
+                ) {
+                    console.log(
+                        `[QuotaManager] OpenAI GPT-Mini family daily limit reached: ${freeQuota.gptMiniFamily.used} > ${freeQuota.gptMiniFamily.limit}`
+                    );
+                    significantChange = true; // Exceeding quota is significant
+                    this.sendQuotaUpdate(); // Update immediately when quota is exceeded
+                    return false; // Exceeded quota
+                }
+            }
+        }
+
+        // Get model-specific quota
+        const modelQuota = this.getModelQuota(provider, model);
+
+        // If no specific quota exists for this model (and it's not OpenAI), assume available
+        if (!modelQuota && provider !== 'openai') {
+            return true;
+        }
+
+        // Track usage only if a specific model quota exists (for non-OpenAI providers)
+        if (modelQuota) {
+            // Track general token usage
+            const previousDailyTokensUsed = modelQuota.dailyTokensUsed;
+            modelQuota.dailyTokensUsed += totalTokens;
+
+            // Track request usage - increment by 1 for each call
+            const previousDailyRequestsUsed = modelQuota.dailyRequestsUsed;
+            modelQuota.dailyRequestsUsed += 1;
+
+            // Check if this usage significantly changes our daily token usage percentage
+            if (modelQuota.dailyTokenLimit > 0) {
+                const previousPercent = Math.floor(
+                    (previousDailyTokensUsed / modelQuota.dailyTokenLimit) * 10
+                ); // Percentage in tenths
+                const currentPercent = Math.floor(
+                    (modelQuota.dailyTokensUsed / modelQuota.dailyTokenLimit) *
+                        10
+                );
+
+                if (previousPercent !== currentPercent) {
+                    significantChange = true; // 10% increment in token usage
+                }
+            }
+
+            // Check if this usage significantly changes our daily request usage percentage
+            if (modelQuota.dailyRequestLimit > 0) {
+                const previousPercent = Math.floor(
+                    (previousDailyRequestsUsed / modelQuota.dailyRequestLimit) *
+                        10
+                ); // Percentage in tenths
+                const currentPercent = Math.floor(
+                    (modelQuota.dailyRequestsUsed /
+                        modelQuota.dailyRequestLimit) *
+                        10
+                );
+
+                if (previousPercent !== currentPercent) {
+                    significantChange = true; // 10% increment in request usage
+                }
+            }
+
+            // Check if we've exceeded daily token limit
+            if (
+                modelQuota.dailyTokenLimit > 0 &&
+                modelQuota.dailyTokensUsed >= modelQuota.dailyTokenLimit
+            ) {
+                console.log(
+                    `[QuotaManager] ${provider} model ${model} daily token limit reached: ${modelQuota.dailyTokensUsed} > ${modelQuota.dailyTokenLimit}`
+                );
+                significantChange = true; // Exceeding quota is significant
+                this.sendQuotaUpdate(); // Update immediately when quota is exceeded
+                return false; // Exceeded quota
+            }
+
+            // Check if we've exceeded daily request limit
+            if (
+                modelQuota.dailyRequestLimit > 0 &&
+                modelQuota.dailyRequestsUsed >= modelQuota.dailyRequestLimit
+            ) {
+                console.log(
+                    `[QuotaManager] ${provider} model ${model} daily request limit reached: ${modelQuota.dailyRequestsUsed} > ${modelQuota.dailyRequestLimit}`
+                );
+                significantChange = true; // Exceeding quota is significant
+                this.sendQuotaUpdate(); // Update immediately when quota is exceeded
+                return false; // Exceeded quota
             }
         }
 
@@ -292,13 +433,24 @@ export class QuotaManager {
      * Returns true if quota is available
      */
     hasQuota(provider: ModelProviderID, model: string): boolean {
-        // Handle specific cases
-        if (provider === 'google' && model === 'gemini-2.5-pro-exp-03-25') {
-            const quota = this.quotas[provider];
-            return quota.dailyUsed < quota.dailyLimit;
+        // First check OpenAI family quotas if applicable
+        if (provider === 'openai') {
+            return this.hasOpenAIFreeQuota(model);
         }
 
-        // Default to true for cases we don't track
+        // For Google and other providers with model-specific quotas
+        const modelQuota = this.getModelQuota(provider, model);
+        if (modelQuota) {
+            // Check both token and request limits if they exist
+            return (
+                (modelQuota.dailyTokenLimit === 0 ||
+                    modelQuota.dailyTokensUsed < modelQuota.dailyTokenLimit) &&
+                (modelQuota.dailyRequestLimit === 0 ||
+                    modelQuota.dailyRequestsUsed < modelQuota.dailyRequestLimit)
+            );
+        }
+
+        // Default to true for cases we don't track (i.e., model not explicitly defined)
         return true;
     }
 
@@ -306,10 +458,10 @@ export class QuotaManager {
      * Check if there's remaining free tier quota for specific OpenAI model families
      */
     hasOpenAIFreeQuota(model: string): boolean {
-        const quota = this.quotas['openai'];
-        if (!quota || !quota.info?.freeQuota) return true;
+        const providerQuota = this.getProviderQuota('openai'); // Use getter
+        if (!providerQuota || !providerQuota.info?.freeQuota) return true;
 
-        const freeQuota = quota.info.freeQuota as OpenAIFreeQuota;
+        const freeQuota = providerQuota.info.freeQuota as OpenAIFreeQuota;
 
         // Check GPT-4o/4.5 family
         if (freeQuota.gpt4Models.includes(model)) {
@@ -328,18 +480,15 @@ export class QuotaManager {
      * Track credit usage for a provider
      */
     trackCreditUsage(provider: ModelProviderID, creditAmount: number): void {
-        if (
-            !this.quotas[provider] ||
-            this.quotas[provider].creditBalance === undefined
-        ) {
+        const providerQuota = this.getProviderQuota(provider); // Use getter
+        if (!providerQuota || providerQuota.creditBalance === undefined) {
             return;
         }
 
-        const quota = this.quotas[provider];
-        if (quota.creditBalance !== undefined) {
-            quota.creditBalance = Math.max(
+        if (providerQuota.creditBalance !== undefined) {
+            providerQuota.creditBalance = Math.max(
                 0,
-                quota.creditBalance - creditAmount
+                providerQuota.creditBalance - creditAmount
             );
         }
     }
@@ -348,27 +497,57 @@ export class QuotaManager {
      * Get the remaining credit balance for a provider
      */
     getCreditBalance(provider: ModelProviderID): number {
-        return this.quotas[provider]?.creditBalance || 0;
+        return this.getProviderQuota(provider)?.creditBalance || 0; // Use getter
     }
 
     /**
-     * Get a summary of all quota usage across providers
+     * Get a summary of all quota usage across providers and models
      */
     getSummary(): Record<string, any> {
         const summary: Record<string, any> = {};
 
-        for (const [provider, quota] of Object.entries(this.quotas)) {
+        for (const [provider, providerQuota] of Object.entries(this.quotas)) {
+            // Start with provider-level information
             summary[provider] = {
-                dailyUsed: quota.dailyUsed,
-                dailyLimit: quota.dailyLimit,
-                creditBalance: quota.creditBalance,
-                creditLimit: quota.creditLimit,
-                lastReset: quota.lastResetDate,
+                creditBalance: providerQuota.creditBalance,
+                creditLimit: providerQuota.creditLimit,
+                models: {},
             };
 
+            // Add model-specific quotas
+            for (const [modelName, modelQuota] of Object.entries(
+                providerQuota.models
+            )) {
+                // No need to skip _default as it's removed
+                summary[provider].models[modelName] = {
+                    tokens: {
+                        used: modelQuota.dailyTokensUsed,
+                        limit: modelQuota.dailyTokenLimit,
+                        percent:
+                            modelQuota.dailyTokenLimit > 0
+                                ? (modelQuota.dailyTokensUsed /
+                                      modelQuota.dailyTokenLimit) *
+                                  100
+                                : 0,
+                    },
+                    requests: {
+                        used: modelQuota.dailyRequestsUsed,
+                        limit: modelQuota.dailyRequestLimit,
+                        percent:
+                            modelQuota.dailyRequestLimit > 0
+                                ? (modelQuota.dailyRequestsUsed /
+                                      modelQuota.dailyRequestLimit) *
+                                  100
+                                : 0,
+                    },
+                    lastReset: modelQuota.lastResetDate,
+                };
+            }
+
             // Add OpenAI free tier details if available
-            if (provider === 'openai' && quota.info?.freeQuota) {
-                const freeQuota = quota.info.freeQuota as OpenAIFreeQuota;
+            if (provider === 'openai' && providerQuota.info?.freeQuota) {
+                const freeQuota = providerQuota.info
+                    .freeQuota as OpenAIFreeQuota;
                 summary[provider].freeTier = {
                     gpt4Family: {
                         used: freeQuota.gpt4Family.used,

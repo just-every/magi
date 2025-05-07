@@ -18,8 +18,10 @@ import {
     Content,
     FunctionCallingConfigMode,
     GenerateContentResponseUsageMetadata,
+    GenerateContentResponse,
     Part,
 } from '@google/genai';
+import { EmbedOpts } from '../model_providers/model_provider.js';
 import { v4 as uuidv4 } from 'uuid';
 import {
     ModelProvider,
@@ -30,7 +32,11 @@ import {
     ResponseInput,
 } from '../types/shared-types.js'; // Adjust path as needed
 import { costTracker } from '../utils/cost_tracker.js'; // Adjust path as needed
-import { log_llm_request } from '../utils/file_utils.js'; // Adjust path as needed
+import {
+    log_llm_error,
+    log_llm_request,
+    log_llm_response,
+} from '../utils/file_utils.js'; // Adjust path as needed
 import { isPaused } from '../utils/communication.js'; // Import pause function
 import { Agent } from '../utils/agent.js'; // Adjust path as needed
 import {
@@ -199,7 +205,7 @@ async function convertToGeminiContents(
                             response: {
                                 content:
                                     extracted.replaceContent.trim() ||
-                                    `[image ${image_id}]`,
+                                    `[image #${image_id}]`,
                             },
                         },
                     });
@@ -296,6 +302,9 @@ async function convertToGeminiContents(
             }
 
             if (textContent && textContent.trim() !== '') {
+                if (msg.type === 'thinking') {
+                    textContent = 'Thinking: ' + textContent;
+                }
                 contents.push({
                     role,
                     parts: [{ text: textContent.trim() }],
@@ -325,6 +334,165 @@ export class GeminiProvider implements ModelProvider {
             apiKey: key,
             vertexai: false,
         });
+    }
+
+    /**
+     * Creates embeddings for text input using Gemini embedding models
+     * @param modelId ID of the embedding model to use (e.g., 'gemini/gemini-embedding-exp-03-07')
+     * @param input Text to embed (string or array of strings)
+     * @param opts Optional parameters for embedding generation
+     * @returns Promise resolving to embedding vector(s)
+     */
+    async createEmbedding(
+        modelId: string,
+        input: string | string[],
+        opts?: EmbedOpts
+    ): Promise<number[] | number[][]> {
+        try {
+            // Handle 'gemini/' prefix if present
+            const actualModelId = modelId.startsWith('gemini/')
+                ? modelId.substring(7)
+                : modelId;
+
+            console.log(
+                `[Gemini] Generating embedding with model ${actualModelId}`
+            );
+
+            // Prepare the embedding request payload
+            const payload = {
+                model: actualModelId,
+                contents: input,
+                config: {
+                    taskType: opts?.taskType ?? 'SEMANTIC_SIMILARITY',
+                },
+            };
+
+            // Call the Gemini API
+            const response = await this.client.models.embedContent(payload);
+
+            // Log the raw response structure for debugging
+            console.log(
+                '[Gemini] Embedding response structure:',
+                JSON.stringify(
+                    response,
+                    (key, value) =>
+                        key === 'values' &&
+                        Array.isArray(value) &&
+                        value.length > 10
+                            ? `[${value.length} items]`
+                            : value,
+                    2
+                )
+            );
+
+            // Extract the embedding values correctly
+            // Check if response has the embedding field with values
+            if (!response.embeddings || !Array.isArray(response.embeddings)) {
+                console.error(
+                    '[Gemini] Unexpected embedding response structure:',
+                    response
+                );
+                throw new Error(
+                    'Invalid embedding response structure from Gemini API'
+                );
+            }
+
+            // Track usage for cost calculation (Gemini embeddings are currently free)
+            // but we still want to track usage for metrics
+            const estimatedTokens =
+                typeof input === 'string'
+                    ? Math.ceil(input.length / 4)
+                    : input.reduce(
+                          (sum, text) => sum + Math.ceil(text.length / 4),
+                          0
+                      );
+
+            // Extract the values from the correct path in the response
+            let extractedValues: number[] | number[][] = [];
+            let dimensions = 0;
+
+            // Handle the Gemini API response format
+            if (response.embeddings.length > 0) {
+                // Access the correct property path - in Gemini API it should be 'values'
+                if (response.embeddings[0].values) {
+                    extractedValues = response.embeddings.map(
+                        e => e.values as number[]
+                    );
+                    dimensions = (extractedValues[0] as number[]).length;
+                } else {
+                    // Try direct embedding access if the expected property isn't found
+                    console.warn(
+                        '[Gemini] Could not find expected "values" property in embeddings response'
+                    );
+                    extractedValues =
+                        response.embeddings as unknown as number[][];
+                    dimensions = Array.isArray(extractedValues[0])
+                        ? extractedValues[0].length
+                        : 0;
+                }
+            }
+
+            costTracker.addUsage({
+                model: modelId,
+                input_tokens: estimatedTokens,
+                output_tokens: 0,
+                metadata: {
+                    dimensions,
+                },
+            });
+
+            // Extract and return the embeddings, ensuring correct type
+            if (Array.isArray(input) && input.length > 1) {
+                // Handle the multi-input case - ensure we have an array of arrays
+                return extractedValues as number[][];
+            } else {
+                // Handle the single-input case - ensure we return a single array
+                let result: number[];
+
+                if (
+                    Array.isArray(extractedValues) &&
+                    extractedValues.length >= 1
+                ) {
+                    const firstValue = extractedValues[0];
+                    // Ensure we're returning a number[] and not a single number
+                    if (Array.isArray(firstValue)) {
+                        result = firstValue;
+                    } else {
+                        // If somehow we got a single number or non-array, return empty array
+                        console.error(
+                            '[Gemini] Unexpected format in embedding result:',
+                            firstValue
+                        );
+                        result = [];
+                    }
+                } else {
+                    // Fallback to empty array if no values
+                    result = [];
+                }
+
+                // Ensure we truncate or pad to exactly 3072 dimensions for our halfvec database schema
+                let adjustedResult = result;
+                if (result.length !== 3072) {
+                    console.warn(
+                        `Gemini embedding returned ${result.length} dimensions, adjusting to 3072...`
+                    );
+                    if (result.length > 3072) {
+                        // Truncate if too long
+                        adjustedResult = result.slice(0, 3072);
+                    } else {
+                        // Pad with zeros if too short
+                        adjustedResult = [
+                            ...result,
+                            ...Array(3072 - result.length).fill(0),
+                        ];
+                    }
+                }
+                return adjustedResult; // This is guaranteed to be number[] with exactly 3072 dimensions
+            }
+        } catch (error) {
+            console.error('[Gemini] Error generating embedding:', error);
+            throw error;
+        }
     }
 
     /**
@@ -377,7 +545,7 @@ export class GeminiProvider implements ModelProvider {
     async *createResponseStream(
         model: string,
         messages: ResponseInput,
-        agent?: Agent
+        agent: Agent
     ): AsyncGenerator<StreamingEvent> {
         const tools: ToolFunction[] | undefined = agent?.tools;
         const settings: ModelSettings | undefined = agent?.modelSettings;
@@ -387,6 +555,8 @@ export class GeminiProvider implements ModelProvider {
         let eventOrder = 0;
         let hasYieldedToolStart = false;
 
+        let requestId: string | undefined = undefined;
+        const chunks: GenerateContentResponse[] = [];
         try {
             // --- Prepare Request ---
             const contents = await convertToGeminiContents(messages);
@@ -478,7 +648,12 @@ export class GeminiProvider implements ModelProvider {
                 config,
             };
 
-            log_llm_request('google', model, requestParams);
+            requestId = log_llm_request(
+                agent.agent_id,
+                'google',
+                model,
+                requestParams
+            );
 
             // --- Start streaming with retry logic ---
             const getStreamFn = () =>
@@ -489,6 +664,8 @@ export class GeminiProvider implements ModelProvider {
 
             // --- Process the stream chunks ---
             for await (const chunk of response) {
+                chunks.push(chunk);
+
                 // Log raw chunks for debugging if needed
                 // console.debug('[Gemini] Raw chunk:', JSON.stringify(chunk));
                 // Check if the system was paused during the stream
@@ -618,7 +795,11 @@ export class GeminiProvider implements ModelProvider {
                 );
             }
 
-            yield { type: 'error', error: 'Gemini error: ' + errorMessage };
+            yield {
+                type: 'error',
+                error: `Gemini error ${model}: ${errorMessage}`,
+            };
+            log_llm_error(requestId, error);
 
             // Emit any partial content if we haven't yielded a tool call
             if (!hasYieldedToolStart && contentBuffer) {
@@ -628,6 +809,8 @@ export class GeminiProvider implements ModelProvider {
                     message_id: messageId,
                 };
             }
+        } finally {
+            log_llm_response(requestId, chunks);
         }
     }
 }

@@ -13,10 +13,14 @@ import {
     ToolCall,
     ResponseInput,
 } from '../types/shared-types.js'; // Adjust path as needed
-import OpenAI from 'openai';
+import OpenAI, { APIError } from 'openai';
 import { v4 as uuidv4 } from 'uuid';
 import { costTracker } from '../utils/cost_tracker.js'; // Adjust path as needed
-import { log_llm_request } from '../utils/file_utils.js'; // Adjust path as needed
+import {
+    log_llm_error,
+    log_llm_request,
+    log_llm_response,
+} from '../utils/file_utils.js'; // Adjust path as needed
 import { Agent } from '../utils/agent.js'; // Adjust path as needed
 import { ModelProviderID } from './model_data.js'; // Adjust path as needed
 import { extractBase64Image } from '../utils/image_utils.js';
@@ -97,8 +101,8 @@ async function mapMessagesToOpenAI(
                         // First, add the original message with image replaced by a placeholder
                         const placeholderOutput =
                             extracted.replaceContent.trim()
-                                ? `${extracted.replaceContent} [image ${image_id}]`
-                                : `[image ${image_id}]`;
+                                ? `${extracted.replaceContent} [image #${image_id}]`
+                                : `[image #${image_id}]`;
 
                         result.push({
                             role: 'tool',
@@ -112,7 +116,7 @@ async function mapMessagesToOpenAI(
                             content: [
                                 {
                                     type: 'text',
-                                    text: `Image ${image_id} from function call output`,
+                                    text: `This is [image #${image_id}] from function call output`,
                                 },
                                 {
                                     type: 'image_url',
@@ -220,8 +224,8 @@ async function mapMessagesToOpenAI(
                             // Create placeholder with remaining text + image placeholder
                             const placeholderContent =
                                 extracted.replaceContent.trim()
-                                    ? `${extracted.replaceContent} [image ${image_id}]`
-                                    : `[image ${image_id}]`;
+                                    ? `${extracted.replaceContent} [image #${image_id}]`
+                                    : `[image #${image_id}]`;
 
                             // First, add the original message with image replaced by a placeholder
                             result.push({
@@ -235,7 +239,7 @@ async function mapMessagesToOpenAI(
                                 content: [
                                     {
                                         type: 'text',
-                                        text: `Image ${image_id} from ${role} message`,
+                                        text: `This is [image #${image_id}] from the ${role} message`,
                                     },
                                     {
                                         type: 'image_url',
@@ -296,13 +300,23 @@ export class OpenAIChat implements ModelProvider {
     protected provider: ModelProviderID;
     protected baseURL: string | undefined;
 
-    constructor(provider?: ModelProviderID, apiKey?: string, baseURL?: string) {
+    constructor(
+        provider?: ModelProviderID,
+        apiKey?: string,
+        baseURL?: string,
+        defaultHeaders: Record<string, string | null | undefined> = {}
+    ) {
         // ... (constructor unchanged)
         this.provider = provider || 'openai';
         this.baseURL = baseURL;
         this.client = new OpenAI({
             apiKey: apiKey || process.env.OPENAI_API_KEY,
             baseURL: this.baseURL,
+            defaultHeaders: defaultHeaders || {
+                'User-Agent': 'magi',
+                'HTTP-Referer': 'https://withmagi.com/',
+                'X-Title': 'magi',
+            },
         });
 
         if (!this.client.apiKey) {
@@ -578,10 +592,11 @@ export class OpenAIChat implements ModelProvider {
     async *createResponseStream(
         model: string,
         messages: ResponseInput,
-        agent?: Agent
+        agent: Agent
     ): AsyncGenerator<StreamingEvent> {
         const tools: ToolFunction[] | undefined = agent?.tools;
         const settings: ModelSettings | undefined = agent?.modelSettings;
+        let requestId: string;
 
         try {
             // --- Prepare Request ---
@@ -602,7 +617,12 @@ export class OpenAIChat implements ModelProvider {
                 requestParams.tools = convertToOpenAITools(tools);
 
             requestParams = this.prepareParameters(requestParams);
-            log_llm_request(this.provider, model, requestParams);
+            requestId = log_llm_request(
+                agent.agent_id,
+                this.provider,
+                model,
+                requestParams
+            );
 
             // --- Process Stream ---
             const stream =
@@ -615,8 +635,11 @@ export class OpenAIChat implements ModelProvider {
             let finishReason: string | null = null;
             let usage: OpenAI.CompletionUsage | undefined = undefined;
 
+            const chunks: OpenAI.Chat.Completions.ChatCompletionChunk[] = [];
             try {
                 for await (const chunk of stream) {
+                    chunks.push(chunk);
+
                     // ... (stream aggregation logic unchanged) ...
                     const choice = chunk.choices[0];
                     if (!choice?.delta) continue;
@@ -764,6 +787,10 @@ export class OpenAIChat implements ModelProvider {
                             type: 'error',
                             error: `Error (${this.provider}): Model indicated tool calls, but none were parsed correctly.`,
                         };
+                        log_llm_error(
+                            requestId,
+                            `Error (${this.provider}): Model indicated tool calls, but none were parsed correctly.`
+                        );
                     }
                 } else if (finishReason === 'length') {
                     const cleanedPartialContent = aggregatedContent.replaceAll(
@@ -774,6 +801,10 @@ export class OpenAIChat implements ModelProvider {
                         type: 'error',
                         error: `Error (${this.provider}): Response truncated (max_tokens). Partial: ${cleanedPartialContent.substring(0, 100)}...`,
                     };
+                    log_llm_error(
+                        requestId,
+                        `Error (${this.provider}): Response truncated (max_tokens). Partial: ${cleanedPartialContent.substring(0, 100)}...`
+                    );
                 } else if (finishReason) {
                     const cleanedReasonContent = aggregatedContent.replaceAll(
                         TOOL_CALL_CLEANUP_REGEX,
@@ -783,6 +814,10 @@ export class OpenAIChat implements ModelProvider {
                         type: 'error',
                         error: `Error (${this.provider}): Response stopped due to: ${finishReason}. Content: ${cleanedReasonContent.substring(0, 100)}...`,
                     };
+                    log_llm_error(
+                        requestId,
+                        `Error (${this.provider}): Response stopped due to: ${finishReason}. Content: ${cleanedReasonContent.substring(0, 100)}...`
+                    );
                 } else {
                     // Handle stream ending without a finish reason
                     if (aggregatedContent) {
@@ -816,6 +851,10 @@ export class OpenAIChat implements ModelProvider {
                             type: 'error',
                             error: `Error (${this.provider}): Stream ended unexpectedly during native tool call generation.`,
                         };
+                        log_llm_error(
+                            requestId,
+                            `Error (${this.provider}): Stream ended unexpectedly during native tool call generation.`
+                        );
                     } else {
                         // ... (unchanged empty stream error handling) ...
                         console.warn(
@@ -825,6 +864,10 @@ export class OpenAIChat implements ModelProvider {
                             type: 'error',
                             error: `Error (${this.provider}): Stream finished unexpectedly empty.`,
                         };
+                        log_llm_error(
+                            requestId,
+                            `Error (${this.provider}): Stream finished unexpectedly empty.`
+                        );
                     }
                 }
             } catch (streamError) {
@@ -836,14 +879,21 @@ export class OpenAIChat implements ModelProvider {
                     type: 'error',
                     error:
                         `Stream processing error (${this.provider} ${model}): ` +
-                        (streamError instanceof OpenAI.APIError
+                        (streamError instanceof OpenAI.APIError ||
+                        streamError instanceof APIError
                             ? `${streamError.status} ${streamError.name} ${streamError.message}`
                             : streamError instanceof Error
                               ? streamError.stack
-                              : String(streamError)),
+                              : Object.getPrototypeOf(streamError) +
+                                ' ' +
+                                String(streamError)),
                 };
+                log_llm_error(requestId, streamError);
             } finally {
                 partialToolCallsByIndex.clear();
+
+                // Log the end of the request
+                log_llm_response(requestId, chunks);
             }
         } catch (error) {
             console.error(
@@ -853,13 +903,15 @@ export class OpenAIChat implements ModelProvider {
             yield {
                 type: 'error',
                 error:
-                    `API Error (${this.provider}): ` +
-                    (error instanceof OpenAI.APIError
+                    `API Error (${this.provider} - ${model}): ` +
+                    (error instanceof OpenAI.APIError ||
+                    error instanceof APIError
                         ? `${error.status} ${error.name} ${error.message}`
                         : error instanceof Error
                           ? error.stack
-                          : String(error)),
+                          : Object.getPrototypeOf(error) + ' ' + String(error)),
             };
+            log_llm_error(requestId, error);
         }
     }
 }

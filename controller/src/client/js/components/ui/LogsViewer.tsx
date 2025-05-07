@@ -4,6 +4,7 @@ import AutoScrollContainer from './AutoScrollContainer';
 
 interface LogsViewerProps {
     processId: string;
+    agentId?: string;
     onClose?: () => void;
     inlineTab?: string;
 }
@@ -32,16 +33,19 @@ interface LogFile {
 
 const LogsViewer: React.FC<LogsViewerProps> = ({
     processId,
+    agentId,
     onClose,
     inlineTab = '',
 }) => {
     const [activeTab, setActiveTab] = useState<string>(inlineTab || 'llm');
+    const [activeLLMTab, setActiveLLMTab] = useState<string>('request');
     const [llmLogs, setLlmLogs] = useState<string[]>([]);
     const [dockerLogs, setDockerLogs] = useState<string[]>([]);
     const [costData, setCostData] = useState<CostData | null>(null);
     const [selectedLogFile, setSelectedLogFile] = useState<LogFile | null>(
         null
     );
+    const [selectedLogFileName, setSelectedLogFileName] = useState<string>('');
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -50,7 +54,12 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
         const fetchLlmLogs = async () => {
             try {
                 setLoading(true);
-                const response = await fetch(`/api/llm-logs/${processId}`);
+                // Use different endpoint based on whether agentId is provided
+                const url = agentId
+                    ? `/api/llm-logs/${processId}/${agentId}`
+                    : `/api/llm-logs/${processId}`;
+
+                const response = await fetch(url);
                 if (!response.ok) {
                     throw new Error(
                         `Failed to fetch LLM logs: ${response.statusText}`
@@ -67,7 +76,7 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
         };
 
         fetchLlmLogs();
-    }, [processId]);
+    }, [processId, agentId]);
 
     // Fetch Docker logs when Docker tab is activated
     useEffect(() => {
@@ -139,6 +148,7 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
             }
             const data = await response.json();
             setSelectedLogFile(data);
+            setSelectedLogFileName(fileName)
             setLoading(false);
         } catch (err) {
             console.error('Error fetching log file:', err);
@@ -153,11 +163,35 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
             // Extract timestamp and provider from filename format: YYYY-MM-DDTHH-mm-ss-mmm_provider.json
             const parts = fileName.split('_');
             if (parts.length >= 2) {
-                const timestampPart = parts[0]
-                    .replace(/-/g, ':')
-                    .replace('T', ' ');
+                const timestampPart = parts[0]; // Format: YYYY-MM-DDTHH-mm-ss-mmm
                 const providerPart = parts[1].replace('.json', '');
-                return `${timestampPart} - ${providerPart}`;
+
+                // Parse the timestamp to calculate the time ago
+                const logTime = new Date(
+                    timestampPart
+                        .replace('T', ' ')
+                        .replace(/-/g, (match, offset) => {
+                            // Replace only the hyphens in time part (after T), not in date part
+                            return offset > 10 ? ':' : '-';
+                        })
+                );
+
+                // Calculate time difference in seconds
+                const diffSeconds = Math.floor((new Date().getTime() - logTime.getTime()) / 1000);
+
+                // Format the time ago string
+                let timeAgo;
+                if (diffSeconds < 60) {
+                    timeAgo = `${diffSeconds}s ago`;
+                } else if (diffSeconds < 3600) {
+                    timeAgo = `${Math.floor(diffSeconds / 60)}m ago`;
+                } else if (diffSeconds < 86400) {
+                    timeAgo = `${Math.floor(diffSeconds / 3600)}h ago`;
+                } else {
+                    timeAgo = `${Math.floor(diffSeconds / 86400)}d ago`;
+                }
+
+                return `${providerPart} (${timeAgo})`;
             }
             return fileName;
         } catch (e) {
@@ -181,13 +215,13 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
 
         return (
             <div className="row h-100">
-                <div className="col-md-3 border-end">
-                    <h5 className="mb-3">Log Files</h5>
+                <div className="col-md-3 border-end h-100 overflow-scroll">
+                    { !inlineTab && <h5 className="mb-3">Log Files</h5> }
                     <div className="list-group">
                         {llmLogs.map((log, index) => (
                             <button
                                 key={index}
-                                className={`list-group-item list-group-item-action ${selectedLogFile && formatLogFileName(log) === formatLogFileName(selectedLogFile.timestamp) ? 'active' : ''}`}
+                                className={`list-group-item list-group-item-action ${selectedLogFile && selectedLogFileName === log ? 'active' : ''}`}
                                 onClick={() => handleLogFileSelect(log)}
                             >
                                 {formatLogFileName(log)}
@@ -195,20 +229,37 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
                         ))}
                     </div>
                 </div>
-                <div className="col-md-9">
+                <div className="col-md-9 h-100">
                     {selectedLogFile ? (
-                        <div>
-                            <h5 className="mb-3">Request Details</h5>
-                            <div className="mb-3">
-                                <strong>Timestamp:</strong>{' '}
-                                {selectedLogFile.timestamp}
+                        <div className='d-flex flex-column h-100'>
+                            <div>
+                                <ul className="nav nav-underline mb-3">
+                                    <li className="nav-item" onClick={() => setActiveLLMTab('request')}>
+                                        <span className={"nav-link"+(activeLLMTab === 'request' ? ' active' : '')}>Request ({selectedLogFile.request?.messages?.length || selectedLogFile.request?.input?.length || selectedLogFile.request?.contents?.length || 0})</span>
+                                    </li>
+                                    <li className="nav-item" onClick={() => setActiveLLMTab('response')}>
+                                        <span className={"nav-link"+(activeLLMTab === 'response' ? ' active' : '')}>Response ({selectedLogFile.response?.length || 0})</span>
+                                    </li>
+                                    <li className="nav-item" onClick={() => setActiveLLMTab('errors')}>
+                                        <span className={"nav-link"+(activeLLMTab === 'errors' ? ' active' : '')+(selectedLogFile.errors?.length  > 0 ? ' text-danger' : '')}>Errors ({selectedLogFile.errors?.length || 0})</span>
+                                    </li>
+                                </ul>
+
+                                <div className="mb-3">
+                                    <strong>Timestamp:</strong>{' '}
+                                    {selectedLogFile.timestamp}
+                                </div>
+                                <div className="mb-3">
+                                    <strong>Provider:</strong>{' '}
+                                    {selectedLogFile.provider}
+                                </div>
+                                <div className="mb-3">
+                                    <strong>Model:</strong>{' '}
+                                    {selectedLogFile.model}
+                                </div>
                             </div>
-                            <div className="mb-3">
-                                <strong>Provider:</strong>{' '}
-                                {selectedLogFile.provider}
-                            </div>
-                            <div className="mb-3">
-                                <strong>Request:</strong>
+                            <div className="pb-3 overflow-scroll">
+                                <strong className='text-capitalize'>{activeLLMTab}:</strong>
                                 <pre
                                     className="bg-light p-3 mt-2 rounded"
                                     style={{
@@ -216,11 +267,11 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
                                         wordBreak: 'break-word',
                                     }}
                                 >
-                                    {JSON.stringify(
-                                        selectedLogFile.request,
+                                    {selectedLogFile[activeLLMTab] ? JSON.stringify(
+                                        selectedLogFile[activeLLMTab],
                                         null,
                                         2
-                                    ).replace(/\\n/g, '\n')}
+                                    ).replace(/\\n/g, '\n') : `No ${activeLLMTab} found`}
                                 </pre>
                             </div>
                         </div>

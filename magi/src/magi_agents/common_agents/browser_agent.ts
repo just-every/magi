@@ -15,6 +15,7 @@ import {
     MAGI_CONTEXT,
     COMMON_WARNINGS,
     SELF_SUFFICIENCY_TEXT,
+    CUSTOM_TOOLS_TEXT,
 } from '../constants.js';
 import { getCommonTools } from '../../utils/index.js';
 
@@ -50,6 +51,8 @@ VISION APPROACH:
 
 ${COMMON_WARNINGS}
 
+${CUSTOM_TOOLS_TEXT}
+
 ${SELF_SUFFICIENCY_TEXT}
 
 IMPORTANT:
@@ -60,9 +63,13 @@ IMPORTANT:
 
 COMPLETION:
 - If you can mostly complete a task after a couple of attempts, that's fine. Just explain what you did and what you couldn't do.
-- Your may need to modify your goals based on what you find while browsing. Your requester does not know what you will find, so be flexible and adapt to the situation.`,
+- Your may need to modify your goals based on what you find while browsing. Your requester does not know what you will find, so be flexible and adapt to the situation.
+- Return your final response without a tool call, to indicate your task is done.`,
         tools: [...getBrowserTools(), ...getCommonTools()],
         modelClass: 'vision',
+        modelSettings: {
+            sequential_tools: true,
+        },
         onRequest: addBrowserStatus,
         params: getBrowserParams('BrowserAgent'),
         processParams: processBrowserParams,

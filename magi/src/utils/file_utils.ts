@@ -2,16 +2,16 @@
  * File utility functions for the MAGI system.
  */
 
+// Global directory path for this process
+let processDirectory: string | null = null;
+let testMode = false;
+
 import fs from 'fs';
 import path from 'path';
 import { ResponseInput, ToolFunction } from '../types/shared-types.js';
 import { createToolFunction } from './tool_call.js';
 import { ModelProviderID } from '../model_providers/model_data.js';
 // Child process utilities are used via dynamic imports in functions below
-
-// Global directory path for this process
-let processDirectory: string | null = null;
-let testMode = false;
 
 export function set_file_test_mode(mode: boolean): void {
     testMode = mode;
@@ -99,69 +99,110 @@ export function get_git_repositories(): Record<string, string> {
 /**
  * Read a file from the file system
  *
- * @param filePath - Path to the file to read
+ * @param file_path - Path to the file to read
+ * @param line_start - Starting line to retrieve (0-based), optional
+ * @param line_end - Ending line to retrieve (0-based), optional
+ * @param max_chars - Maximum number of characters to return (default: 1000), optional
  * @returns File contents as a string
  */
-export function read_file(filePath: string): string {
+export function read_file(
+    file_path: string,
+    line_start?: number,
+    line_end?: number,
+    max_chars: number = 1000
+): string {
     try {
-        return fs.readFileSync(filePath, 'utf-8');
+        let content: string;
+
+        // Get file content (either full file or specific line range)
+        if (line_start === undefined && line_end === undefined) {
+            content = fs.readFileSync(file_path, 'utf-8');
+        } else {
+            // Read the file and split into lines
+            const fileContent = fs.readFileSync(file_path, 'utf-8');
+            const lines = fileContent.split('\n');
+
+            // Validate line numbers
+            const start =
+                line_start !== undefined ? Math.max(0, line_start) : 0;
+            const end =
+                line_end !== undefined
+                    ? Math.min(lines.length - 1, line_end)
+                    : lines.length - 1;
+
+            // Get specified range of lines
+            if (start <= end) {
+                content = lines.slice(start, end + 1).join('\n');
+            } else {
+                return ''; // Return empty string for invalid range
+            }
+        }
+
+        // Apply character limit if needed
+        if (content.length > max_chars) {
+            const truncated = content.substring(0, max_chars);
+            const remainingChars = content.length - max_chars;
+            return `${truncated}\n\n... Content truncated (${remainingChars} more characters)`;
+        }
+
+        return content;
     } catch (error) {
-        throw new Error(`Error reading file ${filePath}: ${error}`);
+        throw new Error(`Error reading file ${file_path}: ${error}`);
     }
 }
 
 /**
  * Write content to a file
  *
- * @param filePath - Path to write the file to
+ * @param file_path - Path to write the file to
  * @param content - Content to write to the file
  * @returns Success message with the path
  */
 export function write_file(
-    filePath: string,
+    file_path: string,
     content: string | ArrayBuffer
 ): string {
     try {
         // Ensure the directory exists
-        const directory = path.dirname(filePath);
+        const directory = path.dirname(file_path);
         if (!fs.existsSync(directory)) {
             fs.mkdirSync(directory, { recursive: true });
         }
 
         // Write the file
         if (typeof content === 'string') {
-            fs.writeFileSync(filePath, content, 'utf-8');
+            fs.writeFileSync(file_path, content, 'utf-8');
         } else {
             // For ArrayBuffer, convert to Buffer and don't specify text encoding
-            fs.writeFileSync(filePath, Buffer.from(content));
+            fs.writeFileSync(file_path, Buffer.from(content));
         }
 
-        return `File written successfully to ${filePath}`;
+        return `File written successfully to ${file_path}`;
     } catch (error) {
-        throw new Error(`Error writing file ${filePath}: ${error}`);
+        throw new Error(`Error writing file ${file_path}: ${error}`);
     }
 }
 
 /**
  * Writes content to a file, ensuring the filename is unique.
- * If the initial filePath exists, it appends a counter (e.g., "file (1).txt", "file (2).txt")
+ * If the initial file_path exists, it appends a counter (e.g., "file (1).txt", "file (2).txt")
  * to the base filename until a unique name is found before writing.
  *
- * @param filePath - The desired initial path to write the file to.
+ * @param file_path - The desired initial path to write the file to.
  * @param content - Content to write to the file (string or ArrayBuffer).
  * @returns Success message with the actual path the file was written to.
  * @throws {Error} If there's an error determining the unique path or writing the file.
  */
 export function write_unique_file(
-    filePath: string,
+    file_path: string,
     content: string | ArrayBuffer
 ): string {
     try {
-        let uniqueFilePath = filePath;
+        let uniqueFilePath = file_path;
         let counter = 1;
-        const directory = path.dirname(filePath);
-        const extension = path.extname(filePath);
-        const baseName = path.basename(filePath, extension);
+        const directory = path.dirname(file_path);
+        const extension = path.extname(file_path);
+        const baseName = path.basename(file_path, extension);
 
         let unique_info = '';
         // Check if the file exists and find a unique name if it does
@@ -184,7 +225,7 @@ export function write_unique_file(
         const err = error instanceof Error ? error : new Error(String(error));
         // Provide more specific context for the error source
         throw new Error(
-            `Error in write_unique_file attempting path ${filePath}: ${err.message}`
+            `Error in write_unique_file attempting path ${file_path}: ${err.message}`
         );
     }
 }
@@ -254,6 +295,7 @@ export function addFileStatus(messages: ResponseInput): ResponseInput {
     }
 
     messages.push({
+        type: 'message',
         role: 'developer',
         content,
     });
@@ -269,14 +311,36 @@ export function getFileTools(): ToolFunction[] {
         createToolFunction(
             read_file,
             'Read a file from the file system',
-            { filePath: 'Path to the file to read' },
+            {
+                file_path: {
+                    type: 'string',
+                    description:
+                        'Path to the file to read. If possible, limit lines to avoid loading too many tokens.',
+                },
+                line_start: {
+                    type: 'number',
+                    description: 'Starting line to retrieve (0-based).',
+                    optional: true,
+                },
+                line_end: {
+                    type: 'number',
+                    description: 'Ending line to retrieve (0-based).',
+                    optional: true,
+                },
+                max_chars: {
+                    type: 'number',
+                    description:
+                        'Maximum number of characters to return (default: 1000).',
+                    optional: true,
+                },
+            },
             'File contents as a string'
         ),
         createToolFunction(
             write_file,
             'Write content to a file',
             {
-                filePath: 'Path to write the file to',
+                file_path: 'Path to write the file to',
                 content: 'Content to write to the file',
             },
             'Success message with the path'
@@ -290,16 +354,51 @@ export function getFileTools(): ToolFunction[] {
  * @param obj The object to process
  * @returns A new object with truncated image data strings
  */
-function truncateImageData(obj: any): any {
+/**
+ * Truncates a long base64 string to a reasonable length.
+ *
+ * @param str The string to truncate
+ * @param maxLength The maximum length to keep after the prefix (default: 50)
+ * @returns The truncated string
+ */
+function truncateBase64String(str: string, maxLength: number = 50): string {
+    if (str.length <= maxLength) return str;
+
+    const charsToRemove = str.length - maxLength;
+    return (
+        str.substring(0, maxLength) +
+        `... [${charsToRemove} characters removed]`
+    );
+}
+
+/**
+ * Recursively processes an object to truncate base64 image data strings and any string values over 2000 characters.
+ *
+ * @param obj The object to process
+ * @returns A new object with truncated values
+ */
+export function truncateLargeValues(obj: any): any {
     if (obj === null || obj === undefined) {
         return obj;
     }
 
     if (typeof obj === 'string') {
-        // Check if string contains image data anywhere within it
+        let resultString = obj;
+
+        // First check if the string is just long and needs to be truncated (>2000 chars)
+        if (resultString.length > 2000) {
+            const charsToRemove = resultString.length - 2000;
+            const keep = 1000; // retain 1k at each end
+            return (
+                resultString.substring(0, keep) +
+                `... [${charsToRemove} characters removed] ...` +
+                resultString.slice(-keep)
+            );
+        }
+
+        // Then check if string contains image data anywhere within it
         const dataImgPattern = /data:image\/[^;]+;base64,/g;
         let match;
-        let resultString = obj;
 
         // Find all occurrences of data:image pattern
         while ((match = dataImgPattern.exec(resultString)) !== null) {
@@ -345,11 +444,50 @@ function truncateImageData(obj: any): any {
 
     if (typeof obj === 'object') {
         if (Array.isArray(obj)) {
-            return obj.map(item => truncateImageData(item));
+            return obj.map(item => truncateLargeValues(item));
         } else {
             const result: Record<string, any> = {};
+
+            // First check if this object is an image data structure with mimeType and data fields
+            if (
+                obj.mimeType &&
+                typeof obj.mimeType === 'string' &&
+                obj.mimeType.includes('image/') &&
+                obj.data &&
+                typeof obj.data === 'string' &&
+                obj.data.length > 100
+            ) {
+                // This is likely an image data object with structure {mimeType: 'image/...', data: '...'}
+                return {
+                    ...obj,
+                    data: truncateBase64String(obj.data),
+                };
+            }
+
+            // Handle special case for inlineData structure
+            if (
+                obj.inlineData &&
+                typeof obj.inlineData === 'object' &&
+                obj.inlineData.mimeType &&
+                typeof obj.inlineData.mimeType === 'string' &&
+                obj.inlineData.mimeType.includes('image/') &&
+                obj.inlineData.data &&
+                typeof obj.inlineData.data === 'string' &&
+                obj.inlineData.data.length > 100
+            ) {
+                // This is likely an object with inlineData structure
+                return {
+                    ...obj,
+                    inlineData: {
+                        ...obj.inlineData,
+                        data: truncateBase64String(obj.inlineData.data),
+                    },
+                };
+            }
+
+            // Process all properties recursively
             for (const [key, value] of Object.entries(obj)) {
-                result[key] = truncateImageData(value);
+                result[key] = truncateLargeValues(value);
             }
             return result;
         }
@@ -361,12 +499,15 @@ function truncateImageData(obj: any): any {
 /**
  * Log LLM request data to a file in the output directory.
  *
+ * @param agentId agent ID to associate with the log
  * @param providerName Name of the LLM provider (e.g., 'openai', 'claude')
+ * @param model Model name used for the request
  * @param requestData The request data to log
  * @param timestamp Optional timestamp (defaults to current time)
- * @returns Path to the log file
+ * @returns ID (file path) that can be used with log_llm_response to add response data
  */
 export function log_llm_request(
+    agentId: string,
     providerName: ModelProviderID,
     model: string,
     requestData: any,
@@ -380,7 +521,7 @@ export function log_llm_request(
             console.dir(
                 {
                     model,
-                    request: truncateImageData(requestData),
+                    request: truncateLargeValues(requestData),
                 },
                 { depth: 10, colors: true }
             );
@@ -392,24 +533,138 @@ export function log_llm_request(
 
         // Format timestamp for filename
         const formattedTime = timestamp.toISOString().replaceAll(/[:.]/g, '-');
-        const fileName = `${formattedTime}_${providerName}.json`;
-        const filePath = path.join(logsDir, fileName);
+        const fileName = `${formattedTime}_${model}.json`;
+        const file_path = path.join(logsDir, fileName);
 
-        // Add timestamp to the logged data
+        // Add timestamp and agent ID to the logged data
         const logData = {
             timestamp: timestamp.toISOString(),
             provider: providerName,
             model,
-            request: truncateImageData(requestData),
+            agent_id: agentId,
+            request: truncateLargeValues(requestData),
         };
 
         // Write the log file
-        fs.writeFileSync(filePath, JSON.stringify(logData, null, 2), 'utf8');
+        fs.writeFileSync(file_path, JSON.stringify(logData, null, 2), 'utf8');
 
-        return filePath;
+        return file_path;
     } catch (err) {
         console.error('Error logging LLM request:', err);
         return '';
+    }
+}
+
+/**
+ * Log LLM response data by adding it to an existing request log file.
+ *
+ * @param requestId The file path returned from a previous log_llm_request call
+ * @param providerName Name of the LLM provider (e.g., 'openai', 'claude')
+ * @param model Model name used for the response
+ * @param responseData The response data to log
+ * @param timestamp Optional timestamp (defaults to current time)
+ */
+export function log_llm_response(
+    requestId: string | undefined,
+    responseData: any,
+    timestamp: Date = new Date()
+): void {
+    if (!requestId) return;
+
+    try {
+        if (testMode) {
+            console.log(
+                `[Response - ${timestamp.toISOString().substring(11, 19)}]`
+            );
+            console.dir(
+                {
+                    response: truncateLargeValues(responseData),
+                },
+                { depth: 10, colors: true }
+            );
+            return;
+        }
+
+        // Check if the request file exists
+        if (!requestId || !fs.existsSync(requestId)) {
+            console.error(`Request file not found: ${requestId}`);
+            return;
+        }
+
+        // Read and parse the existing log file
+        const existingData = JSON.parse(fs.readFileSync(requestId, 'utf8'));
+
+        // Add response data to the log
+        existingData.response_timestamp = timestamp.toISOString();
+        existingData.response = truncateLargeValues(responseData);
+
+        // Write the updated log file
+        fs.writeFileSync(
+            requestId,
+            JSON.stringify(existingData, null, 2),
+            'utf8'
+        );
+    } catch (err) {
+        console.error('Error logging LLM response:', err);
+    }
+}
+
+/**
+ * Log LLM error data by adding it to an existing request log file's error array.
+ *
+ * @param requestId The file path returned from a previous log_llm_request call
+ * @param errorData The error data to log
+ * @param timestamp Optional timestamp (defaults to current time)
+ */
+export function log_llm_error(
+    requestId: string | undefined,
+    errorData: any,
+    timestamp: Date = new Date()
+): void {
+    if (!requestId) return;
+
+    try {
+        if (testMode) {
+            console.log(
+                `[Error - ${timestamp.toISOString().substring(11, 19)}]`
+            );
+            console.dir(
+                {
+                    error: truncateLargeValues(errorData),
+                },
+                { depth: 10, colors: true }
+            );
+            return;
+        }
+
+        // Check if the request file exists
+        if (!requestId || !fs.existsSync(requestId)) {
+            console.error(`Request file not found: ${requestId}`);
+            return;
+        }
+
+        // Read and parse the existing log file
+        const existingData = JSON.parse(fs.readFileSync(requestId, 'utf8'));
+
+        // Add error timestamp
+        existingData.last_error_timestamp = timestamp.toISOString();
+
+        // Initialize error array if it doesn't exist
+        if (!existingData.errors) {
+            existingData.errors = [];
+        }
+
+        // Add error data to the array
+        existingData.errors.push(truncateLargeValues(errorData));
+
+        // Write the updated log file
+        fs.writeFileSync(
+            requestId,
+            JSON.stringify(existingData, null, 2),
+            'utf8'
+        );
+    } catch (err) {
+        console.error('Error logging LLM error:', err);
     }
 }
 

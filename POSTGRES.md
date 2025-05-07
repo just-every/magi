@@ -13,7 +13,7 @@ docker compose up -d db
 
 The database will be accessible at:
 
-- **From containers**: `db:5432` (service name in Docker network)
+- **From containers**: `host.docker.internal:5432` (service name in Docker network)
 - **From host**: `localhost:5432`
 
 ## Connection Details
@@ -21,7 +21,7 @@ The database will be accessible at:
 Default connection parameters (defined in `.env.example`):
 
 ```
-DATABASE_HOST=db        # Use 'db' inside containers, 'localhost' on host
+DATABASE_HOST=host.docker.internal        # Use 'host.docker.internal' inside containers, 'localhost' on host
 DATABASE_PORT=5432
 DATABASE_USER=postgres
 DATABASE_PASSWORD=postgres
@@ -34,11 +34,11 @@ Copy `.env.example` to `.env` and modify these values if needed.
 
 ### Within Docker Containers
 
-Services running in containers should use `db` as the hostname:
+Services running in containers should use `host.docker.internal` as the hostname:
 
 ```javascript
 const dbConfig = {
-    host: process.env.DATABASE_HOST || 'db',
+    host: process.env.DATABASE_HOST || 'host.docker.internal',
     port: process.env.DATABASE_PORT || 5432,
     user: process.env.DATABASE_USER || 'postgres',
     password: process.env.DATABASE_PASSWORD || 'postgres',

@@ -5,9 +5,6 @@
 
 import { BROWSER_WIDTH, BROWSER_HEIGHT } from '../../constants.js';
 
-// Element map type definitions
-export type Viewport = { w: number; h: number };
-
 // More concise element representation for LLM processing
 export type InteractiveElementInfo = {
     href?: string; // Absolute URL for links
@@ -37,8 +34,14 @@ export type InteractiveElement = {
 
 export type BrowserStatusPayload = {
     screenshot: string; // base‑64 PNG (data URL)
-    view: Viewport; // current viewport (CSS px)
+    devicePixelRatio: number; // device pixel ratio (DPR)
+    view: { w: number; h: number }; // current viewport (CSS px)
     full: { w: number; h: number }; // full‑page scroll size (CSS px)
+    cursor: {
+        x: number;
+        y: number;
+        button?: 'none' | 'left' | 'middle' | 'right';
+    }; // cursor position (CSS px)
     url: string; // current page URL
     elementMap: InteractiveElement[]; // Updated element list type
     coreTabs?: any[]; // Optional core tabs for multi-tab scenarios
@@ -51,6 +54,8 @@ export type BrowserStatusPayload = {
  * @param viewportWidth The width of the viewport in CSS pixels
  * @param viewportHeight The height of the viewport in CSS pixels
  * @param devicePixelRatio The actual device pixel ratio of the screen/emulation
+ * @param scrollX Horizontal scroll offset (CSS pixels)
+ * @param scrollY Vertical scroll offset (CSS pixels)
  * @param baseUrl The base URL of the current page, needed for resolving relative links.
  * @returns Array of interactive elements with properties needed for interaction (CSS pixels)
  */
@@ -59,6 +64,8 @@ export function buildElementArray(
     viewportWidth = BROWSER_WIDTH,
     viewportHeight = BROWSER_HEIGHT,
     devicePixelRatio = 1, // Default to 1 if not provided
+    scrollX = 0, // Default to 0 if not provided
+    scrollY = 0, // Default to 0 if not provided
     baseUrl: string = '' // Added baseUrl parameter
 ): InteractiveElement[] {
     // Updated return type
@@ -161,6 +168,7 @@ export function buildElementArray(
     // --- IMPORTANT: Coordinate Correction ---
     // This function now gets raw coordinates (potentially physical pixels if DPR > 1)
     // and divides by DPR to get CSS pixels.
+    // We now also account for scroll offsets to get viewport-relative coordinates.
     const getRect = (i: number): [number, number, number, number] => {
         const rawRect = flatBounds
             ? [
@@ -173,9 +181,10 @@ export function buildElementArray(
 
         // Divide by DPR to convert to CSS pixels. Avoid division by zero.
         const dpr = devicePixelRatio || 1;
+        // Convert to CSS pixels and adjust for scroll position
         return [
-            rawRect[0] / dpr, // x (CSS pixels)
-            rawRect[1] / dpr, // y (CSS pixels)
+            rawRect[0] / dpr - scrollX, // x (CSS pixels) adjusted for horizontal scroll
+            rawRect[1] / dpr - scrollY, // y (CSS pixels) adjusted for vertical scroll
             rawRect[2] / dpr, // width (CSS pixels)
             rawRect[3] / dpr, // height (CSS pixels)
         ];
@@ -187,7 +196,7 @@ export function buildElementArray(
         flatBounds ? Math.floor(bounds.length / 4) : bounds.length
     );
     console.log(
-        `[browser_helpers] Processing ${length} nodes with ${flatBounds ? 'flat' : 'parallel'} bounds format. DPR: ${devicePixelRatio}`
+        `[browser_helpers] Processing ${length} nodes with ${flatBounds ? 'flat' : 'parallel'} bounds format. DPR: ${devicePixelRatio}, Scroll: X=${scrollX}, Y=${scrollY}`
     );
 
     // Iterate through layout
@@ -339,10 +348,10 @@ export function buildElementArray(
             tagStr === 'TEXTAREA' ||
             tagStr === 'SELECT'
         ) {
-            if (w >= 10 && h >= 10) score += 30;
+            if (w >= 10 && h >= 10) score += 100;
         }
         if (tagStr === 'BUTTON' || roleStr === 'button') {
-            if (w >= 8 && h >= 8) score += 25;
+            if (w >= 8 && h >= 8) score += 50;
         }
         if (tagStr === 'A' && href) {
             if (w >= 8 && h >= 8) score += 20;
@@ -352,7 +361,7 @@ export function buildElementArray(
             roleStr === 'radio' ||
             roleStr === 'menuitem'
         ) {
-            if (w >= 6 && h >= 6) score += 10;
+            if (w >= 6 && h >= 6) score += 60;
         }
 
         const area = w * h; // Area in CSS pixels squared
@@ -434,20 +443,7 @@ export function buildElementArray(
     /* ----- Build final InteractiveElement list ----- */
     const interactiveElements: InteractiveElement[] = elements.map(el => {
         // Determine simplified type
-        let simpleType = el.role || el.tag.toLowerCase();
-        // You might want more sophisticated mapping here, e.g.,
-        if (el.tag === 'A' && el.href) simpleType = 'link';
-        else if (
-            el.tag === 'BUTTON' ||
-            (el.tag === 'INPUT' && el.inputType === 'button')
-        )
-            simpleType = 'button';
-        else if (el.tag === 'INPUT')
-            simpleType = 'input'; // Could refine based on el.inputType
-        else if (el.tag === 'TEXTAREA') simpleType = 'textarea';
-        else if (el.tag === 'SELECT') simpleType = 'select';
-        else if (el.tag === 'IMG') simpleType = 'image';
-        // Add more mappings as needed
+        const simpleType = el.role.toUpperCase() || el.tag.toUpperCase();
 
         // Consolidate info fields, prioritizing specific labels/text
         const info: InteractiveElementInfo = {

@@ -20,7 +20,7 @@ The project is organized as follows:
 
 ## Communication flow
 
-Client React (localhost:3011) <-> docker magi-controller (node/express server) <-> docker magi-system (node/typescript) <-> LLMs and tools.
+Client React (localhost:3010) <-> docker magi-controller (node/express server) <-> docker magi-system (node/typescript) <-> LLMs and tools.
 
 ## How to solve problems
 
@@ -31,10 +31,6 @@ Client React (localhost:3011) <-> docker magi-controller (node/express server) <
 ## When debugging and fixing error messages
 
 Only fix the actual problem. If you add code which doesn't work, then remove it. Do not suppress errors, or add mock code, actually fix the error.
-
-### Live Reload
-
-The system has live reload configured, so changes to CSS, JS, and HTML files will automatically refresh in the browser without needing to restart the server or manually reload the page.
 
 ### Testing Changes
 

@@ -19,6 +19,7 @@ import { Agent } from './agent.js';
 import { createSummary } from './summary_utils.js';
 import { runningToolTracker } from './running_tool_tracker.js';
 import { v4 as uuidv4 } from 'uuid';
+import { runSequential } from './sequential_tool_queue.js';
 
 /**
  * Process a tool call from an agent
@@ -62,28 +63,55 @@ export async function processToolCall(
                 }
 
                 // Handle the tool call (pass the agent for event handlers)
-                const result: string = await handleToolCall(
+                // Note: onToolResult handlers are now called *after* summarization/truncation below
+                const rawResult: string = await handleToolCall(
                     call,
                     agent,
                     handlers
                 );
 
-                // Skip summarization for get_summary_source to avoid re-summarizing
+                let finalResult: string;
+
+                // Skip summarization for certain tools but limit output to 1000 characters
                 if (
                     call.function.name === 'get_summary_source' ||
-                    call.function.name === 'get_page_content'
+                    call.function.name === 'get_page_content' ||
+                    rawResult.startsWith('data:image/')
                 ) {
-                    return result;
-                }
-                // Skip summarization for image data
-                if (result.startsWith('data:image/')) {
-                    return result;
+                    if (rawResult.length > 1000) {
+                        finalResult =
+                            rawResult.substring(0, 1000) +
+                            '... Output truncated to 1000 characters' +
+                            (call.function.name === 'get_summary_source'
+                                ? '\n\n[Full output truncated: Use get_summary_source() with the file_path parameter to write full output to a file.]'
+                                : '');
+                    } else {
+                        finalResult = rawResult;
+                    }
+                } else {
+                    // Summarize the result
+                    finalResult = await createSummary(
+                        rawResult,
+                        `The following is the output of a tool call \`${call.function.name}(${call.function.arguments})\` used by an AI agent in an autonomous system. Focus on summarizing both the overall output and the final result of the tool. Your summary will be used to understand what the result of the tool call was.`
+                    );
                 }
 
-                return createSummary(
-                    result,
-                    `The following is the output of a tool \`${call.function.name}()\` used by an AI agent in an autonomous system. Focus on including the overall approach taken and the final result of the tool. Your summary will be used to decide the next steps to take.`
-                );
+                // Trigger onToolResult handler with the final (potentially summarized/truncated) result
+                try {
+                    if (agent && agent.onToolResult) {
+                        await agent.onToolResult(call, finalResult);
+                    }
+                    if (handlers.onToolResult) {
+                        handlers.onToolResult(call, finalResult);
+                    }
+                } catch (handlerError) {
+                    console.error(
+                        'Error in onToolResult handler:',
+                        handlerError
+                    );
+                }
+
+                return finalResult;
             } catch (error) {
                 console.error('Error executing tool:', error);
 
@@ -103,20 +131,29 @@ export async function processToolCall(
 }
 
 // Constants
-const FUNCTION_TIMEOUT_MS = 10000; // 10 seconds timeout for functions
+const FUNCTION_TIMEOUT_MS = 8000; // 8 seconds timeout for functions
 
 // Functions that should never be timed out
 const EXCLUDED_FROM_TIMEOUT_FUNCTIONS = new Set<string>([
+    'inspect_running_tool',
+    'wait_for_running_tool',
+    'terminate_running_tool',
+    'start_task',
+    'send_message',
     'get_task_status',
-    'get_running_tool_status',
+    'check_all_task_health',
+    'wait_for_running_task',
+    'get_summary_source',
+    'read_file',
+    'list_directory',
 ]);
 
 // Tools that enable status tracking for long‑running calls.
 // If an agent does NOT include any of these, we skip the timeout to avoid
 // orphaned executions that cannot be inspected or cancelled.
 const STATUS_TRACKING_TOOL_NAMES = new Set<string>([
-    'get_task_status',
-    'get_running_tool_status',
+    'inspect_running_tool',
+    'terminate_running_tool',
 ]);
 
 /**
@@ -398,11 +435,17 @@ export async function handleToolCall(
 
     // Call the implementation with the parsed arguments
     try {
-        // Register this function with the tracker
-        runningToolTracker.addRunningTool(fnId, name, agent.name, argsString);
+        // Register this function with the tracker and get its abortController
+        const runningTool = runningToolTracker.addRunningTool(
+            fnId,
+            name,
+            agent.name,
+            argsString
+        );
+        const { signal } = runningTool.abortController!;
 
-        // Setup the actual function call
-        const executeFunction = async () => {
+        // Actual function execution logic
+        const runToolLogic = async (): Promise<string> => {
             let result: string;
             try {
                 if (typeof args === 'object' && args !== null) {
@@ -481,6 +524,12 @@ export async function handleToolCall(
                         if (tool.injectAgentId) {
                             orderedArgs.unshift(agent.agent_id);
                         }
+
+                        // Check if the function accepts an abort signal
+                        if (paramNames.includes('signal')) {
+                            orderedArgs.push(signal);
+                        }
+
                         result = await tool.function(...orderedArgs);
                     } else {
                         // Fallback to using args values directly if parameter extraction fails
@@ -503,59 +552,65 @@ export async function handleToolCall(
             }
         };
 
+        // Setup the actual function call with abort support
+        const executeFunction = async (): Promise<string> => {
+            return Promise.race([
+                // Actual tool execution
+                runToolLogic(),
+                // Promise that rejects when abort signal is triggered
+                new Promise<string>((_, reject) => {
+                    signal.addEventListener(
+                        'abort',
+                        () => {
+                            reject(new Error('Operation was aborted'));
+                        },
+                        { once: true }
+                    );
+                }),
+            ]);
+        };
+
+        // Check if this agent requires sequential tool execution
+        const sequential = !!agent?.modelSettings?.sequential_tools;
+
         // Determine if we should apply a timeout:
         //   • Always skip for the explicitly excluded functions
+        //   • Skip for sequential tools (we need to wait for completion)
         //   • Apply timeout ONLY if the calling agent has status‑tracking tools
         const hasStatusTools = agentHasStatusTracking(agent);
 
-        if (EXCLUDED_FROM_TIMEOUT_FUNCTIONS.has(name) || !hasStatusTools) {
-            const result = await executeFunction();
+        // Create the execute function that respects sequential queue if needed
+        const execute = sequential
+            ? () => runSequential(agent.agent_id, executeFunction)
+            : executeFunction;
 
-            // Trigger onToolResult handler if available
-            try {
-                if (agent && agent.onToolResult) {
-                    await agent.onToolResult(toolCall, result);
-                }
-                if (handlers.onToolResult) {
-                    handlers.onToolResult(toolCall, result);
-                }
-            } catch (error) {
-                console.error('Error in onToolResult handler:', error);
-            }
+        if (
+            EXCLUDED_FROM_TIMEOUT_FUNCTIONS.has(name) ||
+            !hasStatusTools ||
+            sequential
+        ) {
+            const result = await execute();
 
+            // onToolResult handlers are now called in processToolCall
             return result;
         }
 
-        // Race the function against a timeout
-        const raceResult = await Promise.race([
-            executeFunction().catch(error => {
+        // Race the function against a timeout (only for non-sequential tools)
+        let result = await Promise.race([
+            execute().catch(error => {
                 throw error; // Re-throw to be caught by the outer try-catch
             }),
             timeoutPromise(FUNCTION_TIMEOUT_MS),
         ]);
 
         // If we got a timeout, inform the user but let the function continue running
-        if (raceResult === 'TIMEOUT') {
+        if (result === 'TIMEOUT') {
             // The function is still running in the background
             // executeFunction() will complete/fail the function in the tracker when it finishes
-            return `Tool ${name} is now running in the background (RunningTool: ${fnId}).`;
+            result = `Tool ${name} is running in the background (RunningTool: ${fnId}).`;
         }
 
-        // If we get here, the function completed before the timeout
-        const result = raceResult;
-
-        // Trigger onToolResult handler if available
-        try {
-            if (agent && agent.onToolResult) {
-                await agent.onToolResult(toolCall, result);
-            }
-            if (handlers.onToolResult) {
-                handlers.onToolResult(toolCall, result);
-            }
-        } catch (error) {
-            console.error('Error in onToolResult handler:', error);
-        }
-
+        // onToolResult handlers are now called in processToolCall
         return result;
     } catch (error: any) {
         console.error(`Error executing tool ${name}:`, error);
@@ -575,7 +630,7 @@ export async function handleToolCall(
  * @returns Tool definition object
  */
 export function createToolFunction(
-    func: (...args: any[]) => any,
+    func: (...args: unknown[]) => Promise<string> | string, // Match ExecutableFunction
     description?: string,
     paramMap?: ToolParameterMap,
     returns?: string,
@@ -605,7 +660,18 @@ export function createToolFunction(
                 .map(p => p.trim())
                 .filter(Boolean)
           : [];
-    for (const param of params) {
+
+    for (const paramUnknown of params) {
+        // --- Start Type Assertion ---
+        if (typeof paramUnknown !== 'string') {
+            console.warn(
+                `Skipping non-string parameter in function signature analysis: ${paramUnknown}`
+            );
+            continue;
+        }
+        const param = paramUnknown as string;
+        // --- End Type Assertion ---
+
         // Extract parameter name and default value
         const paramParts = param.split('=').map(p => p.trim());
         const paramName = paramParts[0].trim();
@@ -623,23 +689,35 @@ export function createToolFunction(
         }
 
         // Check if we have custom mapping for this parameter
-        let paramInfo = paramMap?.[cleanParamName];
-        if (typeof paramInfo === 'string') {
-            paramInfo = { description: paramInfo };
+        const paramInfoRaw: ToolParameter | string | undefined =
+            paramMap?.[cleanParamName]; // Use cleanParamName as key
+        let paramInfoObj: ToolParameter | undefined = undefined;
+        let paramInfoDesc: string | undefined = undefined;
+
+        if (typeof paramInfoRaw === 'string') {
+            paramInfoDesc = paramInfoRaw;
+            paramInfoObj = { description: paramInfoRaw }; // Create a basic object for consistency
+        } else if (typeof paramInfoRaw === 'object' && paramInfoRaw !== null) {
+            paramInfoObj = paramInfoRaw;
+            paramInfoDesc = paramInfoRaw.description;
         }
 
         // Convert to snake_case for API consistency if needed
-        const apiParamName = paramInfo?.name || cleanParamName;
+        // Ensure paramInfoObj.name is treated as string if it exists
+        const apiParamName =
+            (typeof paramInfoObj?.name === 'string'
+                ? paramInfoObj.name
+                : undefined) || cleanParamName;
 
         // Determine parameter type based on default value or param map
         let paramType: ToolParameterType = 'string'; // Default type
 
+        // Check type from paramInfoObj first
         if (
-            paramInfo?.type &&
-            validToolParameterTypes.includes(paramInfo.type as any)
+            paramInfoObj?.type &&
+            validToolParameterTypes.includes(paramInfoObj.type)
         ) {
-            // Use explicit type from paramMap if provided
-            paramType = paramInfo.type as ToolParameterType;
+            paramType = paramInfoObj.type;
         } else if (isRestParam) {
             // Rest parameters are arrays
             paramType = 'array';
@@ -660,8 +738,8 @@ export function createToolFunction(
             }
         }
 
-        const description =
-            paramInfo?.description || `The ${cleanParamName} parameter`;
+        // Use description from paramInfo if available, otherwise default
+        const description = paramInfoDesc || `The ${cleanParamName} parameter`;
 
         // Create parameter definition
         properties[apiParamName] = {
@@ -669,32 +747,42 @@ export function createToolFunction(
             description,
         };
 
+        // Handle array items definition
         if (paramType === 'array') {
-            // If the parameter is an array, prioritize the items definition from paramInfo if available
-            if (paramInfo?.items) {
-                properties[apiParamName].items = paramInfo.items;
+            if (paramInfoObj?.items) {
+                properties[apiParamName].items = paramInfoObj.items;
             } else {
-                // Fallback to default string items if not specified in paramInfo
+                // Fallback to default string items if not specified
                 properties[apiParamName].items = {
                     type: 'string',
                 };
             }
-            // Note: Enum handling inside items might need refinement if enums are defined within paramInfo.items itself.
-            // The current logic assumes enum applies directly to items if items is just {type: 'string'}.
-            // If paramInfo.items is complex, its internal structure should define enums.
+            // Handle enum within items if specified in paramInfoObj
             if (
-                paramInfo?.enum &&
-                properties[apiParamName].items.type === 'string'
+                paramInfoObj?.enum &&
+                properties[apiParamName].items?.type === 'string'
             ) {
-                properties[apiParamName].items.enum = paramInfo.enum;
+                // Ensure items exists and is a simple type before assigning enum
+                if (
+                    typeof properties[apiParamName].items === 'object' &&
+                    properties[apiParamName].items !== null &&
+                    !('properties' in properties[apiParamName].items)
+                ) {
+                    (
+                        properties[apiParamName].items as {
+                            type: ToolParameterType;
+                            enum?: string[];
+                        }
+                    ).enum = paramInfoObj.enum;
+                }
             }
-        } else if (paramInfo?.enum) {
+        } else if (paramInfoObj?.enum) {
             // Handle enum for non-array types
-            properties[apiParamName].enum = paramInfo.enum;
+            properties[apiParamName].enum = paramInfoObj.enum;
         }
 
-        // If parameter has no default value, it's required
-        if (defaultValue === undefined && !paramInfo?.optional) {
+        // If parameter has no default value and is not marked optional, it's required
+        if (defaultValue === undefined && !paramInfoObj?.optional) {
             required.push(apiParamName);
         }
     }

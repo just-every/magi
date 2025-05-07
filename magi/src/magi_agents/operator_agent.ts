@@ -10,7 +10,11 @@ import { createBrowserAgent } from './common_agents/browser_agent.js';
 import { createSearchAgent } from './common_agents/search_agent.js';
 import { createShellAgent } from './common_agents/shell_agent.js';
 import { createReasoningAgent } from './common_agents/reasoning_agent.js';
-import { TASK_CONTEXT, MAGI_CONTEXT } from './constants.js';
+import {
+    CUSTOM_TOOLS_TEXT,
+    getTaskContext,
+    MAGI_CONTEXT,
+} from './constants.js';
 import { getCommonTools } from '../utils/index.js';
 import { getRunningToolTools } from '../utils/running_tools.js';
 import { addHistory } from '../utils/history.js';
@@ -44,6 +48,7 @@ ${runningToolTracker.listActive()}`;
 
     // Add the system status to the messages
     messages.push({
+        type: 'message',
         role: 'developer',
         content: status,
     });
@@ -66,29 +71,31 @@ export function createOperatorAgent(): Agent {
 
 Your role in MAGI is as an Operator Agent. You have been given a task. Your job is to determine the intent of the task, think through the task step by step, then use your tools/agents to complete the task.
 
-${TASK_CONTEXT}
+${getTaskContext()}
 
 You should give agents a degree of autonomy, they may encounter problems and if your instructions are too explicit they will not be able to resolve the problem autonomously. Focus on providing context and high level instructions. If they fail on the first attempt, try another more specific approach.
 
 If you encounter a failure several times, take a step back look at the overall picture and try again from another angle.
 
-PLANNING
+PLANNING:
 If this is the first time you've run and you have not yet used a tool, spend some time thinking first, output a plan, then choose your first set of tools to use. Remember: determine the task's INTENT, think through the task step by step, then come up with a final plan to execute it.
 
-EXECUTION
+EXECUTION:
 Once you decide what to do, you can use the tools available to you. After each tool usage you should consider what work has been done and what else you need to do to complete the task.
 You should launch as many specialized agents at once as possible. Use a parallel approach to explore multiple angles simultaneously. You should approach the problem from many different ways until you find a solution.
 
 When you are done, please use the task_complete(result) tool to report that the task has been completed successfully. If you encounter an error that you can not recover from, use the task_fatal_error(error) tool to report that you were not able to complete the task. You should only use task_fatal_error() once you have made many attempts to resolve the issue and you are sure that you can not complete the task.
 
-COMPLETION
+${CUSTOM_TOOLS_TEXT}
+
+COMPLETION:
 If you think you're complete, review your work and make sure you have not missed anything. If you are not sure, ask the other agents for their opinion.
 
 When you are done, please use the task_complete(result) tool to report that the task has been completed successfully. If you encounter an error that you can not recover from, use the task_fatal_error(error) tool to report that you were not able to complete the task. You should only use task_fatal_error() once you have made many attempts to resolve the issue and you are sure that you can not complete the task.`,
         tools: [
-            ...getCommonTools(),
             ...getRunningToolTools(),
             ...getImageGenerationTools(),
+            ...getCommonTools(),
         ],
         workers: [
             createSearchAgent,
@@ -97,7 +104,7 @@ When you are done, please use the task_complete(result) tool to report that the 
             createShellAgent,
             createReasoningAgent,
         ],
-        modelClass: 'reasoning',
+        modelClass: 'monologue',
         maxToolCallRoundsPerTurn: 1, // Allow models to interleave with each other
 
         onRequest: async (
@@ -119,23 +126,26 @@ When you are done, please use the task_complete(result) tool to report that the 
                         status: 'completed',
                         content: response,
                     },
-                    agent.historyThread
+                    agent.historyThread,
+                    agent.model
                 );
             }
             return response;
         },
         onThinking: async (message: ResponseThinkingMessage): Promise<void> => {
-            return addHistory(message, agent.historyThread);
+            return addHistory(message, agent.historyThread, agent.model);
         },
         onToolCall: async (toolCall: ToolCall): Promise<void> => {
             await addHistory(
                 {
+                    id: toolCall.id,
                     type: 'function_call',
-                    call_id: toolCall.id,
+                    call_id: toolCall.call_id || toolCall.id,
                     name: toolCall.function.name,
                     arguments: toolCall.function.arguments,
                 },
-                agent.historyThread
+                agent.historyThread,
+                agent.model
             );
         },
         onToolResult: async (
@@ -144,12 +154,14 @@ When you are done, please use the task_complete(result) tool to report that the 
         ): Promise<void> => {
             await addHistory(
                 {
+                    id: toolCall.id,
                     type: 'function_call_output',
-                    call_id: toolCall.id,
+                    call_id: toolCall.call_id || toolCall.id,
                     name: toolCall.function.name,
                     output: result,
                 },
-                agent.historyThread
+                agent.historyThread,
+                agent.model
             );
         },
     });

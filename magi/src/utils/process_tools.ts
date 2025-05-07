@@ -1,21 +1,9 @@
-import { ProcessToolType, ToolFunction } from '../types/shared-types.js';
-import { runTask } from '../magi_agents/task_run/index.js';
-import { getCommunicationManager } from './communication.js';
+import { ProcessToolType, ToolFunction } from '../types/shared-types.js'; // Removed AgentProcess
+import { getCommunicationManager, sendStreamEvent } from './communication.js'; // Added sendStreamEvent
 import { processTracker } from './process_tracker.js';
 import { dateFormat } from './date_tools.js';
 import { createToolFunction } from './tool_call.js';
 import { getAllProjects } from './project_utils.js';
-
-export async function runProcessTool(
-    tool: ProcessToolType,
-    command: string
-): Promise<void> {
-    switch (tool) {
-        case 'run_task':
-            await runTask(command);
-            break;
-    }
-}
 
 /**
  * Send a message to a specific process
@@ -150,6 +138,152 @@ function start_task(
     return startProcess('run_task', name, command.join('\n\n'), project);
 }
 
+/**
+ * Wait for a running task (started via start_task) to complete.
+ *
+ * @param taskId The ID of the task to wait for.
+ * @param timeout The maximum time to wait in seconds (default: 1800 = 30 minutes).
+ * @returns The final status message of the task if it completes, fails, or is terminated within the timeout, or a timeout message.
+ */
+const TASK_HEARTBEAT_MS = 60_000; // Heartbeat every 60 seconds
+
+async function wait_for_running_task(
+    taskId: string,
+    timeout: number = 1800
+): Promise<string> {
+    const startTime = Date.now();
+    const timeoutMs = timeout * 1000;
+    let lastHeartbeatTime = Date.now();
+    let finalResult = ''; // To store the final message
+
+    // Send start event
+    sendStreamEvent({
+        type: 'task_wait_start',
+        taskId,
+        timestamp: new Date().toISOString(),
+        overseer_notification: true, // Let the overseer know we're deliberately waiting
+    });
+
+    // Initial check
+    const initialProcess = processTracker.getProcess(taskId);
+    if (!initialProcess) {
+        finalResult = `Error: Task with ID ${taskId} not found or already finished before waiting began.`;
+        sendStreamEvent({
+            type: 'task_wait_complete',
+            taskId,
+            result: finalResult,
+            finalStatus: 'unknown',
+            timestamp: new Date().toISOString(),
+        });
+        return finalResult;
+    }
+    if (
+        initialProcess.status !== 'running' &&
+        initialProcess.status !== 'started' &&
+        initialProcess.status !== 'waiting'
+    ) {
+        // Already finished before we started waiting
+        switch (initialProcess.status) {
+            case 'completed':
+                finalResult =
+                    initialProcess.output ??
+                    `Task ${taskId} completed (status checked before wait).`;
+                break;
+            case 'failed':
+                finalResult =
+                    initialProcess.error ??
+                    `Task ${taskId} failed (status checked before wait).`;
+                break;
+            case 'terminated':
+                finalResult = `Task ${taskId} was terminated (status checked before wait).`;
+                break;
+            default:
+                finalResult = `Task ${taskId} has unexpected status '${initialProcess.status}' before waiting began.`;
+                break;
+        }
+        sendStreamEvent({
+            type: 'task_wait_complete',
+            taskId,
+            result: finalResult,
+            finalStatus: initialProcess.status,
+            timestamp: new Date().toISOString(),
+        });
+        return finalResult;
+    }
+
+    // Polling loop
+    while (Date.now() - startTime < timeoutMs) {
+        const process = processTracker.getProcess(taskId);
+
+        if (!process) {
+            // Task finished and was removed? Should not happen if initial check passed.
+            finalResult = `Task with ID ${taskId} disappeared unexpectedly after waiting began. Check system messages.`;
+            break; // Exit loop
+        }
+
+        switch (process.status) {
+            case 'completed':
+                finalResult =
+                    process.output ??
+                    `Task ${taskId} completed. Check system messages for output.`;
+                break; // Exit loop
+            case 'failed':
+                finalResult =
+                    process.error ??
+                    `Task ${taskId} failed. Check system messages for error details.`;
+                break; // Exit loop
+            case 'terminated':
+                finalResult = `Task ${taskId} was terminated.`;
+                break; // Exit loop
+            case 'running':
+            case 'started':
+            case 'waiting':
+                // Send heartbeat if needed
+                if (Date.now() - lastHeartbeatTime > TASK_HEARTBEAT_MS) {
+                    sendStreamEvent({
+                        type: 'task_waiting',
+                        taskId,
+                        elapsedSeconds: Math.round(
+                            (Date.now() - startTime) / 1000
+                        ),
+                        timestamp: new Date().toISOString(),
+                    });
+                    lastHeartbeatTime = Date.now();
+                }
+                // Still active, wait and check again
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Poll every 1 second
+                continue; // Continue loop
+            default:
+                // Should not happen with defined statuses
+                console.error(
+                    `Unexpected status '${process.status}' for task ${taskId}`
+                );
+                finalResult = `Error: Encountered unexpected status '${process.status}' for task ${taskId}.`;
+                break; // Exit loop
+        }
+        // If we reached here, the status was not 'running'/'started'/'waiting', so break the loop
+        break;
+    }
+
+    // If the loop finished due to timeout
+    if (!finalResult) {
+        const finalStatus =
+            processTracker.getProcess(taskId)?.status ?? 'unknown';
+        finalResult = `Task ${taskId} did not complete within the ${timeout} second timeout. It might still be running.\nLast known status: ${finalStatus}`;
+    }
+
+    // Send completion event
+    sendStreamEvent({
+        type: 'task_wait_complete',
+        taskId,
+        result: finalResult,
+        finalStatus: processTracker.getProcess(taskId)?.status ?? 'unknown',
+        timestamp: new Date().toISOString(),
+    });
+
+    return finalResult;
+}
+
 export function listActiveProjects(): string {
     const projects = getAllProjects();
     if (projects.length === 0) {
@@ -194,7 +328,7 @@ export function getProcessTools(): ToolFunction[] {
             {
                 taskId: 'The ID of the task to send the message to',
                 command:
-                    "The message to send to the task. Send 'stop' to terminate the task. Any other message will be processed by the task as soon as it is able to.",
+                    "The message to send to the task. Send 'stop' to terminate the task. Any other message will be sent to the agent running the task to guide it's operation.",
             },
             'If the message was sent successfully or not'
         ),
@@ -213,6 +347,20 @@ export function getProcessTools(): ToolFunction[] {
             'Check the health of all active tasks and identify any that appear to be failing or stuck',
             {},
             'Information about any tasks that may be failing, along with recommendations'
+        ),
+        createToolFunction(
+            wait_for_running_task,
+            'Wait for a task you started with start_task() to finish. Avoids needing to check status repeatedly.',
+            {
+                taskId: 'The ID of the task to wait for',
+                timeout: {
+                    type: 'number',
+                    description:
+                        'The maximum time to wait for the task to finish, in seconds. Defaults to 1800 seconds (30 minutes).',
+                    default: 1800,
+                },
+            },
+            'The final status message of the task (completion, failure, termination, or timeout).'
         ),
     ];
 }

@@ -53,7 +53,7 @@ class ProcessTracker {
             return `taskId: ${processId}
 Name: ${agentProcess.name}
 Status: ${agentProcess.status}
-History: 
+History:
 
 ${JSON.stringify(agentProcess.history, null, 2)}`;
         }
@@ -235,10 +235,10 @@ Note: Failed to generate summary - ${error}`;
                 result += `  Project: ${agentProcess.project.join(', ')}\n`;
             }
             if (agentProcess.command) {
-                result += `  Command: ${truncateString(agentProcess.command)}\n`;
+                result += `  Command: ${truncateString(agentProcess.command.replaceAll('\n', ' '))}\n`;
             }
             if (agentProcess.output) {
-                result += `  Output: ${truncateString(agentProcess.output)}\n`;
+                result += `  Output: ${truncateString(agentProcess.output.replaceAll('\n', ' '))}\n`;
             }
         }
         return result;

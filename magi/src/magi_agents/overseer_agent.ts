@@ -24,8 +24,7 @@ import {
 } from '../utils/memory_utils.js';
 import { getAllProjects, getProjectTools } from '../utils/project_utils.js';
 import { getProcessTools, listActiveProjects } from '../utils/process_tools.js';
-import { getFocusTools } from '../utils/focus_utils.js';
-import { MAGI_CONTEXT } from './constants.js';
+import { MAGI_CONTEXT, CUSTOM_TOOLS_TEXT } from './constants.js';
 import { sendStreamEvent } from '../utils/communication.js';
 import { getCommonTools } from '../utils/index.js';
 import { getRunningToolTools } from '../utils/running_tools.js';
@@ -84,6 +83,7 @@ ${listShortTermMemories()}
 
     // Add the system status to the messages
     messages.push({
+        type: 'message',
         role: 'developer',
         content: status,
     });
@@ -156,6 +156,7 @@ export function createOverseerAgent(): Agent {
         content: string
     ): ResponseInput {
         messages.push({
+            type: 'message',
             role: 'user',
             content: `${aiName} thoughts: ` + content,
         });
@@ -210,6 +211,7 @@ export function createOverseerAgent(): Agent {
                 typeof commandMessage.content === 'string'
             ) {
                 messages.push({
+                    type: 'message',
                     role: 'developer',
                     content: `Please response to ${person} now with ${talkToolName}()`,
                 });
@@ -304,9 +306,11 @@ start_task() - Does things! Plans, executes then validates. A team managed by a 
 
 Your tasks & agents operate in a shared browsing session with ${person}. This allows you to interact with websites together. You can access accounts ${person} is already logged into and perform actions for them.
 
-You can read/write to /magi_output which is a virtual volume shared with all your agents. Projects are created with create_project({project}) and initialized with a git repo. Agents will receive a read/write clone of the project git repo at /magi_output/{taskId}/projects/{project} and they will work in a branch "magi-{taskId}". Information in /magi_output can be access via http://localhost:3011/magi_output/... in a browser URL if you need to open content requested by ${person}.
+You can read/write to /magi_output which is a virtual volume shared with all your agents. Projects are created with create_project({project}) and initialized with a git repo. Agents will receive a read/write clone of the project git repo at /magi_output/{taskId}/projects/{project} and they will work in a branch "magi-{taskId}". Information in /magi_output can be access via http://localhost:3010/magi_output/... in a browser URL if you need to open content requested by ${person}.
 
 You will receive a live System Status with every thought showing you the most relevant information about the system you manage. You can use this to keep track of what you are doing and decide what you need to do. Run as many agents at once as you like! When an agent updates or completes, you'll also receive a message in your thought history.
+
+${CUSTOM_TOOLS_TEXT}
 
 You should think about the things you read, actions you might like to take and how to complete tasks requested by ${person}. You can call your tools to initiate actions, or just keep thinking about whatever is on your mind. If ${person} asks you to do something, you can respond that you're working on it first, then go off and do what you need to do to complete the task. You are a Mostly **Autonomous** AI which means you should make decisions yourself rather than asking ${person} what to do. You can request input (infrequently) from ${person} but you think much faster than them and often can come up with better ideas, so proceed with tasks yourself and then you can modify them if you get different requests from ${person}. If something fails, you should find a way to fix it rather that asking ${person} what to do.
 
@@ -345,10 +349,10 @@ You are your own user. Your messages will be sent back to you to continue your t
             ...getProjectTools(),
             ...getMemoryTools(),
             ...getThoughtTools(),
-            ...getCommonTools(),
             ...getRunningToolTools(),
             ...getImageGenerationTools(),
-            ...getFocusTools(),
+            //...getFocusTools(),
+            ...getCommonTools(),
         ],
         modelClass: 'monologue',
         maxToolCallRoundsPerTurn: 1, // Allow models to interleave with each other
@@ -384,8 +388,9 @@ You are your own user. Your messages will be sent back to you to continue your t
         onToolCall: async (toolCall: ToolCall): Promise<void> => {
             await addHistory(
                 {
+                    id: toolCall.id,
                     type: 'function_call',
-                    call_id: toolCall.id,
+                    call_id: toolCall.call_id || toolCall.id,
                     name: toolCall.function.name,
                     arguments: toolCall.function.arguments,
                 },
@@ -398,8 +403,9 @@ You are your own user. Your messages will be sent back to you to continue your t
         ): Promise<void> => {
             await addHistory(
                 {
+                    id: toolCall.id,
                     type: 'function_call_output',
-                    call_id: toolCall.id,
+                    call_id: toolCall.call_id || toolCall.id,
                     name: toolCall.function.name,
                     output: result,
                 },

@@ -20,9 +20,12 @@ import {
     ResponseOutputMessage,
 } from '../types/shared-types.js';
 import { costTracker } from '../utils/cost_tracker.js';
-import { log_llm_request } from '../utils/file_utils.js';
+import {
+    log_llm_error,
+    log_llm_request,
+    log_llm_response,
+} from '../utils/file_utils.js';
 import { isPaused } from '../utils/communication.js';
-import { convertHistoryFormat } from '../utils/llm_utils.js'; // Re-import
 import { Agent } from '../utils/agent.js';
 import { ModelClassID } from './model_data.js';
 import {
@@ -149,7 +152,7 @@ async function convertToClaudeMessage(
                         // Add a text description for the image
                         {
                             type: 'text',
-                            text: `Image from function call output of ${msg.name} (ID: ${image_id})`,
+                            text: `This is [image #${image_id}] from the function call output of ${msg.name}`,
                         },
                     ];
 
@@ -192,7 +195,7 @@ async function convertToClaudeMessage(
                 ],
             };
         }
-        return { role: 'assistant', content: content.trim() };
+        return { role: 'assistant', content: 'Thinking: ' + content.trim() };
     } else {
         // Skip messages with no actual text content
         if (!content) {
@@ -418,6 +421,160 @@ export class ClaudeProvider implements ModelProvider {
     }
 
     /**
+     * Combined preprocessing (image conversion) and Claude-specific mapping in a single pass.
+     * This merges the responsibilities of `preprocessMessagesForImageSupport`,
+     * `convertHistoryFormat`, and `convertToClaudeMessage` to avoid multiple
+     * iterations over the message history.
+     *
+     * @param messages The original conversation history.
+     * @param modelId  The Claude model identifier (used to decide image handling).
+     * @returns Array of Claude-ready messages.
+     */
+    private async prepareClaudeMessages(
+        messages: ResponseInput,
+        modelId: string
+    ): Promise<ClaudeMessage[]> {
+        const result: ClaudeMessage[] = [];
+
+        for (const originalMsg of messages) {
+            let msg: ResponseInputItem = originalMsg;
+
+            /* ---------- Inline image preprocessing (from preprocessMessagesForImageSupport) ---------- */
+            if (this.isMessageWithStringContent(msg)) {
+                // --- String content ---
+                if (typeof msg.content === 'string') {
+                    const extracted = extractBase64Image(msg.content as string);
+                    if (extracted.found && extracted.image_id !== null) {
+                        try {
+                            const image_id = extracted.image_id;
+                            const imageData = extracted.images[image_id];
+                            const processedImageData =
+                                await convertImageToTextIfNeeded(
+                                    imageData,
+                                    modelId
+                                );
+
+                            if (
+                                processedImageData &&
+                                !processedImageData.startsWith('data:image/')
+                            ) {
+                                const newContent =
+                                    extracted.replaceContent.trim()
+                                        ? extracted.replaceContent.trim() +
+                                          ' ' +
+                                          processedImageData
+                                        : processedImageData;
+
+                                msg = {
+                                    ...msg,
+                                    content: newContent,
+                                } as ResponseInputItem;
+                            }
+                        } catch (error) {
+                            console.error(
+                                'Error converting image to text:',
+                                error
+                            );
+                        }
+                    }
+                }
+                // --- Array content ---
+                else if (Array.isArray(msg.content)) {
+                    let hasChanges = false;
+                    const newContentItems = [...msg.content];
+
+                    for (let j = 0; j < newContentItems.length; j++) {
+                        const item = newContentItems[j];
+                        if (
+                            item.type === 'input_text' &&
+                            typeof item.text === 'string'
+                        ) {
+                            const extracted = extractBase64Image(item.text);
+                            if (
+                                extracted.found &&
+                                extracted.image_id !== null
+                            ) {
+                                try {
+                                    const image_id = extracted.image_id;
+                                    const imageData =
+                                        extracted.images[image_id];
+                                    const processedImageData =
+                                        await convertImageToTextIfNeeded(
+                                            imageData,
+                                            modelId
+                                        );
+
+                                    if (
+                                        processedImageData &&
+                                        !processedImageData.startsWith(
+                                            'data:image/'
+                                        )
+                                    ) {
+                                        const newText =
+                                            extracted.replaceContent.trim()
+                                                ? extracted.replaceContent.trim() +
+                                                  ' ' +
+                                                  processedImageData
+                                                : processedImageData;
+
+                                        newContentItems[j] = {
+                                            ...item,
+                                            text: newText,
+                                        };
+                                        hasChanges = true;
+                                    }
+                                } catch (error) {
+                                    console.error(
+                                        'Error converting image to text in array content:',
+                                        error
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    if (hasChanges) {
+                        msg = {
+                            ...msg,
+                            content: newContentItems,
+                        } as ResponseInputItem;
+                    }
+                }
+            }
+            /* ---------- End image preprocessing ---------- */
+
+            /* ---------- Build Claude message (logic similar to convertHistoryFormat + convertToClaudeMessage) ---------- */
+            const role =
+                'role' in msg && msg.role !== 'developer' ? msg.role : 'system';
+
+            let content = '';
+            if ('content' in msg) {
+                if (typeof msg.content === 'string') {
+                    content = msg.content;
+                } else if (
+                    (msg.content as any).text &&
+                    typeof (msg.content as any).text === 'string'
+                ) {
+                    content = (msg.content as any).text;
+                }
+            }
+
+            const structuredMsg = await convertToClaudeMessage(
+                role,
+                content,
+                msg,
+                result
+            );
+            if (structuredMsg) {
+                result.push(structuredMsg);
+            }
+            /* ---------- End Claude message build ---------- */
+        }
+
+        return result;
+    }
+
+    /**
      * Type guard to check if a message has content property with image data
      */
     private isMessageWithStringContent(
@@ -455,7 +612,7 @@ export class ClaudeProvider implements ModelProvider {
     async *createResponseStream(
         model: string,
         messages: ResponseInput,
-        agent?: Agent
+        agent: Agent
     ): AsyncGenerator<StreamingEvent> {
         // --- Usage Accumulators ---
         let totalInputTokens = 0;
@@ -464,6 +621,7 @@ export class ClaudeProvider implements ModelProvider {
         let totalCacheReadInputTokens = 0;
         let streamCompletedSuccessfully = false; // Flag to track successful stream completion
         let messageCompleteYielded = false; // Flag to track if message_complete was yielded
+        let requestId: string;
 
         try {
             const tools: ToolFunction[] | undefined = agent?.tools;
@@ -494,14 +652,10 @@ export class ClaudeProvider implements ModelProvider {
                     max_tokens = Math.min(max_tokens, 4096); // Lower limit for other classes
             }
 
-            // Preprocess messages to convert images to text for models that don't support images
-            const processedMessages =
-                await this.preprocessMessagesForImageSupport(messages, model);
-
-            // Convert messages format for Claude using the generic converter and Claude-specific map
-            const claudeMessages = await convertHistoryFormat(
-                processedMessages,
-                convertToClaudeMessage
+            // Preprocess *and* convert messages for Claude in one pass
+            const claudeMessages = await this.prepareClaudeMessages(
+                messages,
+                model
             );
 
             // Ensure content is a string. Handle cases where content might be structured differently or missing.
@@ -555,8 +709,14 @@ export class ClaudeProvider implements ModelProvider {
                 ];
             }
 
-            // Log the request before sending
-            log_llm_request('anthropic', model, requestParams);
+            // Log the request and save the requestId for later response logging
+            requestId = log_llm_request(
+                agent.agent_id,
+                'anthropic',
+                model,
+                requestParams,
+                new Date()
+            );
 
             // Track current tool call info
             let currentToolCall: any = null;
@@ -570,9 +730,12 @@ export class ClaudeProvider implements ModelProvider {
             // Make the API call
             const stream = await this.client.messages.create(requestParams);
 
+            const events: StreamingEvent[] = [];
             try {
                 // @ts-expect-error - Claude's stream is AsyncIterable but TypeScript might not recognize it properly
                 for await (const event of stream) {
+                    events.push(event); // Store events for logs
+
                     // Check if the system was paused during the stream
                     if (isPaused()) {
                         console.log(
@@ -825,6 +988,7 @@ export class ClaudeProvider implements ModelProvider {
                                       JSON.stringify(event.error)
                                     : 'Unknown error'),
                         };
+                        log_llm_error(requestId, event);
                         // Don't mark as successful on API error
                         streamCompletedSuccessfully = false;
                         break; // Stop processing on error
@@ -854,15 +1018,19 @@ export class ClaudeProvider implements ModelProvider {
                 console.error('Error processing Claude stream:', streamError);
                 yield {
                     type: 'error',
-                    error: 'Claude stream error: ' + String(streamError),
+                    error: `Claude stream error (${model}): ${streamError}`,
                 };
+                log_llm_error(requestId, streamError);
+            } finally {
+                log_llm_response(requestId, events);
             }
         } catch (error) {
             console.error('Error in Claude streaming completion setup:', error);
             yield {
                 type: 'error',
-                error: 'Claude streaming setup error: ' + String(error),
+                error: `Claude request error (${model}): ${error}`,
             };
+            log_llm_error(requestId, error);
         } finally {
             // Track cost if we have token usage data
             if (totalInputTokens > 0 || totalOutputTokens > 0) {

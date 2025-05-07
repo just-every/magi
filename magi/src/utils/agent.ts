@@ -25,52 +25,8 @@ import { v4 as uuid } from 'uuid';
 // Import removed to fix lint error
 import { Runner } from './runner.js';
 import { ModelClassID } from '../model_providers/model_data.js';
-
-function expandInstructions(definition: AgentDefinition): string {
-    // Expand the instructions to include the context
-    let instructions = definition.instructions;
-
-    // Add confidence signaling instructions if enabled
-    if (definition.modelSettings?.enableConfidenceMonitoring) {
-        instructions += `
-
-AGENT CONFIDENCE MONITORING
-When receiving results from worker agents, look for a 'Confidence [0-100]: X' score at the end of their responses. These scores indicate how confident the agent is in its result:
-- High confidence (75-100): The agent is very sure of its answer/solution
-- Medium confidence (40-74): The agent has a reasonable answer but isn't completely certain
-- Low confidence (0-39): The agent is unsure or encountered significant issues
-Use these confidence scores to guide your decision-making process. When an agent reports low confidence, consider seeking additional information, validation from another agent, or trying a different approach.
-
-REFLECTIVE SYNTHESIS
-For complex tasks, especially when using multiple worker agents, take time to critically evaluate and synthesize their outputs before proceeding:
-1. Explicitly compare and contrast the results from different agents
-2. Identify any conflicts, inconsistencies, or gaps in the information
-3. For crucial decision points or when facing conflicting information of similar confidence, invoke the ReasoningAgent to validate your approach or help resolve discrepancies
-4. Clearly document your synthesis process and reasoning in your response
-
-This reflective process is especially important when:
-- Multiple agents return conflicting results
-- An agent reports low confidence in its solution
-- You're making a critical decision that affects the entire task`;
-    }
-
-    if (definition.modelSettings?.enableConfidenceSignaling) {
-        instructions += `
-
-CONFIDENCE SIGNALING:
-At the very end of your response, please include a self-assessment of your confidence in your analysis and conclusions.
-Rate your confidence on a scale of 0-100, formatted exactly as: Confidence [0-100]: [your score]
-
-Use the following guidelines when assigning your confidence score:
-- 75-100: Very confident - You have a strong logical basis, sufficient information, and clear reasoning path
-- 40-74: Moderately confident - Some uncertainty exists due to assumptions, limited information, or multiple valid interpretations
-- 0-39: Low confidence - Significant uncertainty, missing critical information, or highly speculative reasoning
-
-For example: "Confidence [0-100]: 85" would indicate high confidence in your answer.`;
-    }
-
-    return instructions;
-}
+import { attachAgentSpecificTools } from './index.js';
+import { truncateLargeValues } from './file_utils.js';
 
 /**
  * Create a clone of an agent instance that properly handles functions
@@ -164,20 +120,27 @@ export class Agent implements AgentInterface {
         this.agent_id = definition.agent_id || uuid();
         this.name = definition.name.replaceAll(' ', '_');
         this.description = definition.description;
-        this.instructions = expandInstructions(definition);
+        this.instructions = definition.instructions;
         this.tools = definition.tools || [];
+
+        // Ensure agent-specific tools are attached once ID is assigned
+        attachAgentSpecificTools(this);
         this.model = definition.model;
         this.modelClass = definition.modelClass;
         this.jsonSchema = definition.jsonSchema;
         this.params = definition.params;
         this.modelSettings = definition.modelSettings || {};
-        this.maxToolCalls = definition.maxToolCalls || 10; // Default to 10 if not specified
+        this.maxToolCalls = definition.maxToolCalls || 200; // Default to 10 if not specified
         this.maxToolCallRoundsPerTurn = definition.maxToolCallRoundsPerTurn; // No default, undefined means no limit
         this.processParams = definition.processParams;
 
         this.onToolCall = definition.onToolCall;
         this.onToolResult = definition.onToolResult;
-        this.onRequest = definition.onRequest;
+        // Assert the type to match the class property
+        this.onRequest = definition.onRequest as (
+            agent: Agent,
+            messages: ResponseInput
+        ) => Promise<[Agent, ResponseInput]>;
         this.onThinking = definition.onThinking;
         this.onResponse = definition.onResponse;
         this.tryDirectExecution = definition.tryDirectExecution; // Add this line
@@ -194,18 +157,6 @@ export class Agent implements AgentInterface {
                     // Call the function with no arguments or adjust based on what ExecutableFunction expects
                     const agent = createAgentFn() as Agent;
                     agent.parent = this;
-
-                    if (definition.modelSettings?.enableConfidenceMonitoring) {
-                        // Force worker agents to use confidence signaling
-                        agent.modelSettings = agent.modelSettings || {};
-                        if (
-                            !agent.modelSettings.json_schema &&
-                            !agent.modelSettings.force_json
-                        ) {
-                            agent.modelSettings.enableConfidenceSignaling =
-                                true;
-                        }
-                    }
                     return agent;
                 }
             );
@@ -403,7 +354,7 @@ async function runAgentTool(
             break;
     }
 
-    const messages: ResponseInput = [{ role: 'user', content: prompt }];
+    const messages: ResponseInput = [];
     let toolResultsToInclude = '';
     const toolCalls: any[] = [];
 
@@ -423,7 +374,7 @@ async function runAgentTool(
                 try {
                     console.log(
                         `${agent.name} intercepted tool result:`,
-                        result
+                        truncateLargeValues(result)
                     );
                     if (result) {
                         const resultString =
@@ -503,37 +454,6 @@ async function runAgentTool(
             // Only append if the tool results aren't already reflected in the response
             console.log(`${agent.name} appending tool results to response`);
             response += '\n\nTool Results:\n' + toolResultsToInclude;
-        }
-
-        // Check for confidence signaling if enabled for the calling agent
-        // The confidence score will be propagated to the calling agent if it's enabled for confidence signaling
-        if (agent.parent?.modelSettings?.enableConfidenceSignaling) {
-            // Extract confidence score using regex pattern - format: "Confidence [0-100]: X"
-            const confidenceMatch = response.match(
-                /Confidence\s*\[0-100\]:\s*(\d{1,3})$/m
-            );
-            if (confidenceMatch && confidenceMatch[1]) {
-                const confidenceScore = parseInt(confidenceMatch[1], 10);
-                if (confidenceScore >= 0 && confidenceScore <= 100) {
-                    console.log(
-                        `${agent.name} reported confidence score: ${confidenceScore}`
-                    );
-
-                    // Option 1: Prepend the confidence to the response for visibility
-                    // This keeps the original confidence signal at the end and adds a more visible marker at the beginning
-                    response = `[Agent confidence: ${confidenceScore}/100] ${response}`;
-
-                    // Option 2: (Alternative) Remove the original confidence line and add a standardized format
-                    // This would make the response cleaner but might interfere with the original formatting
-                    // Uncommenting this would replace Option 1
-                    /*
-					// Remove the original confidence line
-					response = response.replaceAll(/Confidence\s*\[0-100\]:\s*\d{1,3}$/m, '').trim();
-					// Add confidence in a standardized format
-					response += `\n\n[Confidence: ${confidenceScore}/100]`;
-					*/
-                }
-            }
         }
 
         console.log(`${agent.name} final response: ${response}`);

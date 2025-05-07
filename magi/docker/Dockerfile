@@ -38,7 +38,7 @@ ARG GROUP_NAME=magi_user
 RUN npm install -g npm
 
 # Global installs needed at runtime
-RUN npm install -g @anthropic-ai/claude-code@latest @openai/codex@latest
+RUN npm install -g @anthropic-ai/claude-code@latest @openai/codex@latest ts-node esbuild
 
 # Install system dependencies required at runtime, including sudo and git
 # Also install gosu for switching users in the entrypoint
@@ -79,6 +79,10 @@ COPY --from=builder --chown=${USER_NAME}:${GROUP_NAME} /build/node_modules ./nod
 # Copy the entrypoint script (adjust source path as needed)
 COPY ./magi/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Create magi-run-tool for running scripts with tool context
+RUN echo '#!/bin/sh\nexec node /app/dist/utils/tool_runner.js "$@"' > /usr/local/bin/magi-run-tool && \
+    chmod +x /usr/local/bin/magi-run-tool
 
 # Copy the application source code
 # Changes here will invalidate cache from this point onwards

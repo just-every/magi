@@ -26,6 +26,7 @@ import { get_output_dir } from './file_utils.js';
 import { processTracker } from './process_tracker.js';
 import { addSystemMessage } from './history.js';
 import { newProjectReady } from './project_utils.js';
+import { truncateLargeValues } from './file_utils.js';
 
 let lastEventLogged = '';
 // Global variable to track system pause state
@@ -134,14 +135,27 @@ export class CommunicationManager {
                             commandMessage.args &&
                             commandMessage.args.controllerPort
                         ) {
-                            const newPort = commandMessage.args.controllerPort;
+                            const newPortRaw =
+                                commandMessage.args.controllerPort;
 
-                            // If port has changed, update our stored port for future reconnections
-                            if (newPort !== this.controllerPort) {
-                                console.log(
-                                    `Controller port changed from ${this.controllerPort} to ${newPort}`
+                            // Check if newPortRaw is a string or number before assigning
+                            if (
+                                typeof newPortRaw === 'string' ||
+                                typeof newPortRaw === 'number'
+                            ) {
+                                const newPort = String(newPortRaw); // Convert number to string if necessary
+
+                                // If port has changed, update our stored port for future reconnections
+                                if (newPort !== this.controllerPort) {
+                                    console.log(
+                                        `Controller port changed from ${this.controllerPort} to ${newPort}`
+                                    );
+                                    this.controllerPort = newPort;
+                                }
+                            } else if (newPortRaw !== undefined) {
+                                console.warn(
+                                    `Received non-string/number controllerPort: ${typeof newPortRaw}`
                                 );
-                                this.controllerPort = newPort;
                             }
                         }
                         return;
@@ -252,7 +266,9 @@ export class CommunicationManager {
             // Log to console for Docker logs for debugging purposes only
             // but ensure it's clearly marked as a JSON message so we don't try to parse it
             // from the Docker logs in the controller
-            console.log(`[JSON_MESSAGE] ${JSON.stringify(message)}`);
+            console.log(
+                `[JSON_MESSAGE] ${JSON.stringify(truncateLargeValues(message))}`
+            );
         }
 
         if (this.connected && this.ws) {
@@ -466,4 +482,14 @@ export function getCommunicationManager(): CommunicationManager {
 
 export function hasCommunicationManager(): boolean {
     return !!communicationManager;
+}
+
+export function sendComms(event: StreamingEvent): void {
+    if (communicationManager) {
+        communicationManager.send(event);
+    } else {
+        console.error(
+            'Cannot set comm event: Communication manager not initialized'
+        );
+    }
 }

@@ -117,7 +117,7 @@ export class TestProvider implements ModelProvider {
     async *createResponseStream(
         model: string,
         messages: ResponseInput,
-        agent?: Agent
+        agent: Agent
     ): AsyncGenerator<StreamingEvent> {
         console.log(
             `[TestProvider] Creating response stream for model: ${model}`

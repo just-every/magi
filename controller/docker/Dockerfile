@@ -61,6 +61,7 @@ COPY --from=builder --chown=${USER_NAME}:${GROUP_NAME} /build/node_modules ./nod
 # Changes here will invalidate cache from this point onwards
 COPY --chown=${USER_NAME}:${GROUP_NAME} ./controller/ ./
 COPY --chown=${USER_NAME}:${GROUP_NAME} ./common/shared-types.ts ./src/types/shared-types.ts
+COPY --chown=${USER_NAME}:${GROUP_NAME} ./db/ ./db/
 
 # Build the application (runs as root)
 RUN npm run build

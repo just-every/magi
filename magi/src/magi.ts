@@ -8,7 +8,6 @@
 
 import { parseArgs } from 'node:util';
 import {
-    ProcessToolType,
     ResponseInput,
     ServerMessage,
     CommandMessage,
@@ -25,14 +24,16 @@ import {
     initCommunication,
     getCommunicationManager,
     hasCommunicationManager,
+    sendComms,
 } from './utils/communication.js';
 import { move_to_working_dir, set_file_test_mode } from './utils/file_utils.js';
 import { costTracker } from './utils/cost_tracker.js';
-import { runProcessTool } from './utils/process_tools.js';
 import { Agent } from './utils/agent.js';
 import { runThoughtDelay } from './utils/thought_utils.js';
-import { runMECH } from './utils/mech_tools.js';
+// Removed runMECH as it's now handled by runMECHWithMemory
+import { runMECHWithMemory } from './utils/mech_memory_wrapper.js';
 import { getAllProjects } from './utils/project_utils.js';
+import { initDatabase } from './utils/progress_db.js';
 
 const person = process.env.YOUR_NAME || 'User';
 const talkToolName = `talk to ${person}`.toLowerCase().replaceAll(' ', '_');
@@ -96,8 +97,8 @@ export async function spawnThought(
     command: string
 ): Promise<void> {
     if (args.agent !== 'overseer') {
-        // If not overseer, just append to history and let the main thread handle it
-        return await addHumanMessage(command);
+        // If destination is not overseer, it must have come from the overseer
+        return await addHumanMessage(command, undefined, 'Overseer');
     }
 
     const agent = createAgent(args);
@@ -119,13 +120,32 @@ export async function spawnThought(
     agent.historyThread = thread;
     agent.maxToolCallRoundsPerTurn = 1;
 
+    sendComms({
+        type: 'agent_status',
+        agent_id: agent.agent_id,
+        status: 'spawn_thought_start',
+        meta_data: {
+            model: agent.model,
+        },
+    });
+
     // Run the command with unified tool handling
     thread.forEach(message => history.push(message));
     history.push({
+        type: 'message',
         role: 'developer',
         content: `Please respond to ${person} using ${talkToolName}(message, affect, incomplete). You are a model which specialized in writing responses. The response may be obvious from the information provided to you, but if not you can just acknowledge ${person}'s message and set incomplete = true`,
     });
     const response = await Runner.runStreamedWithTools(agent, '', history);
+
+    sendComms({
+        type: 'agent_status',
+        agent_id: agent.agent_id,
+        status: 'spawn_thought_done',
+        meta_data: {
+            model: agent.model,
+        },
+    });
 
     console.log('[SPAWN THOUGHT] ', response);
 
@@ -264,6 +284,16 @@ async function main(): Promise<void> {
     const projects = getAllProjects();
     move_to_working_dir(projects.length > 0 ? `projects/${projects[0]}` : '');
 
+    // Initialize database connection only (migrations are run by controller at startup)
+    const dbReady = await initDatabase();
+    if (!dbReady) {
+        console.warn(
+            'Database connection failed. Custom tools will not be available.'
+        );
+    } else {
+        console.log('Database initialized successfully.');
+    }
+
     // Verify API keys for model providers
     if (!checkModelProviderApiKeys()) {
         return endProcess(1, 'No valid API keys found for any model provider');
@@ -306,12 +336,36 @@ async function main(): Promise<void> {
             agent.agent_id = primaryAgentId;
         }
 
+        sendComms({
+            type: 'agent_status',
+            agent_id: agent.agent_id,
+            status: 'process_start',
+        });
+
         if (args.tool && args.tool === 'run_task') {
-            await runMECH(agent, promptText, !args.test, args.model);
-        } else if (args.tool && args.tool !== 'none') {
-            console.log(`Running tool: ${args.tool}`);
-            await runProcessTool(args.tool as ProcessToolType, promptText);
-            return endProcess(0, 'Tool execution completed.');
+            // Use memory-enhanced MECH for task runs
+            const mechResult = await runMECHWithMemory(
+                agent,
+                promptText,
+                !args.test,
+                args.model
+            );
+
+            // We don't need to do anything special with the result here,
+            // as the completion/error signal is already sent to the communication manager
+            // inside the task_complete / task_fatal_error tools
+
+            // Log task completion with metrics
+            console.log(
+                `Task ${mechResult.status}: ${
+                    mechResult.status === 'complete'
+                        ? mechResult.result
+                        : 'Error: ' + (mechResult as any).error
+                }`
+            );
+            console.log(
+                `Duration: ${mechResult.durationSec}s, Cost: $${mechResult.totalCost.toFixed(6)}`
+            );
         } else {
             // Add initial history
             await addMonologue(
@@ -329,6 +383,12 @@ async function main(): Promise<void> {
                 args.model
             );
         }
+
+        sendComms({
+            type: 'agent_status',
+            agent_id: agent.agent_id,
+            status: 'process_done',
+        });
 
         if (args.test) {
             // For tests we terminate after the first run

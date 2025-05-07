@@ -14,13 +14,15 @@ const BrowserAgentCard: React.FC<{
     const points = useMemo<TimelinePoint[]>(() => {
         if (!screenshots || screenshots.length === 0) return [];
 
-        return screenshots.map((screenshot, index) => ({
+        return screenshots.map((screenshot: ScreenshotEvent, index) => ({
             time: screenshot.timestamp
                 ? new Date(screenshot.timestamp).getTime() / 1000 // Convert to seconds
                 : index, // Fallback to index if no timestamp
             screenshot: screenshot.data,
             thumbnail: screenshot.data, // Use the same image for thumbnail
             url: screenshot.url || '…', // Default to ellipsis if URL is missing
+            viewport: screenshot.viewport,
+            cursor: screenshot.cursor,
         }));
     }, [screenshots]);
 

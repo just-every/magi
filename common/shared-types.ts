@@ -41,6 +41,7 @@ export interface AgentInterface {
     maxToolCalls?: number;
     onToolCall?: (toolCall: ToolCall) => void;
     onToolResult?: (toolCall: ToolCall, result: string) => void;
+    tryDirectExecution?: (messages: ResponseInput) => Promise<ResponseInput | null>; // Added from AgentDefinition
     export(): AgentExportDefinition;
     asTool(): ToolFunction;
 }
@@ -155,9 +156,9 @@ export interface AgentDefinition {
     onToolCall?: (toolCall: ToolCall) => Promise<void>;
     onToolResult?: (toolCall: ToolCall, result: string) => Promise<void>;
     onRequest?: (
-        agent: AgentInterface,
+        agent: AgentInterface, // Reverted back to AgentInterface
         messages: ResponseInput
-    ) => Promise<[any, ResponseInput]>;
+    ) => Promise<[any, ResponseInput]>; // Reverted back to AgentInterface
     onResponse?: (response: string) => Promise<string>;
     onThinking?: (message: ResponseThinkingMessage) => Promise<void>;
     tryDirectExecution?: (
@@ -201,30 +202,9 @@ export interface ModelSettings {
         | 'none'
         | 'required'
         | { type: string; function: { name: string } };
+    sequential_tools?: boolean; // Run tools sequentially instead of in parallel
     json_schema?: object; // JSON schema for structured output
     force_json?: boolean; // Force JSON output even if model doesn't natively support it
-
-    // --- Multi-Model Ensemble Settings (Approach 1) ---
-    /** Enable diverse multi-model sampling with LLM-as-Judge for response selection. */
-    enableDiverseEnsemble?: boolean;
-    /** Number of diverse models to sample in the ensemble (default: 3). */
-    ensembleSamples?: number;
-    /** Temperature for Softmax normalization of judge scores (default: 1.0). */
-    ensembleTemperature?: number;
-    /** Specific model ID to use as the judge LLM (defaults to agent's model or a strong reasoning model). */
-    ensembleJudgeClass?: ModelClassID;
-    /** Custom prompt template for the judge LLM. Must include {question} and {response} placeholders. */
-    ensembleJudgePrompt?: string;
-    /** Optional: Explicit list of model IDs to sample from for the ensemble. */
-    ensembleModelPool?: string[];
-    /** Enable refinement of the ensemble response using a separate model */
-    enableRefinement?: boolean;
-
-    // --- Inter-Agent Validation Settings (Approach 2) ---
-    /** Look for confidence signal from workers */
-    enableConfidenceMonitoring?: boolean;
-    /** Instruct worker agents to include a 'Confidence [0-100]: X' score in their output. */
-    enableConfidenceSignaling?: boolean;
 }
 
 /**
@@ -233,6 +213,7 @@ export interface ModelSettings {
 export interface ToolCall {
     id: string;
     type: 'function';
+    call_id?: string;
     function: {
         name: string;
         arguments: string;
@@ -284,11 +265,17 @@ export type ResponseInputItem =
     | ResponseInputFunctionCall
     | ResponseInputFunctionCallOutput;
 
+export interface ResponseBaseMessage {
+    type: string;
+    model?: string;
+    timestamp?: number; // Timestamp for the event, shared by all event types
+}
+
 /**
  * ResponseInputMessage
  */
-export interface ResponseInputMessage {
-    type?: 'message';
+export interface ResponseInputMessage extends ResponseBaseMessage {
+    type: 'message';
     name?: string; // deprecated
     content: ResponseContent;
     role: 'user' | 'system' | 'developer';
@@ -298,18 +285,30 @@ export interface ResponseInputMessage {
 /**
  * ResponseThinkingMessage
  */
-export interface ResponseThinkingMessage {
+export interface ResponseThinkingMessage extends ResponseBaseMessage {
     type: 'thinking';
     content: ResponseContent;
     signature?: ResponseContent;
+    thinking_id?: string;
     role: 'assistant';
     status?: 'in_progress' | 'completed' | 'incomplete';
 }
 
+export interface ResponseReasoningItem extends ResponseBaseMessage {
+    type: 'reasoning';
+    id: string;
+    summary: Array<{
+        text: string;
+        type: 'summary_text';
+      }>;
+    status?: 'in_progress' | 'completed' | 'incomplete';
+}
+
+
 /**
  * ResponseOutputMessage
  */
-export interface ResponseOutputMessage {
+export interface ResponseOutputMessage extends ResponseBaseMessage {
     type: 'message';
     content: ResponseContent;
     role: 'assistant';
@@ -319,7 +318,7 @@ export interface ResponseOutputMessage {
 /**
  * Tool call data structure
  */
-export interface ResponseInputFunctionCall {
+export interface ResponseInputFunctionCall extends ResponseBaseMessage {
     type: 'function_call';
     call_id: string;
     name: string;
@@ -331,7 +330,7 @@ export interface ResponseInputFunctionCall {
 /**
  * Tool call data structure
  */
-export interface ResponseInputFunctionCallOutput {
+export interface ResponseInputFunctionCallOutput extends ResponseBaseMessage {
     type: 'function_call_output';
     call_id: string;
     name?: string;
@@ -382,6 +381,7 @@ export type StreamEventType =
     | 'agent_start'
     | 'agent_updated'
     | 'agent_done'
+    | 'agent_status'
     | 'message_start'
     | 'message_delta'
     | 'message_complete'
@@ -399,7 +399,15 @@ export type StreamEventType =
     | 'system_status'
     | 'quota_update'
     | 'screenshot'
-    | 'error';
+    | 'error'
+    // New types for waiting on tools
+    | 'tool_wait_start'
+    | 'tool_waiting'
+    | 'tool_wait_complete'
+    // New types for waiting on tasks
+    | 'task_wait_start'
+    | 'task_waiting'
+    | 'task_wait_complete';
 
 /**
  * Base streaming event interface
@@ -408,6 +416,72 @@ export interface StreamEvent {
     type: StreamEventType;
     agent?: AgentExportDefinition;
     timestamp?: string; // Timestamp for the event, shared by all event types
+}
+
+// --- Tool Wait Events ---
+
+/**
+ * Event indicating the start of waiting for a tool.
+ */
+export interface ToolWaitStartEvent extends StreamEvent {
+    type: 'tool_wait_start';
+    runningToolId: string;
+    timestamp: string;
+    overseer_notification?: boolean; // Flag to let the overseer know the agent is deliberately waiting
+}
+
+/**
+ * Heartbeat event while waiting for a tool.
+ */
+export interface ToolWaitingEvent extends StreamEvent {
+    type: 'tool_waiting';
+    runningToolId: string;
+    elapsedSeconds: number;
+    timestamp: string;
+}
+
+/**
+ * Event indicating the completion of waiting for a tool.
+ */
+export interface ToolWaitCompleteEvent extends StreamEvent {
+    type: 'tool_wait_complete';
+    runningToolId: string;
+    result: string; // The final message returned by wait_for_running_tool
+    finalStatus: string; // Status like 'completed', 'failed', 'terminated', 'timeout', 'unknown'
+    timestamp: string;
+}
+
+// --- Task Wait Events ---
+
+/**
+ * Event indicating the start of waiting for a task.
+ */
+export interface TaskWaitStartEvent extends StreamEvent {
+    type: 'task_wait_start';
+    taskId: string;
+    timestamp: string;
+    overseer_notification?: boolean; // Flag to let the overseer know the agent is deliberately waiting
+}
+
+/**
+ * Heartbeat event while waiting for a task.
+ */
+export interface TaskWaitingEvent extends StreamEvent {
+    type: 'task_waiting';
+    taskId: string;
+    elapsedSeconds: number;
+    timestamp: string;
+}
+
+/**
+ * Event indicating the completion of waiting for a task.
+ */
+export interface TaskWaitCompleteEvent extends StreamEvent {
+    type: 'task_wait_complete';
+    taskId: string;
+    result: string; // The final message returned by wait_for_running_task
+    finalStatus: string; // Status like 'completed', 'failed', 'terminated', 'timeout', 'unknown'
+    timestamp: string;
 }
 
 /**
@@ -473,6 +547,16 @@ export interface AgentEvent extends StreamEvent {
     type: 'agent_start' | 'agent_updated' | 'agent_done';
     agent: AgentExportDefinition;
     input?: string;
+}
+
+/**
+ * Agent updated streaming event
+ */
+export interface AgentStatusEvent extends StreamEvent {
+    type: 'agent_status';
+    agent_id: string;
+    status: string;
+    meta_data?: Record<string, unknown>; // Replaced any with Record<string, unknown>
 }
 
 /**
@@ -553,13 +637,14 @@ export interface ScreenshotEvent extends StreamEvent {
     data: string; // Base64 encoded image data
     timestamp: string;
     url?: string; // Optional current URL
-    viewport?: {
+    viewport: {
         // Optional viewport rectangle for cropping/highlighting
         x: number;
         y: number;
         width: number;
         height: number;
     };
+    cursor: { x: number; y: number, button?: 'none' | 'left' | 'middle' | 'right' };
 }
 
 /**
@@ -572,7 +657,7 @@ export interface ModelUsage {
     output_tokens?: number; // Made optional to match model_data.ts
     cached_tokens?: number;
     image_count?: number; // Added to match model_data.ts
-    metadata?: Record<string, any>; // Changed to 'any' for flexibility
+    metadata?: Record<string, any>;
     timestamp?: string | Date; // Support both string and Date types
     isFreeTierUsage?: boolean; // Added flag for free tier usage
 }
@@ -628,6 +713,7 @@ export type StreamingEvent =
     | ProjectEvent
     | ProcessEvent
     | AgentEvent
+    | AgentStatusEvent
     | MessageEvent
     | FileEvent
     | TalkEvent
@@ -637,7 +723,14 @@ export type StreamingEvent =
     | SystemStatusEvent
     | QuotaUpdateEvent
     | AudioEvent
-    | ScreenshotEvent;
+    | ScreenshotEvent
+    // Add new wait events
+    | ToolWaitStartEvent
+    | ToolWaitingEvent
+    | ToolWaitCompleteEvent
+    | TaskWaitStartEvent
+    | TaskWaitingEvent
+    | TaskWaitCompleteEvent;
 
 /**
  * Process status type (used by controller)
@@ -770,7 +863,7 @@ export interface RunResult {
     status: RunStatus;
     response: string;
     next?: string; // Optional name of the next agent to run
-    metadata?: any; // Optional metadata to pass to the next agent
+    metadata?: any;
 }
 
 /**
@@ -782,7 +875,7 @@ export interface RunnerStageConfig {
         lastOutput: Record<string, string>
     ) => ResponseInput; // Prepares the input for the agent based on past conversation history
 
-    agent: () => any; // Returns the agent for this stage
+    agent: () => any;
 
     next: (output: string) => string | null; // Determines the next stage based on the output. Null if this is the last stage
 }
@@ -801,7 +894,7 @@ export interface ModelProvider {
     createResponseStream(
         model: string,
         messages: ResponseInput,
-        agent?: any
+        agent: any
     ): AsyncGenerator<StreamingEvent>;
 }
 
@@ -809,48 +902,19 @@ export interface ModelProvider {
  * Model class identifier
  */
 export type ModelClassID =
-    // Model-specific identifiers
-    | 'gpt-3.5'
-    | 'gpt-4'
-    | 'gpt-4-vision'
-    | 'claude-haiku'
-    | 'claude-sonnet'
-    | 'claude-opus'
-    | 'claude-3-haiku'
-    | 'claude-3-sonnet'
-    | 'claude-3-opus'
-    | 'gemini-pro'
-    | 'gemini-flash'
-    | 'deepseek'
-    | 'brave'
-    | 'command-r'
-    | 'llama3'
-    | 'llama3-70b'
-    | 'mistral-medium'
-    | 'mixtral'
-    | 'grok-1'
-    | 'yi-large'
-    | 'yi-small'
-    | 'phi3-mini'
-
-    // Capability-based identifiers
-    | 'vision'
-    | 'vision_mini' // Added for mini vision models
-    | 'reasoning'
-    | 'code'
-    | 'mini'
-    | 'summary'
-    | 'monologue'
     | 'standard'
+    | 'mini'
+    | 'reasoning'
+    | 'reasoning_mini'
+    | 'monologue'
+    | 'code'
+    | 'writing'
+    | 'summary'
+    | 'vision'
+    | 'vision_mini'
     | 'search'
-    | 'writing' // Added for writing-focused models
-    | 'image_generation' // Added for image generation models
-    | 'embedding' // Added for embedding models
-
-    // Embedding model identifiers
-    | 'text-embedding-3-large'
-    | 'text-embedding-3-small'
-    | 'text-embedding-ada';
+    | 'image_generation'
+    | 'embedding';
 
 // --- Custom Signals for Task Flow Control ---
 
@@ -996,6 +1060,14 @@ export type MessagePayloads = {
     quota_update: Omit<QuotaUpdateEvent, 'type'>;
     screenshot: Omit<ScreenshotEvent, 'type'>;
     error: Omit<ErrorEvent, 'type'>;
+    // Add new wait events
+    tool_wait_start: Omit<ToolWaitStartEvent, 'type'>;
+    tool_waiting: Omit<ToolWaitingEvent, 'type'>;
+    tool_wait_complete: Omit<ToolWaitCompleteEvent, 'type'>;
+    task_wait_start: Omit<TaskWaitStartEvent, 'type'>;
+    task_waiting: Omit<TaskWaitingEvent, 'type'>;
+    task_wait_complete: Omit<TaskWaitCompleteEvent, 'type'>;
+
 
     // Client->Server payloads
     CLIENT_COMMAND_RUN: ClientCommandRunPayload;
@@ -1007,82 +1079,6 @@ export type MessagePayloads = {
     CLIENT_SET_TELEGRAM_STATE: ClientSetTelegramStatePayload;
     CLIENT_UPDATE_APP_SETTINGS: ClientUpdateAppSettingsPayload;
 };
-
-/**
- * Unified Message Interface
- *
- * This is the core interface that should be used for all communication between
- * system components (Magi processes, Controller server, and Controller client).
- *
- * @typeparam T - Message type
- */
-export interface UnifiedMessage<T extends MessageType = MessageType> {
-    /** The type of message */
-    type: T;
-
-    /** Direction of message flow */
-    direction: MessageDirection;
-
-    /** Source/Target process ID where applicable */
-    processId?: string;
-
-    /** Timestamp for the message */
-    timestamp?: string;
-
-    /** Message-specific payload based on the type */
-    payload: MessagePayloads[T];
-}
-
-/**
- * Factory functions to create UnifiedMessages in a type-safe way
- */
-export const createProcessToServerMessage = <T extends StreamEventType>(
-    type: T,
-    processId: string,
-    payload: MessagePayloads[T]
-): UnifiedMessage<T> => ({
-    type,
-    direction: 'process->server',
-    processId,
-    timestamp: new Date().toISOString(),
-    payload,
-});
-
-export const createServerToProcessMessage = <T extends StreamEventType>(
-    type: T,
-    processId: string,
-    payload: MessagePayloads[T]
-): UnifiedMessage<T> => ({
-    type,
-    direction: 'server->process',
-    processId,
-    timestamp: new Date().toISOString(),
-    payload,
-});
-
-export const createServerToClientMessage = <T extends StreamEventType>(
-    type: T,
-    processId: string | undefined,
-    payload: MessagePayloads[T]
-): UnifiedMessage<T> => ({
-    type,
-    direction: 'server->client',
-    processId,
-    timestamp: new Date().toISOString(),
-    payload,
-});
-
-export const createClientToServerMessage = <T extends ClientServerMessageType>(
-    type: T,
-    processId: string | undefined,
-    payload: MessagePayloads[T]
-): UnifiedMessage<T> => ({
-    type,
-    direction: 'client->server',
-    processId,
-    timestamp: new Date().toISOString(),
-    payload,
-});
 
 // Event types
 export interface MagiMessage {

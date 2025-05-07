@@ -40,9 +40,9 @@ const ERROR_FREQUENCY_THRESHOLD = 0.3;
 // --- Helper functions for hash map ---
 type SummaryHashMap = { [hash: string]: string }; // Map<documentHash, summaryId>
 
-async function loadHashMap(filePath: string): Promise<SummaryHashMap> {
+async function loadHashMap(file_path: string): Promise<SummaryHashMap> {
     try {
-        const data = await fs.readFile(filePath, 'utf-8');
+        const data = await fs.readFile(file_path, 'utf-8');
         return JSON.parse(data);
     } catch (error: any) {
         if (error.code === 'ENOENT') {
@@ -50,7 +50,7 @@ async function loadHashMap(filePath: string): Promise<SummaryHashMap> {
             return {};
         }
         console.error(
-            `Error loading summary hash map from ${filePath}:`,
+            `Error loading summary hash map from ${file_path}:`,
             error
         );
         // In case of other errors, return empty map to avoid blocking
@@ -59,14 +59,14 @@ async function loadHashMap(filePath: string): Promise<SummaryHashMap> {
 }
 
 async function saveHashMap(
-    filePath: string,
+    file_path: string,
     map: SummaryHashMap
 ): Promise<void> {
     try {
         const data = JSON.stringify(map, null, 2);
-        await fs.writeFile(filePath, data, 'utf-8');
+        await fs.writeFile(file_path, data, 'utf-8');
     } catch (error) {
-        console.error(`Error saving summary hash map to ${filePath}:`, error);
+        console.error(`Error saving summary hash map to ${file_path}:`, error);
         // Log error but don't throw, as failing to save the map shouldn't stop the summary process
     }
 }
@@ -125,7 +125,9 @@ export async function createSummary(
 
             const originalLines = originalDoc.split('\n').length;
             const summaryLines = existingSummary.split('\n').length;
-            const metadata = `\n\nShowing summary (${originalLines} -> ${summaryLines} lines)\n[You may need to read the full content with get_summary_source(${summaryId}, 0, ${originalLines - 1})]`;
+            const originalChars = originalDoc.length;
+            const summaryChars = existingSummary.length;
+            const metadata = `\n\nSummarized large output to avoid excessive tokens (${originalLines} -> ${summaryLines} lines, ${originalChars} -> ${summaryChars} chars) [Read with get_summary_source(${summaryId})]`;
 
             console.log(
                 `Retrieved summary from cache for hash: ${documentHash.substring(0, 8)}...`
@@ -193,29 +195,53 @@ export async function createSummary(
     }
     // --- End Save Logic ---
 
-    const metadata = `\n\nShowing summary (${originalLines} -> ${summaryLines} lines)\n[You may need to read the full content with get_summary_source(${newSummaryId}, 0, ${originalLines - 1})]`;
+    const originalChars = originalDocumentForSave.length;
+    const summaryChars = trimmedSummary.length;
+    const metadata = `\n\nSummarized large output to avoid excessive tokens (${originalLines} -> ${summaryLines} lines, ${originalChars} -> ${summaryChars} chars) [Read with get_summary_source(${newSummaryId})]`;
     return trimmedSummary + metadata;
 }
 
 /**
  * Retrieves the original document content associated with a summary ID.
- * Can optionally return a specific range of lines.
+ * Can optionally return a specific range of lines and/or write the content to a file.
  *
  * @param id The unique ID of the summary.
  * @param line_start Optional. The starting line number (0-based).
  * @param line_end Optional. The ending line number (0-based).
+ * @param file_path Optional. Path to write the content to a file.
  * @returns The requested content of the original document or an error message.
  */
 export async function get_summary_source(
     id: string,
     line_start?: number,
-    line_end?: number
+    line_end?: number,
+    file_path?: string
 ): Promise<string> {
     const summariesDir = get_output_dir(SUMMARIES_SUBDIR);
     const originalFilePath = path.join(summariesDir, `original-${id}.txt`);
 
     try {
-        const content = await fs.readFile(originalFilePath, 'utf-8');
+        let content = await fs.readFile(originalFilePath, 'utf-8');
+
+        // If file_path is provided, write the content to the file
+        if (file_path) {
+            try {
+                // Create directory if it doesn't exist
+                const directory = path.dirname(file_path);
+                await fs.mkdir(directory, { recursive: true });
+
+                // Write the content to the file
+                await fs.writeFile(file_path, content, 'utf-8');
+                console.log(`Summary written to file: ${file_path}`);
+                return `Successfully wrote ${content.length} chars to file: ${file_path}\n\nStart of content:\n\n${content.substring(0, 500)}...`;
+            } catch (writeError) {
+                console.error(
+                    `Error writing summary to file ${file_path}:`,
+                    writeError
+                );
+                return `Error: Could not write summary to file ${file_path}.`;
+            }
+        }
 
         if (line_start !== undefined && line_end !== undefined) {
             const lines = content.split('\n');
@@ -226,11 +252,10 @@ export async function get_summary_source(
             if (start >= end || start >= lines.length) {
                 return `Error: Invalid line range requested (${line_start}-${line_end}) for document with ${lines.length} lines.`;
             }
-            return lines.slice(start, end).join('\n');
-        } else {
-            // Return full content if no line range specified
-            return content;
+            content = lines.slice(start, end).join('\n');
         }
+
+        return content;
     } catch (error: any) {
         if (error.code === 'ENOENT') {
             return `Error: Original document for summary ID '${id}' not found at ${originalFilePath}.`;
@@ -588,16 +613,24 @@ export function getSummaryTools(): ToolFunction[] {
                 id: {
                     type: 'string',
                     description:
-                        'The unique ID of the summary. If possible, limit lines to avoid loading too much data.',
+                        'The unique ID of the summary. If possible, limit lines to limit tokens returned. Results will be truncated to 1000 characters - for larger files, use file_path to write to the file system, then analyze.',
                 },
                 line_start: {
                     type: 'number',
-                    description: 'Starting line to retrieve (0-based).',
+                    description:
+                        'Starting line to retrieve (0-based). Ignored if file_path is set.',
                     optional: true,
                 },
                 line_end: {
                     type: 'number',
-                    description: 'Ending line to retrieve (0-based).',
+                    description:
+                        'Ending line to retrieve (0-based). Ignored if file_path is set.',
+                    optional: true,
+                },
+                file_path: {
+                    type: 'string',
+                    description:
+                        'Path to write the content to a file instead of returning it.',
                     optional: true,
                 },
             },

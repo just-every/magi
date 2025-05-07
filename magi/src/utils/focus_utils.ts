@@ -26,17 +26,20 @@ export interface OverseerFocus {
 let currentFocus: OverseerFocus = { kind: 'none', lastUpdated: Date.now() };
 
 /**
- * Get the current focus information
+ * Clear the current focus
+ * @returns Confirmation message
  */
-export function getFocus(): OverseerFocus {
-    return { ...currentFocus };
+function clear_focus(): string {
+    currentFocus = { kind: 'none', lastUpdated: Date.now() };
+    return 'Overseer focus cleared.';
 }
 
 /**
- * Clear the current focus
+ * Get the current focus information
+ * @returns Current focus object
  */
-export function clearFocus(): void {
-    currentFocus = { kind: 'none', lastUpdated: Date.now() };
+export function get_focus(): string {
+    return JSON.stringify({ ...currentFocus });
 }
 
 /**
@@ -78,18 +81,13 @@ export async function screenshotTab(tabId: string): Promise<{
     }
 }
 
+/**
+ * Set focus to a specific browser tab
+ * @param tabId Chrome tab ID to focus on
+ * @returns Status message
+ */
 export function setBrowserTabFocus(tabId: string): string {
-    if (!tabId) {
-        return 'Error: Invalid tab ID provided';
-    }
-
-    currentFocus = {
-        kind: 'browser_tab',
-        tabId,
-        lastUpdated: Date.now(),
-    };
-
-    return `Focus set to browser tab ${tabId}`;
+    return set_focus('browser_tab', tabId);
 }
 
 /**
@@ -97,18 +95,8 @@ export function setBrowserTabFocus(tabId: string): string {
  * @param agentId MAGI agent ID to focus on
  * @returns Status message
  */
-export function setAgentFocus(agentId: string): string {
-    if (!agentId) {
-        return 'Error: Invalid agent ID provided';
-    }
-
-    currentFocus = {
-        kind: 'agent',
-        agentId,
-        lastUpdated: Date.now(),
-    };
-
-    return `Focus set to agent ${agentId}`;
+export function set_agent_focus(agentId: string): string {
+    return set_focus('agent', agentId);
 }
 
 /**
@@ -116,18 +104,43 @@ export function setAgentFocus(agentId: string): string {
  * @param processId Task/process ID to focus on
  * @returns Status message
  */
-export function setProcessFocus(processId: string): string {
-    if (!processId) {
-        return 'Error: Invalid process ID provided';
+export function set_process_focus(processId: string): string {
+    return set_focus('process', processId);
+}
+
+/**
+ * Set focus to a specific resource type
+ * @param type Type of focus ('browser_tab', 'agent', or 'process')
+ * @param id ID of the resource to focus on
+ * @returns Status message
+ */
+export function set_focus(type: string, id: string): string {
+    if (!id) {
+        return 'Error: Invalid ID provided';
+    }
+
+    if (!['browser_tab', 'agent', 'process'].includes(type)) {
+        return `Error: Invalid focus type '${type}'. Must be one of: browser_tab, agent, process`;
     }
 
     currentFocus = {
-        kind: 'process',
-        processId,
+        kind: type as FocusKind,
         lastUpdated: Date.now(),
     };
 
-    return `Focus set to process ${processId}`;
+    // Set the appropriate ID field based on the type
+    if (type === 'browser_tab') {
+        currentFocus.tabId = id;
+        return `Focus set to browser tab ${id}`;
+    } else if (type === 'agent') {
+        currentFocus.agentId = id;
+        return `Focus set to agent ${id}`;
+    } else if (type === 'process') {
+        currentFocus.processId = id;
+        return `Focus set to process ${id}`;
+    }
+
+    return 'Error: Focus could not be set';
 }
 
 /**
@@ -136,7 +149,7 @@ export function setProcessFocus(processId: string): string {
  * @returns Markdown-formatted status block or empty string if no focus
  */
 export async function buildFocusStatusBlock(): Promise<string> {
-    const focus = getFocus();
+    const focus = { ...currentFocus };
 
     // No focus set
     if (focus.kind === 'none') {
@@ -146,7 +159,7 @@ export async function buildFocusStatusBlock(): Promise<string> {
     // Check if focus is stale (more than 1 hour old)
     const STALE_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour
     if (Date.now() - focus.lastUpdated > STALE_THRESHOLD_MS) {
-        clearFocus();
+        clear_focus();
         return '';
     }
 
@@ -242,42 +255,26 @@ export async function buildFocusStatusBlock(): Promise<string> {
 export function getFocusTools(): ToolFunction[] {
     return [
         createToolFunction(
-            setBrowserTabFocus,
-            'Set Overseer focus to a specific browser tab. Each thought will include a screenshot of this tab.',
+            set_focus,
+            'Set Overseer focus to a specific resource. Each thought will include updates for this resource.',
             {
-                tabId: {
+                type: {
                     type: 'string',
                     description:
-                        'Chrome tab ID to focus on (obtain from list_browser_tabs)',
+                        'Type of focus: "browser_tab", "agent", or "process"',
+                    enum: ['browser_tab', 'agent', 'process'],
                 },
-            }
-        ),
-        createToolFunction(
-            setAgentFocus,
-            'Set Overseer focus to a specific agent. Each thought will include the most recent logs from this agent.',
-            {
-                agentId: {
+                id: {
                     type: 'string',
-                    description: 'MAGI agent ID to focus on',
+                    description:
+                        'ID of the resource to focus on (tab ID, agent ID, or process ID)',
                 },
             }
         ),
+        createToolFunction(clear_focus, 'Clear the current Overseer focus'),
         createToolFunction(
-            setProcessFocus,
-            'Set Overseer focus to a specific process/task. Each thought will include the most recent logs from this process.',
-            {
-                processId: {
-                    type: 'string',
-                    description: 'Process/task ID to focus on',
-                },
-            }
-        ),
-        createToolFunction(clearFocus, 'Clear the current Overseer focus', {}),
-        createToolFunction(
-            getFocus,
-            'Get information about the current Overseer focus',
-            {},
-            'Current focus information as JSON object'
+            get_focus,
+            'Get information about the current Overseer focus'
         ),
     ];
 }

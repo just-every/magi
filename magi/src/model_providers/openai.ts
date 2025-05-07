@@ -19,7 +19,11 @@ import OpenAI, { toFile } from 'openai';
 import fetch from 'node-fetch';
 // import {v4 as uuidv4} from 'uuid';
 import { costTracker } from '../utils/cost_tracker.js';
-import { log_llm_request } from '../utils/file_utils.js';
+import {
+    log_llm_request,
+    log_llm_response,
+    log_llm_error,
+} from '../utils/file_utils.js';
 import { isPaused } from '../utils/communication.js';
 import { Agent } from '../utils/agent.js';
 import {
@@ -32,6 +36,7 @@ function convertToOpenAITools(requestParams: any): any {
     requestParams.tools = requestParams.tools.map((tool: ToolFunction) => {
         if (tool.definition.function.name === 'web_search') {
             requestParams.model = 'gpt-4o'; // Force model for web_search
+            delete requestParams.reasoning;
             return {
                 type: 'web_search_preview',
                 search_context_size: 'high',
@@ -197,8 +202,10 @@ function convertToOpenAITools(requestParams: any): any {
             display_height: BROWSER_HEIGHT,
             environment: 'browser',
         });
-        requestParams.truncation = 'auto';
     }
+
+    // Always allow truncation if we provide too much input
+    requestParams.truncation = 'auto';
     return requestParams;
 }
 
@@ -230,13 +237,13 @@ async function addImagesToInput(
                 // Single image (no splitting needed)
                 messageContent.push({
                     type: 'input_text',
-                    text: `Image ${image_id} from ${source}`,
+                    text: `This is [image #${image_id}] from the ${source}`,
                 });
             } else {
                 // Multiple segments - explain the splitting
                 messageContent.push({
                     type: 'input_text',
-                    text: `Image ${image_id} from ${source} (split into ${processedImages.length} segments of up to 768px high)`,
+                    text: `This is [image #${image_id}] from the ${source} (split into ${processedImages.length} parts, each up to 768px high)`,
                 });
             }
 
@@ -251,6 +258,7 @@ async function addImagesToInput(
 
             // Add the complete message with all segments
             input.push({
+                type: 'message',
                 role: 'user',
                 content: messageContent,
             });
@@ -258,11 +266,12 @@ async function addImagesToInput(
             console.error(`Error processing image ${image_id}:`, error);
             // If image processing fails, add the original image as a fallback
             input.push({
+                type: 'message',
                 role: 'user',
                 content: [
                     {
                         type: 'input_text',
-                        text: `Image ${image_id} from ${source} (unprocessed due to error)`,
+                        text: `This is [image #${image_id}] from the ${source} (raw image)`,
                     },
                     {
                         type: 'input_image',
@@ -285,12 +294,75 @@ export class OpenAIProvider implements ModelProvider {
     constructor(apiKey?: string) {
         this.client = new OpenAI({
             apiKey: apiKey || process.env.OPENAI_API_KEY,
+            timeout: 60000, // 1 minute timeout
         });
 
         if (!this.client) {
             throw new Error(
                 'Failed to initialize OpenAI client. Make sure OPENAI_API_KEY is set.'
             );
+        }
+    }
+
+    /**
+     * Creates embeddings for text input
+     * @param modelId ID of the embedding model to use (e.g., 'text-embedding-3-small')
+     * @param input Text to embed (string or array of strings)
+     * @param opts Optional parameters for embedding generation
+     * @returns Promise resolving to embedding vector(s)
+     */
+    async createEmbedding(
+        modelId: string,
+        input: string | string[],
+        opts?: { dimensions?: number; normalize?: boolean }
+    ): Promise<number[] | number[][]> {
+        try {
+            // Prepare options
+            const options: any = {
+                model: modelId,
+                input: input,
+                encoding_format: 'float',
+            };
+
+            // Use 3072 dimensions to match our database schema with halfvec type
+            options.dimensions = opts?.dimensions || 3072;
+
+            console.log(`[OpenAI] Generating embedding with model ${modelId}`);
+
+            // Call the OpenAI API
+            const response = await this.client.embeddings.create(options);
+
+            // Track token usage
+            const inputTokens =
+                response.usage?.prompt_tokens ||
+                (typeof input === 'string'
+                    ? Math.ceil(input.length / 4)
+                    : input.reduce(
+                          (sum, text) => sum + Math.ceil(text.length / 4),
+                          0
+                      ));
+
+            costTracker.addUsage({
+                model: modelId,
+                input_tokens: inputTokens,
+                output_tokens: 0, // No output tokens for embeddings
+                metadata: {
+                    dimensions:
+                        response.data[0]?.embedding.length ||
+                        opts?.dimensions ||
+                        1536,
+                },
+            });
+
+            // Extract the embedding vectors - handle single vs. multiple inputs
+            if (Array.isArray(input) && input.length > 1) {
+                return response.data.map(item => item.embedding);
+            } else {
+                return response.data[0].embedding;
+            }
+        } catch (error) {
+            console.error('[OpenAI] Error generating embedding:', error);
+            throw error;
         }
     }
 
@@ -419,34 +491,130 @@ export class OpenAIProvider implements ModelProvider {
     async *createResponseStream(
         model: string,
         messages: ResponseInput,
-        agent?: Agent
+        agent: Agent
     ): AsyncGenerator<StreamingEvent> {
         const tools: ToolFunction[] | undefined = agent?.tools;
         const settings: ModelSettings | undefined = agent?.modelSettings;
+        let requestId: string;
 
         try {
             // Use a more compatible approach with reduce to build the array
-            let input: ResponseInput = [];
+            // Use 'any' type assertion to avoid TypeScript errors when adding custom structures
+            let input: any[] = [];
 
             // Process all messages
-            for (const message of messages) {
+            for (const messageFull of messages) {
+                const message = { ...messageFull };
+                delete message.timestamp;
+                delete message.model;
+
                 // Handle thinking messages
                 if (message.type === 'thinking') {
-                    // Openai does not support thinking messages
-                    // Convert to normal message and add to input
+                    // Convert thinking messages to reasoning items for OpenAI
+                    // Using type assertion to satisfy TypeScript since the OpenAI API expects
+                    // a structure not directly represented in our types
+                    // Use a complete type assertion to bypass TypeScript's type checking for this object
+                    // The OpenAI API expects a structure different from our ResponseInputItem types
+
+                    if (message.thinking_id) {
+                        console.log(
+                            `[OpenAI] Processing thinking message with ID: ${message.thinking_id}`,
+                            message
+                        );
+                        const match = message.thinking_id.match(
+                            /^(rs_[A-Za-z0-9]+)-(\d)$/
+                        );
+                        if (match) {
+                            const reasoningId = match[1];
+                            const summaryIndex = parseInt(match[2], 10);
+
+                            // Format the summary text content
+                            const summaryText =
+                                typeof message.content === 'string'
+                                    ? message.content
+                                    : JSON.stringify(message.content);
+
+                            // Create the summary entry
+                            const summaryEntry = {
+                                type: 'summary_text',
+                                text: summaryText,
+                            };
+
+                            // Look for existing reasoning item with matching ID - use any type to avoid TS errors
+                            const existingIndex = input.findIndex(
+                                (item: any) =>
+                                    item.type === 'reasoning' &&
+                                    item.id === reasoningId
+                            );
+
+                            if (existingIndex !== -1) {
+                                // Found existing reasoning item - update at the correct position
+                                // Use any type to avoid TypeScript errors with custom properties
+                                const existingItem = input[
+                                    existingIndex
+                                ] as any;
+
+                                // Ensure summary array exists and is the right size
+                                if (!existingItem.summary) {
+                                    existingItem.summary = [];
+                                }
+
+                                // Update the summary at the specified index
+                                existingItem.summary[summaryIndex] =
+                                    summaryEntry;
+
+                                // Replace the item in the array (keeping the any type assertion)
+                                input[existingIndex] = existingItem;
+                            } else {
+                                // No existing item found - create a new one
+                                const newItem = {
+                                    type: 'reasoning',
+                                    id: reasoningId,
+                                    summary: [],
+                                } as any; // Type assertion at the object level
+
+                                // Set the summary at the specified index
+                                newItem.summary[summaryIndex] = summaryEntry;
+
+                                // Add to input
+                                input.push(newItem);
+                            }
+                            continue;
+                        }
+                    }
+
+                    // If we weren't able to process the thinking message, add it as a regular message
                     input.push({
                         type: 'message',
                         role: 'user', // Use 'user' as it's a valid type
-                        content: message.content,
+                        content: 'Thinking: ' + message.content,
                         status: message.status || 'completed',
                     });
+                    continue;
+                }
+
+                // Handle function call messages
+                if (message.type === 'function_call') {
+                    // Check if id doesn't start with 'fc_', and remove it if so
+                    let messageToAdd: any = { ...message };
+                    if (message.id && !message.id.startsWith('fc_')) {
+                        // If id exists and doesn't start with 'fc_', remove it
+                        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                        const { id, ...rest } = messageToAdd;
+                        messageToAdd = rest;
+                    }
+
+                    messageToAdd.status = message.status || 'completed';
+
+                    // Add the message (potentially without id)
+                    input.push(messageToAdd);
                     continue;
                 }
 
                 // Handle function call output messages
                 if (message.type === 'function_call_output') {
                     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                    const { name, ...messageWithoutName } = message;
+                    const { name, id, ...messageToAdd } = message; // Original code removes name
 
                     if (typeof message.output === 'string') {
                         const extracted = extractBase64Image(message.output);
@@ -455,7 +623,7 @@ export class OpenAIProvider implements ModelProvider {
                             // If the output contains an image, we need to convert it to a file
                             // Add the modified message with placeholder - preserve all original properties
                             input.push({
-                                ...messageWithoutName, // Keep all properties including 'name'
+                                ...messageToAdd, // Use the potentially modified message
                                 output: extracted.replaceContent, // Already contains [image ID] placeholders
                             });
 
@@ -463,15 +631,15 @@ export class OpenAIProvider implements ModelProvider {
                             input = await addImagesToInput(
                                 input,
                                 extracted.images,
-                                `function call output of ${message.name}`
+                                `function call output of ${message.name}` // Still use original message.name here
                             );
                         } else {
-                            // Add the original message without modification
-                            input.push(messageWithoutName);
+                            // Add the message (potentially without id)
+                            input.push(messageToAdd);
                         }
                     } else {
-                        // Add the original message without modification
-                        input.push(messageWithoutName);
+                        // Add the message (potentially without id)
+                        input.push(messageToAdd);
                     }
                     continue;
                 }
@@ -548,6 +716,7 @@ export class OpenAIProvider implements ModelProvider {
             let requestParams: any = {
                 model,
                 stream: true,
+                user: 'magi',
                 input,
             };
 
@@ -565,7 +734,7 @@ export class OpenAIProvider implements ModelProvider {
             if (model.startsWith('o')) {
                 requestParams.reasoning = {
                     effort: 'high',
-                    summary: 'detailed',
+                    summary: 'auto',
                 };
             }
 
@@ -646,19 +815,30 @@ export class OpenAIProvider implements ModelProvider {
                 requestParams = convertToOpenAITools(requestParams);
             }
 
-            // Log the request for debugging
-            log_llm_request('openai', model, requestParams);
+            // Log the request and save the requestId for later response logging
+            requestId = log_llm_request(
+                agent.agent_id,
+                'openai',
+                model,
+                requestParams
+            );
 
             const stream = await this.client.responses.create(requestParams);
 
             // Track delta positions for each message_id
+            // Track positions for messages and reasoning
             const messagePositions = new Map<string, number>();
+            const reasoningPositions = new Map<string, number>();
+            const reasoningAggregates = new Map<string, string>();
 
             const toolCallStates = new Map<string, ToolCall>();
 
+            const events: StreamingEvent[] = [];
             try {
                 // @ts-expect-error - OpenAI's stream might be AsyncIterable but TypeScript definitions might need adjustment
                 for await (const event of stream) {
+                    events.push(event);
+
                     // Check if the system was paused during the stream
                     if (isPaused()) {
                         console.log(
@@ -671,168 +851,6 @@ export class OpenAIProvider implements ModelProvider {
                             order: 999, // Ensure it appears last if needed
                         };
                         break; // Exit the loop to stop processing further chunks
-                    }
-
-                    // --- Computer Use Preview Events ---
-                    if (
-                        event.type === 'response.computer_call.in_progress' &&
-                        event.item
-                    ) {
-                        console.log(
-                            `Computer call in progress for item ${event.item_id}`
-                        );
-                    } else if (
-                        event.type === 'response.computer_call.done' &&
-                        event.item
-                    ) {
-                        console.log(
-                            `Computer call done for item ${event.item_id}, action:`,
-                            event.item.action
-                        );
-
-                        // Handle computer call actions by converting to browser actions
-                        if (event.item.action && 'type' in event.item.action) {
-                            const action = event.item.action;
-                            const actionType = action.type;
-
-                            // Define a tool call for browser actions
-                            const toolCall: ToolCall = {
-                                id:
-                                    event.item_id ||
-                                    `computer_call_${Date.now()}`,
-                                type: 'function',
-                                function: {
-                                    name: '',
-                                    arguments: '{}',
-                                },
-                            };
-
-                            // Map computer actions to browser tool functions
-                            switch (actionType) {
-                                case 'click': {
-                                    const { x, y, button = 'left' } = action;
-                                    toolCall.function.name = 'click_at';
-                                    toolCall.function.arguments =
-                                        JSON.stringify({ x, y, button });
-                                    break;
-                                }
-
-                                case 'scroll': {
-                                    const { scrollX, scrollY } = action;
-                                    toolCall.function.name = 'scroll_to';
-                                    toolCall.function.arguments =
-                                        JSON.stringify({
-                                            x: scrollX,
-                                            y: scrollY,
-                                        });
-                                    break;
-                                }
-
-                                case 'keypress': {
-                                    const { keys } = action;
-                                    toolCall.function.name = 'press_keys';
-                                    toolCall.function.arguments =
-                                        JSON.stringify({ keys });
-                                    break;
-                                }
-
-                                case 'type': {
-                                    const { text } = action;
-                                    toolCall.function.name = 'type';
-                                    toolCall.function.arguments =
-                                        JSON.stringify({ text });
-                                    break;
-                                }
-
-                                case 'wait': {
-                                    //toolCall.function.name = 'browser_wait';
-                                    //toolCall.function.arguments = JSON.stringify({});
-                                    break;
-                                }
-
-                                case 'screenshot': {
-                                    //toolCall.function.name = 'browser_screenshot';
-                                    //toolCall.function.arguments = JSON.stringify({});
-                                    break;
-                                }
-
-                                default:
-                                    console.warn(
-                                        `Unrecognized computer action type: ${actionType}`
-                                    );
-                                    continue; // Skip unrecognized actions
-                            }
-
-                            // Check for pending safety checks
-                            if (
-                                event.item.pending_safety_checks &&
-                                event.item.pending_safety_checks.length > 0
-                            ) {
-                                // Handle safety checks by acknowledging them
-                                console.log(
-                                    `Safety checks for call ${event.item.call_id}:`,
-                                    event.item.pending_safety_checks
-                                );
-
-                                // Create a new response with acknowledged safety checks
-                                const safetyChecks =
-                                    event.item.pending_safety_checks.map(
-                                        (check: {
-                                            id: string;
-                                            code: string;
-                                            message: string;
-                                        }) => ({
-                                            id: check.id,
-                                            code: check.code,
-                                            message: check.message,
-                                        })
-                                    );
-
-                                // Create and submit a response to acknowledge safety checks
-                                try {
-                                    await this.client.responses.create({
-                                        model: model,
-                                        previous_response_id: event.response_id,
-                                        tools: [
-                                            {
-                                                type: 'computer-preview',
-                                                display_width: BROWSER_WIDTH,
-                                                display_height: BROWSER_HEIGHT,
-                                                environment: 'browser',
-                                            },
-                                        ],
-                                        input: [
-                                            {
-                                                type: 'computer_call_output',
-                                                call_id: event.item.call_id,
-                                                acknowledged_safety_checks:
-                                                    safetyChecks,
-                                                output: {
-                                                    type: 'computer_screenshot',
-                                                    image_url:
-                                                        'data:image/png;base64,iVBORw0KGgo=', // Placeholder
-                                                },
-                                            },
-                                        ],
-                                        truncation: 'auto',
-                                    });
-                                    console.log(
-                                        `Acknowledged safety checks for call ${event.item.call_id}`
-                                    );
-                                } catch (safetyError) {
-                                    console.error(
-                                        'Error acknowledging safety checks:',
-                                        safetyError
-                                    );
-                                }
-                            }
-
-                            // Yield the tool call event to be processed
-                            yield {
-                                type: 'tool_start',
-                                tool_calls: [toolCall],
-                            };
-                        }
                     }
 
                     // --- Response Lifecycle Events ---
@@ -873,6 +891,7 @@ export class OpenAIProvider implements ModelProvider {
                             type: 'error',
                             error: `OpenAI response  failed: [${errorInfo.code}] ${errorInfo.message}`,
                         };
+                        log_llm_error(requestId, errorInfo);
                     } else if (
                         event.type === 'response.incomplete' &&
                         event.response?.incomplete_details
@@ -886,6 +905,10 @@ export class OpenAIProvider implements ModelProvider {
                             type: 'error', // Or a more general 'response_incomplete'
                             error: 'OpenAI response incomplete: ' + reason,
                         };
+                        log_llm_error(
+                            requestId,
+                            'OpenAI response incomplete: ' + reason
+                        );
                     }
 
                     // --- Output Item Lifecycle Events ---
@@ -900,6 +923,7 @@ export class OpenAIProvider implements ModelProvider {
                             if (!toolCallStates.has(event.item.id)) {
                                 toolCallStates.set(event.item.id, {
                                     id: event.item.id, // Use the ID from the event item
+                                    call_id: event.item.call_id, // Use the call_id from the event item
                                     type: 'function',
                                     function: {
                                         name: event.item.name || '', // Ensure 'name' exists on function_call item, provide fallback
@@ -921,6 +945,18 @@ export class OpenAIProvider implements ModelProvider {
                         // If it's a function call, we rely on 'function_call_arguments.done' to yield.
                         // This event could be used for cleanup if needed, but ensure no double-yielding.
                         // We already clean up state in 'function_call_arguments.done'.
+                        if (
+                            event.item.type === 'reasoning' &&
+                            !event.item.summary.length
+                        ) {
+                            // In this case we get a reasoning item with no summary
+                            yield {
+                                type: 'message_complete',
+                                content: '',
+                                message_id: event.item.id + '-0',
+                                thinking_content: '{empty}',
+                            };
+                        }
                     }
 
                     // --- Content Part Lifecycle Events ---
@@ -1013,6 +1049,10 @@ export class OpenAIProvider implements ModelProvider {
                             type: 'error',
                             error: 'OpenAI refusal error: ' + event.refusal,
                         };
+                        log_llm_error(
+                            requestId,
+                            'OpenAI refusal error: ' + event.refusal
+                        );
                     }
 
                     // --- Function Call Events (Based on Docs) ---
@@ -1105,16 +1145,84 @@ export class OpenAIProvider implements ModelProvider {
                         // Note: Results might be used internally by the model or delivered via annotations/text.
                     }
 
+                    // --- Reasoning Summary Events ---
+                    else if (
+                        event.type === 'response.reasoning_summary_part.added'
+                    ) {
+                        // A new reasoning summary part was added - we just log this
+                        console.log(
+                            `Reasoning summary part added for item ${event.item_id}, index ${event.summary_index}`
+                        );
+                        // We don't yield anything here, we wait for the text deltas
+                    } else if (
+                        event.type === 'response.reasoning_summary_part.done'
+                    ) {
+                        // A reasoning summary part was completed - we just log this
+                        console.log(
+                            `Reasoning summary part done for item ${event.item_id}, index ${event.summary_index}`
+                        );
+                        // We don't yield anything here, we rely on the text.done event
+                    } else if (
+                        event.type ===
+                            'response.reasoning_summary_text.delta' &&
+                        event.delta
+                    ) {
+                        // A delta was added to a reasoning summary text
+                        const itemId =
+                            event.item_id + '-' + event.summary_index;
+                        if (!reasoningPositions.has(itemId)) {
+                            reasoningPositions.set(itemId, 0);
+                            reasoningAggregates.set(itemId, '');
+                        }
+                        const position = reasoningPositions.get(itemId)!;
+                        reasoningAggregates.set(
+                            itemId,
+                            reasoningAggregates.get(itemId)! + event.delta
+                        );
+
+                        // Yield the delta as a message_delta with thinking_content
+                        yield {
+                            type: 'message_delta',
+                            content: '', // No visible content for reasoning
+                            message_id: itemId,
+                            thinking_content: event.delta,
+                            order: position,
+                        };
+                        reasoningPositions.set(itemId, position + 1);
+                    } else if (
+                        event.type === 'response.reasoning_summary_text.done' &&
+                        event.text !== undefined
+                    ) {
+                        // A reasoning summary text was completed
+                        const itemId =
+                            event.item_id + '-' + event.summary_index;
+                        const aggregatedThinking =
+                            reasoningAggregates.get(itemId) ?? event.text;
+
+                        // Yield the completed thinking content
+                        yield {
+                            type: 'message_complete',
+                            content: '', // No visible content for reasoning
+                            message_id: itemId,
+                            thinking_content: aggregatedThinking,
+                        };
+
+                        // Clean up tracking
+                        reasoningPositions.delete(itemId);
+                        reasoningAggregates.delete(itemId);
+                    }
+
                     // --- API Stream Error Event ---
                     else if (event.type === 'error' && event.message) {
                         // An error reported by the API within the stream
                         console.error(
-                            `API Stream Error: [${event.code || 'N/A'}] ${event.message}`
+                            `API Stream Error (${model}): [${event.code || 'N/A'}] ${event.message}`
                         );
                         yield {
                             type: 'error',
-                            error: `OpenAI API error: [${event.code || 'N/A'}] ${event.message}`,
+                            error: `OpenAI API error (${model}): [${event.code || 'N/A'}] ${event.message}`,
                         };
+                        log_llm_error(requestId, event);
                     }
 
                     // --- Catch unexpected event types (shouldn't happen if user confirmation is correct) ---
@@ -1127,10 +1235,9 @@ export class OpenAIProvider implements ModelProvider {
                 console.error('Error processing response stream:', streamError);
                 yield {
                     type: 'error',
-                    error:
-                        'OpenAI stream processing error: ' +
-                        String(streamError), // Or more detailed error info
+                    error: `OpenAI stream request error (${model}): ${streamError}`,
                 };
+                log_llm_error(requestId, streamError);
             } finally {
                 // Clean up: Check if any tool calls were started but not completed
                 if (toolCallStates.size > 0) {
@@ -1151,6 +1258,9 @@ export class OpenAIProvider implements ModelProvider {
                 }
                 messagePositions.clear(); // Clear positions map
                 // console.log("Stream processing finished.");
+
+                // For streaming responses, we log basic summary data
+                log_llm_response(requestId, events);
             }
         } catch (error) {
             console.error('Error in OpenAI streaming response:', error);
@@ -1160,6 +1270,7 @@ export class OpenAIProvider implements ModelProvider {
                     'OpenAI streaming error: ' +
                     (error instanceof Error ? error.stack : String(error)),
             };
+            log_llm_error(requestId, error);
         }
     }
 }

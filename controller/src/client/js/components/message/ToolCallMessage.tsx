@@ -10,6 +10,7 @@ interface ToolCallMessageProps {
     message: ToolCallMessageType;
     rgb: string;
     complete: boolean;
+    callFollows: boolean;
 }
 
 function prepareToolName(name: string): string {
@@ -21,6 +22,7 @@ const ToolCallMessage: React.FC<ToolCallMessageProps> = ({
     message,
     rgb,
     complete,
+    callFollows,
 }) => {
     if (message.toolName.startsWith('talk_to_')) {
         return (
@@ -28,6 +30,11 @@ const ToolCallMessage: React.FC<ToolCallMessageProps> = ({
                 className="message-group assistant-message"
                 key={message.message_id || message.id}
             >
+                {message.agent?.model && (
+                    <div className="message-header"><div className="message-model">
+                        {message.agent.model}
+                    </div></div>
+                )}
                 <div
                     className={'message-bubble assistant-bubble talk-bubble'}
                     style={{ color: `rgba(${rgb} / 1)` }}
@@ -65,7 +72,7 @@ const ToolCallMessage: React.FC<ToolCallMessageProps> = ({
                 </div>
                 {message.command && (
                     <div
-                        className="message-bubble tool-call-command"
+                        className={"message-bubble tool-call-command"+(callFollows ? ' call-follows' : '')}
                         style={{ color: `rgba(${rgb} / 1)` }}
                     >
                         <div
@@ -76,7 +83,7 @@ const ToolCallMessage: React.FC<ToolCallMessageProps> = ({
                     </div>
                 )}
                 {!message.command && (
-                    <div className="message-bubble tool-call-command">
+                    <div className={"message-bubble tool-call-command"+(callFollows ? ' call-follows' : '')}>
                         <pre>
                             {message.toolName}(
                             {toolCallParams && toolCallParams !== '{}'

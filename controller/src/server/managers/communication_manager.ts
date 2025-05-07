@@ -640,38 +640,6 @@ export class CommunicationManager {
                         });
                     }
                 }
-
-                // Handle Telegram specific tool calls
-                if (toolCall.function.name === 'Telegram_send_message') {
-                    const toolParams: Record<string, unknown> = JSON.parse(
-                        toolCall.function.arguments
-                    );
-                    if (
-                        toolParams.message &&
-                        typeof toolParams.message === 'string'
-                    ) {
-                        // Affect parameter is optional, default to 'neutral'
-                        const affect =
-                            toolParams.affect &&
-                            typeof toolParams.affect === 'string'
-                                ? toolParams.affect
-                                : 'neutral';
-
-                        // Call talk, which will also send to Telegram
-                        const talkPromise = talk(
-                            toolParams.message as string,
-                            affect,
-                            processId
-                        );
-
-                        talkPromise.catch(error => {
-                            console.error(
-                                'Error calling Telegram send:',
-                                error
-                            );
-                        });
-                    }
-                }
             }
         } else if (
             event.type === 'tool_done' &&
@@ -754,6 +722,7 @@ export class CommunicationManager {
                         'message_complete',
                         'system_status',
                         'agent_start',
+                        'agent_updated',
                         'process_updated',
                         'tool_done',
                         'tool_start',
