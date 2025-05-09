@@ -718,6 +718,7 @@ export class CommunicationManager {
                 if (
                     ![
                         'screenshot',
+                        'console',
                         'message_delta',
                         'message_complete',
                         'system_status',

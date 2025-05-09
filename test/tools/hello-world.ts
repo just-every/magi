@@ -84,7 +84,7 @@ export default async function helloWorld(options: GreetingOptions = {}): Promise
     timestamp: Date.now(),
     environment: {
       tools: toolCategories,
-      agentId: agentId || 'unknown',
+      agentId: agent_id || 'unknown',
       nodeVersion: process.version,
       hasFileAccess
     },

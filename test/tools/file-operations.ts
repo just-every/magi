@@ -4,6 +4,7 @@
  * This tool tests file system operations within the magi-run-tool environment.
  * It verifies that the tool has proper access to read and write files in the Docker container.
  */
+import fs from 'fs';
 
 // Interface for tool options
 interface FileOptions {
@@ -29,7 +30,6 @@ interface FileResult {
     bytesWritten?: number;
   };
   environment: {
-    toolsAvailable: string[];
     currentDirectory: string;
     platform: string;
   }
@@ -56,25 +56,11 @@ export default async function fileOperations(options: FileOptions = {}): Promise
 
   log('Starting file operations test tool...');
 
-  // Get access to tools
-  const toolsAvailable = tools ? Object.keys(tools) : [];
 
-  if (!tools || !tools.read_file) {
-    return {
-      success: false,
-      error: 'read_file not available in the tools context',
-      environment: {
-        toolsAvailable,
-        currentDirectory: process.cwd(),
-        platform: process.platform,
-      }
-    };
-  }
 
   const result: FileResult = {
     success: true,
     environment: {
-      toolsAvailable,
       currentDirectory: process.cwd(),
       platform: process.platform,
     }
@@ -83,7 +69,7 @@ export default async function fileOperations(options: FileOptions = {}): Promise
   // Test reading a file
   try {
     log(`Reading file: ${readPath}`);
-    const content = await tools.read_file(readPath);
+    const content = await read_file(readPath);
     const exists = !!content;
     const size = content?.length || 0;
 
@@ -113,10 +99,10 @@ export default async function fileOperations(options: FileOptions = {}): Promise
     log(`Writing to file: ${writePath}`);
     log(`Content: ${content}`);
 
-    await tools.write_file(writePath, content);
+    await write_file(writePath, content);
 
     // Verify the file was written by reading it back
-    const writtenContent = await tools.read_file(writePath);
+    const writtenContent = await read_file(writePath);
     const success = content === writtenContent;
 
     // Store write result
@@ -132,8 +118,7 @@ export default async function fileOperations(options: FileOptions = {}): Promise
     try {
       log(`Cleaning up test file: ${writePath}`);
       // Use the fs module to unlink the file
-      const fs = require('fs').promises;
-      await fs.unlink(writePath);
+      fs.unlink(writePath, () => {});
       log('Test file cleaned up');
     } catch (cleanupError) {
       log(`Warning: Could not clean up test file: ${cleanupError.message}`);

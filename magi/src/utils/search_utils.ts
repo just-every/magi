@@ -5,14 +5,21 @@
  */
 
 import axios from 'axios';
-import { ToolFunction } from '../types/shared-types.js';
+import {ExecutableFunction, ToolDefinition, ToolFunction, ToolParameter} from '../types/shared-types.js';
 import { createToolFunction } from './tool_call.js';
+import {quick_llm_call} from "./llm_call_utils.js";
 
 const DEFAULT_RESULTS_COUNT = 5;
 
 // Brave Search API configuration
 const BRAVE_API_KEY = process.env.BRAVE_API_KEY;
 const BRAVE_SEARCH_ENDPOINT = 'https://api.search.brave.com/res/v1/web/search';
+
+// Placeholder for other API keys - you'll need to define these
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+
 
 /**
  * Search using the Brave Search API
@@ -33,57 +40,177 @@ async function braveSearch(
     console.log(`Performing Brave API search for: ${query}`);
 
     if (!BRAVE_API_KEY) {
-        throw new Error('BRAVE_API_KEY not set');
+        // Return a specific error message or an empty result if the key is missing
+        return 'Error: Brave Search API key is not configured. Cannot perform search.';
     }
 
-    const response = await axios.get(BRAVE_SEARCH_ENDPOINT, {
-        params: {
-            q: query,
-            count: numResults,
-        },
-        headers: {
-            Accept: 'application/json',
-            'X-Subscription-Token': BRAVE_API_KEY,
-        },
-    });
+    try {
+        const response = await axios.get(BRAVE_SEARCH_ENDPOINT, {
+            params: {
+                q: query,
+                count: numResults,
+            },
+            headers: {
+                Accept: 'application/json',
+                'X-Subscription-Token': BRAVE_API_KEY,
+            },
+        });
 
-    if (response.data && response.data.web && response.data.web.results) {
-        const results = response.data.web.results.map((result: any) => ({
-            title: result.title,
-            url: result.url,
-            snippet: result.description,
-        }));
+        if (response.data && response.data.web && response.data.web.results) {
+            const results = response.data.web.results.map((result: any) => ({
+                title: result.title,
+                url: result.url,
+                snippet: result.description,
+            }));
 
-        return JSON.stringify(results);
+            return JSON.stringify(results);
+        }
+        // It's better to return a structured error or an empty array than to throw an error for "invalid response"
+        // unless the API contract guarantees a certain structure.
+        console.error('Invalid response structure from Brave Search API:', response.data);
+        return 'Error: Received an invalid response structure from Brave Search API.';
+    } catch (error) {
+        console.error('Error during Brave API search:', error);
+        return `Error performing Brave search: ${error instanceof Error ? error.message : String(error)}`;
     }
-    throw new Error(`Invalid response from Brave ${response}`);
+}
+
+function signalToolFunction(name: string): ToolFunction {
+    return {
+        function: () => '',
+        definition: {
+            type: 'function',
+            function: {
+                name,
+                description: '',
+                parameters: {
+                    type: 'object',
+                    properties: {},
+                    required: [],
+                },
+            },
+        },
+    };
 }
 
 /**
  * Perform a web search and get results
  *
+ * @param engine - The search engine
  * @param query - The search query
  * @param numResults - Number of results to return (default: 5)
  * @returns Search results
  */
 export async function web_search(
+    inject_agent_id: string,
+    engine: string,
     query: string,
     numResults: number = DEFAULT_RESULTS_COUNT
 ): Promise<string> {
-    return await braveSearch(query, numResults);
+    switch(engine) {
+        // TODO: Implement search logic for other engines
+        case 'brave':
+            if (!BRAVE_API_KEY) return `Error: Brave API key not configured.`;
+            return await braveSearch(query, numResults);
+        case 'anthropic':
+            if (!ANTHROPIC_API_KEY) return `Error: Anthropic API key not configured.`;
+            return await quick_llm_call(
+                query,
+                null,
+                {
+                    model: 'claude-3-7-sonnet-latest',
+                    name: 'ClaudeSearch',
+                    description: 'Search the web',
+                    instructions: 'Please run a search for this query.',
+                    modelSettings: {
+                        max_tokens: 1024,
+                    },
+                    tools: [signalToolFunction('claude_web_search')],
+                },
+                inject_agent_id
+            );
+        case 'openai':
+            if (!OPENAI_API_KEY) return `Error: OpenAI API key not configured.`;
+            return await quick_llm_call(
+                query,
+                null,
+                {
+                    model: 'gpt-4.1',
+                    name: 'OpenAISearch',
+                    description: 'Search the web',
+                    instructions: 'Please run a search for this query.',
+                    tools: [signalToolFunction('openai_web_search')],
+                },
+                inject_agent_id
+            );
+        case 'google':
+            if (!GOOGLE_API_KEY) return `Error: Google API key not configured.`;
+            return await quick_llm_call(
+                query,
+                null,
+                {
+                    model: 'gemini-2.5-flash-preview-04-17',
+                    name: 'GoogleSearch',
+                    description: 'Search the web',
+                    instructions: 'Please run a search for this query.',
+                    tools: [signalToolFunction('google_web_search')],
+                },
+                inject_agent_id
+            );
+
+    }
+    return `Error: Invalid or unsupported search engine ${engine}`;
 }
 
 /**
  * Get all search tools as an array of tool definitions
  */
 export function getSearchTools(): ToolFunction[] {
+    const availableEngines: string[] = [];
+    const engineDescriptions: string[] = [];
+
+    if (ANTHROPIC_API_KEY) {
+        availableEngines.push('anthropic');
+        engineDescriptions.push('- anthropic: deep multi-hop research, strong source citations');
+    }
+    if (BRAVE_API_KEY) {
+        availableEngines.push('brave');
+        engineDescriptions.push('- brave: privacy-first, independent index (good for niche/controversial)');
+    }
+    if (OPENAI_API_KEY) {
+        availableEngines.push('openai');
+        engineDescriptions.push('- openai: ChatGPT-grade contextual search, cited results');
+    }
+    if (GOOGLE_API_KEY) {
+        availableEngines.push('google');
+        engineDescriptions.push('- google: freshest breaking-news facts via Gemini grounding');
+    }
+
+    if (availableEngines.length === 0) {
+        // Optionally, don't offer the tool if no engines are configured
+        return [];
+    }
+
     return [
-        createToolFunction(web_search, 'Search the web and get results', {
-            query: 'The search query - format this as you would any search in Google.',
-            numResults: {
-                type: 'number',
-                description: 'Number of results to return (default: 5)',
+        createToolFunction(
+            web_search,
+            'Adaptive web search—pick the engine that best fits the query.',
+            {
+                engine: {
+                    type: 'string',
+                    description: `Engine to use:\n${engineDescriptions.join('\n')}`,
+                    enum: availableEngines,
+                },
+                query: {
+                    type: 'string',
+                    description: 'Plain-language web query.',
+                },
+                numResults: {
+                    type: 'number',
+                    description: 'Max results to return (default = 5).',
+                    optional: true, // Assuming numResults is optional
+                },
             },
-        }),
+        ),
     ];
 }

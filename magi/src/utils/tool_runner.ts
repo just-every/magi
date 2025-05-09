@@ -23,13 +23,17 @@ import { executeToolInSandbox } from './tool_executor.js';
 async function main() {
     try {
         // Logging the starting environment
-        console.log(`[tool_runner] START - Current working directory: ${process.cwd()}`);
-        console.log(`[tool_runner] START - Process argv: ${JSON.stringify(process.argv)}`);
+        console.log(
+            `[tool_runner] START - Current working directory: ${process.cwd()}`
+        );
+        console.log(
+            `[tool_runner] START - Process argv: ${JSON.stringify(process.argv)}`
+        );
         console.log(`[tool_runner] START - Node version: ${process.version}`);
-        console.log(`[tool_runner] START - Environment vars:`, {
+        console.log('[tool_runner] START - Environment vars:', {
             NODE_PATH: process.env.NODE_PATH,
             NODE_ENV: process.env.NODE_ENV,
-            PATH: process.env.PATH
+            PATH: process.env.PATH,
         });
 
         // Parse command line arguments
@@ -86,10 +90,15 @@ async function main() {
         // Does the script file exist?
         try {
             const scriptStats = fs.statSync(resolvedScriptPath);
-            console.log(`[tool_runner] Script file exists: ${scriptStats.isFile()}`);
+            console.log(
+                `[tool_runner] Script file exists: ${scriptStats.isFile()}`
+            );
             console.log(`[tool_runner] Script file size: ${scriptStats.size}`);
         } catch (err) {
-            console.error(`[tool_runner] ERROR: Script file check failed:`, err);
+            console.error(
+                '[tool_runner] ERROR: Script file check failed:',
+                err
+            );
         }
 
         // Use the shared executor to run the script
@@ -106,22 +115,38 @@ async function main() {
 
             // Check if the result indicates an error (string starting with "Error:" or object with success: false)
             if (typeof result === 'string' && result.startsWith('Error:')) {
-                console.error('[tool_runner] Execution resulted in a string error:', result);
+                console.error(
+                    '[tool_runner] Execution resulted in a string error:',
+                    result
+                );
                 throw new Error(result); // Convert error string to actual Error
-            } else if (typeof result === 'object' && result !== null && result.success === false) {
-                 console.error('[tool_runner] Execution resulted in a failed status object:', result);
-                 // Throw an error so the main catch block handles the non-zero exit
-                 throw new Error(`Tool reported failure: ${result.error || 'No specific error message provided'}`);
+            } else if (
+                typeof result === 'object' &&
+                result !== null &&
+                result.success === false
+            ) {
+                console.error(
+                    '[tool_runner] Execution resulted in a failed status object:',
+                    result
+                );
+                // Throw an error so the main catch block handles the non-zero exit
+                throw new Error(
+                    `Tool reported failure: ${result.error || 'No specific error message provided'}`
+                );
             }
 
             console.log('[tool_runner] Tool execution completed successfully');
         } catch (execError) {
-            console.error('[tool_runner] Error during executeToolInSandbox or processing its result:', execError);
+            console.error(
+                '[tool_runner] Error during executeToolInSandbox or processing its result:',
+                execError
+            );
             throw execError; // Re-throw to be caught by the outer try-catch
         }
 
         // Display the result (if any)
-        if (result !== undefined) { // Check for undefined, as null might be a valid tool return
+        if (result !== undefined) {
+            // Check for undefined, as null might be a valid tool return
             console.log('[tool_runner] Script execution result:', result);
         } else {
             console.log(
@@ -131,7 +156,9 @@ async function main() {
 
         // Send a SIGINT signal to self to trigger browser cleanup from signal handlers
         // This will invoke the closeAllSessions() in browser_session.ts through the signal handler
-        console.log('[tool_runner] Sending SIGINT to self to ensure browser cleanup');
+        console.log(
+            '[tool_runner] Sending SIGINT to self to ensure browser cleanup'
+        );
         setTimeout(() => {
             process.kill(process.pid, 'SIGINT');
         }, 100); // Small delay to ensure console message is output

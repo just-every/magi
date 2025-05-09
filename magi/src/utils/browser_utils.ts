@@ -901,25 +901,7 @@ export async function processBrowserParams(
  */
 function getAgentTabId(agent: AgentInterface): string {
     // Use the agent ID as the default tab ID
-    let tabId = agent.agent_id;
-    // Check if parent exists, has an ID, and is one of the browser agent types
-    if (
-        agent.parent?.agent_id && // Ensure parent and parent.agent_id exist
-        (agent.parent.name === 'BrowserAgent' ||
-            agent.parent.name === 'BrowserCodeAgent' ||
-            agent.parent.name === 'BrowserVisionAgent')
-    ) {
-        // Use the parent agent ID if it's a browser agent, ensuring consistency
-        tabId = agent.parent.agent_id;
-        console.log(
-            `[browser_utils] Using parent agent ID (${tabId}) for browser session for agent ${agent.agent_id} (${agent.name}).`
-        );
-    } else {
-        console.log(
-            `[browser_utils] Using own agent ID (${tabId}) for browser session for agent ${agent.agent_id} (${agent.name}).`
-        );
-    }
-    return tabId;
+    return agent.agent_id;
 }
 
 /**

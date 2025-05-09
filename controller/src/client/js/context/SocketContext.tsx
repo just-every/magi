@@ -17,6 +17,7 @@ import {
     GlobalCostData,
     AppSettings,
     ScreenshotEvent,
+    ConsoleEvent,
     AgentStatusEvent,
 } from '../../../types/shared-types';
 // Comment out direct import - we'll use simpler approach to avoid TypeScript errors
@@ -124,6 +125,7 @@ export interface AgentData {
     messages: ClientMessage[]; // Store structured messages
     isTyping?: boolean; // Indicates if the agent is in "thinking" state
     screenshots?: ScreenshotEvent[]; // Store screenshots for this agent
+    consoleEvents?: ConsoleEvent[]; // Store console data for this agent
     statusEvent?: AgentStatusEvent; // Store the last status event for this agent
 }
 
@@ -141,6 +143,7 @@ export interface ProcessData {
     logs: string;
     agent?: AgentData;
     pendingScreenshots: Map<string, ScreenshotEvent[]>;
+    pendingConsoleEvents: Map<string, ConsoleEvent[]>;
     pendingMessages: Map<string, PartialClientMessage[]>;
 }
 
@@ -299,6 +302,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         workers: new Map<string, AgentData>(),
                     },
                     pendingScreenshots: new Map<string, ScreenshotEvent[]>(),
+                    pendingConsoleEvents: new Map<string, ConsoleEvent[]>(),
                     pendingMessages: new Map<string, PartialClientMessage[]>(),
                 });
 
@@ -347,7 +351,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
             if (
                 event.message &&
                 (!event.message.event.type ||
-                    !['message_delta', 'tool_delta', 'quota_update', 'cost_update'].includes(event.message.event.type))
+                    !['message_delta', 'console', 'tool_delta', 'quota_update', 'cost_update'].includes(event.message.event.type))
             ) {
                 console.log(`process:message`, event.id, event.message.event.type, event.message);
             }
@@ -491,45 +495,54 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     targetAgent.screenshots = updatedScreenshots;
                 }
 
-                // Utility to flush pending screenshots for an agent
-                function flushPendingScreenshots(agent_id: string): void {
-                    const pending = process.pendingScreenshots.get(agent_id);
-                    if (!pending?.length) return;
+                // Utility to merge console data into an agent
+                function mergeConsoleEvent(
+                    targetAgent: AgentData,
+                    consoleEvent: ConsoleEvent
+                ): void {
+                    // Create a new screenshots array immutably
+                    const updatedConsoleEvents = [
+                        ...(targetAgent.consoleEvents || []),
+                        consoleEvent,
+                    ];
 
-                    // Find the target agent
-                    const targetAgent = process.agent!.agent_id === agent_id
-                        ? process.agent!
-                        : process.agent!.workers?.get(agent_id);
+                    // @todo how could we sample data here? I guess we would need to combine events - we can't just drop them because we need all historic data at each point
 
-                    if (targetAgent) {
-                        // Process each pending screenshot
-                        pending.forEach(screenshotEvent => {
-                            mergeScreenshot(targetAgent, screenshotEvent);
-                        });
-
-                        // Clear the pending list
-                        process.pendingScreenshots.delete(agent_id);
-                    }
+                    // Apply the updated screenshots to the agent
+                    targetAgent.consoleEvents = updatedConsoleEvents;
                 }
 
-                // Utility to flush pending messages for an agent
-                function flushPendingMessages(agent_id: string): void {
-                    const pending = process.pendingMessages.get(agent_id);
-                    if (!pending?.length) return;
-
+                // Utility to flush pending screenshots for an agent
+                function flushPending(agent_id: string): void {
                     // Find the target agent
                     const targetAgent = process.agent!.agent_id === agent_id
                         ? process.agent!
                         : process.agent!.workers?.get(agent_id);
 
                     if (targetAgent) {
-                        // Process each pending message
-                        pending.forEach(message => {
-                            addMessage(completeMessage(message), agent_id, targetAgent);
-                        });
+                        const pendingMessages = process.pendingMessages.get(agent_id);
+                        if(pendingMessages?.length > 0) {
+                            pendingMessages.forEach(message => {
+                                addMessage(completeMessage(message), agent_id, targetAgent);
+                            });
+                            process.pendingMessages.delete(agent_id);
+                        }
 
-                        // Clear the pending list
-                        process.pendingMessages.delete(agent_id);
+                        const pendingScreenshots = process.pendingScreenshots.get(agent_id);
+                        if(pendingScreenshots?.length > 0) {
+                            pendingScreenshots.forEach(screenshotEvent => {
+                                mergeScreenshot(targetAgent, screenshotEvent);
+                            });
+                            process.pendingScreenshots.delete(agent_id);
+                        }
+
+                        const pendingConsoleEvents = process.pendingConsoleEvents.get(agent_id);
+                        if(pendingConsoleEvents?.length > 0) {
+                            pendingConsoleEvents.forEach(consoleEvent => {
+                                mergeConsoleEvent(targetAgent, consoleEvent);
+                            });
+                            process.pendingConsoleEvents.delete(agent_id);
+                        }
                     }
                 }
 
@@ -784,7 +797,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                             }
                         }
                     }
-                } else if (eventType === 'screenshot') {
+                } else if (eventType === 'screenshot' || eventType === 'console') {
                     // We call this a screenshot if it has the data property (for the base64 image)
                     // Access the screenshot properties using in-operator checks for type safety
                     const data = streamingEvent.data;
@@ -802,9 +815,14 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         : process.agent;
 
                     if (targetAgent && data) {
-                        // Use our helper to merge the screenshot with downsampling
-                        mergeScreenshot(targetAgent, streamingEvent);
-
+                        if (eventType === 'screenshot') {
+                            // Use our helper to merge the screenshot with downsampling
+                            mergeScreenshot(targetAgent, streamingEvent);
+                        }
+                        else if (eventType === 'console') {
+                            // Use our helper to merge the console data
+                            mergeConsoleEvent(targetAgent, streamingEvent);
+                        }
                         // Make sure parent references are updated properly
                         if (process.agent.agent_id === targetAgent.agent_id) {
                             // Agent already updated in place
@@ -819,7 +837,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         }
                     } else if (agent_id && data) {
                         // Queue the screenshot for later when the agent becomes available
-                        queuePending(process.pendingScreenshots, agent_id, streamingEvent);
+                        queuePending(eventType === 'screenshot' ? process.pendingScreenshots : process.pendingConsoleEvents, agent_id, streamingEvent);
                     }
                 } else if (eventType === 'error') {
                     // Error message
@@ -840,8 +858,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     // Check for parent-child relationship
                     if (
                         streamingEvent.agent &&
-                        streamingEvent.agent.parent &&
-                        streamingEvent.agent.parent.agent_id
+                        streamingEvent.agent.parent_id
                     ) {
                         // Generate a unique ID for the sub-agent
                         const workerId = streamingEvent.agent.agent_id;
@@ -872,8 +889,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                             process.agent!.workers.set(workerId, worker);
 
                             // Flush any pending data for this newly created agent
-                            flushPendingScreenshots(workerId);
-                            flushPendingMessages(workerId);
+                            flushPending(workerId);
                         } else if (streamingEvent.input) {
                             addPartialMessage({
                                 content: streamingEvent.input,
@@ -899,8 +915,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
                         // If this is the first time we've seen this agent, flush any pending data
                         if (isNewAgentId && agent_id) {
-                            flushPendingScreenshots(agent_id);
-                            flushPendingMessages(agent_id);
+                            flushPending(agent_id);
                         }
                     }
                 }
@@ -918,12 +933,14 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     updateAgent({ statusEvent: streamingEvent }, streamingEvent.agent_id);
                 }
 
-                // Update the process with the new messages
-                newProcesses.set(event.id, {
-                    ...process,
-                });
+                // Default update: If the event wasn't handled above or didn't need a specific update,
+                // ensure the process is still set in the new map (might be redundant in some cases, but safe).
+                // This covers cases where an event type doesn't modify the process state directly here.
+                if (!newProcesses.has(event.id)) {
+                     newProcesses.set(event.id, { ...process });
+                }
 
-                return newProcesses;
+                return newProcesses; // Return the potentially modified map
             });
         });
 

@@ -149,7 +149,8 @@ const TASK_HEARTBEAT_MS = 60_000; // Heartbeat every 60 seconds
 
 async function wait_for_running_task(
     taskId: string,
-    timeout: number = 1800
+    timeout: number = 1800,
+    abort_signal?: AbortSignal
 ): Promise<string> {
     const startTime = Date.now();
     const timeoutMs = timeout * 1000;
@@ -213,6 +214,20 @@ async function wait_for_running_task(
 
     // Polling loop
     while (Date.now() - startTime < timeoutMs) {
+        // Check if the operation was aborted
+        if (abort_signal?.aborted) {
+            finalResult = `Wait for task ${taskId} was aborted.`;
+            // Send stream event indicating abort - using task_wait_complete type with aborted status
+            sendStreamEvent({
+                type: 'task_wait_complete',
+                taskId,
+                result: finalResult,
+                finalStatus: 'aborted',
+                timestamp: new Date().toISOString(),
+            });
+            break; // Exit loop
+        }
+
         const process = processTracker.getProcess(taskId);
 
         if (!process) {
@@ -251,7 +266,34 @@ async function wait_for_running_task(
                     lastHeartbeatTime = Date.now();
                 }
                 // Still active, wait and check again
-                await new Promise(resolve => setTimeout(resolve, 1000)); // Poll every 1 second
+                try {
+                    await new Promise((resolve, reject) => {
+                        if (abort_signal?.aborted) {
+                            reject(new Error('Aborted before delay'));
+                            return;
+                        }
+                        const timerId = setTimeout(resolve, 1000);
+                        abort_signal?.addEventListener('abort', () => {
+                            clearTimeout(timerId);
+                            reject(new Error('Aborted during delay'));
+                        }, { once: true });
+                    });
+                } catch (error) {
+                    if (abort_signal?.aborted) {
+                        finalResult = `Wait for task ${taskId} was aborted during polling delay.`;
+                        // Send stream event - using task_wait_complete type with aborted status
+                        sendStreamEvent({
+                            type: 'task_wait_complete',
+                            taskId,
+                            result: finalResult,
+                            finalStatus: 'aborted',
+                            timestamp: new Date().toISOString(),
+                        });
+                        break; // Exit the switch
+                    }
+                    // Re-throw if it's not an abort error, though unlikely here
+                    // throw error;
+                }
                 continue; // Continue loop
             default:
                 // Should not happen with defined statuses
@@ -315,7 +357,7 @@ export function getProcessTools(): ToolFunction[] {
                         (getAllProjects().includes('magi-system')
                             ? ' Include "magi-system" to provide access to your code.'
                             : '') +
-                        ' The task will have access to these files at /magi_output/{taskId}/projects/{project}. Their default branch will be "magi-{taskId}". If you provide only one project, that will be their working directory when they start (otherwise it will be /magi_output/{taskId}/working)',
+                        ' The task will have access to these files at /magi_output/{taskId}/projects/{project}. Their default branch will be "magi-{taskId}". If you provide only one project, that will be their working directory when they start (otherwise it will be /magi_output/{taskId}/working)\nNote: ONLY INCLUDE PROJECTS THE TASK NEEDS as an entire copy of the project is made for each task. For large projects this take 10+ seconds.',
                     type: 'array',
                     enum: getAllProjects(),
                 },
@@ -358,7 +400,7 @@ export function getProcessTools(): ToolFunction[] {
                     description:
                         'The maximum time to wait for the task to finish, in seconds. Defaults to 1800 seconds (30 minutes).',
                     default: 1800,
-                },
+                }
             },
             'The final status message of the task (completion, failure, termination, or timeout).'
         ),

@@ -20,7 +20,7 @@ import { openaiProvider } from '../../model_providers/openai.js';
  * @param urls - Optional URL reference images to consider when generating the image
  * @returns A promise that resolves to the base64 encoded image data
  */
-async function generateImage(
+export async function generateImage(
     prompt: string,
     aspect?: 'square' | 'landscape' | 'portrait' | 'auto',
     background?: 'transparent' | 'opaque' | 'auto',

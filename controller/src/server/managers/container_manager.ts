@@ -139,11 +139,19 @@ async function prepareGitRepository(
         try {
             console.log('Checking if git repository exists', hostPath);
             try {
-                await execPromise(`git -C "${hostPath}" rev-parse --is-inside-work-tree`);
+                await execPromise(
+                    `git -C "${hostPath}" rev-parse --is-inside-work-tree`
+                );
             } catch (error) {
-                await execPromise(`git config --global --add safe.directory "${hostPath}"`);
-                await execPromise(`git config --global --add safe.directory "${hostPath}/.git"`);
-                await execPromise(`git -C "${hostPath}" rev-parse --is-inside-work-tree`);
+                await execPromise(
+                    `git config --global --add safe.directory "${hostPath}"`
+                );
+                await execPromise(
+                    `git config --global --add safe.directory "${hostPath}/.git"`
+                );
+                await execPromise(
+                    `git -C "${hostPath}" rev-parse --is-inside-work-tree`
+                );
             }
         } catch (error) {
             console.error(`Can not access git at ${hostPath}`);

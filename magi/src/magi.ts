@@ -15,6 +15,7 @@ import {
 import { Runner } from './utils/runner.js';
 import { createAgent } from './magi_agents/index.js';
 import {
+    interruptWaiting,
     addHumanMessage,
     addMonologue,
     getHistory,
@@ -34,6 +35,7 @@ import { runThoughtDelay } from './utils/thought_utils.js';
 import { runMECHWithMemory } from './utils/mech_memory_wrapper.js';
 import { getAllProjects } from './utils/project_utils.js';
 import { initDatabase } from './utils/progress_db.js';
+import { ensureMemoryDirectories } from './utils/memory_utils.js';
 
 const person = process.env.YOUR_NAME || 'User';
 const talkToolName = `talk to ${person}`.toLowerCase().replaceAll(' ', '_');
@@ -98,7 +100,10 @@ export async function spawnThought(
 ): Promise<void> {
     if (args.agent !== 'overseer') {
         // If destination is not overseer, it must have come from the overseer
-        return await addHumanMessage(command, undefined, 'Overseer');
+        await addHumanMessage(command, undefined, 'Overseer');
+        // Interrupt any active delays and waiting tools
+        interruptWaiting('new message from overseer');
+        return;
     }
 
     const agent = createAgent(args);
@@ -151,6 +156,9 @@ export async function spawnThought(
 
     // Merge the thread back into the main history
     await mergeHistoryThread(thread);
+
+    // Interrupt any active delays and waiting tools
+    interruptWaiting(`new message from ${person}`);
 }
 
 /**
@@ -262,6 +270,7 @@ async function main(): Promise<void> {
     console.log(`Initializing with process ID: ${process.env.PROCESS_ID}`);
 
     // Setup comms early, so we can send back failure messages
+    ensureMemoryDirectories();
     const comm = initCommunication(args.test);
     set_file_test_mode(args.test);
 

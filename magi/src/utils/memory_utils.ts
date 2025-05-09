@@ -19,12 +19,8 @@ const MAX_SHORT_TERM_MEMORIES = 10;
 let longTermMemories: { id: number; memory: string; timestamp: number }[] = [];
 const MAX_MEMORY_LENGTH = 2000;
 
-// Ensure memories are loaded from files on agent creation/restart
-ensureMemoryDirectories();
-loadMemoriesFromFiles();
-
 // Ensure memory directories exist
-function ensureMemoryDirectories(): void {
+export function ensureMemoryDirectories(): void {
     try {
         // Create memory directories if they don't exist
         if (!fs.existsSync(MEMORY_DIR)) {
@@ -40,6 +36,7 @@ function ensureMemoryDirectories(): void {
                 recursive: true,
             });
         }
+        loadMemoriesFromFiles();
     } catch (error) {
         console.error(`Error creating memory directories: ${error}`);
     }

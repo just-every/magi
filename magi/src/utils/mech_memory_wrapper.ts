@@ -26,7 +26,7 @@ import {
 } from './progress_db.js';
 import { registerRelevantCustomTools } from './index.js';
 import { MechResult } from './mech_tools.js';
-import { quickLlmCall } from './llm_call_utils.js';
+import { quick_llm_call } from './llm_call_utils.js';
 import { MAGI_CONTEXT } from '../magi_agents/constants.js';
 import { ResponseInput } from '../types/shared-types.js';
 
@@ -222,7 +222,9 @@ Task Result: **${status === 'complete' ? 'COMPLETED SUCCESSFULLY' : 'FAILED WITH
         });
 
         // Call the reasoning model to extract learnings using our utility with JSON mode
-        const response = await quickLlmCall(
+        const response = await quick_llm_call(
+            describeHistory(100, messages),
+            null,
             {
                 name: 'MemoryAgent',
                 description: 'Extract learnings from task history',
@@ -268,10 +270,7 @@ IMPORTANT:
                     },
                 },
             },
-            describeHistory(100, messages),
-            {
-                parent: agent,
-            }
+            agent.agent_id,
         );
 
         // Parse JSON response to extract learnings
@@ -328,8 +327,6 @@ IMPORTANT:
         console.error('Failed to extract or store learnings:', err);
     }
 }
-
-// Helper function removed - now using quickLlmCall instead
 
 /**
  * Parse bullet points from a string response

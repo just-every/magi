@@ -130,7 +130,8 @@ Note: Failed to generate summary - ${error}`;
 
                     // Add a system message to notify about the failing task
                     await addSystemMessage(
-                        `WARNING: Task with taskId ${id} (${agentProcess.name}) appears to be failing or stuck. Consider checking its status.`
+                        `WARNING: Task with taskId ${id} (${agentProcess.name}) appears to be failing or stuck. Consider checking its status.`,
+                        `task ${id} stuck`
                     );
                 }
             } catch (error) {
@@ -189,7 +190,8 @@ Note: Failed to generate summary - ${error}`;
             if (eventMessage.event.history)
                 process.history = eventMessage.event.history;
             await addSystemMessage(
-                `Task with taskId ${processId} has completed and is waiting further messages.`
+                `Task with taskId ${processId} has completed and is waiting further messages.`,
+                `Task ${processId} completed`
             );
         } else if (eventMessage.event.type === 'process_failed') {
             process.status = 'failed';
@@ -198,7 +200,8 @@ Note: Failed to generate summary - ${error}`;
             if (eventMessage.event.history)
                 process.history = eventMessage.event.history;
             await addSystemMessage(
-                `Task with taskId ${processId} FAILED. ${eventMessage.event.error || ''}`
+                `Task with taskId ${processId} FAILED. ${eventMessage.event.error || ''}`,
+                `Task ${processId} failed`
             );
         } else if (eventMessage.event.type === 'process_terminated') {
             process.status = 'terminated';
@@ -207,7 +210,8 @@ Note: Failed to generate summary - ${error}`;
             if (eventMessage.event.history)
                 process.history = eventMessage.event.history;
             await addSystemMessage(
-                `Task with taskId ${processId} terminated. ${eventMessage.event.error || ''}`
+                `Task with taskId ${processId} terminated. ${eventMessage.event.error || ''}`,
+                `Task ${processId} terminated`
             );
         }
 

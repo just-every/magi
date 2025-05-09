@@ -78,7 +78,7 @@ export class Agent implements AgentInterface {
     name: string;
     description: string;
     instructions: string;
-    parent?: Agent;
+    parent_id?: string;
     workers?: Agent[];
     tools?: ToolFunction[];
     model?: string;
@@ -156,7 +156,7 @@ export class Agent implements AgentInterface {
                 (createAgentFn: WorkerFunction) => {
                     // Call the function with no arguments or adjust based on what ExecutableFunction expects
                     const agent = createAgentFn() as Agent;
-                    agent.parent = this;
+                    agent.parent_id = this.agent_id;
                     return agent;
                 }
             );
@@ -303,18 +303,9 @@ export class Agent implements AgentInterface {
         if (this.modelClass) {
             agentExport.modelClass = this.modelClass;
         }
-        if (this.parent) {
+        if (this.parent_id) {
             // Make sure parent is an Agent with an export method
-            try {
-                agentExport.parent = this.parent.export();
-            } catch (err) {
-                console.error(`Error exporting parent for ${this.name}:`, err);
-                // Fall back to a basic export without parent to avoid breaking the chain
-                agentExport.parent = {
-                    agent_id: this.parent.agent_id || 'unknown',
-                    name: this.parent.name || 'unknown_parent',
-                };
-            }
+            agentExport.parent_id = this.parent_id;
         }
         return agentExport;
     }

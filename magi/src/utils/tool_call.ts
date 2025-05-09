@@ -74,7 +74,7 @@ export async function processToolCall(
 
                 // Skip summarization for certain tools but limit output to 1000 characters
                 if (
-                    call.function.name === 'get_summary_source' ||
+                    call.function.name === 'read_source' ||
                     call.function.name === 'get_page_content' ||
                     rawResult.startsWith('data:image/')
                 ) {
@@ -82,8 +82,8 @@ export async function processToolCall(
                         finalResult =
                             rawResult.substring(0, 1000) +
                             '... Output truncated to 1000 characters' +
-                            (call.function.name === 'get_summary_source'
-                                ? '\n\n[Full output truncated: Use get_summary_source() with the file_path parameter to write full output to a file.]'
+                            (call.function.name === 'read_source'
+                                ? '\n\n[Full output truncated: Use write_source(summary_id, file_path) to write full output to a file.]'
                                 : '');
                     } else {
                         finalResult = rawResult;
@@ -143,8 +143,10 @@ const EXCLUDED_FROM_TIMEOUT_FUNCTIONS = new Set<string>([
     'get_task_status',
     'check_all_task_health',
     'wait_for_running_task',
-    'get_summary_source',
+    'read_source',
+    'write_source',
     'read_file',
+    'write_file',
     'list_directory',
 ]);
 
@@ -525,8 +527,8 @@ export async function handleToolCall(
                             orderedArgs.unshift(agent.agent_id);
                         }
 
-                        // Check if the function accepts an abort signal
-                        if (paramNames.includes('signal')) {
+                        // Inject abort signal if the tool needs it
+                        if (tool.injectAbortSignal) {
                             orderedArgs.push(signal);
                         }
 
@@ -652,6 +654,7 @@ export function createToolFunction(
     const required: string[] = [];
 
     let injectAgentId = false;
+    let injectAbortSignal = false;
     const params = paramMap
         ? Object.keys(paramMap)
         : paramMatch && paramMatch[1]
@@ -685,6 +688,12 @@ export function createToolFunction(
         if (cleanParamName === 'inject_agent_id') {
             // Skip agent_id parameter
             injectAgentId = true;
+            continue;
+        }
+
+        if (cleanParamName === 'abort_signal') {
+            // Skip abort_signal parameter (will be injected internally)
+            injectAbortSignal = true;
             continue;
         }
 
@@ -799,6 +808,7 @@ export function createToolFunction(
     return {
         function: func,
         injectAgentId,
+        injectAbortSignal,
         definition: {
             type: 'function',
             function: {

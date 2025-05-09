@@ -32,7 +32,7 @@ export interface AgentInterface {
     name: string;
     description: string;
     instructions: string;
-    parent?: AgentInterface;
+    parent_id?: string;
     workers?: AgentInterface[];
     tools?: ToolFunction[];
     model?: string;
@@ -107,6 +107,7 @@ export interface ToolFunction {
     function: ExecutableFunction;
     definition: ToolDefinition;
     injectAgentId?: boolean;
+    injectAbortSignal?: boolean;
 }
 
 /**
@@ -181,7 +182,7 @@ export interface AgentDefinition {
 export interface AgentExportDefinition {
     agent_id: string;
     name: string;
-    parent?: AgentExportDefinition;
+    parent_id?: string;
     model?: string;
     modelClass?: string;
 }
@@ -399,6 +400,7 @@ export type StreamEventType =
     | 'system_status'
     | 'quota_update'
     | 'screenshot'
+    | 'console'
     | 'error'
     // New types for waiting on tools
     | 'tool_wait_start'
@@ -648,6 +650,16 @@ export interface ScreenshotEvent extends StreamEvent {
 }
 
 /**
+ * Console output streaming event
+ */
+export interface ConsoleEvent extends StreamEvent {
+    type: 'console';
+    data: string; // Raw terminal output
+    timestamp: string;
+    message_id?: string; // Optional reference to the message that generated this console output
+}
+
+/**
  * Interface for model usage data
  */
 export interface ModelUsage {
@@ -724,6 +736,7 @@ export type StreamingEvent =
     | QuotaUpdateEvent
     | AudioEvent
     | ScreenshotEvent
+    | ConsoleEvent
     // Add new wait events
     | ToolWaitStartEvent
     | ToolWaitingEvent

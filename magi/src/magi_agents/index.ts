@@ -23,6 +23,7 @@ export * from './constants.js';
  * Available agent types
  */
 export type AgentType =
+    | 'quick'
     | 'overseer'
     | 'operator'
     | 'supervisor'
@@ -45,7 +46,7 @@ export function createAgent(args: Record<string, unknown>): Agent {
         modelClass,
         agent_id,
     } = args as {
-        agent: AgentType;
+        agent: AgentType | ModelClassID;
         model?: string;
         modelClass?: ModelClassID;
         agent_id?: string;
@@ -53,6 +54,9 @@ export function createAgent(args: Record<string, unknown>): Agent {
     let agent: Agent;
 
     switch (type) {
+        case 'quick':
+            agent = createQuickAgent();
+            break;
         case 'overseer':
             agent = createOverseerAgent();
             break;
@@ -81,7 +85,8 @@ export function createAgent(args: Record<string, unknown>): Agent {
             agent = createImageAgent();
             break;
         default:
-            throw new Error(`Unknown agent type: ${type}`);
+            agent = createQuickAgent(type as ModelClassID);
+            break;
     }
 
     agent.args = args;
@@ -104,8 +109,18 @@ export function createAgent(args: Record<string, unknown>): Agent {
     return agent;
 }
 
+function createQuickAgent(modelClass: ModelClassID = 'reasoning_mini'): Agent {
+    return new Agent({
+        name: 'QuickAgent',
+        description: 'Performs quick tasks and provides immediate responses',
+        instructions: 'Please think through this step by step.',
+        modelClass,
+    });
+}
+
 // Export all agent creation functions
 export {
+    createQuickAgent,
     createManagerAgent,
     createReasoningAgent,
     createCodeAgent,

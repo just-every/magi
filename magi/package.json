@@ -6,7 +6,7 @@
     "type": "module",
     "scripts": {
         "build": "tsc",
-        "start": "node dist/magi.js",
+        "start": "node --no-deprecation --experimental-vm-modules dist/magi.js",
         "dev": "npm run build && npm start",
         "lint": "tsc --noEmit && eslint \"src/**/*.ts\"",
         "lint:fix": "tsc --noEmit && eslint \"src/**/*.ts\" --fix",

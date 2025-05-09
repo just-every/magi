@@ -2,7 +2,7 @@
  * LLM and Agent Tools Test Tool
  *
  * This tool tests LLM and agent-related tools available in the Magi environment:
- * `quickLlmCall`, `get_summary_source`, `uuid`, and `agent_id`.
+ * `quick_llm_call`, `uuid`, and `agent_id`.
  */
 
 interface LlmAgentToolsOptions {
@@ -14,7 +14,7 @@ interface ToolResult {
   message?: string;
   error?: string;
   results?: {
-    quickLlmCall?: string | { success: boolean; error: string };
+    quick_llm_call?: string | { success: boolean; error: string };
     getSummarySource?: string | { success: boolean; error: string };
     uuid?: string | { success: boolean; error: string };
     agentId?: string | { success: boolean; error: string };
@@ -37,9 +37,9 @@ export default async function llmAgentToolsTest(options: LlmAgentToolsOptions = 
 
   // Test agent_id access
   if (verbose) console.log(`Checking agent_id access...`);
-  if (agentId) {
-      results.agentId = agentId;
-      if (verbose) console.log(`agent_id found: ${agentId}`);
+  if (agent_id) {
+      results.agentId = agent_id;
+      if (verbose) console.log(`agent_id found: ${agent_id}`);
   } else {
       results.agentId = { success: false, error: 'agent_id not available' };
       overallSuccess = false;
@@ -49,8 +49,7 @@ export default async function llmAgentToolsTest(options: LlmAgentToolsOptions = 
 
 
   // Test uuid
-  if (tools && tools.uuid) {
-    if (verbose) console.log(`Attempting to generate UUID...`);
+  if (verbose) console.log(`Attempting to generate UUID...`);
     try {
       const generatedUuid = tools.uuid();
       if (typeof generatedUuid === 'string' && generatedUuid.length > 0) {
@@ -68,75 +67,33 @@ export default async function llmAgentToolsTest(options: LlmAgentToolsOptions = 
       overallError += `uuid tool failed: ${error.message || String(error)}\n`;
       console.error('uuid tool failed:', error);
     }
-  } else {
-    results.uuid = { success: false, error: 'uuid tool not available' };
-    overallSuccess = false;
-    overallError += 'uuid tool not available\n';
-    console.warn('uuid tool not available.');
-  }
 
-  // Test quickLlmCall (requires an LLM provider, might fail in isolation)
-  if (tools && tools.quickLlmCall) {
+  // Test quick_llm_call (requires an LLM provider, might fail in isolation)
+
     const prompt = 'Respond with the word "success".';
-    if (verbose) console.log(`Attempting quickLlmCall with prompt: "${prompt}"`);
+    if (verbose) console.log(`Attempting quick_llm_call with prompt: "${prompt}"`);
     try {
       // Use a simple model and prompt that should be quick and predictable
-      const llmResponse = await tools.quickLlmCall({
-          name: 'TestAgent',
-          description: 'A simple test agent',
-          instructions: prompt,
-          modelClass: 'reasoning_mini', // Use a small, fast model class if available
-      });
+      const llmResponse = await quick_llm_call(
+        prompt,
+        'reasoning_mini'
+    );
 
       if (typeof llmResponse === 'string' && llmResponse.toLowerCase().includes('success')) {
-          results.quickLlmCall = `LLM responded: "${llmResponse.substring(0, 50)}..."`;
-          if (verbose) console.log('quickLlmCall successful.');
+          results.quick_llm_call = `LLM responded: "${llmResponse.substring(0, 50)}..."`;
+          if (verbose) console.log('quick_llm_call successful.');
       } else {
-          results.quickLlmCall = { success: false, error: `LLM response did not contain "success": "${llmResponse}"` };
+          results.quick_llm_call = { success: false, error: `LLM response did not contain "success": "${llmResponse}"` };
           overallSuccess = false;
           overallError += `LLM response did not contain "success": "${llmResponse}"\n`;
-          console.error('quickLlmCall failed: Unexpected response.');
+          console.error('quick_llm_call failed: Unexpected response.');
       }
     } catch (error: any) {
-      results.quickLlmCall = { success: false, error: `quickLlmCall failed: ${error.message || String(error)}` };
+      results.quick_llm_call = { success: false, error: `quick_llm_call failed: ${error.message || String(error)}` };
       overallSuccess = false;
-      overallError += `quickLlmCall failed: ${error.message || String(error)}\n`;
-      console.error('quickLlmCall failed:', error);
+      overallError += `quick_llm_call failed: ${error.message || String(error)}\n`;
+      console.error('quick_llm_call failed:', error);
     }
-  } else {
-    results.quickLlmCall = { success: false, error: 'quickLlmCall tool not available' };
-    overallSuccess = false;
-    overallError += 'quickLlmCall tool not available\n';
-    console.warn('quickLlmCall tool not available.');
-  }
-
-   // Test get_summary_source (requires a summary source provider, might fail in isolation)
-  if (tools && tools.get_summary_source) {
-    if (verbose) console.log(`Attempting to get summary source...`);
-    try {
-      // get_summary_source typically returns a string or null/undefined
-      const summarySource = await tools.get_summary_source();
-      if (summarySource === null || summarySource === undefined || typeof summarySource === 'string') {
-          results.getSummarySource = `Summary source received (type: ${typeof summarySource}, length: ${String(summarySource).length})`;
-          if (verbose) console.log('get_summary_source successful.');
-      } else {
-          results.getSummarySource = { success: false, error: `get_summary_source returned unexpected type: ${typeof summarySource}` };
-          overallSuccess = false;
-          overallError += `get_summary_source returned unexpected type: ${typeof summarySource}\n`;
-          console.error('get_summary_source failed: Unexpected return type.');
-      }
-    } catch (error: any) {
-      results.getSummarySource = { success: false, error: `get_summary_source failed: ${error.message || String(error)}` };
-      overallSuccess = false;
-      overallError += `get_summary_source failed: ${error.message || String(error)}\n`;
-      console.error('get_summary_source failed:', error);
-    }
-  } else {
-    results.getSummarySource = { success: false, error: 'get_summary_source tool not available' };
-    overallSuccess = false;
-    overallError += 'get_summary_source tool not available\n';
-    console.warn('get_summary_source tool not available.');
-  }
 
 
   return {

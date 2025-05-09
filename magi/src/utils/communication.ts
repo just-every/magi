@@ -167,7 +167,8 @@ export class CommunicationManager {
                         const projectMessage = message as ProjectMessage;
                         newProjectReady(projectMessage.project);
                         await addSystemMessage(
-                            `A new project "${projectMessage.project}" has been successfully created!`
+                            `A new project "${projectMessage.project}" has been successfully created!`,
+                            'project created'
                         );
                         return;
                     } else if (message.type === 'system_message') {
@@ -190,7 +191,8 @@ export class CommunicationManager {
                                 'System RESUMED - LLM requests will proceed normally'
                             );
                             await addSystemMessage(
-                                'System resumed - LLM requests will proceed normally'
+                                'System resumed - LLM requests will proceed normally',
+                                'system resumed'
                             );
                         }
                         return;
@@ -248,7 +250,8 @@ export class CommunicationManager {
         if (
             !this.testMode &&
             message.event.type !== 'message_delta' &&
-            message.event.type !== 'tool_delta'
+            message.event.type !== 'tool_delta' &&
+            message.event.type !== 'console'
         ) {
             this.messageHistory.push(message);
             this.saveHistoryToFile();
@@ -261,7 +264,8 @@ export class CommunicationManager {
 
         if (
             message.event.type !== 'message_delta' &&
-            message.event.type !== 'tool_delta'
+            message.event.type !== 'tool_delta' &&
+            message.event.type !== 'console'
         ) {
             // Log to console for Docker logs for debugging purposes only
             // but ensure it's clearly marked as a JSON message so we don't try to parse it

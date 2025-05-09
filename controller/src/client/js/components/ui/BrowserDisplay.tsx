@@ -1,13 +1,12 @@
-import * as React from 'react';
-import { useMemo } from 'react';
-import { ScreenshotEvent } from '../../../../types/shared-types';
+import React, { useMemo } from 'react';
 import TimelinePlayer, { TimelinePoint } from './TimelinePlayer';
+import { ScreenshotEvent } from '../../../../types/shared-types';
 
 /**
  * Component to display browser agent screenshots using the new TimelinePlayer component
  * Acts as an adapter between the existing API (ScreenshotEvent[]) and TimelinePlayer (TimelinePoint[])
  */
-const BrowserAgentCard: React.FC<{
+const BrowserDisplay: React.FC<{
     screenshots: ScreenshotEvent[];
 }> = ({ screenshots }) => {
     // Convert ScreenshotEvent[] to TimelinePoint[]
@@ -30,7 +29,7 @@ const BrowserAgentCard: React.FC<{
     if (points.length === 0) return null;
 
     // Render the TimelinePlayer with converted points
-    return <TimelinePlayer points={points} />;
+    return <TimelinePlayer mode="browser" points={points} />;
 };
 
-export default BrowserAgentCard;
+export default BrowserDisplay;

@@ -36,83 +36,77 @@ export default async function webBrowserActionsTest(options: WebBrowserActionsOp
   let overallSuccess = true;
   let overallError = '';
 
-  // Test navigate
-  if (tools && tools.navigate) {
+  // Test navigate function
+  try {
     if (verbose) console.log(`Attempting to navigate to: ${url}`);
-    try {
-      // navigate tool typically doesn't return a value, just resolves on success
-      results.navigate = await tools.navigate(url);
-      if (verbose) console.log('Navigate successful.');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      results.navigate = { success: false, error: `Navigate failed: ${error.message || String(error)}` };
-      overallSuccess = false;
-      overallError += `Navigate failed: ${error.message || String(error)}\n`;
-      console.error('Navigate failed:', error);
-    }
-  } else {
-    results.navigate = { success: false, error: 'navigate tool not available' };
+
+    // The navigate function will be available globally based on our declarations
+    await navigate(url);
+    results.navigate = "Navigate successful";
+
+    if (verbose) console.log('Navigate successful.');
+  } catch (error: unknown) {
+    results.navigate = {
+      success: false,
+      error: `Navigate failed: ${error instanceof Error ? error.message : String(error)}`
+    };
     overallSuccess = false;
-    overallError += 'navigate tool not available\n';
-    console.warn('navigate tool not available.');
+    overallError += `Navigate failed: ${error instanceof Error ? error.message : String(error)}\n`;
+    console.error('Navigate failed:', error);
   }
 
-  // Test web_search (requires a search provider, might fail in isolation)
-  if (tools && tools.web_search) {
+  // Test web_search function
+  try {
     const searchTerm = 'test';
     if (verbose) console.log(`Attempting web search for: "${searchTerm}"`);
-    try {
-      const searchResult = await tools.web_search(searchTerm);
-      results.webSearch = `Search result received (length: ${String(searchResult).length})`;
-       if (verbose) {
-         console.log('Web search successful. Result snippet:');
-         console.log(String(searchResult).substring(0, 200) + '...');
-       }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      results.webSearch = { success: false, error: `Web search failed: ${error.message || String(error)}` };
-      overallSuccess = false;
-      overallError += `Web search failed: ${error.message || String(error)}\n`;
-      console.error('Web search failed:', error);
+
+    // The web_search function will be available globally based on our declarations
+    const searchResult = await web_search(searchTerm);
+    results.webSearch = `Search result received (length: ${String(searchResult).length})`;
+
+    if (verbose) {
+      console.log('Web search successful. Result snippet:');
+      console.log(String(searchResult).substring(0, 200) + '...');
     }
-  } else {
-    results.webSearch = { success: false, error: 'web_search tool not available' };
+  } catch (error: unknown) {
+    results.webSearch = {
+      success: false,
+      error: `Web search failed: ${error instanceof Error ? error.message : String(error)}`
+    };
     overallSuccess = false;
-    overallError += 'web_search tool not available\n';
-    console.warn('web_search tool not available.');
+    overallError += `Web search failed: ${error instanceof Error ? error.message : String(error)}\n`;
+    console.error('Web search failed:', error);
   }
 
-  // Test js_evaluate (requires an active page)
-   if (tools && tools.js_evaluate) {
+  // Test js_evaluate function
+  try {
     const scriptToEvaluate = 'document.title';
     if (verbose) console.log(`Attempting to evaluate JS: "${scriptToEvaluate}"`);
-    try {
-      // Pass the script directly as a string, not as an object
-      results.jsEvaluate = await tools.js_evaluate(scriptToEvaluate);
-      if (verbose) console.log('JS evaluate successful. Result:', results.jsEvaluate);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      results.jsEvaluate = { success: false, error: `JS evaluate failed: ${error.message || String(error)}` };
-      overallSuccess = false;
-      overallError += `JS evaluate failed: ${error.message || String(error)}\n`;
-      console.error('JS evaluate failed:', error);
-    }
-  } else {
-    results.jsEvaluate = { success: false, error: 'js_evaluate tool not available' };
-    overallSuccess = false;
-    overallError += 'js_evaluate tool not available\n';
-    console.warn('js_evaluate tool not available.');
-  }
 
+    // The js_evaluate function will be available globally based on our declarations
+    const evaluationResult = await js_evaluate(scriptToEvaluate);
+    results.jsEvaluate = evaluationResult;
+
+    if (verbose) console.log('JS evaluate successful. Result:', evaluationResult);
+  } catch (error: unknown) {
+    results.jsEvaluate = {
+      success: false,
+      error: `JS evaluate failed: ${error instanceof Error ? error.message : String(error)}`
+    };
+    overallSuccess = false;
+    overallError += `JS evaluate failed: ${error instanceof Error ? error.message : String(error)}\n`;
+    console.error('JS evaluate failed:', error);
+  }
 
   // Note: Testing click, type, press_keys, scroll_to, move, cdp_command
   // is more complex as it requires specific page structure and state.
-  // We'll skip detailed tests for these for now, but their availability
-  // is implicitly tested if the tool category is present.
+  // We could add TypeScript declarations for these and implement tests as needed.
 
   return {
     success: overallSuccess,
-    message: overallSuccess ? 'Web browser actions tested (some may require active browser)' : 'Some web browser actions failed or were not available',
+    message: overallSuccess
+      ? 'Web browser actions tested successfully'
+      : 'Some web browser actions failed',
     error: overallSuccess ? undefined : overallError.trim(),
     results: results,
   };

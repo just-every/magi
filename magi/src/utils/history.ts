@@ -17,6 +17,26 @@ import { setDelayInterrupted } from './thought_utils.js';
 import { formatHistoryForSummary, createSummary } from './summary_utils.js';
 import { truncateLargeValues } from './file_utils.js';
 import { readableTime } from './date_tools.js';
+import { runningToolTracker } from './running_tool_tracker.js';
+
+/**
+ * Interrupts any active thought delays and terminates waiting tools
+ *
+ * @param reason The reason for the interruption (for logging)
+ */
+export function interruptWaiting(reason: string): void {
+    // Interrupt any active delay
+    setDelayInterrupted(true);
+
+    // Interrupt any waiting tools
+    const activeTools = runningToolTracker.getAllRunningTools();
+    for (const tool of activeTools) {
+        if ((tool.name === 'wait_for_running_task' || tool.name === 'wait_for_running_tool') && tool.status === 'running') {
+            console.log(`[History] Interrupting waiting tool: ${tool.name} (ID: ${tool.id}) due to ${reason}.`);
+            runningToolTracker.terminateRunningTool(tool.id);
+        }
+    }
+}
 
 const COMPACT_TOKENS_AT = 50000;
 
@@ -464,11 +484,8 @@ export async function addHumanMessage(
     thread?: ResponseInput,
     source?: string
 ): Promise<void> {
-    // Interrupt any active delay
-    setDelayInterrupted(true);
-
     const person = process.env.YOUR_NAME || 'User';
-    return addHistory(
+    addHistory(
         {
             type: 'message',
             role: 'developer',
@@ -483,12 +500,10 @@ export async function addHumanMessage(
  */
 export async function addSystemMessage(
     content: string,
-    thread?: ResponseInput
+    interrupt?: string,
+    thread?: ResponseInput,
 ): Promise<void> {
-    // Interrupt any active delay
-    setDelayInterrupted(true);
-
-    return addHistory(
+    addHistory(
         {
             type: 'message',
             role: 'developer',
@@ -496,6 +511,9 @@ export async function addSystemMessage(
         },
         thread
     );
+    if(interrupt) {
+        interruptWaiting(interrupt);
+    }
 }
 
 /**

@@ -11,8 +11,9 @@ import MessageList from '../message/MessageList';
 import AutoScrollContainer from '../ui/AutoScrollContainer';
 import LogsViewer from '../ui/LogsViewer';
 import { PRIMARY_RGB } from '../../utils/constants';
-import BrowserAgentCard from '../ui/BrowserAgentCard';
-import { ScreenshotEvent } from '../../../../types/shared-types';
+import BrowserDisplay from '../ui/BrowserDisplay';
+import ConsoleDisplay from '../ui/ConsoleDisplay';
+import { ScreenshotEvent, ConsoleEvent } from '../../../../types/shared-types';
 
 interface OutputColumnProps {
     selectedItemId: string | null;
@@ -28,10 +29,12 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
     } | null>(null);
 
     const [tab, setTab] = useState('output');
+    const [isTabManuallySelected, setIsTabManuallySelected] = useState(false);
 
     let name: string;
     let messages: ClientMessage[];
     let screenshots: ScreenshotEvent[];
+    let consoleEvents: ConsoleEvent[];
     let logs: string;
 
     if (selectedItem?.type === 'process') {
@@ -41,6 +44,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
             messages = process.agent?.messages || [];
             logs = process.logs || '';
             screenshots = process.agent?.screenshots || [];
+            consoleEvents = process.agent?.consoleEvents || [];
         }
     } else if (selectedItem?.type === 'agent') {
         const agent = selectedItem ? (selectedItem.data as AgentData) : null;
@@ -48,8 +52,42 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
             name = agent.name || '';
             messages = agent.messages || [];
             screenshots = agent.screenshots || [];
+            consoleEvents = agent.consoleEvents || [];
         }
     }
+
+    // When selected item changes, switch to output tab, unless browser/console data is present
+    useEffect(() => {
+        if (selectedItemId && selectedItem && selectedItem.id === selectedItemId) {
+            // Only proceed when selectedItem has been updated to match selectedItemId
+            if (screenshots && screenshots.length > 0) {
+                setTab('browser');
+            }
+            else if (consoleEvents && consoleEvents.length > 0) {
+                setTab('console');
+            }
+            else {
+                setTab('output');
+            }
+            // Reset manual selection flag when item changes
+            setIsTabManuallySelected(false);
+        }
+        else if (!selectedItemId && selectedItem === null) {
+            // Handle deselection case
+            setTab('output');
+            setIsTabManuallySelected(false);
+        }
+    }, [selectedItemId, selectedItem, screenshots, consoleEvents]); // Ensure tab is set with correct item data
+
+    // If tab is not manually changed, switch to browser/console when data starts coming in
+    useEffect(() => {
+        if (!isTabManuallySelected && tab === 'output' && screenshots && screenshots.length > 0) {
+            setTab('browser');
+        }
+        else if (!isTabManuallySelected && tab === 'output' && consoleEvents && consoleEvents.length > 0) {
+            setTab('console');
+        }
+    }, [tab, screenshots, consoleEvents, isTabManuallySelected]);
 
     // Update selected item whenever selection changes
     useEffect(() => {
@@ -156,23 +194,55 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                             <div>
                                 <i className="bi bi-hash me-1"></i> {process.id}
                             </div>
-                            { screenshots &&
-                                screenshots.length > 0 ? (
-                                    <BrowserAgentCard
-                                        screenshots={screenshots}
-                                    />
-                                ) : (
-                                    <div className="mt-2">
-                                        <i className="bi bi-code me-1"></i>{' '}
-                                        {truncate(command, 200)}
-                                    </div>
-                                )}
+                            <div className="mt-2">
+                                <i className="bi bi-code me-1"></i>{' '}
+                                {truncate(command, 200)}
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <ul className="nav nav-tabs small border-0">
-                    <li className="nav-item" onClick={() => setTab('output')}>
+                    {screenshots && screenshots.length > 0 &&
+                        <li className="nav-item" onClick={() => {
+                            setTab('browser');
+                            setIsTabManuallySelected(true);
+                        }}>
+                            <a
+                                className={
+                                    'nav-link border-0 m-0' +
+                                    (tab === 'browser' ? ' active' : '')
+                                }
+                                style={{
+                                    backgroundColor: `rgba(${tab === 'browser' ? rbg : '255 255 255'} / 0.1)`,
+                                }}
+                            >
+                                Browser
+                            </a>
+                        </li>
+                    }
+                    {consoleEvents && consoleEvents.length > 0 &&
+                        <li className="nav-item" onClick={() => {
+                            setTab('console');
+                            setIsTabManuallySelected(true);
+                        }}>
+                            <a
+                                className={
+                                    'nav-link border-0 m-0' +
+                                    (tab === 'console' ? ' active' : '')
+                                }
+                                style={{
+                                    backgroundColor: `rgba(${tab === 'console' ? rbg : '255 255 255'} / 0.1)`,
+                                }}
+                            >
+                                Console
+                            </a>
+                        </li>
+                    }
+                    <li className="nav-item" onClick={() => {
+                        setTab('output');
+                        setIsTabManuallySelected(true);
+                    }}>
                         <a
                             className={
                                 'nav-link border-0 m-0' +
@@ -185,7 +255,10 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                             Output
                         </a>
                     </li>
-                    <li className="nav-item" onClick={() => setTab('llm')}>
+                    <li className="nav-item" onClick={() => {
+                        setTab('llm');
+                        setIsTabManuallySelected(true);
+                    }}>
                         <a
                             className={
                                 'nav-link border-0 m-0' +
@@ -198,7 +271,10 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                             Requests
                         </a>
                     </li>
-                    <li className="nav-item" onClick={() => setTab('docker')}>
+                    <li className="nav-item" onClick={() => {
+                        setTab('docker');
+                        setIsTabManuallySelected(true);
+                    }}>
                         <a
                             className={
                                 'nav-link border-0 m-0' +
@@ -214,27 +290,40 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                 </ul>
 
                 {/* Process Content */}
-                <AutoScrollContainer
-                    className="process-content flex-grow-1 p-3 pb-0"
-                    style={{ backgroundColor: `rgba(${rbg} / 0.1)` }}
-                >
-                    {tab === 'output' && <MessageList messages={messages} />}
-                    {tab === 'llm' && (
-                        <LogsViewer processId={process.id} inlineTab={tab} />
-                    )}
-                    {tab === 'docker' && (
-                        <div className="logs font-monospace small">
-                            <pre
-                                style={{
-                                    whiteSpace: 'pre-wrap',
-                                    wordBreak: 'break-word',
-                                }}
-                            >
-                                {logs || 'No logs available'}
-                            </pre>
-                        </div>
-                    )}
-                </AutoScrollContainer>
+                {tab === 'console' && consoleEvents ? (<div
+                        className="process-content flex-grow-1 p-3 pb-0"
+                        style={{ backgroundColor: `rgba(${rbg} / 0.1)`}}>
+                            <ConsoleDisplay
+                                consoleEvents={consoleEvents}
+                            />
+                    </div>
+                    ) : <AutoScrollContainer
+                        className="process-content flex-grow-1 p-3 pb-0"
+                        style={{ backgroundColor: `rgba(${rbg} / 0.1)` }}
+                    >
+                        {tab === 'browser' && screenshots && (
+                            <BrowserDisplay
+                                screenshots={screenshots}
+                            />
+                        )}
+                        {tab === 'output' && <MessageList messages={messages} />}
+                        {tab === 'llm' && (
+                            <LogsViewer processId={process.id} inlineTab={tab} />
+                        )}
+                        {tab === 'docker' && (
+                            <div className="logs font-monospace small">
+                                <pre
+                                    style={{
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-word',
+                                    }}
+                                >
+                                    {logs || 'No logs available'}
+                                </pre>
+                            </div>
+                        )}
+                    </AutoScrollContainer>
+                }
             </div>
         );
     };
@@ -302,45 +391,78 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                         )}
                         */}
 
-                        {screenshots &&
-                            screenshots.length > 0 ? (
-                                <BrowserAgentCard
-                                    screenshots={screenshots}
-                                />
-                            ) : (messages.length > 0 &&
-                                messages[0].content &&
-                                typeof messages[0].content === 'string' && (
-                                    <div className="mt-2">
-                                        <i className="bi bi-code me-1"></i>{' '}
-                                        {truncate(messages[0].content, 200)}
-                                    </div>
-                                ))}
+                        <div className="mt-2">
+                            <i className="bi bi-code me-1"></i>{' '}
+                            {truncate(messages[0].content, 200)}
+                        </div>
                     </div>
                 </div>
 
                 {/* Agent Content */}
                 <ul className="nav nav-tabs small border-0">
-                    <li className="nav-item" onClick={() => setTab('output')}>
+                    {screenshots && screenshots.length > 0 &&
+                        <li className="nav-item" onClick={() => {
+                            setTab('browser');
+                            setIsTabManuallySelected(true);
+                        }}>
+                            <a
+                                className={
+                                    'nav-link border-0 m-0' +
+                                    (tab === 'browser' ? ' active' : '')
+                                }
+                                style={{
+                                    backgroundColor: `rgba(${tab === 'browser' ? rbg : '255 255 255'} / 0.08)`,
+                                }}
+                            >
+                                Browser
+                            </a>
+                        </li>
+                    }
+                    {consoleEvents && consoleEvents.length > 0 &&
+                        <li className="nav-item" onClick={() => {
+                            setTab('console');
+                            setIsTabManuallySelected(true);
+                        }}>
+                            <a
+                                className={
+                                    'nav-link border-0 m-0' +
+                                    (tab === 'console' ? ' active' : '')
+                                }
+                                style={{
+                                    backgroundColor: `rgba(${tab === 'console' ? rbg : '255 255 255'} / 0.08)`,
+                                }}
+                            >
+                                Console
+                            </a>
+                        </li>
+                    }
+                    <li className="nav-item" onClick={() => {
+                        setTab('output');
+                        setIsTabManuallySelected(true);
+                    }}>
                         <a
                             className={
                                 'nav-link border-0 m-0' +
                                 (tab === 'output' ? ' active' : '')
                             }
                             style={{
-                                backgroundColor: `rgba(${tab === 'output' ? rbg : '255 255 255'} / 0.1)`,
+                                backgroundColor: `rgba(${tab === 'output' ? rbg : '255 255 255'} / 0.08)`,
                             }}
                         >
                             Output
                         </a>
                     </li>
-                    <li className="nav-item" onClick={() => setTab('llm')}>
+                    <li className="nav-item" onClick={() => {
+                        setTab('llm');
+                        setIsTabManuallySelected(true);
+                    }}>
                         <a
                             className={
                                 'nav-link border-0 m-0' +
                                 (tab === 'llm' ? ' active' : '')
                             }
                             style={{
-                                backgroundColor: `rgba(${tab === 'llm' ? rbg : '255 255 255'} / 0.1)`,
+                                backgroundColor: `rgba(${tab === 'llm' ? rbg : '255 255 255'} / 0.08)`,
                             }}
                         >
                             Requests
@@ -348,19 +470,32 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                     </li>
                 </ul>
 
-                <AutoScrollContainer
+                {tab === 'console' && consoleEvents ? (<div
                     className="agent-content flex-grow-1 p-3"
-                    style={{ backgroundColor: `rgba(${rbg} / 0.08)` }}
-                >
-                    {tab === 'output' && <MessageList messages={messages} />}
-                    {tab === 'llm' && selectedItem && (
-                        <LogsViewer
-                            processId={selectedItem.parentId || ''}
-                            agentId={selectedItem.id}
-                            inlineTab={tab}
+                    style={{ backgroundColor: `rgba(${rbg} / 0.08)`}}>
+                        <ConsoleDisplay
+                            consoleEvents={consoleEvents}
                         />
-                    )}
-                </AutoScrollContainer>
+                    </div>
+                    ) : <AutoScrollContainer
+                        className="agent-content flex-grow-1 p-3"
+                        style={{ backgroundColor: `rgba(${rbg} / 0.08)` }}
+                    >
+                        {tab === 'browser' && screenshots && (
+                            <BrowserDisplay
+                                screenshots={screenshots}
+                            />
+                        )}
+                        {tab === 'output' && <MessageList messages={messages} />}
+                        {tab === 'llm' && selectedItem && (
+                            <LogsViewer
+                                processId={selectedItem.parentId || ''}
+                                agentId={selectedItem.id}
+                                inlineTab={tab}
+                            />
+                        )}
+                    </AutoScrollContainer>
+                }
             </div>
         );
     };

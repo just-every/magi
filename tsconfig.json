@@ -11,12 +11,13 @@
         "sourceMap": true,
         "declaration": true,
         "removeComments": true,
-        "skipLibCheck": true,
-        "typeRoots": [
-            "./controller/node_modules/@types",
-            "./common/shared-types"
-        ],
-        "baseUrl": "./",
+    "skipLibCheck": true,
+    "typeRoots": [
+        "./controller/node_modules/@types",
+        "./common/shared-types",
+        "./node_modules/@types"
+    ],
+    "baseUrl": "./",
         "paths": {
             "@types": ["./common/shared-types"],
             "common/*": ["common/*"]
@@ -30,5 +31,8 @@
         "setup/**/*",
         "test/**/*"
     ],
-    "exclude": ["controller/node_modules", "controller/dist"]
+    "exclude": ["controller/node_modules", "controller/dist"],
+    "files": [
+        "test/tools/tool-types.d.ts"
+    ]
 }

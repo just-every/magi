@@ -49,6 +49,13 @@ function convertToGeminiFunctionDeclarations(
     tools: ToolFunction[]
 ): FunctionDeclaration[] {
     return tools.map(tool => {
+        // Special handling for Google web search
+        if (tool.definition.function.name === 'google_web_search') {
+            console.log('[Gemini] Enabling Google Search grounding');
+            // Return null for this special tool - we'll handle it separately in the config
+            return null;
+        }
+
         const properties: Record<string, any> = {};
         const toolParams = tool.definition?.function?.parameters?.properties;
 
@@ -119,7 +126,7 @@ function convertToGeminiFunctionDeclarations(
                     : [],
             },
         };
-    });
+    }).filter(Boolean); // Filter out null entries from special tools
 }
 
 /**
@@ -594,8 +601,15 @@ export class GeminiProvider implements ModelProvider {
                 config.topK = settings.top_k;
             }
 
-            // Add function calling configuration if tools are provided
+            // Check if any tools require special handling
+            let hasGoogleWebSearch = false;
             if (tools && tools.length > 0) {
+                // Check for Google web search tool
+                hasGoogleWebSearch = tools.some(
+                    tool => tool.definition.function.name === 'google_web_search'
+                );
+
+                // Configure standard function calling tools
                 const functionDeclarations =
                     convertToGeminiFunctionDeclarations(tools);
                 let allowedFunctionNames: string[] = [];
@@ -635,11 +649,18 @@ export class GeminiProvider implements ModelProvider {
                             }
                         }
                     }
-                } else {
+                } else if (!hasGoogleWebSearch) {
                     console.warn(
                         'Tools were provided but resulted in empty declarations after conversion.'
                     );
                 }
+            }
+
+            // Set up Google Search grounding if needed
+            if (hasGoogleWebSearch) {
+                console.log('[Gemini] Enabling Google Search grounding');
+                // Configure the Google Search grounding
+                config.googleSearch = { enabled: true };
             }
 
             const requestParams = {

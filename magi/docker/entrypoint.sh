@@ -55,7 +55,7 @@ fi
 if [ -z "$1" ] || [ "${1#-}" != "$1" ]; then
     # 'set --' modifies the script's positional parameters ($@)
     # Prepend the default command 'node dist/magi.js' to the arguments
-    set -- node dist/magi.js "$@"
+    set -- node --no-deprecation --experimental-vm-modules dist/magi.js "$@"
 fi
 
 # --- Execute Command as magi_user ---

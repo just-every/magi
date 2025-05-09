@@ -5,7 +5,7 @@ import MessageList from '../message/MessageList';
 import ProcessHeader from '../ui/ProcessHeader';
 import { ProcessStatus, ScreenshotEvent } from '../../../../types/shared-types';
 import AutoScrollContainer from '../ui/AutoScrollContainer';
-import BrowserAgentCard from '../ui/BrowserAgentCard';
+import BrowserDisplay from '../ui/BrowserDisplay';
 
 interface AgentBoxProps {
     id: string;
@@ -114,7 +114,7 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
                 <ProcessHeader agentName={agentName} colors={colors} />
 
                 {screenshots && screenshots.length > 0 && (
-                    <BrowserAgentCard screenshots={screenshots} />
+                    <BrowserDisplay screenshots={screenshots} />
                 )}
 
                 <AutoScrollContainer

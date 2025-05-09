@@ -127,7 +127,7 @@ export async function createSummary(
             const summaryLines = existingSummary.split('\n').length;
             const originalChars = originalDoc.length;
             const summaryChars = existingSummary.length;
-            const metadata = `\n\nSummarized large output to avoid excessive tokens (${originalLines} -> ${summaryLines} lines, ${originalChars} -> ${summaryChars} chars) [Read with get_summary_source(${summaryId})]`;
+            const metadata = `\n\nSummarized large output to avoid excessive tokens (${originalLines} -> ${summaryLines} lines, ${originalChars} -> ${summaryChars} chars) [Write to file with write_source(${summaryId}, file_path) or read with read_source(${summaryId}, line_start, line_end)]`;
 
             console.log(
                 `Retrieved summary from cache for hash: ${documentHash.substring(0, 8)}...`
@@ -197,51 +197,29 @@ export async function createSummary(
 
     const originalChars = originalDocumentForSave.length;
     const summaryChars = trimmedSummary.length;
-    const metadata = `\n\nSummarized large output to avoid excessive tokens (${originalLines} -> ${summaryLines} lines, ${originalChars} -> ${summaryChars} chars) [Read with get_summary_source(${newSummaryId})]`;
+    const metadata = `\n\nSummarized large output to avoid excessive tokens (${originalLines} -> ${summaryLines} lines, ${originalChars} -> ${summaryChars} chars) [Write to file with write_source(${newSummaryId}, file_path) or read with read_source(${newSummaryId}, line_start, line_end)]`;
     return trimmedSummary + metadata;
 }
 
 /**
  * Retrieves the original document content associated with a summary ID.
- * Can optionally return a specific range of lines and/or write the content to a file.
+ * Can optionally return a specific range of lines.
  *
- * @param id The unique ID of the summary.
+ * @param summary_id The unique ID of the summary.
  * @param line_start Optional. The starting line number (0-based).
  * @param line_end Optional. The ending line number (0-based).
- * @param file_path Optional. Path to write the content to a file.
  * @returns The requested content of the original document or an error message.
  */
-export async function get_summary_source(
-    id: string,
+export async function read_source(
+    summary_id: string,
     line_start?: number,
     line_end?: number,
-    file_path?: string
 ): Promise<string> {
     const summariesDir = get_output_dir(SUMMARIES_SUBDIR);
-    const originalFilePath = path.join(summariesDir, `original-${id}.txt`);
+    const originalFilePath = path.join(summariesDir, `original-${summary_id}.txt`);
 
     try {
         let content = await fs.readFile(originalFilePath, 'utf-8');
-
-        // If file_path is provided, write the content to the file
-        if (file_path) {
-            try {
-                // Create directory if it doesn't exist
-                const directory = path.dirname(file_path);
-                await fs.mkdir(directory, { recursive: true });
-
-                // Write the content to the file
-                await fs.writeFile(file_path, content, 'utf-8');
-                console.log(`Summary written to file: ${file_path}`);
-                return `Successfully wrote ${content.length} chars to file: ${file_path}\n\nStart of content:\n\n${content.substring(0, 500)}...`;
-            } catch (writeError) {
-                console.error(
-                    `Error writing summary to file ${file_path}:`,
-                    writeError
-                );
-                return `Error: Could not write summary to file ${file_path}.`;
-            }
-        }
 
         if (line_start !== undefined && line_end !== undefined) {
             const lines = content.split('\n');
@@ -258,15 +236,63 @@ export async function get_summary_source(
         return content;
     } catch (error: any) {
         if (error.code === 'ENOENT') {
-            return `Error: Original document for summary ID '${id}' not found at ${originalFilePath}.`;
+            return `Error: Original document for summary ID '${summary_id}' not found at ${originalFilePath}.`;
         }
         console.error(
-            `Error reading original summary source for ID ${id}:`,
+            `Error reading original summary source for ID ${summary_id}:`,
             error
         );
-        return `Error: Could not retrieve original document for summary ID '${id}'.`;
+        return `Error: Could not retrieve original document for summary ID '${summary_id}'.`;
     }
 }
+
+/**
+ * Write to file the original document content associated with a summary ID.
+ *
+ * @param summary_id The unique ID of the summary.
+ * @param file_path Optional. Path to write the content to a file.
+ * @returns Confirmation or an error message.
+ */
+export async function write_source(
+    summary_id: string,
+    file_path: string
+): Promise<string> {
+    const summariesDir = get_output_dir(SUMMARIES_SUBDIR);
+    const originalFilePath = path.join(summariesDir, `original-${summary_id}.txt`);
+
+    try {
+        const content = await fs.readFile(originalFilePath, 'utf-8');
+        if(!file_path) {
+            return 'Error: file_path is required.';
+        }
+        try {
+            // Create directory if it doesn't exist
+            const directory = path.dirname(file_path);
+            await fs.mkdir(directory, { recursive: true });
+
+            // Write the content to the file
+            await fs.writeFile(file_path, content, 'utf-8');
+            console.log(`Summary written to file: ${file_path}`);
+            return `Successfully wrote ${content.length} chars to file: ${file_path}\n\nStart of content:\n\n${content.substring(0, 400)}...`;
+        } catch (writeError) {
+            console.error(
+                `Error writing summary to file ${file_path}:`,
+                writeError
+            );
+            return `Error: Could not write summary to file ${file_path}.`;
+        }
+    } catch (error: any) {
+        if (error.code === 'ENOENT') {
+            return `Error: Original document for summary ID '${summary_id}' not found at ${originalFilePath}.`;
+        }
+        console.error(
+            `Error reading original summary source for ID ${summary_id}:`,
+            error
+        );
+        return `Error: Could not retrieve original document for summary ID '${summary_id}'.`;
+    }
+}
+
 
 /**
  * Summarize task output and detect potential issues
@@ -607,13 +633,13 @@ function detectPotentialIssues(
 export function getSummaryTools(): ToolFunction[] {
     return [
         createToolFunction(
-            get_summary_source,
-            'Expands a summary.',
+            read_source,
+            'Read the original (not summarized) document to a file. If possible, limit lines to limit tokens returned. Results will be truncated to 1000 characters - for larger files, use write_source.',
             {
-                id: {
+                summary_id: {
                     type: 'string',
                     description:
-                        'The unique ID of the summary. If possible, limit lines to limit tokens returned. Results will be truncated to 1000 characters - for larger files, use file_path to write to the file system, then analyze.',
+                        'The unique ID of the summary.',
                 },
                 line_start: {
                     type: 'number',
@@ -627,14 +653,23 @@ export function getSummaryTools(): ToolFunction[] {
                         'Ending line to retrieve (0-based). Ignored if file_path is set.',
                     optional: true,
                 },
-                file_path: {
+            }
+        ),
+        createToolFunction(
+            write_source,
+            'Write the original (not summarized) document to a file.',
+            {
+                summary_id: {
                     type: 'string',
                     description:
-                        'Path to write the content to a file instead of returning it.',
+                        'The unique ID of the summary.',
+                },
+                file_path: {
+                    type: 'string',
+                    description: 'Relative or absolute path to write the document to.',
                     optional: true,
                 },
-            },
-            'The original document for the given range of lines.'
+            }
         ),
     ];
 }

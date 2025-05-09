@@ -26,7 +26,8 @@ const TOOL_HEARTBEAT_MS = 30_000; // Heartbeat every 30 seconds
 
 async function wait_for_running_tool(
     runningToolId: string,
-    timeout: number = 300
+    timeout: number = 300,
+    abort_signal?: AbortSignal
 ): Promise<string> {
     const startTime = Date.now();
     const timeoutMs = timeout * 1000;
@@ -69,6 +70,20 @@ async function wait_for_running_tool(
 
     // Polling loop
     while (Date.now() - startTime < timeoutMs) {
+        // Check if the operation was aborted
+        if (abort_signal?.aborted) {
+            finalResult = `Wait for running tool ${runningToolId} was aborted.`;
+            // Send stream event indicating abort
+            sendStreamEvent({
+                type: 'tool_wait_complete',
+                runningToolId,
+                result: finalResult,
+                finalStatus: 'aborted',
+                timestamp: new Date().toISOString(),
+            });
+            break; // Exit loop
+        }
+
         const tool = runningToolTracker.getRunningTool(runningToolId);
 
         if (!tool) {
@@ -105,7 +120,34 @@ async function wait_for_running_tool(
                     lastHeartbeatTime = Date.now();
                 }
                 // Still running, wait and check again
-                await new Promise(resolve => setTimeout(resolve, 500)); // Poll every 500ms
+                try {
+                    await new Promise((resolve, reject) => {
+                        if (abort_signal?.aborted) {
+                            reject(new Error('Aborted before delay'));
+                            return;
+                        }
+                        const timerId = setTimeout(resolve, 500);
+                        abort_signal?.addEventListener('abort', () => {
+                            clearTimeout(timerId);
+                            reject(new Error('Aborted during delay'));
+                        }, { once: true });
+                    });
+                } catch (error) {
+                    if (abort_signal?.aborted) {
+                        finalResult = `Wait for running tool ${runningToolId} was aborted during polling delay.`;
+                        // Send stream event
+                        sendStreamEvent({
+                            type: 'tool_wait_complete',
+                            runningToolId,
+                            result: finalResult,
+                            finalStatus: 'aborted',
+                            timestamp: new Date().toISOString(),
+                        });
+                        break; // Exit the switch
+                    }
+                    // Re-throw if it's not an abort error, though unlikely here
+                    // throw error;
+                }
                 continue; // Continue loop
             default:
                 // Should not happen with defined statuses
@@ -173,13 +215,13 @@ export function getRunningToolTools() {
             wait_for_running_tool,
             'Wait for a tool to complete. Avoids you having to check the status of a tool repeatedly.',
             {
-                id: 'The ID of the running tool to wait for',
+                runningToolId: 'The ID of the running tool to wait for',
                 timeout: {
                     type: 'number',
                     description:
                         'The maximum time to wait for the tool to finish, in seconds. If the tool completes before this time, you will start again immediately. Defaults to 300 seconds (5 minutes).',
                     default: 300,
-                },
+                }
             }
         ),
         createToolFunction(

@@ -6,9 +6,9 @@
  * to call existing agent functionality safely.
  */
 
-import { quickLlmCall } from './llm_call_utils.js';
+import { quick_llm_call } from './llm_call_utils.js';
 import { getToolsForCustomFunctions } from './index.js';
-import type { ToolFunction } from '../types/shared-types.js';
+import type { ToolFunction, ModelClassID } from '../types/shared-types.js';
 import { v4 as uuid } from 'uuid';
 
 /**
@@ -40,13 +40,6 @@ export function getHelperDescriptions(): string[] {
             const required =
                 tool.definition.function.parameters?.required || [];
 
-            // Extract return type from description if available
-            let returnType = '';
-            const returnsMatch = desc.match(/Returns:\s*(.*?)(?:\.|\n|$)/);
-            if (returnsMatch && returnsMatch[1]) {
-                returnType = returnsMatch[1].trim();
-            }
-
             // Build the function signature with JSDoc-style comment
             let functionSpec = '/**\n * ' + desc + '\n';
 
@@ -66,14 +59,12 @@ export function getHelperDescriptions(): string[] {
             });
 
             // Add return type if available
-            if (returnType) {
-                functionSpec += ' * @returns ' + returnType + '\n';
-            }
+            functionSpec += ' * @returns Promise<string>\n';
 
             functionSpec += ' */\n';
 
-            // Build the actual function signature
-            functionSpec += 'function tools.' + name + '(';
+            // Build the actual function signature as a TypeScript ambient declaration
+            functionSpec += 'declare function ' + name + '(';
 
             // Add parameters to function signature
             const paramEntries = Object.entries(params);
@@ -121,7 +112,7 @@ export function getHelperDescriptions(): string[] {
             }
 
             // Add return type
-            functionSpec += ': ' + (returnType || 'string') + ';\n';
+            functionSpec += ': Promise<string>;\n';
 
             lines.push(functionSpec);
         }
@@ -130,20 +121,26 @@ export function getHelperDescriptions(): string[] {
     // Add other core utilities that aren't part of ToolFunctions
     lines.push(`/**
  * Call an LLM with the specified text prompt
- * @param agent The type of agent to use for the call. Use 'reasoning' for general purpose thinking.
  * @param messages Either a string or array of message objects to send to the LLM. Include your full request here.
+ * @param modelClass The type of agent to use for the call. 'reasoning_mini' is a good choice for non-specialized tasks. It's fast, cheap, and accurate.
  * @returns The LLM's response as a string
  */
-function tools.quickLlmCall(
-    agent: 'reasoning' | 'code' | 'browser' | 'search' | 'shell' | 'image',
+declare function quick_llm_call(
     messages: string | Array<{ type: 'message'; role: 'user' | 'system' | 'developer'; content: string }>,
-): string;`);
+    modelClass: 'reasoning_mini' | 'reasoning' | 'code' | 'writing' | 'summary' | 'vision' | 'search' | 'image_generation',
+): Promise<string>;`);
 
     lines.push(`/**
  * Generate a v4 uuid
  * @returns A random alphanumeric string in UUID format
  */
-function tools.uuid(): string;`);
+declare function uuid(): string;`);
+
+    // Add the agent_id declaration
+    lines.push(`/**
+ * The ID of the current agent.
+ */
+export declare const agent_id: string;`);
 
     return lines;
 }
@@ -190,7 +187,10 @@ function extractFunctionsFromTools(
  * @param communicationManager Optional communication manager instance to use
  * @returns Object with helper functions that can be used in a custom tool
  */
-export function buildToolContext(agent_id?: string, communicationManager?: any): Record<string, any> {
+export function buildToolContext(
+    agent_id?: string,
+    communicationManager?: any
+): Record<string, any> {
     // Get all tools that should be available to custom functions
     const tools = getToolsForCustomFunctions();
 
@@ -203,8 +203,15 @@ export function buildToolContext(agent_id?: string, communicationManager?: any):
         ...toolFunctions,
 
         // Add more utility functions here
-        // Wrap quickLlmCall to pass the communicationManager from the context
-        quickLlmCall: (agent: any, messages: any, opts: any = {}) => quickLlmCall(agent, messages, opts, communicationManager),
+        // Wrap quick_llm_call to pass the communicationManager from the context
+        quick_llm_call: (messages: any, modelClass: ModelClassID) =>
+            quick_llm_call(
+                messages,
+                modelClass,
+                undefined,
+                agent_id,
+                communicationManager
+            ),
 
         // Add simple helpers
         uuid,

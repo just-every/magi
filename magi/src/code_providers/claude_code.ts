@@ -73,7 +73,11 @@ function isNoiseLine(line: string): boolean {
 
     // Dynamic Status/Progress Lines (specific patterns)
     // Matches dynamic status lines like "* Action... (Xs · esc to interrupt)" or "* Action... (Xs · details · esc to interrupt)"
-    if (/^\s*\p{S}\s*\w+…\s*\(\d+s(?:\s*·\s*.+?)?\s*·\s*esc to interrupt\)$/u.test(line))
+    if (
+        /^\s*\p{S}\s*\w+…\s*\(\d+s(?:\s*·\s*.+?)?\s*·\s*esc to interrupt\)$/u.test(
+            line
+        )
+    )
         return true;
     // Note: Thinking/Task/Call/Bash/Read lines are handled by isProcessingStartSignal or history dedupe
     if (line === '⎿  Running…') return true; // Specific running message
@@ -342,7 +346,7 @@ export class ClaudeCodeProvider implements ModelProvider {
                     return textContent;
                 })
                 .filter(Boolean)
-                .join('\n\n'); // Join non-empty parts with double newline
+                .join('\n\n---\n'); // Join non-empty parts
 
             if (!prompt) {
                 throw new Error(
@@ -415,9 +419,18 @@ export class ClaudeCodeProvider implements ModelProvider {
                     ptyProcess = pty.spawn(command, args, {
                         name: 'xterm-color', // Terminal type
                         cols: 80, // Terminal columns
-                        rows: 30, // Terminal rows
+                        rows: 60, // Terminal rows
                         cwd: cwd, // Working directory
-                        env: process.env, // Inherit environment variables
+                        env: {
+                            // Insert environment variables
+                            ...process.env,
+                            // Disable some features for cleaner output
+                            DISABLE_AUTOUPDATER: '1',
+                            DISABLE_BUG_COMMAND: '1',
+                            DISABLE_ERROR_REPORTING: '1',
+                            DISABLE_COST_WARNINGS: '1',
+                            DISABLE_TELEMETRY: '1'
+                        },
                     });
 
                     resetSilenceTimeout(); // Start the silence timer initially
@@ -426,6 +439,15 @@ export class ClaudeCodeProvider implements ModelProvider {
                     ptyProcess.onData((data: string) => {
                         try {
                             resetSilenceTimeout(); // Reset silence timer on ANY data received
+
+                            // Emit raw console output for frontend visualization
+                            eventQueue.push({
+                                type: 'console',
+                                agent: agent.export(),
+                                data: data,
+                                timestamp: new Date().toISOString(),
+                                message_id: messageId,
+                            });
 
                             const rawChunk = data.toString();
                             // Strip ANSI escape codes for cleaner processing
@@ -438,9 +460,29 @@ export class ClaudeCodeProvider implements ModelProvider {
 
                             // Process each complete line
                             for (const line of lines) {
-                                const trimmedLine = line.trim();
-                                // Accumulate all cleaned output for potential metadata parsing later
-                                accumulatedCleanOutput += line + '\n';
+                            const trimmedLine = line.trim();
+                            // Accumulate all cleaned output for potential metadata parsing later
+                            accumulatedCleanOutput += line + '\n';
+
+                            // Check for [complete] signal to terminate the process early
+                            if (trimmedLine === '[complete]') {
+                                console.log(
+                                    `[ClaudeCodeProvider] Early completion signal "[complete]" detected for message ${messageId}. Killing PTY process.`
+                                );
+                                if (ptyProcess && typeof ptyProcess.kill === 'function') {
+                                    try {
+                                        ptyProcess.kill();
+                                    } catch (e) {
+                                        console.warn(
+                                            '[ClaudeCodeProvider] Error killing PTY process after [complete] signal:',
+                                            e
+                                        );
+                                    }
+                                }
+                                // Stop processing further lines from this chunk as the process is being terminated.
+                                // The onExit handler will take care of the rest.
+                                break;
+                            }
 
                                 // --- Skip Prompt Echo Logic ---
                                 if (!processingStarted) {
@@ -601,17 +643,17 @@ export class ClaudeCodeProvider implements ModelProvider {
                         // Future CLI updates might break this parsing.
                         try {
                             // Use accumulatedCleanOutput which contains the full stripped stream
-                            // Regex made slightly more flexible with \s* around colon.
+                            // Regex made more flexible to handle variable whitespace formatting in output
                             const costMatch = accumulatedCleanOutput.match(
-                                /Total cost\s*:\s*\$([\d.]+)/m
+                                /Total cost\s*:[\s\t]*\$([\d.]+)/m
                             );
                             const apiDurationMatch =
                                 accumulatedCleanOutput.match(
-                                    /Total duration \(API\)\s*:\s*([\d.]+s?)/m
+                                    /Total duration \(API\)\s*:[\s\t]*([\d.]+s?)/m
                                 );
                             const wallDurationMatch =
                                 accumulatedCleanOutput.match(
-                                    /Total duration \(wall\)\s*:\s*([\d.]+s?)/m
+                                    /Total duration \(wall\)\s*:[\s\t]*([\d.]+s?)/m
                                 );
 
                             if (apiDurationMatch && apiDurationMatch[1]) {

@@ -17,14 +17,24 @@ export const validThoughtDelays: string[] = [
     '128',
 ];
 export let thoughtDelay: string = '0';
-export let delayInterrupted: boolean = false;
+// Use AbortController for interrupting thought delays
+let delayAbortController = new AbortController();
 
 export function setDelayInterrupted(interrupted: boolean): void {
-    delayInterrupted = interrupted;
+    if (interrupted) {
+        // If we're interrupting, abort the current controller and create a new one
+        delayAbortController.abort();
+        delayAbortController = new AbortController();
+    }
 }
 
 export function isDelayInterrupted(): boolean {
-    return delayInterrupted;
+    return delayAbortController.signal.aborted;
+}
+
+// Get the current abort signal for thought delay
+export function getDelayAbortSignal(): AbortSignal {
+    return delayAbortController.signal;
 }
 
 export function getThoughtDelay(): string {
@@ -36,32 +46,44 @@ export function getValidThoughtDelays(): string[] {
 
 export async function runThoughtDelay(): Promise<void> {
     if (thoughtDelay && parseInt(thoughtDelay)) {
-        // Reset the interrupt flag before starting the delay
-        setDelayInterrupted(false);
+        // Create a new controller for this delay
+        delayAbortController = new AbortController();
+        const signal = delayAbortController.signal;
 
         // Create a delay promise that can be interrupted
-        await new Promise<void>(resolve => {
-            // Break the delay into smaller chunks and check for interruption
-            const chunkSize = 100; // Check every 100ms
-            let remaining = parseInt(thoughtDelay) * 1000;
+        try {
+            await new Promise<void>((resolve) => {
+                // Break the delay into smaller chunks and check for interruption
+                const chunkSize = 100; // Check every 100ms
+                let remaining = parseInt(thoughtDelay) * 1000;
 
-            function waitChunk() {
-                if (isDelayInterrupted() || remaining <= 0) {
-                    // If interrupted or completed, resolve immediately
+                // Set up abort handler
+                signal.addEventListener('abort', () => {
+                    // If aborted, resolve immediately
                     resolve();
-                    return;
+                }, { once: true });
+
+                function waitChunk() {
+                    if (signal.aborted || remaining <= 0) {
+                        // If interrupted or completed, resolve immediately
+                        resolve();
+                        return;
+                    }
+
+                    // Wait for the next chunk or the remaining time (whichever is smaller)
+                    const waitTime = Math.min(chunkSize, remaining);
+                    remaining -= waitTime;
+
+                    setTimeout(() => waitChunk(), waitTime);
                 }
 
-                // Wait for the next chunk or the remaining time (whichever is smaller)
-                const waitTime = Math.min(chunkSize, remaining);
-                remaining -= waitTime;
-
-                setTimeout(() => waitChunk(), waitTime);
-            }
-
-            // Start the chunked waiting process
-            waitChunk();
-        });
+                // Start the chunked waiting process
+                waitChunk();
+            });
+        } catch (error) {
+            // Just suppress errors from abortion
+            console.log('[ThoughtDelay] Delay was aborted');
+        }
     }
 }
 

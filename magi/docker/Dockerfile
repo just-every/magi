@@ -81,7 +81,7 @@ COPY ./magi/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Create magi-run-tool for running scripts with tool context
-RUN echo '#!/bin/sh\nexec node /app/dist/utils/tool_runner.js "$@"' > /usr/local/bin/magi-run-tool && \
+RUN echo '#!/bin/sh\nexec node --no-deprecation --experimental-vm-modules /app/dist/utils/tool_runner.js "$@"' > /usr/local/bin/magi-run-tool && \
     chmod +x /usr/local/bin/magi-run-tool
 
 # Copy the application source code
@@ -98,4 +98,4 @@ RUN npm run build
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 # Default command if entrypoint doesn't override
-CMD ["node", "dist/magi.js"]
+CMD ["node", "--no-deprecation", "--experimental-vm-modules", "dist/magi.js"]

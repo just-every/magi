@@ -34,8 +34,7 @@ import {
 // Convert our tool definition to OpenAI's format
 function convertToOpenAITools(requestParams: any): any {
     requestParams.tools = requestParams.tools.map((tool: ToolFunction) => {
-        if (tool.definition.function.name === 'web_search') {
-            requestParams.model = 'gpt-4o'; // Force model for web_search
+        if (tool.definition.function.name === 'openai_web_search') {
             delete requestParams.reasoning;
             return {
                 type: 'web_search_preview',

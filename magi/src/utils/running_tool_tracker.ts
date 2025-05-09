@@ -97,7 +97,8 @@ class RunningToolTracker {
 
         // Add system message with final output
         await addSystemMessage(
-            `RunningTool ${fn.name} (id: ${id}) completed after ${readableTime(fn.duration)} with output: ${output}`
+            `RunningTool ${fn.name} (id: ${id}) completed after ${readableTime(fn.duration)} with output: ${output}`,
+            `RunningTool ${fn.name} (id: ${id}) completed`
         );
 
         // Remove from tracking
@@ -126,7 +127,8 @@ class RunningToolTracker {
 
         // Add system message with error
         await addSystemMessage(
-            `RunningTool ${fn.name} (id: ${id}) failed after ${readableTime(fn.duration)} with error: ${error}`
+            `RunningTool ${fn.name} (id: ${id}) failed after ${readableTime(fn.duration)} with error: ${error}`,
+            `RunningTool ${fn.name} (id: ${id}) failed`
         );
 
         // Remove from tracking
@@ -162,7 +164,8 @@ class RunningToolTracker {
 
         // Add system message about termination
         await addSystemMessage(
-            `RunningTool ${fn.name} (id: ${id}) was terminated after ${readableTime(fn.duration)}.`
+            `RunningTool ${fn.name} (id: ${id}) was terminated after ${readableTime(fn.duration)}.`,
+            `RunningTool ${fn.name} (id: ${id}) terminated`
         );
 
         // Keep in the map for reference
@@ -234,6 +237,15 @@ Running Time: ${readableTime(new Date().getTime() - fn.started.getTime())}`;
      */
     reset(): void {
         this.functions = new Map();
+    }
+
+    /**
+     * Get all currently running tools
+     *
+     * @returns An array of all running tool objects
+     */
+    public getAllRunningTools(): RunningTool[] {
+        return Array.from(this.functions.values());
     }
 }
 

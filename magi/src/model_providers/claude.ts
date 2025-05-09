@@ -36,13 +36,24 @@ import { convertImageToTextIfNeeded } from '../utils/image_to_text.js';
 
 // Convert our tool definition to Claude's format
 function convertToClaudeTools(tools: ToolFunction[]): any[] {
-    return tools.map(tool => ({
-        // Directly map the properties to the top level
-        name: tool.definition.function.name,
-        description: tool.definition.function.description,
-        // Map 'parameters' from your definition to 'input_schema' for Claude
-        input_schema: tool.definition.function.parameters,
-    }));
+    return tools.map(tool => {
+        // Special handling for web search tool
+        if (tool.definition.function.name === 'claude_web_search') {
+            return {
+                type: "web_search_20250305",
+                name: "web_search"
+            };
+        }
+
+        // Standard tool handling for other tools
+        return {
+            // Directly map the properties to the top level
+            name: tool.definition.function.name,
+            description: tool.definition.function.description,
+            // Map 'parameters' from your definition to 'input_schema' for Claude
+            input_schema: tool.definition.function.parameters,
+        };
+    });
 }
 
 // Assuming ResponseInputItem is your internal message structure type
