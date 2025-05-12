@@ -55,10 +55,7 @@ WARNINGS:
 
 FINALLY:
 - Synthesize findings into a comprehensive answer`,
-        tools: [
-            ...getSearchTools(),
-            ...getCommonTools(),
-        ],
+        tools: [...getSearchTools(), ...getCommonTools()],
         workers: [createBrowserAgent],
         modelClass: 'search',
     });

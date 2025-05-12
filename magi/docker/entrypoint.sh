@@ -33,7 +33,19 @@ if [ -f "$CLAUSE_JSON_SOURCE" ]; then
     echo "Linked $CLAUSE_JSON_SOURCE to $CLAUSE_JSON_TARGET"
 fi
 
+# --- Git Safe Directory Configuration ---
+# Configure Git to trust the /magi_output directory and subdirectories
+echo "Configuring Git to trust directories in /magi_output..."
+gosu magi_user git config --global --add safe.directory '*'
+echo "Git safe.directory configuration set"
+
 # --- Fix /magi_output Permissions ---
+# First ensure the root directory is owned by magi_user
+echo "Fixing ownership of /magi_output for files not already owned by magi_user..."
+# Only change objects not already owned by magi_user - more efficient for large volumes
+find /magi_output ! -user magi_user -exec chown magi_user:magi_user {} \; 2>/dev/null || true
+echo "Permissions fixed for /magi_output"
+
 # Check if PROCESS_ID environment variable is set
 if [ -n "$PROCESS_ID" ]; then
     PROCESS_DIR="/magi_output/$PROCESS_ID"
@@ -41,11 +53,24 @@ if [ -n "$PROCESS_ID" ]; then
     # Create the directory if it doesn't exist
     mkdir -p "$PROCESS_DIR"
     # Change ownership to magi_user:magi_user
-    # This is crucial because the volume might be owned by root initially
+    # This would be redundant if we fixed ownership above, but we keep it for safety
     chown -R magi_user:magi_user "$PROCESS_DIR"
     echo "Permissions set for $PROCESS_DIR"
 else
     echo "Warning: PROCESS_ID environment variable not set. Cannot fix permissions for specific process directory."
+fi
+
+# --- Check for shared directory ---
+SHARED_DIR="/magi_output/shared"
+echo "Checking if $SHARED_DIR exists..."
+if [ ! -d "$SHARED_DIR" ]; then
+    echo "Creating $SHARED_DIR directory..."
+    mkdir -p "$SHARED_DIR"
+    # Set ownership to magi_user
+    chown -R magi_user:magi_user "$SHARED_DIR"
+    echo "Created $SHARED_DIR with correct permissions"
+else
+    echo "$SHARED_DIR already exists"
 fi
 
 # --- Determine Command ---

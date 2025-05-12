@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     ProcessData,
     AgentData,
@@ -56,28 +56,42 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
         }
     }
 
+    // Ref to track the previously processed selectedItemId
+    const prevSelectedItemIdRef = useRef<string | null | undefined>(undefined);
+
     // When selected item changes, switch to output tab, unless browser/console data is present
     useEffect(() => {
         if (selectedItemId && selectedItem && selectedItem.id === selectedItemId) {
-            // Only proceed when selectedItem has been updated to match selectedItemId
-            if (screenshots && screenshots.length > 0) {
-                setTab('browser');
+            // Only proceed with initial tab setup if the selectedItemId is different
+            // from the one we last fully processed
+            if (prevSelectedItemIdRef.current !== selectedItemId) {
+                if (screenshots && screenshots.length > 0) {
+                    setTab('browser');
+                }
+                else if (consoleEvents && consoleEvents.length > 0) {
+                    setTab('console');
+                }
+                else {
+                    setTab('output');
+                }
+                // Reset manual selection flag ONLY when a new item is selected
+                setIsTabManuallySelected(false);
+                // Store this ID as processed
+                prevSelectedItemIdRef.current = selectedItemId;
             }
-            else if (consoleEvents && consoleEvents.length > 0) {
-                setTab('console');
-            }
-            else {
-                setTab('output');
-            }
-            // Reset manual selection flag when item changes
-            setIsTabManuallySelected(false);
+            // If prevSelectedItemIdRef.current === selectedItemId, it means
+            // selectedItem might have just changed its reference for the SAME item.
+            // In this case, we DO NOT want to reset the tab or isTabManuallySelected.
         }
         else if (!selectedItemId && selectedItem === null) {
-            // Handle deselection case
-            setTab('output');
-            setIsTabManuallySelected(false);
+            // Handle deselection - only if it was previously an item
+            if (prevSelectedItemIdRef.current !== null) {
+                setTab('output');
+                setIsTabManuallySelected(false);
+                prevSelectedItemIdRef.current = null;
+            }
         }
-    }, [selectedItemId, selectedItem, screenshots, consoleEvents]); // Ensure tab is set with correct item data
+    }, [selectedItemId, selectedItem]); // Only re-run when selectedItem or selectedItemId changes
 
     // If tab is not manually changed, switch to browser/console when data starts coming in
     useEffect(() => {
@@ -291,14 +305,14 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
 
                 {/* Process Content */}
                 {tab === 'console' && consoleEvents ? (<div
-                        className="process-content flex-grow-1 p-3 pb-0"
+                        className="process-content flex-grow-1 p-4"
                         style={{ backgroundColor: `rgba(${rbg} / 0.1)`}}>
                             <ConsoleDisplay
                                 consoleEvents={consoleEvents}
                             />
                     </div>
                     ) : <AutoScrollContainer
-                        className="process-content flex-grow-1 p-3 pb-0"
+                        className="process-content flex-grow-1 p-4"
                         style={{ backgroundColor: `rgba(${rbg} / 0.1)` }}
                     >
                         {tab === 'browser' && screenshots && (
@@ -471,14 +485,14 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                 </ul>
 
                 {tab === 'console' && consoleEvents ? (<div
-                    className="agent-content flex-grow-1 p-3"
+                    className="agent-content flex-grow-1 p-4"
                     style={{ backgroundColor: `rgba(${rbg} / 0.08)`}}>
                         <ConsoleDisplay
                             consoleEvents={consoleEvents}
                         />
                     </div>
                     ) : <AutoScrollContainer
-                        className="agent-content flex-grow-1 p-3"
+                        className="agent-content flex-grow-1 p-4"
                         style={{ backgroundColor: `rgba(${rbg} / 0.08)` }}
                     >
                         {tab === 'browser' && screenshots && (

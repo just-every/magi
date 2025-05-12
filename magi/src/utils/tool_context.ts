@@ -83,16 +83,24 @@ export function getHelperDescriptions(): string[] {
 
                     // Add enum values if available
                     if (paramDef.enum) {
-                        typeInfo = paramDef.enum
-                            .map(v => "'" + v + "'")
-                            .join(' | ');
-                    } else if (paramDef.items?.enum) {
-                        typeInfo =
-                            'array<' +
-                            paramDef.items.enum
+                        if (typeof paramDef.enum === 'function') {
+                            typeInfo = 'string'; // Just use string for dynamic enums
+                        } else {
+                            typeInfo = paramDef.enum
                                 .map(v => "'" + v + "'")
-                                .join(' | ') +
-                            '>';
+                                .join(' | ');
+                        }
+                    } else if (paramDef.items?.enum) {
+                        if (typeof paramDef.items.enum === 'function') {
+                            typeInfo = 'array<string>'; // Just use array of strings for dynamic enums
+                        } else {
+                            typeInfo =
+                                'array<' +
+                                paramDef.items.enum
+                                    .map(v => "'" + v + "'")
+                                    .join(' | ') +
+                                '>';
+                        }
                     }
 
                     // Add parameter to signature with type

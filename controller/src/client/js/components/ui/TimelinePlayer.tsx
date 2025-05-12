@@ -76,6 +76,7 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
     // --- Refs ---
     const trackRef = useRef<HTMLDivElement>(null);
     const isDraggingRef = useRef(false);
+    const userHasManuallySelectedRef = useRef(false);
     const screenshotContainerRef = useRef<HTMLDivElement>(null);
     const terminalContainerRef = useRef<HTMLDivElement>(null);
 
@@ -333,11 +334,13 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
             setCurrentTime(0);
             setCurrentIndex(-1);
             setIsLive(true);
+            userHasManuallySelectedRef.current = false;
             if (onTimeChange) onTimeChange(null);
             return;
         }
         const newLatestTime = sortedPoints[sortedPoints.length - 1].time;
-        if (isLive) {
+        if (isLive && !userHasManuallySelectedRef.current) {
+            // Only auto-follow the latest point if the user hasn't manually selected a position
             const newIndex = sortedPoints.length - 1;
             if (currentTime !== newLatestTime || currentIndex !== newIndex) {
                 setCurrentTime(newLatestTime);
@@ -345,6 +348,7 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
                 if (onTimeChange && sortedPoints[newIndex]) onTimeChange(sortedPoints[newIndex]);
             }
         } else {
+            // User has either explicitly set isLive=false or manually positioned the timeline
             let foundIndex = -1;
             let minDiff = Infinity;
             sortedPoints.forEach((p, i) => {
@@ -362,19 +366,28 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
                     setCurrentTime(closestPoint.time);
                     setCurrentIndex(foundIndex);
                 }
-                setIsLive(closestPoint.time === newLatestTime);
+                // Don't auto-update isLive state if user has manually positioned the timeline
+                if (!userHasManuallySelectedRef.current) {
+                    setIsLive(closestPoint.time === newLatestTime);
+                }
             } else {
-                setCurrentTime(newLatestTime);
-                setCurrentIndex(sortedPoints.length - 1);
-                setIsLive(true);
-                if (onTimeChange && sortedPoints[sortedPoints.length - 1]) onTimeChange(sortedPoints[sortedPoints.length - 1]);
+                // This is a fallback that should rarely occur - only if we can't find the current time
+                // in the sorted points array, which might happen during data updates
+                if (!userHasManuallySelectedRef.current) {
+                    setCurrentTime(newLatestTime);
+                    setCurrentIndex(sortedPoints.length - 1);
+                    setIsLive(true);
+                    if (onTimeChange && sortedPoints[sortedPoints.length - 1]) onTimeChange(sortedPoints[sortedPoints.length - 1]);
+                }
             }
         }
     }, [sortedPoints, isLive, currentTime, currentIndex, onTimeChange]);
 
     // Set initial time
     useEffect(() => {
-        if (sortedPoints.length === 0) return;
+        // Skip if the user has manually positioned the timeline or there are no points
+        if (userHasManuallySelectedRef.current || sortedPoints.length === 0) return;
+
         let targetTime: number;
         let targetIndex = -1;
         if (initialTime !== undefined) {
@@ -399,7 +412,7 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
         if (onTimeChange && targetIndex !== -1 && sortedPoints[targetIndex]) {
             onTimeChange(sortedPoints[targetIndex]);
         }
-    }, [initialTime, points, onTimeChange, endTime]); // endTime added as it's used for setIsLive
+    }, [initialTime, points, onTimeChange, endTime, sortedPoints]); // endTime added as it's used for setIsLive
 
     // --- Slider Calculation Helpers ---
     const timeToPercentage = useCallback((t: number): number => {
@@ -468,6 +481,10 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
         isDraggingRef.current = true;
         setIsDragging(true);
         document.body.style.userSelect = 'none';
+
+        // User is manually interacting with the timeline
+        userHasManuallySelectedRef.current = true;
+
         const newTime = getTimeFromClientX(clientX);
         if (newTime !== currentTime) {
             const newIndex = sortedPoints.findIndex(p => p.time === newTime);
@@ -516,7 +533,7 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
     const progressPercentage = timeToPercentage(currentTime);
 
     function renderScreenshot() {
-        return <div ref={screenshotContainerRef} className="display-container position-relative border-start border-end bg-white" style={{ overflowY: 'auto', maxHeight: '60vh' }}>
+        return <div ref={screenshotContainerRef} className="display-container position-relative border-start border-end bg-white" style={{ overflowY: 'auto' }}>
             {currentPoint && currentPoint.screenshot ? (
                 <img
                     key={currentPoint.time + (currentPoint.screenshot || '')}
@@ -546,7 +563,7 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
     // --- JSX ---
     return (
         <div
-            className={`timeline-player card shadow-sm ${mode === 'browser' ? 'timeline-player-browser' : 'timeline-player-console'} ${className || ''}`}
+            className={`timeline-player shadow-sm ${mode === 'browser' ? 'timeline-player-browser' : 'timeline-player-console'} ${className || ''}`}
             style={style}
         >
             <div className="url-bar d-flex align-items-center py-1 px-2 text-center bg-light border rounded-top" onClick={toggleCollapse} style={{ cursor: 'pointer' }}>
@@ -625,7 +642,7 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
                                 </div>
                                 <div className="tsp-labels d-flex justify-content-between small text-muted mt-1 px-1">
                                     <span>{formatTime(currentTime - startTime)}</span>
-                                    <span className={isLive ? 'tsp-labels-live text-danger fw-bold' : ''}>
+                                    <span className={isLive ? 'tsp-labels-live' : ''}>
                                         {isLive ? 'LIVE' : `-${formatTime(endTime - currentTime)}`}
                                     </span>
                                 </div>

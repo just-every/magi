@@ -16,14 +16,13 @@ import { addHistory, getHistory, describeHistory } from './history.js';
 import { costTracker } from './cost_tracker.js';
 import { embed } from './embedding_utils.js';
 import {
-    initDatabase,
     recordTaskStart,
     recordTaskEnd,
     lookupMemoriesEmbedding,
     formatMemories,
     insertMemories,
     MemoryMatch,
-} from './progress_db.js';
+} from './db_utils.js';
 import { registerRelevantCustomTools } from './index.js';
 import { MechResult } from './mech_tools.js';
 import { quick_llm_call } from './llm_call_utils.js';
@@ -50,11 +49,6 @@ export async function runMECHWithMemory(
     console.log(
         `Running MECH with memory for task: ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`
     );
-
-    // Initialize the database connection
-    if (!(await initDatabase())) {
-        throw new Error('Database initialization failed. Cannot proceed.');
-    }
 
     // Record the task start time and get a task ID
     const startTime = Date.now();
@@ -104,10 +98,7 @@ ${formattedMemories}`,
         // Register any relevant custom tools based on the task embedding
         console.log('Looking for relevant custom tools...');
         // Pass the agent with its ID for proper per-agent tool management
-        await registerRelevantCustomTools(embedding, {
-            agent_id: agent.agent_id,
-            tools: agent.tools,
-        });
+        await registerRelevantCustomTools(embedding, agent);
     } catch (err) {
         console.error('Failed to retrieve memories:', err);
     }
@@ -270,7 +261,7 @@ IMPORTANT:
                     },
                 },
             },
-            agent.agent_id,
+            agent.agent_id
         );
 
         // Parse JSON response to extract learnings

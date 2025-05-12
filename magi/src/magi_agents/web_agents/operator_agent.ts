@@ -1,40 +1,47 @@
 /**
- * OperatorAgent for the Task Runner
+ * WebsiteOperatorAgent for the Task Runner
  *
- * Plans how to deploy the task force of agents
+ * Plans and orchestrates the construction of websites from research to deployment
+ * Specialized in the full-stack website delivery workflow
  */
 
-import { Agent } from '../utils/agent.js';
-import { createCodeAgent } from './common_agents/code_agent.js';
-import { createBrowserAgent } from './common_agents/browser_agent.js';
-import { createSearchAgent } from './common_agents/search_agent.js';
-import { createShellAgent } from './common_agents/shell_agent.js';
-import { createReasoningAgent } from './common_agents/reasoning_agent.js';
+import { Agent } from '../../utils/agent.js';
+import { createCodeAgent } from '../common_agents/code_agent.js';
+import { createBrowserAgent } from '../common_agents/browser_agent.js';
+import { createSearchAgent } from '../common_agents/search_agent.js';
+import { createShellAgent } from '../common_agents/shell_agent.js';
+import { createReasoningAgent } from '../common_agents/reasoning_agent.js';
+import { createDesignAgent } from './design_agent.js';
+import { createFrontendAgent } from './frontend_agent.js';
+import { createBackendAgent } from './backend_agent.js';
+import { createTestAgent } from './test_agent.js';
 import {
     CUSTOM_TOOLS_TEXT,
     getTaskContext,
     MAGI_CONTEXT,
-} from './constants.js';
-import { getCommonTools } from '../utils/index.js';
-import { getRunningToolTools } from '../utils/running_tools.js';
-import { addHistory } from '../utils/history.js';
+} from '../constants.js';
+import { getCommonTools } from '../../utils/index.js';
+import { getRunningToolTools } from '../../utils/running_tools.js';
+import { addHistory } from '../../utils/history.js';
 import {
     ResponseInput,
     ToolCall,
     ResponseThinkingMessage,
-} from '../types/shared-types.js';
-import { dateFormat, readableTime } from '../utils/date_tools.js';
-import { runningToolTracker } from '../utils/running_tool_tracker.js';
-import { listActiveProjects } from '../utils/project_utils.js';
-import { getThoughtDelay } from '../utils/thought_utils.js';
-import { getImageGenerationTools } from '../utils/image_generation.js';
+} from '../../types/shared-types.js';
+import { dateFormat, readableTime } from '../../utils/date_tools.js';
+import { runningToolTracker } from '../../utils/running_tool_tracker.js';
+import { listActiveProjects } from '../../utils/project_utils.js';
+import { getThoughtDelay } from '../../utils/thought_utils.js';
+import { getImageGenerationTools } from '../../utils/image_generation.js';
+// Project cache functionality is not currently available
+// import { cacheProjectIfNeeded, loadCachedProject } from '../../utils/project_cache.js';
 
 export const startTime = new Date();
-async function addOperatorStatus(
+async function addWebsiteOperatorStatus(
     messages: ResponseInput
 ): Promise<ResponseInput> {
     // Prepare the system status message
-    const status = `=== Operator Status ===
+    const status = `=== Website Operator Status ===
 
 Current Time: ${dateFormat()}
 Your Running Time: ${readableTime(new Date().getTime() - startTime.getTime())}
@@ -57,19 +64,53 @@ ${runningToolTracker.listActive()}`;
 }
 
 /**
- * Create the planning agent with optional ensemble and inter-agent validation features
+ * Create the website operator agent for specialized website construction
  *
- * @param settings Additional settings to control the ensemble and inter-agent validation features
- * @returns The configured OperatorAgent instance
+ * @returns The configured WebsiteOperatorAgent instance
  */
-export function createOperatorAgent(): Agent {
+export function createWebsiteOperatorAgent(): Agent {
     const agent = new Agent({
-        name: 'OperatorAgent',
-        description: 'Operator of specialized agents for complex tasks',
+        name: 'WebsiteOperatorAgent',
+        description: 'Orchestrates research → design → code → test for websites',
         instructions: `${MAGI_CONTEXT}
 ---
 
-Your role in MAGI is as an Operator Agent. You have been given a task. Your job is to determine the intent of the task, think through the task step by step, then use your tools/agents to complete the task.
+Your role in MAGI is as a Website Construction Operator. You have been given a task to build a website.
+Your job is to orchestrate the process through several phases:
+
+PHASE A – Analyse project files and cache a structured summary.
+- Read and understand the existing project structure (if any)
+- Cache summary for subsequent operations
+- Identify key Next.js configurations and components
+
+PHASE B – Research competitor / reference sites and collect screenshot assets.
+- Use SearchAgent to find relevant competitor sites
+- Use BrowserAgent to capture screenshots and analyze UI patterns
+- Save inspirational assets for reference
+
+PHASE C – Use image_generation tools to create full-page and component-level mock-ups.
+- Generate UI mockups for homepage, pricing, dashboard, auth, etc.
+- Create component-level designs (headers, footers, sidebars, etc.)
+- Organize assets for frontend implementation
+
+PHASE D – Generate or modify Next.js front-end code to match mock-ups.
+- Implement page layouts and components
+- Style with CSS/Tailwind according to designs
+- Ensure responsive design and cross-browser compatibility
+- Run quick validation (build passes, visual comparison)
+
+PHASE E – Build back-end APIs, integrate with front-end, and run comprehensive tests.
+- Implement API routes and backend logic
+- Set up database models and connections
+- Write unit and integration tests
+- Run end-to-end testing to validate the entire application
+
+General Guidance:
+• Begin by thinking and outputting a phase plan.
+• After each phase, run quick validation (e.g. build passes, unit tests pass, UI screenshot diff etc.).
+• If validation fails, reason about fixes, adjust context, and retry.
+• Use parallel agent launches where beneficial.
+• On final success call task_complete(result).
 
 ${getTaskContext()}
 
@@ -98,6 +139,10 @@ When you are done, please use the task_complete(result) tool to report that the 
             ...getCommonTools(),
         ],
         workers: [
+            createDesignAgent,
+            createFrontendAgent,
+            createBackendAgent,
+            createTestAgent,
             createSearchAgent,
             createBrowserAgent,
             createCodeAgent,
@@ -111,9 +156,16 @@ When you are done, please use the task_complete(result) tool to report that the 
             agent: Agent,
             messages: ResponseInput
         ): Promise<[Agent, ResponseInput]> => {
-            //[agent, messages] = addPromptGuide(agent, messages);
-            //messages = await addSystemStatus(messages);
-            messages = await addOperatorStatus(messages);
+            messages = await addWebsiteOperatorStatus(messages);
+
+            // Project cache functionality commented out (not currently available)
+            // try {
+            //     const projectPath = process.cwd();
+            //     // Handle project cache here if needed in the future
+            // } catch (error) {
+            //     console.error('Error loading project cache:', error);
+            // }
+
             return [agent, messages];
         },
         onResponse: async (response: string): Promise<string> => {

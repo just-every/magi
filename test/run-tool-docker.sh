@@ -3,7 +3,7 @@ set -euo pipefail
 # Usage: ./run-tool-docker.sh path/to/tool.ts '{"json":"args"}' [agent_id]
 #
 # This script runs a TypeScript file inside the magi-base Docker container
-# using the magi-run-tool command. This ensures that the execution environment
+# using the test-custom-tool.sh command. This ensures that the execution environment
 # matches the one used in production.
 #
 # Arguments:
@@ -51,7 +51,7 @@ docker build -t magi-system:latest -f magi/docker/Dockerfile "$REPO_ROOT" >/dev/
 echo "ℹ️ Script path: $SCRIPT_PATH"
 echo "ℹ️ Agent ID: $AGENT_ID"
 echo "ℹ️ JSON args: $JSON_ARGS"
-echo "🚀 Running magi-run-tool inside container..."
+echo "🚀 Running test-custom-tool.sh inside container..."
 
 # Run the container with a direct mount of the TypeScript file to /tmp/tool_script.ts
 # Use the container's entrypoint script which handles proper user switching
@@ -66,7 +66,7 @@ docker run --rm --name $CONTAINER_NAME \
     -v "$ABS_PATH:/tmp/tool_script.ts:ro" \
     --add-host=host.docker.internal:host-gateway \
     magi-system:latest \
-    magi-run-tool "$AGENT_ID" "/tmp/tool_script.ts" "$JSON_ARGS"
+    test-custom-tool.sh "$AGENT_ID" "/tmp/tool_script.ts" "$JSON_ARGS"
 
 # Capture exit code
 EXIT_CODE=$?

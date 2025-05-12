@@ -1,7 +1,7 @@
 /**
  * Hello World Tool
  *
- * A simple test tool to verify that magi-run-tool is working correctly.
+ * A simple test tool to verify that test-custom-tool.sh is working correctly.
  * It outputs information about the execution environment and demonstrates
  * basic TypeScript features
  */
@@ -29,7 +29,7 @@ interface ToolResult {
 
 /**
  * Main function for the hello-world tool
- * This will be executed by the magi-run-tool environment
+ * This will be executed by the test-custom-tool.sh environment
  *
  * NOTE: Export this as the default export so our test runner can find it
  */

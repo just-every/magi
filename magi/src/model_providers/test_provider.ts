@@ -197,45 +197,46 @@ export class TestProvider implements ModelProvider {
         }
 
         // Simulate a tool call if configured
-        if (
-            this.config.simulateToolCall &&
-            agent &&
-            agent.tools &&
-            agent.tools.length > 0
-        ) {
-            // Find an actual tool to simulate calling
-            const availableTool = agent.tools.find(tool =>
-                this.config.toolName
-                    ? tool.definition.function.name === this.config.toolName
-                    : true
-            );
+        if (this.config.simulateToolCall && agent) {
+            const currentTools = agent.getTools();
+            if (currentTools) {
+                const toolArray = await currentTools;
+                if (toolArray.length > 0) {
+                    // Use execute_command as a well-known tool
+                    const availableTool = toolArray.find(tool =>
+                        this.config.toolName
+                            ? tool.definition.function.name === this.config.toolName
+                            : true
+                    );
 
-            if (availableTool) {
-                const toolCall: ToolCall = {
-                    id: uuidv4(),
-                    type: 'function',
-                    function: {
-                        name: availableTool.definition.function.name,
-                        arguments: JSON.stringify(
-                            this.config.toolArguments || {
-                                query: userMessageContent.slice(0, 50),
-                            }
-                        ),
-                    },
-                };
+                    if (availableTool) {
+                        const toolCall: ToolCall = {
+                            id: uuidv4(),
+                            type: 'function',
+                            function: {
+                                name: availableTool.definition.function.name,
+                                arguments: JSON.stringify(
+                                    this.config.toolArguments || {
+                                        query: userMessageContent.slice(0, 50),
+                                    }
+                                ),
+                            },
+                        };
 
-                // Emit tool call event
-                yield {
-                    type: 'tool_start',
-                    tool_calls: [toolCall],
-                    agent: agent?.export(),
-                };
+                        // Emit tool call event
+                        yield {
+                            type: 'tool_start',
+                            tool_calls: [toolCall],
+                            agent: agent?.export(),
+                        };
 
-                // Let the tool processing happen elsewhere - we don't emit a result
-                await sleep(this.config.streamingDelay || 50);
+                        // Let the tool processing happen elsewhere - we don't emit a result
+                        await sleep(this.config.streamingDelay || 50);
 
-                // Update the response to mention the tool call
-                response = `I've used the ${toolCall.function.name} tool to help answer your question.\n\n${response}`;
+                        // Update the response to mention the tool call
+                        response = `I've used the ${toolCall.function.name} tool to help answer your question.\n\n${response}`;
+                    }
+                }
             }
         }
 

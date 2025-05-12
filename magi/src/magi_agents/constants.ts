@@ -2,7 +2,7 @@
  * Constants and shared text for MAGI agents.
  */
 import { get_output_dir } from '../utils/file_utils.js';
-import { getAllProjects } from '../utils/project_utils.js';
+import { getProcessProjectIds } from '../utils/project_utils.js';
 
 export const YOUR_NAME = process.env.YOUR_NAME || 'User';
 
@@ -39,16 +39,20 @@ export const COMMON_WARNINGS = `IMPORTANT WARNINGS:
  * Returns the project context for agents.
  */
 export function getProjectsContext(): string {
-    const projects = getAllProjects();
-    const projectDir = projects.length > 0 ? `projects/${projects[0]}` : '';
+    const projectIds = getProcessProjectIds();
+    const projectDir = projectIds.length > 0 ? `projects/${projectIds[0]}` : '';
     const startingDir = get_output_dir(projectDir);
 
-    return projects.length === 0
+    return projectIds.length === 0
         ? 'You can read/write to /magi_output which is a virtual volume shared with all MAGI agents.'
         : `You can read/write to /magi_output which is a virtual volume shared with all MAGI agents. You have access to projects which are git repositories with files you are working on. You will receive a read/write clone of the project git repo at /magi_output/${process.env.PROCESS_ID}/projects/{project} and your default branch is "magi-${process.env.PROCESS_ID}"
 
+When sharing files with other agents or ${YOUR_NAME} please use this directory:
+/magi_output/shared
+You can read and write to any location in /magi_output, but using /magi_output/shared for file sharing keeps the file system organized.
+
 YOUR PROJECTS:
-- ${projects.join('\n- ')}
+- ${projectIds.join('\n- ')}
 
 Your starting directory is: ${startingDir}
 Your taskID is: ${process.env.PROCESS_ID}`;

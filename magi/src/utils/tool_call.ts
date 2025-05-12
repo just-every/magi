@@ -161,8 +161,10 @@ const STATUS_TRACKING_TOOL_NAMES = new Set<string>([
 /**
  * Check whether the given agent declares ANY status‑tracking tool.
  */
-function agentHasStatusTracking(agent?: Agent): boolean {
-    return !!agent?.tools?.some(t =>
+async function agentHasStatusTracking(agent?: Agent): Promise<boolean> {
+    if (!agent) return false;
+    const tools = await agent.getTools();
+    return tools.some(t =>
         STATUS_TRACKING_TOOL_NAMES.has(t.definition.function.name)
     );
 }
@@ -424,11 +426,12 @@ export async function handleToolCall(
         );
     }
 
-    if (!agent.tools) {
+    const agentTools = await agent.getTools();
+    if (!agentTools || agentTools.length === 0) {
         throw new Error(`Agent ${agent.name} has no tools defined`);
     }
 
-    const tool = agent.tools.find(
+    const tool = agentTools.find(
         tool => tool.definition.function.name === name
     );
     if (!tool) {
@@ -556,6 +559,17 @@ export async function handleToolCall(
 
         // Setup the actual function call with abort support
         const executeFunction = async (): Promise<string> => {
+            // Special case:
+            // For `wait_for_running_tool` we allow the tool itself to handle
+            // the abort signal and return a descriptive string. Propagating
+            // the abort as an error here causes the overall tool call to fail
+            // with “Error: Operation was aborted”, which is not helpful to
+            // the agent/user. By bypassing the outer Promise.race for this
+            // tool we avoid converting the abort into an unhandled rejection.
+            if (name === 'wait_for_running_tool') {
+                return runToolLogic();
+            }
+
             return Promise.race([
                 // Actual tool execution
                 runToolLogic(),
@@ -708,7 +722,9 @@ export function createToolFunction(
             paramInfoObj = { description: paramInfoRaw }; // Create a basic object for consistency
         } else if (typeof paramInfoRaw === 'object' && paramInfoRaw !== null) {
             paramInfoObj = paramInfoRaw;
-            paramInfoDesc = paramInfoRaw.description;
+            paramInfoDesc = typeof paramInfoRaw.description === 'function'
+                ? paramInfoRaw.description()
+                : paramInfoRaw.description;
         }
 
         // Convert to snake_case for API consistency if needed
@@ -777,12 +793,15 @@ export function createToolFunction(
                     properties[apiParamName].items !== null &&
                     !('properties' in properties[apiParamName].items)
                 ) {
-                    (
-                        properties[apiParamName].items as {
-                            type: ToolParameterType;
-                            enum?: string[];
-                        }
-                    ).enum = paramInfoObj.enum;
+                    // Don't set enum directly if it's a function - it will be resolved later
+                    if (typeof paramInfoObj.enum !== 'function') {
+                        (
+                            properties[apiParamName].items as {
+                                type: ToolParameterType;
+                                enum?: string[];
+                            }
+                        ).enum = paramInfoObj.enum as string[];
+                    }
                 }
             }
         } else if (paramInfoObj?.enum) {

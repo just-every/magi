@@ -45,6 +45,58 @@ import type { Agent } from '../utils/agent.js';
 // Example for strict ESM: const { default: stripAnsi } = await import('strip-ansi');
 
 /**
+ * Convert human-readable number strings to integers.
+ * Handles values like "1.9k", "2M", "3_456", "987,654" etc.
+ *
+ * @param str - Human-readable number string
+ * @returns Parsed integer value
+ */
+function humanReadableToInt(str: string): number {
+    // Remove commas, underscores, spaces
+    const normalized = str.replace(/[,_\s]/g, '');
+    // Extract number and optional suffix
+    const match = normalized.match(/^([\d.]+)([kKmMbB]?)$/);
+
+    if (!match) {
+        throw new Error(`Invalid human-readable number format: ${str}`);
+    }
+
+    const [, numStr, suffix = ''] = match;
+    const num = parseFloat(numStr);
+
+    // Convert based on suffix
+    const MULTIPLIERS: Record<string, number> = {
+        '': 1,
+        'k': 1000,
+        'K': 1000,
+        'm': 1000000,
+        'M': 1000000,
+        'b': 1000000000,
+        'B': 1000000000
+    };
+
+    return Math.round(num * MULTIPLIERS[suffix]);
+}
+
+/**
+ * Extract token count from a progress/status line.
+ * Handles formats like "203 tokens", "↑ 1.9k tokens", etc.
+ *
+ * @param line - Status line containing token information
+ * @returns Parsed token count or null if no valid token count found
+ */
+function parseTokenProgress(line: string): number | null {
+    const match = /\b(?:↑\s*)?([\d.,_a-zA-Z]+)\s*tokens\b/i.exec(line);
+    if (!match) return null;
+
+    try {
+        return humanReadableToInt(match[1]);
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Helper function to filter out known noise patterns from the interactive CLI output.
  *
  * **WARNING:** This function is highly dependent on the specific output format of the
@@ -52,9 +104,10 @@ import type { Agent } from '../utils/agent.js';
  * in future CLI versions may require this function to be updated.
  *
  * @param line - A single line of text (after ANSI stripping and trimming).
+ * @param tokenCb - Optional callback to receive detected token counts from status lines
  * @returns True if the line is considered noise, false otherwise.
  */
-function isNoiseLine(line: string): boolean {
+function isNoiseLine(line: string, tokenCb?: (n: number) => void): boolean {
     if (!line) return true; // Skip empty lines
 
     // --- Filtering based on observed output ---
@@ -74,11 +127,17 @@ function isNoiseLine(line: string): boolean {
     // Dynamic Status/Progress Lines (specific patterns)
     // Matches dynamic status lines like "* Action... (Xs · esc to interrupt)" or "* Action... (Xs · details · esc to interrupt)"
     if (
-        /^\s*\p{S}\s*\w+…\s*\(\d+s(?:\s*·\s*.+?)?\s*·\s*esc to interrupt\)$/u.test(
+        /^\s*[\p{S}\p{P}]\s*\w+…\s*\(\d+s(?:\s*·\s*.+?)?\s*·\s*[^)]+\)$/u.test(
             line
         )
-    )
+    ) {
+        // Extract token count from the line before filtering it out
+        const tokenCount = parseTokenProgress(line);
+        if (tokenCount !== null && tokenCb) {
+            tokenCb(tokenCount);
+        }
         return true;
+    }
     // Note: Thinking/Task/Call/Bash/Read lines are handled by isProcessingStartSignal or history dedupe
     if (line === '⎿  Running…') return true; // Specific running message
     if (line.match(/^⎿\s*Read \d+ lines \(ctrl\+r to expand\)$/)) return true; // Matches "Read N lines..." status
@@ -172,6 +231,19 @@ export class ClaudeCodeProvider implements ModelProvider {
         let ptyProcess: pty.IPty | null = null; // Hold reference for potential kill
         let lastYieldedLine: string | null = null; // Track last *yielded* non-noise line for dedupe
 
+        // --- Token Tracking for Cost Estimation ---
+        let liveOutputTokens = 0;
+        const updateLiveTokenEstimate = (n: number) => {
+            if (n > liveOutputTokens) {
+                liveOutputTokens = n;
+                console.log(`[ClaudeCodeProvider] Updated token count: ${liveOutputTokens} for message ${messageId}`);
+            }
+        };
+
+        // --- Exit Control Variables ---
+        let sentExitCtrlCs = false;
+        let hardKillTimerId: NodeJS.Timeout | null = null;
+
         // --- Sliding Window History for Deduplication ---
         const historySize = 10; // Number of recent lines to remember
         const recentHistory: string[] = []; // Stores lines in order
@@ -208,6 +280,45 @@ export class ClaudeCodeProvider implements ModelProvider {
         const silenceTimeoutDuration = 5000; // 5 seconds silence timeout for the PTY process itself
         let silenceTimeoutId: NodeJS.Timeout | null = null;
         // --- End Silence Timeout ---
+
+        /**
+         * Sends the double Ctrl-C sequence needed to get the CLI to print cost summary.
+         * Works similar to manual interaction with the CLI.
+         */
+        const sendExitCtrlCs = () => {
+            if (sentExitCtrlCs || !ptyProcess) return;
+            console.log(`[ClaudeCodeProvider] Sending exit Ctrl-C sequence for message ${messageId}`);
+            sentExitCtrlCs = true;
+
+            try {
+                // First Ctrl-C
+                ptyProcess.write('\x03');
+
+                // Second Ctrl-C after small delay
+                setTimeout(() => {
+                    try {
+                        if (ptyProcess) ptyProcess.write('\x03');
+                    } catch(e) {
+                        console.warn('[ClaudeCodeProvider] Error sending second Ctrl-C:', e);
+                    }
+                }, 300);
+
+                // Hard-kill watchdog - if the process is still alive after 3 seconds
+                // despite the Ctrl-C sequence, force-kill it
+                hardKillTimerId = setTimeout(() => {
+                    if (!ptyExited && ptyProcess) {
+                        console.log(`[ClaudeCodeProvider] Hard-kill timeout reached for message ${messageId}, killing process`);
+                        try {
+                            ptyProcess.kill();
+                        } catch(e) {
+                            console.warn('[ClaudeCodeProvider] Error during hard-kill:', e);
+                        }
+                    }
+                }, 3000);
+            } catch(e) {
+                console.warn('[ClaudeCodeProvider] Error initiating exit sequence:', e);
+            }
+        };
 
         // --- Helper Functions for Batching/Yielding ---
 
@@ -429,7 +540,7 @@ export class ClaudeCodeProvider implements ModelProvider {
                             DISABLE_BUG_COMMAND: '1',
                             DISABLE_ERROR_REPORTING: '1',
                             DISABLE_COST_WARNINGS: '1',
-                            DISABLE_TELEMETRY: '1'
+                            DISABLE_TELEMETRY: '1',
                         },
                     });
 
@@ -460,29 +571,21 @@ export class ClaudeCodeProvider implements ModelProvider {
 
                             // Process each complete line
                             for (const line of lines) {
-                            const trimmedLine = line.trim();
-                            // Accumulate all cleaned output for potential metadata parsing later
-                            accumulatedCleanOutput += line + '\n';
+                                const trimmedLine = line.trim();
+                                // Accumulate all cleaned output for potential metadata parsing later
+                                accumulatedCleanOutput += line + '\n';
 
-                            // Check for [complete] signal to terminate the process early
-                            if (trimmedLine === '[complete]') {
-                                console.log(
-                                    `[ClaudeCodeProvider] Early completion signal "[complete]" detected for message ${messageId}. Killing PTY process.`
-                                );
-                                if (ptyProcess && typeof ptyProcess.kill === 'function') {
-                                    try {
-                                        ptyProcess.kill();
-                                    } catch (e) {
-                                        console.warn(
-                                            '[ClaudeCodeProvider] Error killing PTY process after [complete] signal:',
-                                            e
-                                        );
-                                    }
+                                // Check for [complete] signal to initiate graceful exit sequence
+                                if (trimmedLine === '[complete]') {
+                                    console.log(
+                                        `[ClaudeCodeProvider] Early completion signal "[complete]" detected for message ${messageId}. Initiating exit sequence.`
+                                    );
+                                    // Instead of killing immediately, use our double-Ctrl-C sequence
+                                    // to get the cost summary from the CLI
+                                    sendExitCtrlCs();
+                                    // Continue processing this chunk in case there are other important lines
+                                    continue;
                                 }
-                                // Stop processing further lines from this chunk as the process is being terminated.
-                                // The onExit handler will take care of the rest.
-                                break;
-                            }
 
                                 // --- Skip Prompt Echo Logic ---
                                 if (!processingStarted) {
@@ -508,8 +611,8 @@ export class ClaudeCodeProvider implements ModelProvider {
                                 // --- End Skip Prompt Echo Logic ---
 
                                 // Process line only if processing has started
-                                // WARNING: Relies on isNoiseLine
-                                if (!isNoiseLine(trimmedLine)) {
+                                // WARNING: Relies on isNoiseLine - pass token callback
+                                if (!isNoiseLine(trimmedLine, updateLiveTokenEstimate)) {
                                     let shouldBuffer = true;
 
                                     // --- Deduplication Logic ---
@@ -608,7 +711,7 @@ export class ClaudeCodeProvider implements ModelProvider {
                             if (
                                 processingStarted &&
                                 finalTrimmedLine &&
-                                !isNoiseLine(finalTrimmedLine)
+                                !isNoiseLine(finalTrimmedLine, updateLiveTokenEstimate)
                             ) {
                                 let shouldBufferFinal = true;
                                 if (finalTrimmedLine === lastYieldedLine)
@@ -669,24 +772,38 @@ export class ClaudeCodeProvider implements ModelProvider {
                                 );
                             }
 
-                            // Estimate tokens - we don't know the exact tokenization, but this is a vague estimate
+                            // Calculate input tokens
                             const input_tokens = Math.ceil(
                                 (prompt?.length || 0) / 4
                             );
-                            const output_tokens = Math.ceil(
-                                finalContent.length / 4
-                            );
 
-                            //. See if we can extract the cost from the output
+                            let output_tokens = 0;
                             let cost = 0;
+
+                            // First try to extract the cost from the output summary
                             if (costMatch && costMatch[1]) {
                                 cost = parseFloat(costMatch[1]);
                                 if (isNaN(cost)) {
                                     cost = 0;
                                 }
+                                // Use content length for token count if we have cost but no token info
+                                output_tokens = Math.ceil(finalContent.length / 4);
+                            } else {
+                                // Fallback: Use live token tracking, or content length if that fails
+                                output_tokens = liveOutputTokens || Math.ceil(finalContent.length / 4);
+                                console.log(`[ClaudeCodeProvider] Using live token count for estimation: ${output_tokens}`);
+
+                                // Calculate cost using Sonnet pricing if model matches
+                                if (/claude-3-?7?-?sonnet/i.test(model)) {
+                                    // Sonnet pricing: $3/1M input tokens, $15/1M output tokens
+                                    const inputCost = (input_tokens * 0.003) / 1000;
+                                    const outputCost = (output_tokens * 0.015) / 1000;
+                                    cost = inputCost + outputCost;
+                                    console.log(`[ClaudeCodeProvider] Estimated cost for Sonnet: $${cost.toFixed(6)}`);
+                                }
                             }
 
-                            finalCost = cost; // Store parsed cost
+                            finalCost = cost; // Store parsed or calculated cost
                             console.log(
                                 `[ClaudeCodeProvider] Extracted cost from stream: $${cost.toFixed(6)}`
                             );
@@ -825,6 +942,7 @@ export class ClaudeCodeProvider implements ModelProvider {
         } finally {
             // 8. Final Cleanup: Ensure timers are cleared and resources released
             if (silenceTimeoutId) clearTimeout(silenceTimeoutId);
+            if (hardKillTimerId) clearTimeout(hardKillTimerId);
             if (batchTimerId) {
                 // Ensure batch timer is cleared
                 clearTimeout(batchTimerId);

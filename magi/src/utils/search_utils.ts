@@ -5,9 +5,9 @@
  */
 
 import axios from 'axios';
-import {ExecutableFunction, ToolDefinition, ToolFunction, ToolParameter} from '../types/shared-types.js';
+import { ToolFunction } from '../types/shared-types.js';
 import { createToolFunction } from './tool_call.js';
-import {quick_llm_call} from "./llm_call_utils.js";
+import { quick_llm_call } from './llm_call_utils.js';
 
 const DEFAULT_RESULTS_COUNT = 5;
 
@@ -19,7 +19,6 @@ const BRAVE_SEARCH_ENDPOINT = 'https://api.search.brave.com/res/v1/web/search';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
-
 
 /**
  * Search using the Brave Search API
@@ -67,7 +66,10 @@ async function braveSearch(
         }
         // It's better to return a structured error or an empty array than to throw an error for "invalid response"
         // unless the API contract guarantees a certain structure.
-        console.error('Invalid response structure from Brave Search API:', response.data);
+        console.error(
+            'Invalid response structure from Brave Search API:',
+            response.data
+        );
         return 'Error: Received an invalid response structure from Brave Search API.';
     } catch (error) {
         console.error('Error during Brave API search:', error);
@@ -107,13 +109,14 @@ export async function web_search(
     query: string,
     numResults: number = DEFAULT_RESULTS_COUNT
 ): Promise<string> {
-    switch(engine) {
+    switch (engine) {
         // TODO: Implement search logic for other engines
         case 'brave':
-            if (!BRAVE_API_KEY) return `Error: Brave API key not configured.`;
+            if (!BRAVE_API_KEY) return 'Error: Brave API key not configured.';
             return await braveSearch(query, numResults);
         case 'anthropic':
-            if (!ANTHROPIC_API_KEY) return `Error: Anthropic API key not configured.`;
+            if (!ANTHROPIC_API_KEY)
+                return 'Error: Anthropic API key not configured.';
             return await quick_llm_call(
                 query,
                 null,
@@ -130,7 +133,7 @@ export async function web_search(
                 inject_agent_id
             );
         case 'openai':
-            if (!OPENAI_API_KEY) return `Error: OpenAI API key not configured.`;
+            if (!OPENAI_API_KEY) return 'Error: OpenAI API key not configured.';
             return await quick_llm_call(
                 query,
                 null,
@@ -144,7 +147,7 @@ export async function web_search(
                 inject_agent_id
             );
         case 'google':
-            if (!GOOGLE_API_KEY) return `Error: Google API key not configured.`;
+            if (!GOOGLE_API_KEY) return 'Error: Google API key not configured.';
             return await quick_llm_call(
                 query,
                 null,
@@ -157,7 +160,6 @@ export async function web_search(
                 },
                 inject_agent_id
             );
-
     }
     return `Error: Invalid or unsupported search engine ${engine}`;
 }
@@ -171,19 +173,27 @@ export function getSearchTools(): ToolFunction[] {
 
     if (ANTHROPIC_API_KEY) {
         availableEngines.push('anthropic');
-        engineDescriptions.push('- anthropic: deep multi-hop research, strong source citations');
+        engineDescriptions.push(
+            '- anthropic: deep multi-hop research, strong source citations'
+        );
     }
     if (BRAVE_API_KEY) {
         availableEngines.push('brave');
-        engineDescriptions.push('- brave: privacy-first, independent index (good for niche/controversial)');
+        engineDescriptions.push(
+            '- brave: privacy-first, independent index (good for niche/controversial)'
+        );
     }
     if (OPENAI_API_KEY) {
         availableEngines.push('openai');
-        engineDescriptions.push('- openai: ChatGPT-grade contextual search, cited results');
+        engineDescriptions.push(
+            '- openai: ChatGPT-grade contextual search, cited results'
+        );
     }
     if (GOOGLE_API_KEY) {
         availableEngines.push('google');
-        engineDescriptions.push('- google: freshest breaking-news facts via Gemini grounding');
+        engineDescriptions.push(
+            '- google: freshest breaking-news facts via Gemini grounding'
+        );
     }
 
     if (availableEngines.length === 0) {
@@ -210,7 +220,7 @@ export function getSearchTools(): ToolFunction[] {
                     description: 'Max results to return (default = 5).',
                     optional: true, // Assuming numResults is optional
                 },
-            },
+            }
         ),
     ];
 }

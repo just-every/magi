@@ -594,7 +594,9 @@ export class OpenAIChat implements ModelProvider {
         messages: ResponseInput,
         agent: Agent
     ): AsyncGenerator<StreamingEvent> {
-        const tools: ToolFunction[] | undefined = agent?.tools;
+        // Get tools asynchronously (getTools now returns a Promise)
+        const toolsPromise = agent ? agent.getTools() : Promise.resolve([]);
+        const tools = await toolsPromise;
         const settings: ModelSettings | undefined = agent?.modelSettings;
         let requestId: string;
 

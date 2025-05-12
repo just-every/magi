@@ -235,8 +235,8 @@ Note: Failed to generate summary - ${error}`;
   Name: ${agentProcess.name}
   Status: ${agentProcess.status}
 `;
-            if (agentProcess.project) {
-                result += `  Project: ${agentProcess.project.join(', ')}\n`;
+            if (agentProcess.projectIds) {
+                result += `  Project: ${agentProcess.projectIds.join(', ')}\n`;
             }
             if (agentProcess.command) {
                 result += `  Command: ${truncateString(agentProcess.command.replaceAll('\n', ' '))}\n`;

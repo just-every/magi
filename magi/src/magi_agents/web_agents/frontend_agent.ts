@@ -1,0 +1,150 @@
+/**
+ * Frontend Agent for Website Construction
+ *
+ * Specializes in Phase D of website construction:
+ * - Implementing React/Next.js frontend
+ * - Creating responsive components based on design mockups
+ * - Implementing styling and interactions
+ * - Testing and validating UI implementation
+ */
+
+import { Agent } from '../../utils/agent.js';
+import { getCommonTools } from '../../utils/index.js';
+import { addHistory } from '../../utils/history.js';
+import {
+    ResponseInput,
+    ToolCall,
+    ResponseThinkingMessage,
+} from '../../types/shared-types.js';
+import { MAGI_CONTEXT } from '../constants.js';
+
+/**
+ * Create the frontend agent for specialized React/Next.js implementation
+ *
+ * @returns The configured FrontendAgent instance
+ */
+export function createFrontendAgent(): Agent {
+    const agent = new Agent({
+        name: 'FrontendAgent',
+        description: 'Specializes in React/Next.js frontend implementation for websites',
+        instructions: `${MAGI_CONTEXT}
+---
+
+You are a Frontend Agent specializing in building modern web applications using React and Next.js.
+Your primary responsibilities are:
+
+1. PROJECT SETUP
+   - Configure Next.js project structure (app/ or pages/ router based on requirements)
+   - Set up Tailwind CSS or other styling approach
+   - Configure ESLint, TypeScript, and other development tools
+   - Create folder structure following best practices
+
+2. COMPONENT IMPLEMENTATION
+   - Convert design mockups into React components
+   - Implement responsive layouts that work on all device sizes
+   - Build reusable UI components following atomic design principles
+   - Create consistent styling system with Tailwind or CSS modules
+
+3. FUNCTIONALITY
+   - Implement client-side interactivity and state management
+   - Create form validations and user interactions
+   - Connect components to API endpoints
+   - Implement routing and navigation
+
+4. TESTING & VALIDATION
+   - Ensure code is clean, maintainable, and follows best practices
+   - Test components on different screen sizes
+   - Validate against mockups with visual comparison
+   - Run performance checks and ensure accessibility compliance
+
+FRONTEND ARCHITECTURE BEST PRACTICES:
+• Clean component organization: /components/[section]/Component.tsx
+• Separation of concerns: UI components vs. container/logic components
+• Appropriate state management: React hooks for simple state, context for shared state
+• Proper routing: Use Next.js file-based routing with good URL structure
+• Type safety: Use TypeScript interfaces for props and state
+• Performance optimization: Use Next.js image optimization, code splitting, etc.
+
+CODING STANDARDS:
+• Follow React best practices (hooks, functional components)
+• Use named exports for components
+• Write semantic HTML with proper accessibility attributes
+• Implement proper error handling and loading states
+• Add comments for complex logic
+• Use consistent naming conventions
+
+DO NOT:
+• Create overly complex components that do too many things
+• Ignore responsive design considerations
+• Hard-code values that should be configurable
+• Mix styling approaches (stick to one methodology)
+• Ignore TypeScript type safety
+
+VISUAL TESTING:
+After implementing key pages, run comparison tests between your implementation and the design mockups to ensure fidelity.
+
+The backend engineer will connect your frontend to real data, so ensure your components accept appropriate props and handle loading/error states.
+`,
+        tools: [
+            ...getCommonTools(),
+        ],
+        modelClass: 'monologue',
+        maxToolCallRoundsPerTurn: 1,
+
+        onRequest: async (
+            agent: Agent,
+            messages: ResponseInput
+        ): Promise<[Agent, ResponseInput]> => {
+            return [agent, messages];
+        },
+        onResponse: async (response: string): Promise<string> => {
+            if (response && response.trim()) {
+                await addHistory(
+                    {
+                        type: 'message',
+                        role: 'assistant',
+                        status: 'completed',
+                        content: response,
+                    },
+                    agent.historyThread,
+                    agent.model
+                );
+            }
+            return response;
+        },
+        onThinking: async (message: ResponseThinkingMessage): Promise<void> => {
+            return addHistory(message, agent.historyThread, agent.model);
+        },
+        onToolCall: async (toolCall: ToolCall): Promise<void> => {
+            await addHistory(
+                {
+                    id: toolCall.id,
+                    type: 'function_call',
+                    call_id: toolCall.call_id || toolCall.id,
+                    name: toolCall.function.name,
+                    arguments: toolCall.function.arguments,
+                },
+                agent.historyThread,
+                agent.model
+            );
+        },
+        onToolResult: async (
+            toolCall: ToolCall,
+            result: string
+        ): Promise<void> => {
+            await addHistory(
+                {
+                    id: toolCall.id,
+                    type: 'function_call_output',
+                    call_id: toolCall.call_id || toolCall.id,
+                    name: toolCall.function.name,
+                    output: result,
+                },
+                agent.historyThread,
+                agent.model
+            );
+        },
+    });
+
+    return agent;
+}

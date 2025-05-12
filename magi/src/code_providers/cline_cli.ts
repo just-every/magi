@@ -477,7 +477,9 @@ export class ClineCliProvider implements ModelProvider {
         let deltaPosition = 0; // For tracking ordered deltas
 
         try {
-            const tools: ToolFunction[] | undefined = agent?.tools;
+            // Get tools asynchronously (getTools now returns a Promise)
+            const toolsPromise = agent ? agent.getTools() : Promise.resolve([]);
+            const tools = await toolsPromise;
             const settings: ModelSettings | undefined = agent?.modelSettings;
             const modelClass: ModelClassID | undefined = agent?.modelClass;
 

@@ -22,7 +22,6 @@ import {
     updateServerVersion,
 } from './env_store';
 import { ProcessManager } from './process_manager';
-import { ProjectManager } from './project_manager';
 import { execPromise } from '../utils/docker_commands';
 import { cleanupAllContainers } from './container_manager';
 import { saveUsedColors } from './color_manager';
@@ -101,7 +100,6 @@ export class ServerManager {
     private wss = new WebSocket.Server({ noServer: true });
     private liveReloadClients = new Set<WebSocket>();
     private processManager: ProcessManager;
-    private projectManager: ProjectManager;
     private communicationManager: CommunicationManager;
     private cleanupInProgress = false;
     private isSystemPaused = false;
@@ -111,7 +109,6 @@ export class ServerManager {
 
     constructor() {
         this.processManager = new ProcessManager(this.io);
-        this.projectManager = new ProjectManager();
 
         // Initialize the communication manager before setting up WebSockets
         this.communicationManager = new CommunicationManager(
@@ -150,9 +147,6 @@ export class ServerManager {
         // Load stored environment variables
         loadAllEnvVars();
         updateServerVersion();
-
-        // Initialize the project manager
-        this.projectManager.initialize();
 
         // Initialize the server asynchronously
         await this.setupServer();
@@ -562,46 +556,7 @@ export class ServerManager {
 
         // Set up Socket.io connection handlers
         this.io.on('connection', this.handleSocketConnection.bind(this));
-
-        // Set up handlers for project-related events from Magi
-        this.communicationManager.addEventHandler(
-            'project_create',
-            this.handleProjectEvent.bind(this)
-        );
-        this.communicationManager.addEventHandler(
-            'project_update_description',
-            this.handleProjectEvent.bind(this)
-        );
-        this.communicationManager.addEventHandler(
-            'project_update_overview',
-            this.handleProjectEvent.bind(this)
-        );
-        this.communicationManager.addEventHandler(
-            'project_add_history',
-            this.handleProjectEvent.bind(this)
-        );
-        this.communicationManager.addEventHandler(
-            'project_get_details',
-            this.handleProjectEvent.bind(this)
-        );
-    }
-
-    /**
-     * Handle project-related events from agent processes
-     */
-    private async handleProjectEvent(
-        event: any,
-        sourceProcessId?: string
-    ): Promise<any> {
-        console.log(
-            `Received project event from process ${sourceProcessId}:`,
-            event.type
-        );
-
-        // Send to project manager
-        const response = await this.projectManager.handleProjectEvent(event);
-        return response;
-    }
+   }
 
     /**
      * Set up Express routes

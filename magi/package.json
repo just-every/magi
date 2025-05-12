@@ -25,6 +25,7 @@
         "chrome-remote-interface": "^0.33.3",
         "dotenv": "^16.4.7",
         "esbuild": "^0.25.4",
+        "glob": "^11.0.2",
         "jsdom": "^26.0.0",
         "node-pty": "^1.0.0",
         "openai": "^4.88.0",

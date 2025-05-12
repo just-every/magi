@@ -6,10 +6,10 @@
  * tool validation to ensure consistent behavior.
  *
  * Usage:
- *   magi-run-tool <AGENT_ID> <TARGET_SCRIPT_PATH> ['<JSON_ENCODED_ARGS>']
+ *   test-custom-tool.sh <AGENT_ID> <TARGET_SCRIPT_PATH> ['<JSON_ENCODED_ARGS>']
  *
  * Example:
- *   magi-run-tool abc123 ./my_generated_script.ts '{"param1":"value1","param2":123}'
+ *   test-custom-tool.sh abc123 ./my_generated_script.ts '{"param1":"value1","param2":123}'
  *
  * This runner also supports running TypeScript modules with exports:
  *   1. If the file has a default export function, that function will be called with args
@@ -34,50 +34,121 @@ async function main() {
             NODE_PATH: process.env.NODE_PATH,
             NODE_ENV: process.env.NODE_ENV,
             PATH: process.env.PATH,
+            MAGI_TEST_FUNCTION_NAME: process.env.MAGI_TEST_FUNCTION_NAME
+                ? 'set'
+                : 'not set',
         });
 
-        // Parse command line arguments
-        const [, , agentId, targetScriptPath, ...scriptArgs] = process.argv;
+        // Check if we're in custom tool test mode (environment variables are set)
+        const isCustomToolTestMode = !!process.env.MAGI_TEST_FUNCTION_NAME;
 
-        if (!agentId) {
-            console.error('Error: Agent ID is required');
-            console.error(
-                'Usage: magi-run-tool <AGENT_ID> <TARGET_SCRIPT_PATH> [SCRIPT_ARGS...]'
-            );
-            process.exit(1);
-        }
-
-        if (!targetScriptPath) {
-            console.error('Error: Target script path is required');
-            console.error(
-                'Usage: magi-run-tool <AGENT_ID> <TARGET_SCRIPT_PATH> [SCRIPT_ARGS...]'
-            );
-            process.exit(1);
-        }
-
-        console.log(
-            `[tool_runner] Running script ${targetScriptPath} with agent ID ${agentId}`
-        );
-
-        // Process script arguments - parse JSON if provided
+        let agentId: string;
+        let targetScriptPath: string;
         let parsedArgs: any = [];
-        if (scriptArgs.length > 0) {
-            // Get JSON string (might be multiple args that got split)
-            const argsStr = scriptArgs.join(' ');
+        let functionNameToExecute: string | undefined;
+
+        if (isCustomToolTestMode) {
+            // Custom tool test mode: Get parameters from environment variables
+            console.log(
+                '[tool_runner] Running in CUSTOM TOOL TEST MODE using environment variables'
+            );
+
+            // Extract parameters from environment variables
+            agentId = process.env.MAGI_TEST_AGENT_ID || '';
+            targetScriptPath = process.env.MAGI_TEST_FILE_PATH || '';
+            functionNameToExecute = process.env.MAGI_TEST_FUNCTION_NAME;
+
+            // Validate required environment variables
+            if (!agentId) {
+                console.error(
+                    'Error: MAGI_TEST_AGENT_ID environment variable is required'
+                );
+                process.exit(1);
+            }
+
+            if (!targetScriptPath) {
+                console.error(
+                    'Error: MAGI_TEST_FILE_PATH environment variable is required'
+                );
+                process.exit(1);
+            }
+
+            if (!functionNameToExecute) {
+                console.error(
+                    'Error: MAGI_TEST_FUNCTION_NAME environment variable is required'
+                );
+                process.exit(1);
+            }
+
+            // Parse args from JSON string
             try {
-                // Attempt to parse as JSON
-                parsedArgs = JSON.parse(argsStr);
+                const argsJsonString = process.env.MAGI_TEST_ARGS_JSON || '[]';
+                parsedArgs = JSON.parse(argsJsonString);
                 console.log(
-                    '[tool_runner] Successfully parsed JSON args:',
+                    '[tool_runner] Successfully parsed args from MAGI_TEST_ARGS_JSON:',
                     JSON.stringify(parsedArgs)
                 );
             } catch (err) {
-                // If not valid JSON, use as-is
-                console.log(
-                    '[tool_runner] Args not valid JSON, using as raw strings:',
-                    scriptArgs
+                console.error(
+                    '[tool_runner] Error parsing MAGI_TEST_ARGS_JSON:',
+                    err
                 );
-                parsedArgs = scriptArgs;
+                console.log('[tool_runner] Using empty args array');
+                parsedArgs = [];
+            }
+
+            console.log(`[tool_runner] Running custom tool test with parameters:
+  - Agent ID: ${agentId}
+  - Script Path: ${targetScriptPath}
+  - Function Name: ${functionNameToExecute}
+  - Args: ${JSON.stringify(parsedArgs)}`);
+        } else {
+            // Standard mode: Parse command line arguments
+            const [, , cliAgentId, cliTargetScriptPath, ...scriptArgs] =
+                process.argv;
+
+            agentId = cliAgentId;
+            targetScriptPath = cliTargetScriptPath;
+
+            if (!agentId) {
+                console.error('Error: Agent ID is required');
+                console.error(
+                    'Usage: test-custom-tool.sh <AGENT_ID> <TARGET_SCRIPT_PATH> [SCRIPT_ARGS...]'
+                );
+                process.exit(1);
+            }
+
+            if (!targetScriptPath) {
+                console.error('Error: Target script path is required');
+                console.error(
+                    'Usage: test-custom-tool.sh <AGENT_ID> <TARGET_SCRIPT_PATH> [SCRIPT_ARGS...]'
+                );
+                process.exit(1);
+            }
+
+            console.log(
+                `[tool_runner] Running script ${targetScriptPath} with agent ID ${agentId}`
+            );
+
+            // Process script arguments - parse JSON if provided
+            if (scriptArgs.length > 0) {
+                // Get JSON string (might be multiple args that got split)
+                const argsStr = scriptArgs.join(' ');
+                try {
+                    // Attempt to parse as JSON
+                    parsedArgs = JSON.parse(argsStr);
+                    console.log(
+                        '[tool_runner] Successfully parsed JSON args:',
+                        JSON.stringify(parsedArgs)
+                    );
+                } catch (err) {
+                    // If not valid JSON, use as-is
+                    console.log(
+                        '[tool_runner] Args not valid JSON, using as raw strings:',
+                        scriptArgs
+                    );
+                    parsedArgs = scriptArgs;
+                }
             }
         }
 
@@ -108,6 +179,7 @@ async function main() {
         try {
             result = await executeToolInSandbox({
                 filePath: resolvedScriptPath,
+                functionName: functionNameToExecute,
                 agentId: agentId,
                 args: Array.isArray(parsedArgs) ? parsedArgs : [parsedArgs],
             });

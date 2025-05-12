@@ -34,7 +34,6 @@ services:
             - ../:/external/host:rw # Mount parent directory for repo management
             - ./.env:/.env:ro # Mount .env file in parent directory (where server expects it)
             - /var/run/docker.sock:/var/run/docker.sock # Allow Docker-in-Docker
-            - ./db:/app/db:ro # Mount migrations directory
         env_file:
             - ./.env
         environment:

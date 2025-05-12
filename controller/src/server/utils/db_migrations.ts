@@ -30,7 +30,7 @@ export async function ensureMigrations(): Promise<void> {
         const dbName = process.env.DATABASE_NAME || 'postgres';
 
         const connectionString = `postgres://${dbUser}:${dbPassword}@${dbHost}:${dbPort}/${dbName}`;
-        const command = `cd ./db && DATABASE_URL="${connectionString}" npx node-pg-migrate up`;
+        const command = `cd /app/db && DATABASE_URL="${connectionString}" npx node-pg-migrate up`;
 
         // Execute the command
         const { stdout, stderr } = await execAsync(command);

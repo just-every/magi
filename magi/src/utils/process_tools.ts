@@ -3,7 +3,7 @@ import { getCommunicationManager, sendStreamEvent } from './communication.js'; /
 import { processTracker } from './process_tracker.js';
 import { dateFormat } from './date_tools.js';
 import { createToolFunction } from './tool_call.js';
-import { getAllProjects } from './project_utils.js';
+import { getAllProjectIds, getExternalProjectIds } from './project_utils.js';
 
 /**
  * Send a message to a specific process
@@ -104,7 +104,7 @@ function startProcess(
         tool,
         name,
         command,
-        project,
+        projectIds: project,
     });
 
     // Send start event to the controller
@@ -273,10 +273,14 @@ async function wait_for_running_task(
                             return;
                         }
                         const timerId = setTimeout(resolve, 1000);
-                        abort_signal?.addEventListener('abort', () => {
-                            clearTimeout(timerId);
-                            reject(new Error('Aborted during delay'));
-                        }, { once: true });
+                        abort_signal?.addEventListener(
+                            'abort',
+                            () => {
+                                clearTimeout(timerId);
+                                reject(new Error('Aborted during delay'));
+                            },
+                            { once: true }
+                        );
                     });
                 } catch (error) {
                     if (abort_signal?.aborted) {
@@ -326,15 +330,6 @@ async function wait_for_running_task(
     return finalResult;
 }
 
-export function listActiveProjects(): string {
-    const projects = getAllProjects();
-    if (projects.length === 0) {
-        return '- No projects';
-    }
-
-    return projects.map(project => `- ${project}`).join('\n');
-}
-
 /**
  * Get all project tools as an array of tool definitions
  */
@@ -352,14 +347,13 @@ export function getProcessTools(): ToolFunction[] {
                     'Are there any warnings or things to be aware of? This could be a list of things to avoid, or things that are not working as expected. This is optional, but can help the task operator avoid problems.',
                 goal: 'What is the final goal of this task? This is the final output or result you expect from the task. It should be a single sentence or two at most',
                 project: {
-                    description:
-                        'An array of projects to mount for the task giving the task access to a copy of files. The task can modify the files and submit them back as a new git branch.' +
-                        (getAllProjects().includes('magi-system')
+                    description: 'An array of projects to mount for the task giving the task access to a copy of files. The task can modify the files and submit them back as a new git branch.' +
+                        (getExternalProjectIds().includes('magi-system')
                             ? ' Include "magi-system" to provide access to your code.'
                             : '') +
                         ' The task will have access to these files at /magi_output/{taskId}/projects/{project}. Their default branch will be "magi-{taskId}". If you provide only one project, that will be their working directory when they start (otherwise it will be /magi_output/{taskId}/working)\nNote: ONLY INCLUDE PROJECTS THE TASK NEEDS as an entire copy of the project is made for each task. For large projects this take 10+ seconds.',
                     type: 'array',
-                    enum: getAllProjects(),
+                    enum: () => getAllProjectIds(),
                 },
             },
             'A description of information found or work that has been completed'
@@ -400,7 +394,7 @@ export function getProcessTools(): ToolFunction[] {
                     description:
                         'The maximum time to wait for the task to finish, in seconds. Defaults to 1800 seconds (30 minutes).',
                     default: 1800,
-                }
+                },
             },
             'The final status message of the task (completion, failure, termination, or timeout).'
         ),

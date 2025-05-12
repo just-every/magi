@@ -48,85 +48,88 @@ import {
 function convertToGeminiFunctionDeclarations(
     tools: ToolFunction[]
 ): FunctionDeclaration[] {
-    return tools.map(tool => {
-        // Special handling for Google web search
-        if (tool.definition.function.name === 'google_web_search') {
-            console.log('[Gemini] Enabling Google Search grounding');
-            // Return null for this special tool - we'll handle it separately in the config
-            return null;
-        }
-
-        const properties: Record<string, any> = {};
-        const toolParams = tool.definition?.function?.parameters?.properties;
-
-        if (toolParams) {
-            for (const [name, param] of Object.entries(toolParams)) {
-                let type: Type = Type.STRING;
-
-                switch (param.type) {
-                    case 'string':
-                        type = Type.STRING;
-                        break;
-                    case 'number':
-                        type = Type.NUMBER;
-                        break;
-                    case 'boolean':
-                        type = Type.BOOLEAN;
-                        break;
-                    case 'object':
-                        type = Type.OBJECT;
-                        break;
-                    case 'array':
-                        type = Type.ARRAY;
-                        break;
-                    case 'null':
-                        type = Type.STRING;
-                        console.warn(
-                            `Mapping 'null' type to STRING for parameter ${name} in tool ${tool.definition.function.name}`
-                        );
-                        break;
-                    default:
-                        console.warn(
-                            `Unsupported parameter type '${param.type}' for ${name} in tool ${tool.definition.function.name}. Defaulting to STRING.`
-                        );
-                        type = Type.STRING;
-                }
-
-                properties[name] = { type, description: param.description };
-
-                if (type === Type.ARRAY) {
-                    const itemType = Type.STRING; // Assuming string items
-                    properties[name].items = { type: itemType };
-                    if (param.items?.enum) {
-                        properties[name].items.enum = param.items.enum;
-                    } else if (param.enum) {
-                        properties[name].items.enum = param.enum;
-                    }
-                } else if (param.enum) {
-                    properties[name].format = 'enum';
-                    properties[name].enum = param.enum;
-                }
+    return tools
+        .map(tool => {
+            // Special handling for Google web search
+            if (tool.definition.function.name === 'google_web_search') {
+                console.log('[Gemini] Enabling Google Search grounding');
+                // Return null for this special tool - we'll handle it separately in the config
+                return null;
             }
-        } else {
-            console.warn(
-                `Tool ${tool.definition?.function?.name || 'Unnamed Tool'} has missing or invalid parameters definition.`
-            );
-        }
 
-        return {
-            name: tool.definition.function.name,
-            description: tool.definition.function.description,
-            parameters: {
-                type: Type.OBJECT,
-                properties,
-                required: Array.isArray(
-                    tool.definition?.function?.parameters?.required
-                )
-                    ? tool.definition.function.parameters.required
-                    : [],
-            },
-        };
-    }).filter(Boolean); // Filter out null entries from special tools
+            const properties: Record<string, any> = {};
+            const toolParams =
+                tool.definition?.function?.parameters?.properties;
+
+            if (toolParams) {
+                for (const [name, param] of Object.entries(toolParams)) {
+                    let type: Type = Type.STRING;
+
+                    switch (param.type) {
+                        case 'string':
+                            type = Type.STRING;
+                            break;
+                        case 'number':
+                            type = Type.NUMBER;
+                            break;
+                        case 'boolean':
+                            type = Type.BOOLEAN;
+                            break;
+                        case 'object':
+                            type = Type.OBJECT;
+                            break;
+                        case 'array':
+                            type = Type.ARRAY;
+                            break;
+                        case 'null':
+                            type = Type.STRING;
+                            console.warn(
+                                `Mapping 'null' type to STRING for parameter ${name} in tool ${tool.definition.function.name}`
+                            );
+                            break;
+                        default:
+                            console.warn(
+                                `Unsupported parameter type '${param.type}' for ${name} in tool ${tool.definition.function.name}. Defaulting to STRING.`
+                            );
+                            type = Type.STRING;
+                    }
+
+                    properties[name] = { type, description: param.description };
+
+                    if (type === Type.ARRAY) {
+                        const itemType = Type.STRING; // Assuming string items
+                        properties[name].items = { type: itemType };
+                        if (param.items?.enum) {
+                            properties[name].items.enum = param.items.enum;
+                        } else if (param.enum) {
+                            properties[name].items.enum = param.enum;
+                        }
+                    } else if (param.enum) {
+                        properties[name].format = 'enum';
+                        properties[name].enum = param.enum;
+                    }
+                }
+            } else {
+                console.warn(
+                    `Tool ${tool.definition?.function?.name || 'Unnamed Tool'} has missing or invalid parameters definition.`
+                );
+            }
+
+            return {
+                name: tool.definition.function.name,
+                description: tool.definition.function.description,
+                parameters: {
+                    type: Type.OBJECT,
+                    properties,
+                    required: Array.isArray(
+                        tool.definition?.function?.parameters?.required
+                    )
+                        ? tool.definition.function.parameters.required
+                        : [],
+                },
+            };
+        })
+        .filter(Boolean); // Filter out null entries from special tools
 }
 
 /**
@@ -554,7 +557,7 @@ export class GeminiProvider implements ModelProvider {
         messages: ResponseInput,
         agent: Agent
     ): AsyncGenerator<StreamingEvent> {
-        const tools: ToolFunction[] | undefined = agent?.tools;
+        const tools: ToolFunction[] | undefined = agent ? await agent.getTools() : [];
         const settings: ModelSettings | undefined = agent?.modelSettings;
 
         let contentBuffer = '';
@@ -606,7 +609,8 @@ export class GeminiProvider implements ModelProvider {
             if (tools && tools.length > 0) {
                 // Check for Google web search tool
                 hasGoogleWebSearch = tools.some(
-                    tool => tool.definition.function.name === 'google_web_search'
+                    tool =>
+                        tool.definition.function.name === 'google_web_search'
                 );
 
                 // Configure standard function calling tools

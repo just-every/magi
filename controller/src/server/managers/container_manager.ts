@@ -13,7 +13,6 @@ import {
     execPromiseFallback,
 } from '../utils/docker_commands';
 import { ProcessToolType } from '../../types/index';
-import { loadEnvVar, saveEnvVar } from './env_store';
 
 export interface DockerBuildOptions {
     tag?: string;
@@ -26,7 +25,7 @@ export interface DockerRunOptions {
     command: string;
     tool?: ProcessToolType;
     coreProcessId?: string;
-    project?: string[]; // Array of git repositories to clone and mount
+    projectIds?: string[]; // Array of git repositories to clone and mount
 }
 
 /**
@@ -109,19 +108,19 @@ export async function buildDockerImage(
  */
 async function prepareGitRepository(
     processId: string,
-    project: string
+    projectId: string
 ): Promise<{ hostPath: string; outputPath: string }> {
-    console.log(`prepareGitRepository(${processId}, ${project})...`);
+    console.log(`prepareGitRepository(${processId}, ${projectId})...`);
 
     // Where the git repository is located on the host
-    const hostPath = path.join('/external/host', project);
+    const hostPath = path.join('/external/host', projectId);
 
     // Create a temporary directory for the git repo in the magi_output volume
     const outputPath = path.join(
         '/magi_output',
         processId,
         'projects',
-        project
+        projectId
     );
 
     try {
@@ -211,14 +210,14 @@ async function prepareGitRepository(
  * @param project The repository options
  * @returns The project name if successful, null if it fails
  */
-export function createNewProject(project: string): string {
-    if (!/^[a-zA-Z0-9_-]+$/.test(project)) {
+export function createNewProject(projectId: string): string {
+    if (!/^[a-zA-Z0-9_-]+$/.test(projectId)) {
         throw new Error(
-            `Invalid project name '${project}'. Only letters, numbers, dashes and underscores are allowed.`
+            `Invalid project name '${projectId}'. Only letters, numbers, dashes and underscores are allowed.`
         );
     }
 
-    project = project.trim().toLowerCase();
+    projectId = projectId.trim().toLowerCase();
 
     // Check if parent directory exists
     const parentDir = '/external/host';
@@ -228,9 +227,9 @@ export function createNewProject(project: string): string {
 
     // Make sure we have a unique project name
     let i = 0;
-    let finalProjectName = project;
+    let finalProjectName = projectId;
     while (fs.existsSync(path.join(parentDir, finalProjectName))) {
-        finalProjectName = 'magi-' + project + (i > 0 ? `-${i}` : '');
+        finalProjectName = 'magi-' + projectId + (i > 0 ? `-${i}` : '');
         i++;
     }
 
@@ -249,9 +248,6 @@ export function createNewProject(project: string): string {
         execSync('git config --global init.defaultBranch main');
         execSync(`git -C "${projectPath}" init`);
 
-        const projects = getCreatedProjects();
-        projects.push(finalProjectName);
-        saveEnvVar('CREATED_PROJECTS', projects.join(','));
 
         return finalProjectName;
     } catch (error) {
@@ -270,23 +266,6 @@ export function createNewProject(project: string): string {
     }
 }
 
-function getCreatedProjects(): string[] {
-    const projects = (loadEnvVar('CREATED_PROJECTS') || '').split(',');
-    return projects.filter(project => project.trim() !== '');
-}
-
-export function listProjects(): string[] {
-    const projects = (process.env.PROJECT_REPOSITORIES || '').split(',');
-
-    getCreatedProjects().forEach(project => {
-        if (!projects.includes(project)) {
-            projects.push(project);
-        }
-    });
-
-    return projects.filter(project => project.trim() !== '');
-}
-
 /**
  * Run a MAGI System Docker container
  * @param options Run options
@@ -296,7 +275,7 @@ export async function runDockerContainer(
     options: DockerRunOptions
 ): Promise<string> {
     try {
-        const { processId, command, tool, coreProcessId, project } = options;
+        const { processId, command, tool, coreProcessId, projectIds } = options;
 
         // Input validation
         if (!processId || typeof processId !== 'string') {
@@ -329,7 +308,7 @@ export async function runDockerContainer(
         const gitProjectsArray =
             coreProcessId && coreProcessId === processId
                 ? projects
-                : (project || []).filter(project => projects.includes(project));
+                : (projectIds || []).filter(project => projects.includes(project));
 
         console.log('gitProjectsArray', gitProjectsArray);
 

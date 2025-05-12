@@ -9,7 +9,7 @@
 import { Agent } from './agent.js';
 import { Runner } from './runner.js';
 import { getCommunicationManager, sendComms } from './communication.js';
-import { addHistory, getHistory } from './history.js';
+import { addHistory, getHistory, processPendingHistoryThreads } from './history.js';
 import { runThoughtDelay, getThoughtDelay } from './thought_utils.js';
 import { ToolFunction, ResponseInput } from '../types/shared-types.js';
 import { createToolFunction } from './tool_call.js';
@@ -89,6 +89,9 @@ export async function runMECH(
     const comm = getCommunicationManager();
 
     do {
+        // Process any pending history threads at the start of each mech loop
+        await processPendingHistoryThreads();
+
         try {
             await spawnMetaThoughtIfNeeded(agent);
 

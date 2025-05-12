@@ -25,8 +25,9 @@ import { v4 as uuid } from 'uuid';
 // Import removed to fix lint error
 import { Runner } from './runner.js';
 import { ModelClassID } from '../model_providers/model_data.js';
-import { attachAgentSpecificTools } from './index.js';
+import { getCommonTools } from './index.js';
 import { truncateLargeValues } from './file_utils.js';
+import { getAgentSpecificTools } from './custom_tool_utils.js';
 
 /**
  * Create a clone of an agent instance that properly handles functions
@@ -124,7 +125,6 @@ export class Agent implements AgentInterface {
         this.tools = definition.tools || [];
 
         // Ensure agent-specific tools are attached once ID is assigned
-        attachAgentSpecificTools(this);
         this.model = definition.model;
         this.modelClass = definition.modelClass;
         this.jsonSchema = definition.jsonSchema;
@@ -289,8 +289,126 @@ export class Agent implements AgentInterface {
     }
 
     /**
-     * Export this agent for event passing
+     * Get the complete set of tools available to this agent
+     * Combines statically assigned tools with tools from agentToolCache
+     * Processes dynamic tool parameter values (descriptions and enums)
      */
+    public async getTools(): Promise<ToolFunction[]> {
+        const combinedTools = new Map<string, ToolFunction>();
+
+        // 1. Add statically assigned tools (from this.tools) or common tools as a base
+        const baseTools =
+            this.tools && this.tools.length > 0 ? this.tools : getCommonTools();
+        for (const tool of baseTools) {
+            if (
+                tool &&
+                tool.definition &&
+                tool.definition.function &&
+                tool.definition.function.name
+            ) {
+                // Clone the tool to avoid modifying the original
+                const clonedTool = { ...tool };
+                clonedTool.definition = { ...tool.definition };
+                clonedTool.definition.function = { ...tool.definition.function };
+                clonedTool.definition.function.parameters = { ...tool.definition.function.parameters };
+                clonedTool.definition.function.parameters.properties = { ...tool.definition.function.parameters.properties };
+
+                // Process dynamic properties in parameters
+                await this.processDynamicToolParameters(clonedTool);
+
+                combinedTools.set(clonedTool.definition.function.name, clonedTool);
+            } else {
+                console.warn(
+                    '[Agent.getTools] Encountered a base tool with missing definition or name:',
+                    tool
+                );
+            }
+        }
+
+        // 2. Add/override with tools from agentToolCache (via getAgentSpecificTools)
+        if (this.agent_id) {
+            const cachedAgentTools = getAgentSpecificTools(
+                this.agent_id
+            );
+            for (const tool of cachedAgentTools) {
+                if (
+                    tool &&
+                    tool.definition &&
+                    tool.definition.function &&
+                    tool.definition.function.name
+                ) {
+                    // Clone the tool to avoid modifying the original
+                    const clonedTool = { ...tool };
+                    clonedTool.definition = { ...tool.definition };
+                    clonedTool.definition.function = { ...tool.definition.function };
+                    clonedTool.definition.function.parameters = { ...tool.definition.function.parameters };
+                    clonedTool.definition.function.parameters.properties = { ...tool.definition.function.parameters.properties };
+
+                    // Process dynamic properties in parameters
+                    await this.processDynamicToolParameters(clonedTool);
+
+                    combinedTools.set(clonedTool.definition.function.name, clonedTool); // Overwrites if name exists
+                } else {
+                    console.warn(
+                        '[Agent.getTools] Encountered a cached tool with missing definition or name:',
+                        tool
+                    );
+                }
+            }
+        }
+        return Array.from(combinedTools.values());
+    }
+
+    /**
+     * Process dynamic tool parameters (descriptions and enums)
+     * @param tool The tool to process
+     */
+    private async processDynamicToolParameters(tool: ToolFunction): Promise<void> {
+        const properties = tool.definition.function.parameters.properties;
+
+        for (const paramName in properties) {
+            const param = properties[paramName];
+
+            // Process dynamic description
+            if (typeof param.description === 'function') {
+                param.description = param.description();
+            }
+
+            // Process dynamic enum
+            if (typeof param.enum === 'function') {
+                param.enum = await param.enum();
+            }
+
+            // Handle nested parameters in objects
+            if (param.properties) {
+                for (const nestedParamName in param.properties) {
+                    const nestedParam = param.properties[nestedParamName];
+
+                    // Process nested dynamic description
+                    if (typeof nestedParam.description === 'function') {
+                        nestedParam.description = nestedParam.description();
+                    }
+
+                    // Process nested dynamic enum
+                    if (typeof nestedParam.enum === 'function') {
+                        nestedParam.enum = await nestedParam.enum();
+                    }
+                }
+            }
+
+            // Handle items for array types
+            if (param.items) {
+                const items = param.items as any;
+                if (typeof items.description === 'function') {
+                    items.description = items.description();
+                }
+                if (typeof items.enum === 'function') {
+                    items.enum = await items.enum();
+                }
+            }
+        }
+    }
+
     export(): AgentExportDefinition {
         // Return a simplified representation of the agent
         const agentExport: AgentExportDefinition = {

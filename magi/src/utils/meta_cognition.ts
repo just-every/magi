@@ -21,7 +21,7 @@ import { MAGI_CONTEXT } from '../magi_agents/constants.js';
 import { getThoughtDelay } from './thought_utils.js';
 import { startTime } from '../magi_agents/operator_agent.js';
 import { dateFormat, readableTime } from './date_tools.js';
-import { listActiveProjects } from './process_tools.js';
+import { listActiveProjects } from './project_utils.js';
 import { runningToolTracker } from './running_tool_tracker.js';
 /**
  * Spawns a metacognition process that analyzes recent history and can

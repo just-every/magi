@@ -35,6 +35,7 @@ import { capitalize } from './llm_utils.js';
 import { getCommunicationManager, sendComms } from './communication.js';
 import { isPaused, sleep } from './communication.js';
 import { mechState, getModelScore } from './mech_state.js';
+import { initRunningToolEventBridge } from './running_tool_event_bridge.js';
 
 const EVENT_TIMEOUT_MS = 300000; // 5 min timeout for events
 
@@ -239,11 +240,32 @@ export class Runner {
             triedModels.add(selectedModel); // Mark this model as tried *before* the attempt
             agent.model = selectedModel; // Update agent's current model for this attempt
 
+            const agentInput: string[] = [];
+            if (agent.instructions) {
+                agentInput.push(agent.instructions);
+            }
+            if (input) {
+                agentInput.push(input);
+            } else if (conversationHistory.length > 0) {
+                // If no input is provided, use the first message from the conversation history
+                const firstMessage =
+                    conversationHistory[0] as ResponseInputMessage;
+                if (
+                    firstMessage.type === 'message' &&
+                    firstMessage.content &&
+                    typeof firstMessage.content === 'string'
+                ) {
+                    agentInput.push(firstMessage.content);
+                }
+            }
+
             // Yield agent_start (first attempt) or agent_updated (fallback attempts)
             yield {
                 type: attempt === 1 ? 'agent_start' : 'agent_updated',
                 agent: agent.export(),
-                ...(attempt === 1 && input ? { input } : {}),
+                ...(attempt === 1 && agentInput.length > 0
+                    ? { input: agentInput.join('\n\n') }
+                    : {}),
             };
 
             try {
@@ -1336,3 +1358,6 @@ export class Runner {
         return model;
     }
 }
+
+// Initialize the running tool event bridge
+initRunningToolEventBridge();

@@ -213,10 +213,13 @@ export async function createSummary(
 export async function read_source(
     summary_id: string,
     line_start?: number,
-    line_end?: number,
+    line_end?: number
 ): Promise<string> {
     const summariesDir = get_output_dir(SUMMARIES_SUBDIR);
-    const originalFilePath = path.join(summariesDir, `original-${summary_id}.txt`);
+    const originalFilePath = path.join(
+        summariesDir,
+        `original-${summary_id}.txt`
+    );
 
     try {
         let content = await fs.readFile(originalFilePath, 'utf-8');
@@ -258,11 +261,14 @@ export async function write_source(
     file_path: string
 ): Promise<string> {
     const summariesDir = get_output_dir(SUMMARIES_SUBDIR);
-    const originalFilePath = path.join(summariesDir, `original-${summary_id}.txt`);
+    const originalFilePath = path.join(
+        summariesDir,
+        `original-${summary_id}.txt`
+    );
 
     try {
         const content = await fs.readFile(originalFilePath, 'utf-8');
-        if(!file_path) {
+        if (!file_path) {
             return 'Error: file_path is required.';
         }
         try {
@@ -292,7 +298,6 @@ export async function write_source(
         return `Error: Could not retrieve original document for summary ID '${summary_id}'.`;
     }
 }
-
 
 /**
  * Summarize task output and detect potential issues
@@ -638,8 +643,7 @@ export function getSummaryTools(): ToolFunction[] {
             {
                 summary_id: {
                     type: 'string',
-                    description:
-                        'The unique ID of the summary.',
+                    description: 'The unique ID of the summary.',
                 },
                 line_start: {
                     type: 'number',
@@ -661,12 +665,12 @@ export function getSummaryTools(): ToolFunction[] {
             {
                 summary_id: {
                     type: 'string',
-                    description:
-                        'The unique ID of the summary.',
+                    description: 'The unique ID of the summary.',
                 },
                 file_path: {
                     type: 'string',
-                    description: 'Relative or absolute path to write the document to.',
+                    description:
+                        'Relative or absolute path to write the document to.',
                     optional: true,
                 },
             }

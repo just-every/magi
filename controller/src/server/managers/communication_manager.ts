@@ -23,6 +23,7 @@ import {
     ContainerConnection,
     StreamingEvent,
 } from '../../types/index';
+import e from '@types/express';
 
 interface ProcessState {
     accumulatedData: CostUpdateData;
@@ -575,25 +576,17 @@ export class CommunicationManager {
             await this.processManager.createAgentProcess(
                 event.agentProcess as AgentProcess
             );
-        } else if (
-            event.type === 'project_create' &&
-            processId === this.processManager.coreProcessId
-        ) {
+        } else if (event.type === 'project_create') {
             try {
+                createNewProject(event.project_id);
+            }
+            catch (error) {
                 this.sendMessage(
                     this.processManager.coreProcessId,
                     JSON.stringify({
-                        type: 'project_ready',
-                        project: createNewProject(event.project as string),
-                    })
-                );
-            } catch (error) {
-                // Notify failure
-                this.sendMessage(
-                    this.processManager.coreProcessId,
-                    JSON.stringify({
-                        type: 'system_message',
-                        message: `Error creating "${event.project}" project: ${error}`,
+                        type: 'project_update',
+                        project_id: event.project_id,
+                        message: `Error creating project: ${error}`,
                     })
                 );
             }

@@ -72,7 +72,11 @@ async function wait_for_running_tool(
     while (Date.now() - startTime < timeoutMs) {
         // Check if the operation was aborted
         if (abort_signal?.aborted) {
-            finalResult = `Wait for running tool ${runningToolId} was aborted.`;
+            const abortReason =
+                (abort_signal as any)?.reason
+                    ? ` Reason: ${(abort_signal as any)?.reason}.`
+                    : '';
+            finalResult = `Wait for running tool ${runningToolId} was aborted.${abortReason}`;
             // Send stream event indicating abort
             sendStreamEvent({
                 type: 'tool_wait_complete',
@@ -127,14 +131,22 @@ async function wait_for_running_tool(
                             return;
                         }
                         const timerId = setTimeout(resolve, 500);
-                        abort_signal?.addEventListener('abort', () => {
-                            clearTimeout(timerId);
-                            reject(new Error('Aborted during delay'));
-                        }, { once: true });
+                        abort_signal?.addEventListener(
+                            'abort',
+                            () => {
+                                clearTimeout(timerId);
+                                reject(new Error('Aborted during delay'));
+                            },
+                            { once: true }
+                        );
                     });
                 } catch (error) {
                     if (abort_signal?.aborted) {
-                        finalResult = `Wait for running tool ${runningToolId} was aborted during polling delay.`;
+                        const abortReason2 =
+                            (abort_signal as any)?.reason
+                                ? ` Reason: ${(abort_signal as any)?.reason}.`
+                                : '';
+                        finalResult = `Wait for running tool ${runningToolId} was aborted during polling delay.${abortReason2}`;
                         // Send stream event
                         sendStreamEvent({
                             type: 'tool_wait_complete',
@@ -221,7 +233,7 @@ export function getRunningToolTools() {
                     description:
                         'The maximum time to wait for the tool to finish, in seconds. If the tool completes before this time, you will start again immediately. Defaults to 300 seconds (5 minutes).',
                     default: 300,
-                }
+                },
             }
         ),
         createToolFunction(

@@ -62,7 +62,7 @@ export interface AgentProcess {
     output?: string;
     error?: string;
     history?: ResponseInput;
-    project?: string[]; // List of git repositories to mount
+    projectIds?: string[]; // List of git repositories to mount
 }
 
 export type ToolParameterType =
@@ -86,9 +86,9 @@ export const validToolParameterTypes: ToolParameterType[] = [
  */
 export interface ToolParameter {
     type?: ToolParameterType;
-    description?: string;
-    enum?: string[];
-    items?: ToolParameter | { type: ToolParameterType; enum?: string[] };
+    description?: string | (() => string);
+    enum?: string[] | (() => Promise<string[]>);
+    items?: ToolParameter | { type: ToolParameterType; enum?: string[] | (() => Promise<string[]>) };
     properties?: Record<string, ToolParameter>;
     required?: string[];
     optional?: boolean;
@@ -367,11 +367,7 @@ export type StreamEventType =
     | 'command_start'
     | 'command_done'
     | 'project_create'
-    | 'project_ready'
-    | 'project_update_description'
-    | 'project_update_overview'
-    | 'project_add_history'
-    | 'project_get_details'
+    | 'project_update'
     | 'process_start'
     | 'process_running'
     | 'process_updated'
@@ -504,22 +500,34 @@ export interface CommandEvent extends StreamEvent {
     timestamp?: string; // Timestamp for the event
 }
 
+export type ProjectType =
+    | 'web-static'
+    | 'web-app'
+    | 'game-2d'
+    | 'game-3d'
+    | 'mobile-app'
+    | 'desktop-app'
+    | 'plain';
+
+export interface Project {
+    project_id: string;
+    project_type?: ProjectType;
+    simple_description?: string;
+    detailed_description?: string;
+    file_system_structure?: any;
+    repository_url?: string;
+    is_generated?: boolean;
+    is_ready?: boolean;
+}
+
 /**
  * Project updated streaming event
  */
 export interface ProjectEvent extends StreamEvent {
     type:
         | 'project_create'
-        | 'project_ready'
-        | 'project_update_description'
-        | 'project_update_overview'
-        | 'project_add_history'
-        | 'project_get_details';
-    project: string;
-    description?: string;
-    overview?: string;
-    action?: string;
-    taskId?: string;
+        | 'project_update';
+    project_id: string;
 }
 
 export type ProcessToolType = 'research_engine' | 'godel_machine' | 'run_task';
@@ -1040,11 +1048,7 @@ export type MessagePayloads = {
     command_start: Omit<CommandEvent, 'type'>;
     command_done: Omit<CommandEvent, 'type'>;
     project_create: Omit<ProjectEvent, 'type'>;
-    project_ready: Omit<ProjectEvent, 'type'>;
-    project_update_description: Omit<ProjectEvent, 'type'>;
-    project_update_overview: Omit<ProjectEvent, 'type'>;
-    project_add_history: Omit<ProjectEvent, 'type'>;
-    project_get_details: Omit<ProjectEvent, 'type'>;
+    project_update: Omit<ProjectEvent, 'type'>;
     process_start: Omit<ProcessEvent, 'type'>;
     process_running: Omit<ProcessEvent, 'type'>;
     process_updated: Omit<ProcessEvent, 'type'>;
@@ -1104,7 +1108,7 @@ export interface ServerMessage {
         | 'command'
         | 'connect'
         | 'process_event'
-        | 'project_ready'
+        | 'project_update'
         | 'system_message'
         | 'system_command';
 }
@@ -1119,8 +1123,9 @@ export interface CommandMessage extends ServerMessage {
 }
 
 export interface ProjectMessage extends ServerMessage {
-    type: 'project_ready';
-    project: string;
+    type: 'project_update';
+    project_id: string;
+    message: string;
 }
 
 export interface SystemMessage extends ServerMessage {

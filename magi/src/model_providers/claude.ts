@@ -40,8 +40,8 @@ function convertToClaudeTools(tools: ToolFunction[]): any[] {
         // Special handling for web search tool
         if (tool.definition.function.name === 'claude_web_search') {
             return {
-                type: "web_search_20250305",
-                name: "web_search"
+                type: 'web_search_20250305',
+                name: 'web_search',
             };
         }
 
@@ -635,7 +635,9 @@ export class ClaudeProvider implements ModelProvider {
         let requestId: string;
 
         try {
-            const tools: ToolFunction[] | undefined = agent?.tools;
+            const tools: ToolFunction[] | undefined = agent
+                ? await agent.getTools()
+                : [];
             const settings: ModelSettings | undefined = agent?.modelSettings;
             const modelClass: ModelClassID | undefined = agent?.modelClass;
 

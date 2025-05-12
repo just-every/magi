@@ -4,7 +4,7 @@
  * A shared execution environment for TypeScript/JavaScript tools and scripts.
  * This module provides a unified sandbox for both:
  * 1. Internal VM-based execution of custom tools (from custom_tool_utils.ts)
- * 2. CLI-based execution of scripts via magi-run-tool (from tool_runner.ts)
+ * 2. CLI-based execution of scripts via test-custom-tool.sh (from tool_runner.ts)
  *
  * Both paths use the same esbuild transpilation and VM sandbox setup to ensure
  * consistent behavior regardless of how the code is executed.
@@ -166,8 +166,8 @@ export async function executeToolInSandbox({
         agentId: agentId,
         agent_id: agentId,
         tools: toolsContext, // Keep for backward compatibility if tools expect `tools.someFunc()`
-        fs,                      // allow global fs.*
-        path,                    // handy for path.join etc.
+        fs, // allow global fs.*
+        path, // handy for path.join etc.
         require: createRequire(import.meta.url), // enable require('fs')
         __dirname: process.cwd(),
         __filename: filePath ?? 'tool.ts',
@@ -307,7 +307,7 @@ export async function executeToolInSandbox({
                 );
             }
         } else {
-            // magi-run-tool scenario: look for a default export function
+            // test-custom-tool.sh scenario: look for a default export function
             const namespace = esModule.namespace as Record<string, unknown>;
             if (namespace.default && typeof namespace.default === 'function') {
                 console.log(

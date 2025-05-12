@@ -492,7 +492,7 @@ export class OpenAIProvider implements ModelProvider {
         messages: ResponseInput,
         agent: Agent
     ): AsyncGenerator<StreamingEvent> {
-        const tools: ToolFunction[] | undefined = agent?.tools;
+        const tools: ToolFunction[] | undefined = agent ? await agent.getTools() : [];
         const settings: ModelSettings | undefined = agent?.modelSettings;
         let requestId: string;
 
@@ -504,8 +504,11 @@ export class OpenAIProvider implements ModelProvider {
             // Process all messages
             for (const messageFull of messages) {
                 const message = { ...messageFull };
+                // Keep the original model for class comparison
+                const originalModel: string | undefined = (message as any).model;
+
                 delete message.timestamp;
-                delete message.model;
+                // Don't delete message.model yet - we need it for reasoning filter
 
                 // Handle thinking messages
                 if (message.type === 'thinking') {
@@ -515,7 +518,13 @@ export class OpenAIProvider implements ModelProvider {
                     // Use a complete type assertion to bypass TypeScript's type checking for this object
                     // The OpenAI API expects a structure different from our ResponseInputItem types
 
-                    if (message.thinking_id) {
+                    // Check if both models are of the same class (both o-class models)
+                    const sameClass =
+                        model.startsWith('o') &&
+                        originalModel?.startsWith('o');
+
+                    // Only convert to reasoning if both current model and source model are o-class
+                    if (message.thinking_id && sameClass) {
                         console.log(
                             `[OpenAI] Processing thinking message with ID: ${message.thinking_id}`,
                             message
@@ -589,8 +598,14 @@ export class OpenAIProvider implements ModelProvider {
                         content: 'Thinking: ' + message.content,
                         status: message.status || 'completed',
                     });
+
+                    // Now it's safe to delete the model field
+                    delete (message as any).model;
                     continue;
                 }
+
+                // Now it's safe to delete the model field for non-thinking messages
+                delete (message as any).model;
 
                 // Handle function call messages
                 if (message.type === 'function_call') {

@@ -2,16 +2,9 @@ import type { ToolFunction } from '../types/shared-types.js';
 import { getFileTools } from '../utils/file_utils.js';
 import { getShellTools } from '../utils/shell_utils.js';
 import { getSummaryTools } from '../utils/summary_utils.js';
-import {
-    getCustomTools,
-    getAgentSpecificTools,
-} from '../utils/custom_tool_utils.js';
-//import { getFocusTools } from '../utils/focus_utils.js';
+import { getCustomTools } from '../utils/custom_tool_utils.js';
 import { getMemoryTools } from '../utils/memory_utils.js';
-//import { getProcessTools } from '../utils/process_tools.js';
-//import { getProjectTools } from '../utils/project_utils.js';
 import { getSearchTools } from '../utils/search_utils.js';
-//import { getThoughtTools } from '../utils/thought_utils.js';
 import { getBrowserTools } from '../utils/browser_utils.js';
 
 /**
@@ -38,59 +31,10 @@ export function getToolsForCustomFunctions(): ToolFunction[] {
         ...getFileTools(),
         ...getShellTools(),
         ...getSummaryTools(),
-        //...getFocusTools(),
         ...getMemoryTools(),
-        //...getProcessTools(),
-        //...getProjectTools(),
         ...getSearchTools(),
-        //...getThoughtTools(),
         ...getBrowserTools(),
     ];
-}
-
-/**
- * Attach agent-specific custom tools to an agent once its ID is assigned
- * This should be called immediately after an agent_id is assigned to ensure
- * the agent has access to any custom tools it should have (like modify_tool)
- *
- * This function will only add agent-specific tools if the agent already has
- * the CUSTOM_TOOL function, which indicates it was initialized with getCommonTools()
- *
- * @param agent The agent with agent_id and tools array
- */
-export function attachAgentSpecificTools(agent: {
-    agent_id: string;
-    tools?: ToolFunction[];
-}): void {
-    // If tools is not set, do nothing
-    if (!agent.tools) {
-        return;
-    }
-
-    // Only add agent-specific tools if the agent has the CUSTOM_TOOL function
-    // This ensures we only add tools to agents initialized with getCommonTools()
-    const hasCreateTool = agent.tools.some(
-        t => t.definition?.function?.name === 'CUSTOM_TOOL'
-    );
-
-    if (!hasCreateTool) {
-        return; // Don't add agent-specific tools if CUSTOM_TOOL isn't available
-    }
-
-    // Add any agent-specific custom tools that aren't already present
-    const agentSpecificTools = getAgentSpecificTools(agent.agent_id);
-
-    // Only add tools that aren't already in the agent's toolset
-    for (const tool of agentSpecificTools) {
-        if (
-            !agent.tools.some(
-                t =>
-                    t.definition.function.name === tool.definition.function.name
-            )
-        ) {
-            agent.tools.push(tool);
-        }
-    }
 }
 
 /**
@@ -154,22 +98,6 @@ export async function registerRelevantCustomTools(
                 // Add new tool
                 agentTools.push(tool);
             }
-        }
-    }
-
-    // Add relevant tools to the agent's current toolset (for immediate use)
-    for (const tool of relevantTools) {
-        // Avoid adding duplicate tools
-        const existingIndex = agent.tools.findIndex(
-            t => t.definition.function.name === tool.definition.function.name
-        );
-
-        if (existingIndex >= 0) {
-            // Replace with new version
-            agent.tools[existingIndex] = tool;
-        } else {
-            // Add new tool
-            agent.tools.push(tool);
         }
     }
 }

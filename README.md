@@ -15,31 +15,38 @@ A core principal of MAGI is self-improvement. By being Open Source and using git
 
 Think of Magi like a co-worker. She might make some mistakes, but she learns from them and improves over time. She is not perfect, but she is getting better every day.
 
-## System Architecture
+## Architecture Overview
 
-The system consists of two primary components:
+Magí consists of four core components:
 
-1. **Controller (Node.js Web Server)**
+• **Controller Service** (`controller/`)
+  - Node.js (TypeScript) Express backend + Socket.IO
+  - React/HTML/CSS frontend (UI at http://localhost:3010)
+  - Manages Docker agent containers via Dockerode
 
-    - TypeScript/Express backend with Socket.IO for real-time communication
-    - Docker container management for running AI agents
-    - Web interface for interacting with the system
-    - Provides a secure interface with host system (LLMs do not have direct access to the host)
+• **Magi Agents** (`magi/`)
+  - TypeScript runtime executing chain-of-thought loops
+  - Tool integrations: browser automation (CDP), shell, web search, code execution
+  - Runs in isolated Docker containers (`magi-base` image)
+  - Supports multiple LLM providers with fallback and cost tracking
 
-2. **MAGI Agents (TypeScript Backend)**
-    - Specialized agents for different tasks (coding, browsing, searching, etc.)
-    - Runs in Docker containers for isolation and resource management
-    - Modular design for easy extension
-    - Supports multiple LLM providers
+• **Browser Bridge** (`host/`)
+  - CLI to launch/kill/toggle Chrome via DevTools Protocol
+  - Manages user-data directories, profile cloning and merging
+  - Commands: `npm run browser:start|status|kill|toggle|clone-profile|merge-profile`
+
+• **Shared Database** (`db/`)
+  - PostgreSQL + pgvector for history, memory, and usage tracking
+  - Migrations in `db/migrations`, auto-run on controller startup
 
 ## Installation
 
 ### Prerequisites
 
-- Node.js (v18+ recommended)
-- Docker
-- Chrome browser (for browser extension)
-- API keys for supported LLM providers (OpenAI, Anthropic Claude, Google Gemini, etc.)
+- Node.js v18+ (npm)
+- Docker & Docker Compose v2+
+- Google Chrome or Chromium (for CDP)
+- API keys for OpenAI, Anthropic, Google GenAI, etc.
 
 ### Setup
 
@@ -54,12 +61,6 @@ npm install
 # Run the automated setup
 npm run setup
 
-# This will guide you through:
-# 1. Setting up environment variables and API keys
-# 2. Building the Docker image
-# 3. Setting up Docker volumes
-# 4. Setting up Claude authentication
-# 5. Setting up the browser extension
 ```
 
 ## Usage
@@ -67,41 +68,26 @@ npm run setup
 ### Starting the System
 
 ```bash
-# Build Docker images and start the system with browser bridge
+git clone https://github.com/has-context/magi-system.git
+cd magi-system
+npm install
+npm run setup
 npm run dev
 ```
 
 This will:
+- Launch a detached CDP Chrome instance
+- Build Docker images (controller & magi-base)
+- Start Postgres and controller (`docker compose up`)
+- Serve the web UI at http://localhost:3010
 
-1. Start the browser bridge for Chrome extension communication
-2. Build the Docker images for the controller and MAGI base
-3. Start the system with Docker Compose
-4. Make the web interface available at http://localhost:3010
-
-#### Additional Start Options
-
-```bash
-# Start only the core system without browser integration
-npm run dev:core
-
-# Start only the browser bridge
-npm run bridge:start
-
-# Stop the browser bridge
-npm run bridge:stop
-```
 
 ### Running Tests
 
 ```bash
-# Install Playwright dependencies (first time only)
-npm run test:install
-
-# Run automated tests
-npm test
-
-# Run tests with UI for debugging
-npm run test:ui
+npm test                    # Unit & integration (Vitest)
+cd test/playwright && npm install
+npm run test:e2e            # End-to-end (Playwright)
 ```
 
 ### Testing Individual Components
@@ -121,40 +107,31 @@ Replace `<agent>` with one of: `supervisor`, `code`, `browser`, `shell`, `search
 ### Project Structure
 
 ```
-magi-system/
-├── controller/           # Node.js web server & client
-│   ├── client/           # Frontend TypeScript/CSS/HTML
-│   │   ├── css/          # Stylesheet files
-│   │   ├── html/         # HTML templates
-│   │   └── js/           # Client-side TypeScript
-│   └── server/           # Server TypeScript files
-├── magi/                 # Agent implementation
-│   ├── src/              # TypeScript source code
-│   │   ├── magi_agents/  # Agent implementations
-│   │   └── model_providers/ # LLM provider integrations
-│   └── docker/           # Docker configuration
-├── test/                 # Testing infrastructure
-│   └── playwright/       # Automated tests
-├── scripts/              # Utility scripts
-└── setup/                # Setup scripts
+common/     Shared TS types & templates
+db/         Postgres migrations
+host/       Browser bridge CLI
+controller/ Web UI & container manager
+magi/       Agent runtime & model providers
+test/       E2E tests (Playwright)
+docker-compose.yml
 ```
 
 ### Development Workflow
 
-1. Make code changes
-2. Run linting to check for errors:
-    ```bash
-    npm run lint     # Check for errors
-    npm run lint:fix # Fix automatically fixable errors
-    ```
-3. Run tests to verify functionality:
-    ```bash
-    npm test
-    ```
-4. Start the system:
-    ```bash
-    npm run dev
-    ```
+1. Edit code in `host/`, `controller/`, or `magi/`
+2. Lint & type-check:
+   ```bash
+   npm run lint
+   npm run lint:fix
+   ```
+3. Run tests:
+   ```bash
+   npm test
+   ```
+4. Build & run locally:
+   ```bash
+   npm run dev
+   ```
 
 ## Key Features
 

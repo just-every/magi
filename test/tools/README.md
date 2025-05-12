@@ -1,6 +1,6 @@
-# Magi-Run-Tool Test Examples
+# test-custom-tool.sh Test Examples
 
-This directory contains example tools for testing the `magi-run-tool` execution environment. These tools verify that the shared executor works correctly across both custom tools and scripts.
+This directory contains example tools for testing the `test-custom-tool.sh` execution environment. These tools verify that the shared executor works correctly across both custom tools and scripts.
 
 ## Usage
 

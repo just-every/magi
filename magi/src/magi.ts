@@ -33,8 +33,8 @@ import { Agent } from './utils/agent.js';
 import { runThoughtDelay } from './utils/thought_utils.js';
 // Removed runMECH as it's now handled by runMECHWithMemory
 import { runMECHWithMemory } from './utils/mech_memory_wrapper.js';
-import { getAllProjects } from './utils/project_utils.js';
-import { initDatabase } from './utils/progress_db.js';
+import { getProcessProjectIds } from './utils/project_utils.js';
+import { initDatabase } from './utils/db.js';
 import { ensureMemoryDirectories } from './utils/memory_utils.js';
 
 const person = process.env.YOUR_NAME || 'User';
@@ -290,17 +290,12 @@ async function main(): Promise<void> {
     }
 
     // Move to working directory in /magi_output
-    const projects = getAllProjects();
+    const projects = getProcessProjectIds();
     move_to_working_dir(projects.length > 0 ? `projects/${projects[0]}` : '');
 
-    // Initialize database connection only (migrations are run by controller at startup)
-    const dbReady = await initDatabase();
-    if (!dbReady) {
-        console.warn(
-            'Database connection failed. Custom tools will not be available.'
-        );
-    } else {
-        console.log('Database initialized successfully.');
+    // Initialize database connection
+    if (!await initDatabase()) {
+        return endProcess(1, 'Database connection failed.');
     }
 
     // Verify API keys for model providers

@@ -52,16 +52,20 @@ export async function runThoughtDelay(): Promise<void> {
 
         // Create a delay promise that can be interrupted
         try {
-            await new Promise<void>((resolve) => {
+            await new Promise<void>(resolve => {
                 // Break the delay into smaller chunks and check for interruption
                 const chunkSize = 100; // Check every 100ms
                 let remaining = parseInt(thoughtDelay) * 1000;
 
                 // Set up abort handler
-                signal.addEventListener('abort', () => {
-                    // If aborted, resolve immediately
-                    resolve();
-                }, { once: true });
+                signal.addEventListener(
+                    'abort',
+                    () => {
+                        // If aborted, resolve immediately
+                        resolve();
+                    },
+                    { once: true }
+                );
 
                 function waitChunk() {
                     if (signal.aborted || remaining <= 0) {

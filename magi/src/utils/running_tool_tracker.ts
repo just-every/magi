@@ -4,6 +4,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { addSystemMessage } from './history.js';
 import { readableTime } from './date_tools.js';
+import { EventEmitter } from 'events';
 
 // Helper function to truncate long strings
 const truncateString = (string = '', maxLength = 200) =>
@@ -26,8 +27,12 @@ export interface RunningTool {
 /**
  * Singleton class to track long-running functions
  */
-class RunningToolTracker {
+class RunningToolTracker extends EventEmitter {
     private functions: Map<string, RunningTool> = new Map();
+
+    constructor() {
+        super();
+    }
 
     /**
      * Add a function to be tracked
@@ -101,8 +106,14 @@ class RunningToolTracker {
             `RunningTool ${fn.name} (id: ${id}) completed`
         );
 
+        // Create a copy of the tool for the event
+        const completedTool = { ...fn };
+
         // Remove from tracking
         this.functions.delete(id);
+
+        // Emit completion event
+        this.emit('complete', id, completedTool);
 
         return true;
     }
@@ -131,10 +142,38 @@ class RunningToolTracker {
             `RunningTool ${fn.name} (id: ${id}) failed`
         );
 
+        // Create a copy of the tool for the event
+        const failedTool = { ...fn };
+
         // Remove from tracking
         this.functions.delete(id);
 
+        // Emit failure event
+        this.emit('fail', id, failedTool);
+
         return true;
+    }
+
+    /**
+     * Register event handlers for tool completion
+     *
+     * @param callback Function to call when a tool completes
+     * @returns this (for chaining)
+     */
+    onComplete(callback: (id: string, tool: RunningTool) => void): this {
+        this.on('complete', callback);
+        return this;
+    }
+
+    /**
+     * Register event handlers for tool failure
+     *
+     * @param callback Function to call when a tool fails
+     * @returns this (for chaining)
+     */
+    onFail(callback: (id: string, tool: RunningTool) => void): this {
+        this.on('fail', callback);
+        return this;
     }
 
     /**
@@ -143,7 +182,7 @@ class RunningToolTracker {
      * @param id Running Tool ID
      * @returns true if the function was found and terminated, false otherwise
      */
-    async terminateRunningTool(id: string): Promise<boolean> {
+    async terminateRunningTool(id: string, reason?: string): Promise<boolean> {
         const fn = this.functions.get(id);
         if (!fn) return false;
 
@@ -156,7 +195,7 @@ class RunningToolTracker {
         // Try to abort the operation if possible
         if (fn.abortController) {
             try {
-                fn.abortController.abort();
+                fn.abortController.abort(reason);
             } catch (error) {
                 console.error(`Error aborting function ${id}:`, error);
             }
@@ -164,7 +203,7 @@ class RunningToolTracker {
 
         // Add system message about termination
         await addSystemMessage(
-            `RunningTool ${fn.name} (id: ${id}) was terminated after ${readableTime(fn.duration)}.`,
+            `RunningTool ${fn.name} (id: ${id}) was terminated after ${readableTime(fn.duration)}.${reason ? ' Reason: ' + reason + '.' : ''}`,
             `RunningTool ${fn.name} (id: ${id}) terminated`
         );
 

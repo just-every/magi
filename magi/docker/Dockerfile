@@ -80,9 +80,9 @@ COPY --from=builder --chown=${USER_NAME}:${GROUP_NAME} /build/node_modules ./nod
 COPY ./magi/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# Create magi-run-tool for running scripts with tool context
-RUN echo '#!/bin/sh\nexec node --no-deprecation --experimental-vm-modules /app/dist/utils/tool_runner.js "$@"' > /usr/local/bin/magi-run-tool && \
-    chmod +x /usr/local/bin/magi-run-tool
+# Create test-custom-tool.sh for running scripts with tool context
+RUN echo '#!/bin/sh\nexec node --no-deprecation --experimental-vm-modules /app/dist/utils/tool_runner.js "$@"' > /usr/local/bin/test-custom-tool.sh && \
+    chmod +x /usr/local/bin/test-custom-tool.sh
 
 # Copy the application source code
 # Changes here will invalidate cache from this point onwards

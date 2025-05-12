@@ -31,9 +31,15 @@ export function interruptWaiting(reason: string): void {
     // Interrupt any waiting tools
     const activeTools = runningToolTracker.getAllRunningTools();
     for (const tool of activeTools) {
-        if ((tool.name === 'wait_for_running_task' || tool.name === 'wait_for_running_tool') && tool.status === 'running') {
-            console.log(`[History] Interrupting waiting tool: ${tool.name} (ID: ${tool.id}) due to ${reason}.`);
-            runningToolTracker.terminateRunningTool(tool.id);
+        if (
+            (tool.name === 'wait_for_running_task' ||
+                tool.name === 'wait_for_running_tool') &&
+            tool.status === 'running'
+        ) {
+            console.log(
+                `[History] Interrupting waiting tool: ${tool.name} (ID: ${tool.id}) due to ${reason}.`
+            );
+            runningToolTracker.terminateRunningTool(tool.id, reason);
         }
     }
 }
@@ -49,6 +55,9 @@ interface History {
 const history: History = {
     messages: [],
 };
+
+// Queue for pending history threads to be merged
+const pendingHistoryThreads: ResponseInput[] = [];
 
 // Define the categories
 type MessageCategory =
@@ -396,11 +405,34 @@ export async function addHistory(
 }
 
 /**
- * Merge in a history thread
- * For now just appending, but perhaps keep timestamps for a proper merge?
+ * Add a history thread to the pending merge queue
+ * Will be merged at the start of the next mech loop
  */
 export async function mergeHistoryThread(thread: ResponseInput): Promise<void> {
-    thread.forEach(message => history.messages.push(message));
+    // Add thread to pending queue instead of directly to history
+    pendingHistoryThreads.push(thread);
+}
+
+/**
+ * Process any pending history threads and merge them into the main history
+ * This should be called at the start of each mech loop to ensure proper ordering
+ */
+export async function processPendingHistoryThreads(): Promise<void> {
+    if (pendingHistoryThreads.length === 0) {
+        return; // No pending threads to process
+    }
+
+    console.log(`[History] Processing ${pendingHistoryThreads.length} pending history threads`);
+
+    // Process all pending threads in the order they were added
+    for (const thread of pendingHistoryThreads) {
+        thread.forEach(message => history.messages.push(message));
+    }
+
+    // Clear the pending queue
+    pendingHistoryThreads.length = 0;
+
+    // Compact history if needed
     await compactHistory();
 }
 
@@ -501,7 +533,7 @@ export async function addHumanMessage(
 export async function addSystemMessage(
     content: string,
     interrupt?: string,
-    thread?: ResponseInput,
+    thread?: ResponseInput
 ): Promise<void> {
     addHistory(
         {
@@ -511,7 +543,7 @@ export async function addSystemMessage(
         },
         thread
     );
-    if(interrupt) {
+    if (interrupt) {
         interruptWaiting(interrupt);
     }
 }

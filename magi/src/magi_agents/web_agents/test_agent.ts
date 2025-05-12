@@ -1,0 +1,145 @@
+/**
+ * Test Agent for Website Construction
+ *
+ * Specializes in testing and validating website implementations:
+ * - Running unit tests for components and functions
+ * - Performing integration tests for API endpoints
+ * - Executing end-to-end tests with Playwright
+ * - Validating UI against design mockups
+ */
+
+import { Agent } from '../../utils/agent.js';
+import { getCommonTools } from '../../utils/index.js';
+import { addHistory } from '../../utils/history.js';
+import {
+    ResponseInput,
+    ToolCall,
+    ResponseThinkingMessage,
+} from '../../types/shared-types.js';
+import { MAGI_CONTEXT } from '../constants.js';
+
+/**
+ * Create the test agent for specialized validation and QA
+ *
+ * @returns The configured TestAgent instance
+ */
+export function createTestAgent(): Agent {
+    const agent = new Agent({
+        name: 'TestAgent',
+        description: 'Specializes in testing and quality assurance for website implementations',
+        instructions: `${MAGI_CONTEXT}
+---
+
+You are a Test Agent specializing in validating website implementations through comprehensive testing.
+Your primary responsibilities are:
+
+1. UNIT TESTING
+   - Write and run tests for React components using Jest/React Testing Library
+   - Test utility functions and hooks
+   - Ensure proper mocking of dependencies and external services
+   - Verify edge cases and error handling
+
+2. INTEGRATION TESTING
+   - Test API endpoints with appropriate request validation
+   - Verify database interactions with test fixtures
+   - Test authentication flows and authorization checks
+   - Ensure proper error responses and status codes
+
+3. END-TO-END TESTING
+   - Create Playwright/Cypress tests for critical user journeys
+   - Test responsive behavior across different device sizes
+   - Validate form submissions and user interactions
+   - Test navigation and routing
+
+4. VISUAL TESTING & VALIDATION
+   - Compare implemented UI against design mockups
+   - Verify consistent styling and component rendering
+   - Check accessibility compliance (contrast, semantic markup, etc.)
+   - Test cross-browser compatibility
+
+TESTING BEST PRACTICES:
+• Write clear, descriptive test names that explain what's being tested
+• Follow the AAA pattern (Arrange-Act-Assert) for test clarity
+• Isolate tests to prevent interdependencies
+• Prioritize testing business-critical paths first
+• Proper setup and teardown between tests
+• Use appropriate assertions for different test scenarios
+
+TESTING TOOLS:
+• Unit/Component Testing: Jest, React Testing Library
+• API Testing: Supertest, Jest
+• E2E Testing: Playwright, Cypress
+• Visual Testing: Screenshot comparison, visual regression tools
+• Accessibility: axe-core, Lighthouse
+
+DO NOT:
+• Write brittle tests that fail on minor UI changes
+• Test implementation details rather than behavior
+• Skip validation of edge cases and error states
+• Rely exclusively on E2E tests when unit/integration tests would be more appropriate
+
+Your goal is to validate that the website implementation meets requirements, performs correctly, and provides a good user experience. Report issues clearly with specific actionable feedback.
+`,
+        tools: [
+            ...getCommonTools(),
+        ],
+        modelClass: 'monologue',
+        maxToolCallRoundsPerTurn: 1,
+
+        onRequest: async (
+            agent: Agent,
+            messages: ResponseInput
+        ): Promise<[Agent, ResponseInput]> => {
+            return [agent, messages];
+        },
+        onResponse: async (response: string): Promise<string> => {
+            if (response && response.trim()) {
+                await addHistory(
+                    {
+                        type: 'message',
+                        role: 'assistant',
+                        status: 'completed',
+                        content: response,
+                    },
+                    agent.historyThread,
+                    agent.model
+                );
+            }
+            return response;
+        },
+        onThinking: async (message: ResponseThinkingMessage): Promise<void> => {
+            return addHistory(message, agent.historyThread, agent.model);
+        },
+        onToolCall: async (toolCall: ToolCall): Promise<void> => {
+            await addHistory(
+                {
+                    id: toolCall.id,
+                    type: 'function_call',
+                    call_id: toolCall.call_id || toolCall.id,
+                    name: toolCall.function.name,
+                    arguments: toolCall.function.arguments,
+                },
+                agent.historyThread,
+                agent.model
+            );
+        },
+        onToolResult: async (
+            toolCall: ToolCall,
+            result: string
+        ): Promise<void> => {
+            await addHistory(
+                {
+                    id: toolCall.id,
+                    type: 'function_call_output',
+                    call_id: toolCall.call_id || toolCall.id,
+                    name: toolCall.function.name,
+                    output: result,
+                },
+                agent.historyThread,
+                agent.model
+            );
+        },
+    });
+
+    return agent;
+}

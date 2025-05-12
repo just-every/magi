@@ -327,7 +327,7 @@ export class ProcessManager {
                 command,
                 tool,
                 coreProcessId: this.coreProcessId,
-                project: agentProcess?.project,
+                projectIds: agentProcess?.projectIds,
             });
 
             // Handle container start failure

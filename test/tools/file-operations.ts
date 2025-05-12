@@ -1,7 +1,7 @@
 /**
  * File Operations Test Tool
  *
- * This tool tests file system operations within the magi-run-tool environment.
+ * This tool tests file system operations within the test-custom-tool.sh environment.
  * It verifies that the tool has proper access to read and write files in the Docker container.
  */
 import fs from 'fs';
@@ -36,7 +36,7 @@ interface FileResult {
 }
 
 /**
- * Test file operations within the magi-run-tool environment
+ * Test file operations within the test-custom-tool.sh environment
  *
  * @param options Options for file operations
  * @returns Results of the file operations

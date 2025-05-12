@@ -20,7 +20,7 @@ import {
     addCustomTool,
     getCustomToolByName,
     searchCustomToolsByEmbedding,
-} from './progress_db.js';
+} from './db_utils.js';
 import { get_working_dir } from './file_utils.js';
 import { executeToolInSandbox } from './tool_executor.js';
 import { sendStreamEvent } from './communication.js';
@@ -52,6 +52,45 @@ const toolCache = new Map<string, ToolFunction>();
 // Keys are agent_ids, values are arrays of custom tool functions
 export const agentToolCache = new Map<string, ToolFunction[]>();
 
+/**
+ * Adds or updates a tool in the specified agent's tool cache.
+ * Enforces MAX_AGENT_TOOLS limit.
+ *
+ * @param agent_id The ID of the agent.
+ * @param toolFunction The ToolFunction to add or update.
+ */
+function addOrUpdateToolInAgentCache(
+    agent_id: string,
+    toolFunction: ToolFunction
+): void {
+    if (!agent_id) return; // Do nothing if no agent_id
+
+    // Initialize the agent's tool cache if needed
+    if (!agentToolCache.has(agent_id)) {
+        agentToolCache.set(agent_id, []);
+    }
+
+    const agentToolsInCache = agentToolCache.get(agent_id)!;
+
+    // Check if this tool already exists in the agent's toolset by name
+    const existingIndexInCache = agentToolsInCache.findIndex(
+        tf =>
+            tf.definition.function.name ===
+            toolFunction.definition.function.name
+    );
+
+    if (existingIndexInCache >= 0) {
+        // Replace with newer version if it already exists
+        agentToolsInCache[existingIndexInCache] = toolFunction;
+    } else {
+        // Add new tool, enforcing MAX_AGENT_TOOLS
+        if (agentToolsInCache.length >= MAX_AGENT_TOOLS) {
+            agentToolsInCache.shift(); // Remove the oldest tool
+        }
+        agentToolsInCache.push(toolFunction);
+    }
+}
+
 // No need for forward declarations, we'll just move these functions up in the file
 
 /**
@@ -75,6 +114,12 @@ export function getCustomTools(): ToolFunction[] {
                 type: 'string',
                 description:
                     'What should this tool return, or what task should it perform?',
+            },
+            force_new: {
+                type: 'boolean',
+                description:
+                    'Set to true to skip existing tool matches and force creation of a new tool.',
+                default: false,
             },
         }),
     ];
@@ -147,6 +192,89 @@ export async function getRelevantCustomTools(
     } catch (error) {
         console.error('Error fetching relevant custom tools:', error);
         return [];
+    }
+}
+
+/**
+ * Use an LLM to pick the most appropriate tool from a list of candidate tools
+ * based on a problem description.
+ *
+ * @param problem The description of the problem to solve
+ * @param candidateTools Array of potential tools that might solve the problem
+ * @returns The best matching tool or null if none are suitable
+ */
+async function llmPickBestTool(
+    problem: string,
+    candidateTools: CustomTool[]
+): Promise<CustomTool | null> {
+    if (candidateTools.length === 0) {
+        return null;
+    }
+
+    console.log(
+        `Using LLM to rank ${candidateTools.length} tool candidates for: ${problem}`
+    );
+
+    // Prepare the prompt with tool information
+    let toolsDescription = '';
+    for (let i = 0; i < candidateTools.length; i++) {
+        const tool = candidateTools[i];
+        toolsDescription += `[${i + 1}] ${tool.name}
+Description: ${tool.description}
+Parameters: ${tool.parameters_json}\n\n`;
+    }
+
+    // Call the LLM to select the best tool or "none"
+    const response = await quick_llm_call(
+        `PROBLEM: ${problem}\n\nBelow is a list of existing tools (name, description, parameters). If one of them clearly solves the problem, return its name. Otherwise return "none".\n\nTOOLS:\n${toolsDescription}`,
+        'reasoning_mini',
+        {
+            name: 'ToolSelectorAgent',
+            description:
+                'Select the best tool for a given problem, or "none" if no suitable tool exists',
+            instructions: `You are evaluating a set of custom tools to determine if any are well-suited to solve a specific problem.
+
+Your task is to carefully analyze the problem description and the list of available tools. For each tool, consider:
+1. Does it solve the core functionality requested in the problem?
+2. Does it accept the appropriate parameters needed for this problem?
+3. Is it likely to produce output that matches what the problem requires?
+
+Return ONLY:
+- The exact name of the best tool if one is clearly suitable (e.g., "weather_forecast" or "pdf_extractor")
+- The string "none" (lowercase) if no tool is suitable or if you're uncertain
+
+IMPORTANT: Do not return explanations or additional text, only the tool name or "none".
+Be strict in your evaluation - only return a tool name if it's truly appropriate for the specific problem.`,
+            modelSettings: {
+                temperature: 0.2, // Lower temperature for more deterministic selection
+                max_tokens: 20, // We only need a short output - just the tool name or "none"
+            },
+        }
+    );
+
+    // Process the response
+    const selectedToolName = response.trim().toLowerCase();
+
+    // If the response is "none" or doesn't match any tool name, return null
+    if (selectedToolName === 'none') {
+        console.log('LLM determined no suitable tool exists for this problem');
+        return null;
+    }
+
+    // Find the tool that matches the selected name
+    const selectedTool = candidateTools.find(
+        tool => tool.name.toLowerCase() === selectedToolName
+    );
+
+    if (selectedTool) {
+        console.log(`LLM selected tool: ${selectedTool.name}`);
+        return selectedTool;
+    } else {
+        // Tool name returned by LLM doesn't match any candidate
+        console.log(
+            `LLM returned "${selectedToolName}" which doesn't match any candidate tool names`
+        );
+        return null;
     }
 }
 
@@ -518,7 +646,7 @@ SPECIFICATION - Your tool implementation MUST follow this SPECIFICATION:
  * @param ${paramKeys.length > 0 ? paramKeys.join(' Description of first parameter\\n * @param ') : ''}${paramKeys.length > 0 ? ' Description of last parameter' : ''}
  * @returns Promise<string>
  */
-async function ${toolSpec.name}(${paramKeys.length > 0 ? paramKeys.map(key => `${key}: ${(toolSpec.parameters_json as any).properties[key]?.type || 'any'}`).join(', ') : ''}): Promise<string> {
+export async function ${toolSpec.name}(${paramKeys.length > 0 ? paramKeys.map(key => `${key}: ${(toolSpec.parameters_json as any).properties[key]?.type || 'any'}`).join(', ') : ''}): Promise<string> {
     // Your implementation here
     return 'Final status or result';
 }
@@ -550,7 +678,7 @@ declare function quick_llm_call(
  * @param filePath string The path to the file to summarize
  * @returns Promise<string> containing the result
  */
-async function example_file_summary(filePath: string): Promise<string> {
+export async function example_file_summary(filePath: string): Promise<string> {
     // EXAMPLE: Reading a file using the read_file helper function
     let fileContent = '';
     try {
@@ -579,7 +707,7 @@ FILE OUTPUT REQUIREMENT:
 You MUST write your complete function implementation to a file located at ${absolutePath}`;
 
         if (feedback) {
-    codePrompt += `
+            codePrompt += `
 
 ---
 TEST FAILURE:
@@ -603,63 +731,102 @@ ${existingImplementation}
 \`\`\``;
         }
 
-
-        // Prepare the arguments string for the magi-run-tool command in the prompt
-        let cliTestArgsString = '';
+        // Prepare the arguments for passing through environment variables
+        let orderedArgsForCli: any[] = []; // Changed from string[] to any[] to hold raw values
         try {
             const finalParamsObject = JSON.parse(input); // 'input' is adaptedInputString from final_parameter_values
-            const orderedArgsForCli: string[] = [];
 
-            if (paramKeys.length > 0 && (typeof finalParamsObject !== 'object' || finalParamsObject === null)) {
+            if (
+                paramKeys.length > 0 &&
+                (typeof finalParamsObject !== 'object' ||
+                    finalParamsObject === null)
+            ) {
                 // This case implies that paramKeys exist, but the input (final_parameter_values)
                 // is not an object that can provide these keys. This might happen if the schema
                 // expects e.g. { "input_string": "value" } but final_parameter_values was just "value".
                 // If there's only one paramKey, assume finalParamsObject is its direct value.
                 if (paramKeys.length === 1) {
-                    orderedArgsForCli.push(JSON.stringify(finalParamsObject));
+                    // Don't stringify individual values - we'll stringify the entire array once
+                    orderedArgsForCli.push(finalParamsObject); // Push raw value
                 } else {
                     // Multiple params expected, but input is not an object. This is ambiguous.
                     // Fallback to old behavior for safety, though this state indicates an upstream issue.
                     // eslint-disable-next-line quotes
-                    console.warn('CLI Warning: Params expected by schema, but final_parameter_values not an object. Input: ' + input); // Ensure single quotes
-                    throw new Error('Ambiguous input for CLI test string with multiple parameters.');
+                    console.warn(
+                        'CLI Warning: Params expected by schema, but final_parameter_values not an object. Input: ' +
+                            input
+                    ); // Ensure single quotes
+                    throw new Error(
+                        'Ambiguous input for CLI test string with multiple parameters.'
+                    );
                 }
-            } else if (typeof finalParamsObject === 'object' && finalParamsObject !== null) {
-                 for (const key of paramKeys) {
+            } else if (
+                typeof finalParamsObject === 'object' &&
+                finalParamsObject !== null
+            ) {
+                for (const key of paramKeys) {
                     // paramKeys are from the schema. finalParamsObject is from LLM-generated final_parameter_values.
                     // It's assumed keys in finalParamsObject align with paramKeys.
-                    const value = Object.prototype.hasOwnProperty.call(finalParamsObject, key) ? finalParamsObject[key] : undefined;
-                    orderedArgsForCli.push(JSON.stringify(value));
+                    const value = Object.prototype.hasOwnProperty.call(
+                        finalParamsObject,
+                        key
+                    )
+                        ? finalParamsObject[key]
+                        : undefined;
+                    // Don't stringify individual values - we'll stringify the entire array once
+                    orderedArgsForCli.push(value); // Push raw value
                 }
             }
             // If paramKeys is empty, orderedArgsForCli will be empty.
             // If finalParamsObject was not an object and paramKeys was also empty, it's also fine.
-
-            cliTestArgsString = orderedArgsForCli.join(' ');
-
         } catch (e) {
             // Fallback if JSON.parse(input) fails or other issues.
             // This is a safety net; 'input' should be valid JSON from final_parameter_values.
-            console.warn('Could not construct CLI test args string from input \'' + input + '\' due to: ' + (e instanceof Error ? e.message : String(e)) + '. Falling back to single-quoted input for prompt.');
-            cliTestArgsString = `'${input}'`; // Original way
+            console.warn(
+                "Could not construct args array from input '" +
+                    input +
+                    "' due to: " +
+                    (e instanceof Error ? e.message : String(e)) +
+                    '. Falling back to raw input string.'
+            );
+            orderedArgsForCli = [input]; // Use the raw input string directly (without quotes)
         }
-        // Ensure there's no leading space if cliTestArgsString is empty (no params)
-        const magiRunToolCommand = '> magi-run-tool ' + agent_id + ' ' + absolutePath + (cliTestArgsString ? ' ' + cliTestArgsString : '');
+
+        // Store original environment variables to restore later
+        const originalEnv = {
+            MAGI_TEST_AGENT_ID: process.env.MAGI_TEST_AGENT_ID,
+            MAGI_TEST_FILE_PATH: process.env.MAGI_TEST_FILE_PATH,
+            MAGI_TEST_FUNCTION_NAME: process.env.MAGI_TEST_FUNCTION_NAME,
+            MAGI_TEST_ARGS_JSON: process.env.MAGI_TEST_ARGS_JSON,
+        };
+
+        // Set environment variables for the test
+        console.log(
+            '[custom_tool_utils] Setting test environment variables for CodeAgent'
+        );
+        process.env.MAGI_TEST_AGENT_ID = agent_id;
+        process.env.MAGI_TEST_FILE_PATH = absolutePath;
+        process.env.MAGI_TEST_FUNCTION_NAME = toolSpec.name;
+        process.env.MAGI_TEST_ARGS_JSON = JSON.stringify(orderedArgsForCli);
 
         codePrompt += `
 
 ---
 SCRIPTS & TESTING:
 ALWAYS test your implementation by running the following command:
-${magiRunToolCommand}
+> test-custom-tool.sh
+
+IMPORTANT: This testing tool requires that you create a named export function:
+export async function ${toolSpec.name}(...) {
+  // Your implementation
+}
 
 ---
 PLAN:
 1. Think through the problem fully and consider the full intent of the request.
 2. Write the full async TypeScript function implementation for this tool.
 3. You MUST save your final code as a single file located at ${absolutePath}
-4. TEST, TEST, TEST using
-${magiRunToolCommand}
+4. TEST, TEST, TEST using \`test-custom-tool.sh\`
 - fix any issues and resolve the underlying problem, never add mock code or placeholders.
 5. Make the VERY LAST LINE of your output only the string '[complete]'
 
@@ -671,7 +838,7 @@ FAILURE:
 If you determine that this task cannot be completed, instead of providing code, respond with ONLY:
 ERROR: <clear explanation of why the task cannot be completed>`;
 
-            const codeMessage = `
+        const codeMessage = `
 PROBLEM TO SOLVE:
 ${problem}
 
@@ -685,18 +852,52 @@ ${result}`;
         console.log(`\n\n***Code message for CodeAgent:\n${codeMessage}`);
 
         // Generate the implementation
-        const response = await quick_llm_call(
-            codeMessage,
-            null,
-            {
-                name: 'CustomToolAgent',
-                description:
-                    'Generate a TypeScript function implementation for a custom tool.',
-                instructions: codePrompt,
-                modelClass: 'code',
-            },
-            agent_id
-        );
+        let response;
+        try {
+            response = await quick_llm_call(
+                codeMessage,
+                null,
+                {
+                    name: 'CustomToolAgent',
+                    description:
+                        'Generate a TypeScript function implementation for a custom tool.',
+                    instructions: codePrompt,
+                    modelClass: 'code',
+                },
+                agent_id
+            );
+        } finally {
+            // Clean up environment variables after CodeAgent completes
+            console.log(
+                '[custom_tool_utils] Cleaning up test environment variables'
+            );
+            if (originalEnv.MAGI_TEST_AGENT_ID === undefined) {
+                delete process.env.MAGI_TEST_AGENT_ID;
+            } else {
+                process.env.MAGI_TEST_AGENT_ID = originalEnv.MAGI_TEST_AGENT_ID;
+            }
+
+            if (originalEnv.MAGI_TEST_FILE_PATH === undefined) {
+                delete process.env.MAGI_TEST_FILE_PATH;
+            } else {
+                process.env.MAGI_TEST_FILE_PATH =
+                    originalEnv.MAGI_TEST_FILE_PATH;
+            }
+
+            if (originalEnv.MAGI_TEST_FUNCTION_NAME === undefined) {
+                delete process.env.MAGI_TEST_FUNCTION_NAME;
+            } else {
+                process.env.MAGI_TEST_FUNCTION_NAME =
+                    originalEnv.MAGI_TEST_FUNCTION_NAME;
+            }
+
+            if (originalEnv.MAGI_TEST_ARGS_JSON === undefined) {
+                delete process.env.MAGI_TEST_ARGS_JSON;
+            } else {
+                process.env.MAGI_TEST_ARGS_JSON =
+                    originalEnv.MAGI_TEST_ARGS_JSON;
+            }
+        }
 
         // Extract the implementation from the file written by Claude
         try {
@@ -711,7 +912,65 @@ ${result}`;
             }
 
             // Read the file content
-            const implementation = fs.readFileSync(absolutePath, 'utf-8');
+            let implementation = fs.readFileSync(absolutePath, 'utf-8');
+
+            // Auto-fix common issues with the implementation
+
+            // 1. Check if 'export' is missing from the main function
+            const functionName = toolSpec.name;
+            const functionRegex = new RegExp(
+                `(async\\s+)?function\\s+${functionName}\\s*\\(`
+            );
+            const exportRegex = new RegExp(
+                `export\\s+(async\\s+)?function\\s+${functionName}\\s*\\(`
+            );
+
+            if (
+                implementation.match(functionRegex) &&
+                !implementation.match(exportRegex)
+            ) {
+                console.log(
+                    `[custom_tool_utils] Attempting to add missing 'export' for function ${functionName}`
+                );
+                implementation = implementation.replace(
+                    new RegExp(
+                        `(async\\s+)?function\\s+${functionName}\\s*\\(`
+                    ),
+                    `export $1function ${functionName}(`
+                );
+            }
+
+            // 2. Check if 'async' is missing but the function returns a Promise
+            const promiseReturnRegex = new RegExp(
+                `(export\\s+)?function\\s+${functionName}\\s*\\([^)]*\\)\\s*:\\s*Promise<`
+            );
+            const asyncRegex = new RegExp(
+                `(export\\s+)?async\\s+function\\s+${functionName}`
+            );
+
+            if (
+                implementation.match(promiseReturnRegex) &&
+                !implementation.match(asyncRegex)
+            ) {
+                console.log(
+                    `[custom_tool_utils] Attempting to add missing 'async' for function ${functionName}`
+                );
+                implementation = implementation.replace(
+                    new RegExp(`(export\\s+)?function\\s+${functionName}`),
+                    `$1async function ${functionName}`
+                );
+            }
+
+            // 3. Strict validation - verify the function exists with correct name after fixes
+            const expectedFunctionRegex = new RegExp(
+                `export\\s+(async\\s+)?function\\s+${functionName}\\s*\\(`
+            );
+            if (!implementation.match(expectedFunctionRegex)) {
+                console.log(
+                    `[custom_tool_utils] Warning: Function '${functionName}' still not found with expected signature after fixes`
+                );
+                // Don't fail here - we'll let the execution attempt determine if it's a problem
+            }
 
             // Validate that it contains a function definition
             if (
@@ -764,11 +1023,23 @@ ${result}`;
                     arguments: JSON.stringify(args),
                     output: null,
                 },
-            }
+            };
+
+            const verifierAgentDefinition = {
+                agent_id: uuidv4(),
+                name: 'VerifierAgent',
+                parent_id: agent_id,
+            };
+
+            sendStreamEvent({
+                type: 'agent_start',
+                agent: verifierAgentDefinition,
+            });
 
             sendStreamEvent({
                 type: 'tool_start',
                 tool_calls: [toolCall],
+                agent: verifierAgentDefinition,
             });
 
             // Execute the function in a safe sandbox with the agent context
@@ -784,7 +1055,8 @@ ${result}`;
                 type: 'tool_done',
                 tool_calls: [toolCall],
                 results: executionResult,
-            })
+                agent: verifierAgentDefinition,
+            });
 
             console.log(`Tool execution result: ${executionResult}`);
 
@@ -799,7 +1071,7 @@ EXPECTED RESULT DESCRIPTION: ${result}
 ACTUAL RESULT: ${executionResult}`,
                 null,
                 {
-                    name: 'VerifierAgent',
+                    ...verifierAgentDefinition,
                     description:
                         'Verify if the tool execution result meets expectations.',
                     instructions: `You are verifying if a TypeScript tool's execution result satisfies the expected outcome.
@@ -807,6 +1079,7 @@ Does the actual result satisfy the intent of result description? Do not be overl
 Return only
 "pass" if it satisfies expectations, or "fail: <reason>" explaining why it doesn't.
 `,
+
                     modelClass: 'reasoning_mini',
                     modelSettings: {
                         temperature: 0.5, // Lower temperature for more deterministic evaluation
@@ -828,11 +1101,11 @@ Return only
                 console.log('Tool verification failed: ' + failReason);
 
                 // Truncate feedback to prevent prompt explosion
-                feedback =`Testing the tool failed due to the following reason:
+                feedback = `Testing the tool failed due to the following reason:
 ${failReason}
 
 Raw test results:
-${executionResult}` ;
+${executionResult}`;
                 if (feedback.length > MAX_FEEDBACK_SIZE) {
                     feedback =
                         feedback.substring(0, MAX_FEEDBACK_SIZE) +
@@ -937,11 +1210,10 @@ function prepareArguments(
     if (typeof keyMapping === 'object' && keyMapping !== null) {
         for (const [original, snakeCase] of Object.entries(keyMapping)) {
             if (typeof snakeCase === 'string') {
-                 reverseMapping[snakeCase] = original as string;
+                reverseMapping[snakeCase] = original as string;
             }
         }
     }
-
 
     for (const paramName of paramNames) {
         let valueFound = false;
@@ -997,7 +1269,8 @@ export async function CUSTOM_TOOL(
     inject_agent_id: string,
     problem: string,
     input: string,
-    result: string
+    result: string,
+    force_new: boolean = false
 ): Promise<string> {
     console.log(`Creating custom tool to solve ${problem}`);
     const MAX_ATTEMPTS = 10; // Maximum number of tool generation/fix attempts
@@ -1008,22 +1281,100 @@ export async function CUSTOM_TOOL(
         // Generate embedding for description once and reuse
         const embedding = await embed(description);
 
-        // Search for similar existing tools (threshold: 0.8)
-        const similarTools = await searchCustomToolsByEmbedding(
-            embedding,
-            0.8,
-            1
-        );
+        // ------------------------------------------------------------------
+        // 1️⃣  Existing-tool discovery phase (unless force_new is true)
+        // ------------------------------------------------------------------
+        let existingToolData: CustomTool | null = null;
 
-        // If a similar tool was found, return it
-        if (similarTools.length > 0) {
-            const existingTool = similarTools[0];
-            console.log(`Found existing similar tool: ${existingTool.name}`);
-            return `Found existing tool: ${existingTool.name}
-Description: ${existingTool.description}
-Parameters: ${existingTool.parameters_json}
+        if (!force_new) {
+            const candidateTools = await searchCustomToolsByEmbedding(
+                embedding,
+                0.8,
+                10
+            );
+
+            if (candidateTools.length > 0) {
+                existingToolData = await llmPickBestTool(
+                    problem,
+                    candidateTools
+                );
+            }
+        }
+
+        // If a suitable existing tool was selected, use/return it
+        if (existingToolData) {
+            console.log(
+                `Selected existing tool via LLM re-rank: ${existingToolData.name}`
+            );
+
+            let parsedParameters;
+            try {
+                parsedParameters = JSON.parse(existingToolData.parameters_json);
+            } catch (e) {
+                console.error(
+                    `Error parsing parameters_json for existing tool ${existingToolData.name}: ${existingToolData.parameters_json}`,
+                    e
+                );
+                // Fallback to a simple object if parsing fails, to prevent crashes
+                parsedParameters = {
+                    type: 'object',
+                    properties: {
+                        error: {
+                            type: 'string',
+                            description: 'Could not parse parameters',
+                        },
+                    },
+                };
+            }
+
+            // Convert to ToolFunction. This also caches it in the global toolCache.
+            const toolFunction =
+                convertCustomToolToToolFunction(existingToolData);
+
+            // Add to agent's specific tool cache (agentToolCache)
+            addOrUpdateToolInAgentCache(inject_agent_id, toolFunction);
+
+            // Attempt to execute the existing tool with the provided input
+            let executionOutput = '';
+            let executionError = '';
+            try {
+                // 'input' here is the original input string passed to CUSTOM_TOOL
+                const args = prepareArguments(
+                    existingToolData.implementation,
+                    input,
+                    parsedParameters // Use the parsed parameters object
+                );
+
+                executionOutput = await executeToolInSandbox({
+                    codeString: existingToolData.implementation,
+                    functionName: existingToolData.name,
+                    agentId: inject_agent_id || '',
+                    args: args,
+                });
+            } catch (e) {
+                console.error(
+                    `Error executing existing tool ${existingToolData.name}:`,
+                    e
+                );
+                executionError = `Error trying to run existing tool ${existingToolData.name} with the provided input ("${input}"): ${e instanceof Error ? e.message : String(e)}`;
+            }
+
+            const paramsString = JSON.stringify(parsedParameters, null, 2); // Correct parameter display
+
+            let resultMessage = `Found existing tool: ${existingToolData.name}
+Description: ${existingToolData.description}
+Parameters: ${paramsString}
 
 This tool is now available in your toolset.`;
+
+            if (executionError) {
+                resultMessage += `\n\n${executionError}`;
+            } else {
+                // If successfully executed, return the output directly instead of a message about the tool
+                // This makes the tool behave as if it was directly called
+                return executionOutput;
+            }
+            return resultMessage;
         }
 
         // No similar tool found, create a new one using CodeAgent
@@ -1120,23 +1471,7 @@ This tool is now available in your toolset.`;
         });
 
         // Add the tool to this agent's toolset
-        if (inject_agent_id) {
-            // Initialize the agent's tool cache if needed
-            if (!agentToolCache.has(inject_agent_id)) {
-                agentToolCache.set(inject_agent_id, []);
-            }
-
-            // Add the tool to the agent's cache
-            const agentTools = agentToolCache.get(inject_agent_id)!;
-
-            // Enforce the tool limit by removing the oldest one if needed
-            if (agentTools.length >= MAX_AGENT_TOOLS) {
-                agentTools.shift(); // Remove the oldest tool
-            }
-
-            // Add the new tool
-            agentTools.push(toolFunction);
-        }
+        addOrUpdateToolInAgentCache(inject_agent_id, toolFunction);
 
         return `Created new tool: ${generatedTool.name}()
 Description: ${generatedTool.description}
@@ -1246,26 +1581,7 @@ export async function modify_tool(
             const toolFunction = convertCustomToolToToolFunction(customTool);
 
             // Update the agent's toolset with the modified version
-            if (inject_agent_id && agentToolCache.has(inject_agent_id)) {
-                const agentTools = agentToolCache.get(inject_agent_id)!;
-
-                // Find and replace the old version of the tool if it exists
-                const existingIndex = agentTools.findIndex(
-                    t => t.definition.function.name === generatedTool.name
-                );
-
-                if (existingIndex >= 0) {
-                    // Replace the old tool with the new version
-                    agentTools[existingIndex] = toolFunction;
-                } else {
-                    // Add as a new tool if it doesn't exist
-                    // Enforce the tool limit
-                    if (agentTools.length >= MAX_AGENT_TOOLS) {
-                        agentTools.shift(); // Remove the oldest tool
-                    }
-                    agentTools.push(toolFunction);
-                }
-            }
+            addOrUpdateToolInAgentCache(inject_agent_id, toolFunction);
 
             return `Modified tool: ${generatedTool.name}
 Description: ${generatedTool.description}
@@ -1349,7 +1665,8 @@ function convertCustomToolToToolFunction(tool: CustomTool): ToolFunction {
         functionImpl,
         tool.description,
         {}, // Empty param map since we'll set the full schema directly
-        'Custom tool result'
+        'Custom tool result',
+        tool.name
     );
 
     // Directly set the parameters schema from the stored JSON
