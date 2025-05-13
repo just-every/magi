@@ -1,5 +1,5 @@
 import { PrismaClient } from '@/generated/prisma'
-import bcrypt from 'bcrypt'
+import bcrypt from 'bcryptjs';
 
 const globalForPrisma = global as unknown as {
     prisma: PrismaClient
