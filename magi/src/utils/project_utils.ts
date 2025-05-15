@@ -5,7 +5,7 @@ import { ToolFunction, ProjectType } from '../types/shared-types.js';
 import { sendStreamEvent } from './communication.js';
 import { getDB } from './db.js';
 import { createToolFunction } from './tool_call.js';
-import { PROJECT_TYPES } from '../constants/project_types.js';
+import { PROJECT_TYPES, PROJECT_TYPE_DESCRIPTIONS } from '../constants/project_types.js';
 
 export function getExternalProjectIds(): string[] {
     // Get the list of projects from the environment variable
@@ -105,14 +105,14 @@ export async function listActiveProjects(
  * @param project_type The type of project (web-static, web-app, game-2d, etc.)
  * @returns A string indicating success or failure
  */
-export async function create_project(params: {
-    project_id: string;
-    simple_description: string;
-    project_type: ProjectType;
-}): Promise<string> {
+export async function create_project(
+    project_id: string,
+    simple_description: string,
+    project_type: ProjectType,
+): Promise<string> {
     // Validate project_id format
     const idRegex = /^[a-zA-Z0-9_-]+$/;
-    if (!idRegex.test(params.project_id)) {
+    if (!idRegex.test(project_id)) {
         return 'Error: project_id must contain only letters, numbers, dashes and underscores.';
     }
 
@@ -122,11 +122,11 @@ export async function create_project(params: {
         // Check if project already exists
         const existingProject = await db.query(
             'SELECT project_id FROM projects WHERE project_id = $1',
-            [params.project_id]
+            [project_id]
         );
 
         if (existingProject.rows.length > 0) {
-            return `Error: A project with ID '${params.project_id}' already exists.`;
+            return `Error: A project with ID '${project_id}' already exists.`;
         }
 
         // Insert new project
@@ -135,20 +135,20 @@ export async function create_project(params: {
             (project_id, project_type, simple_description, is_generated)
             VALUES ($1, $2, $3, $4)`,
             [
-                params.project_id,
-                params.project_type,
-                params.simple_description,
+                project_id,
+                project_type,
+                simple_description,
                 true,
             ]
         );
 
         sendStreamEvent({
             type: 'project_create',
-            project_id: params.project_id,
+            project_id: project_id,
         });
 
         // Return success message
-        return `Project '${params.project_id}' created successfully.`;
+        return `Project '${project_id}' created successfully.`;
     } catch (error) {
         console.error('Error creating project:', error);
         return `Error creating project: ${error instanceof Error ? error.message : String(error)}`;
@@ -175,6 +175,9 @@ export function getProjectTools(): ToolFunction[] {
                     description:
                         "What type of files will be in the project. Use 'plain' if no other type matches.",
                     enum: PROJECT_TYPES,
+                    enumDescriptions: Object.entries(PROJECT_TYPE_DESCRIPTIONS).map(
+                        ([type, description]) => `${type}: ${description}`
+                    ),
                 },
             }
         ),
