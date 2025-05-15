@@ -347,7 +347,8 @@ export function getProcessTools(): ToolFunction[] {
                     'Are there any warnings or things to be aware of? This could be a list of things to avoid, or things that are not working as expected. This is optional, but can help the task operator avoid problems.',
                 goal: 'What is the final goal of this task? This is the final output or result you expect from the task. It should be a single sentence or two at most',
                 project: {
-                    description: 'An array of projects to mount for the task giving the task access to a copy of files. The task can modify the files and submit them back as a new git branch.' +
+                    description:
+                        'An array of projects to mount for the task giving the task access to a copy of files. The task can modify the files and submit them back as a new git branch.' +
                         (getExternalProjectIds().includes('magi-system')
                             ? ' Include "magi-system" to provide access to your code.'
                             : '') +

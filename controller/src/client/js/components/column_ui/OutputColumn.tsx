@@ -61,17 +61,19 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
 
     // When selected item changes, switch to output tab, unless browser/console data is present
     useEffect(() => {
-        if (selectedItemId && selectedItem && selectedItem.id === selectedItemId) {
+        if (
+            selectedItemId &&
+            selectedItem &&
+            selectedItem.id === selectedItemId
+        ) {
             // Only proceed with initial tab setup if the selectedItemId is different
             // from the one we last fully processed
             if (prevSelectedItemIdRef.current !== selectedItemId) {
                 if (screenshots && screenshots.length > 0) {
                     setTab('browser');
-                }
-                else if (consoleEvents && consoleEvents.length > 0) {
+                } else if (consoleEvents && consoleEvents.length > 0) {
                     setTab('console');
-                }
-                else {
+                } else {
                     setTab('output');
                 }
                 // Reset manual selection flag ONLY when a new item is selected
@@ -82,8 +84,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
             // If prevSelectedItemIdRef.current === selectedItemId, it means
             // selectedItem might have just changed its reference for the SAME item.
             // In this case, we DO NOT want to reset the tab or isTabManuallySelected.
-        }
-        else if (!selectedItemId && selectedItem === null) {
+        } else if (!selectedItemId && selectedItem === null) {
             // Handle deselection - only if it was previously an item
             if (prevSelectedItemIdRef.current !== null) {
                 setTab('output');
@@ -95,10 +96,19 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
 
     // If tab is not manually changed, switch to browser/console when data starts coming in
     useEffect(() => {
-        if (!isTabManuallySelected && tab === 'output' && screenshots && screenshots.length > 0) {
+        if (
+            !isTabManuallySelected &&
+            tab === 'output' &&
+            screenshots &&
+            screenshots.length > 0
+        ) {
             setTab('browser');
-        }
-        else if (!isTabManuallySelected && tab === 'output' && consoleEvents && consoleEvents.length > 0) {
+        } else if (
+            !isTabManuallySelected &&
+            tab === 'output' &&
+            consoleEvents &&
+            consoleEvents.length > 0
+        ) {
             setTab('console');
         }
     }, [tab, screenshots, consoleEvents, isTabManuallySelected]);
@@ -143,7 +153,6 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
         setSelectedItem(null);
     }, [selectedItemId, processes]);
 
-
     // The MessageList component handles formatting of messages internally
 
     // Render process details
@@ -163,8 +172,13 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
             if (process.agent.statusEvent.status) {
                 status = process.agent.statusEvent.status;
             }
-            if (process.agent.statusEvent.meta_data && Object.keys(process.agent.statusEvent.meta_data).length > 0) {
-                metaDataString = ` (${Object.entries(process.agent.statusEvent.meta_data)
+            if (
+                process.agent.statusEvent.meta_data &&
+                Object.keys(process.agent.statusEvent.meta_data).length > 0
+            ) {
+                metaDataString = ` (${Object.entries(
+                    process.agent.statusEvent.meta_data
+                )
                     .map(([key, value]) => `${key}: ${value}`)
                     .join(', ')})`;
             }
@@ -217,11 +231,14 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                 </div>
 
                 <ul className="nav nav-tabs small border-0">
-                    {screenshots && screenshots.length > 0 &&
-                        <li className="nav-item" onClick={() => {
-                            setTab('browser');
-                            setIsTabManuallySelected(true);
-                        }}>
+                    {screenshots && screenshots.length > 0 && (
+                        <li
+                            className="nav-item"
+                            onClick={() => {
+                                setTab('browser');
+                                setIsTabManuallySelected(true);
+                            }}
+                        >
                             <a
                                 className={
                                     'nav-link border-0 m-0' +
@@ -234,12 +251,15 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                                 Browser
                             </a>
                         </li>
-                    }
-                    {consoleEvents && consoleEvents.length > 0 &&
-                        <li className="nav-item" onClick={() => {
-                            setTab('console');
-                            setIsTabManuallySelected(true);
-                        }}>
+                    )}
+                    {consoleEvents && consoleEvents.length > 0 && (
+                        <li
+                            className="nav-item"
+                            onClick={() => {
+                                setTab('console');
+                                setIsTabManuallySelected(true);
+                            }}
+                        >
                             <a
                                 className={
                                     'nav-link border-0 m-0' +
@@ -252,11 +272,14 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                                 Console
                             </a>
                         </li>
-                    }
-                    <li className="nav-item" onClick={() => {
-                        setTab('output');
-                        setIsTabManuallySelected(true);
-                    }}>
+                    )}
+                    <li
+                        className="nav-item"
+                        onClick={() => {
+                            setTab('output');
+                            setIsTabManuallySelected(true);
+                        }}
+                    >
                         <a
                             className={
                                 'nav-link border-0 m-0' +
@@ -269,10 +292,13 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                             Output
                         </a>
                     </li>
-                    <li className="nav-item" onClick={() => {
-                        setTab('llm');
-                        setIsTabManuallySelected(true);
-                    }}>
+                    <li
+                        className="nav-item"
+                        onClick={() => {
+                            setTab('llm');
+                            setIsTabManuallySelected(true);
+                        }}
+                    >
                         <a
                             className={
                                 'nav-link border-0 m-0' +
@@ -285,10 +311,13 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                             Requests
                         </a>
                     </li>
-                    <li className="nav-item" onClick={() => {
-                        setTab('docker');
-                        setIsTabManuallySelected(true);
-                    }}>
+                    <li
+                        className="nav-item"
+                        onClick={() => {
+                            setTab('docker');
+                            setIsTabManuallySelected(true);
+                        }}
+                    >
                         <a
                             className={
                                 'nav-link border-0 m-0' +
@@ -304,25 +333,35 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                 </ul>
 
                 {/* Process Content */}
-                {tab === 'console' && consoleEvents ? (<div
+                {tab === 'console' && consoleEvents ? (
+                    <div
                         className="process-content flex-grow-1 p-4"
-                        style={{ backgroundColor: `rgba(${rbg} / 0.1)`}}>
-                            <ConsoleDisplay
-                                consoleEvents={consoleEvents}
-                            />
+                        style={{ backgroundColor: `rgba(${rbg} / 0.1)` }}
+                    >
+                        <ConsoleDisplay
+                            consoleEvents={consoleEvents}
+                            collapsible={false}
+                        />
                     </div>
-                    ) : <AutoScrollContainer
+                ) : (
+                    <AutoScrollContainer
                         className="process-content flex-grow-1 p-4"
                         style={{ backgroundColor: `rgba(${rbg} / 0.1)` }}
                     >
                         {tab === 'browser' && screenshots && (
                             <BrowserDisplay
                                 screenshots={screenshots}
+                                collapsible={false}
                             />
                         )}
-                        {tab === 'output' && <MessageList messages={messages} />}
+                        {tab === 'output' && (
+                            <MessageList messages={messages} />
+                        )}
                         {tab === 'llm' && (
-                            <LogsViewer processId={process.id} inlineTab={tab} />
+                            <LogsViewer
+                                processId={process.id}
+                                inlineTab={tab}
+                            />
                         )}
                         {tab === 'docker' && (
                             <div className="logs font-monospace small">
@@ -337,7 +376,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                             </div>
                         )}
                     </AutoScrollContainer>
-                }
+                )}
             </div>
         );
     };
@@ -361,8 +400,13 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
             if (selectedItem.data.statusEvent.status) {
                 status = selectedItem.data.statusEvent.status;
             }
-            if (selectedItem.data.statusEvent.meta_data && Object.keys(selectedItem.data.statusEvent.meta_data).length > 0) {
-                metaDataString = ` (${Object.entries(selectedItem.data.statusEvent.meta_data)
+            if (
+                selectedItem.data.statusEvent.meta_data &&
+                Object.keys(selectedItem.data.statusEvent.meta_data).length > 0
+            ) {
+                metaDataString = ` (${Object.entries(
+                    selectedItem.data.statusEvent.meta_data
+                )
                     .map(([key, value]) => `${key}: ${value}`)
                     .join(', ')})`;
             }
@@ -414,11 +458,14 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
 
                 {/* Agent Content */}
                 <ul className="nav nav-tabs small border-0">
-                    {screenshots && screenshots.length > 0 &&
-                        <li className="nav-item" onClick={() => {
-                            setTab('browser');
-                            setIsTabManuallySelected(true);
-                        }}>
+                    {screenshots && screenshots.length > 0 && (
+                        <li
+                            className="nav-item"
+                            onClick={() => {
+                                setTab('browser');
+                                setIsTabManuallySelected(true);
+                            }}
+                        >
                             <a
                                 className={
                                     'nav-link border-0 m-0' +
@@ -431,12 +478,15 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                                 Browser
                             </a>
                         </li>
-                    }
-                    {consoleEvents && consoleEvents.length > 0 &&
-                        <li className="nav-item" onClick={() => {
-                            setTab('console');
-                            setIsTabManuallySelected(true);
-                        }}>
+                    )}
+                    {consoleEvents && consoleEvents.length > 0 && (
+                        <li
+                            className="nav-item"
+                            onClick={() => {
+                                setTab('console');
+                                setIsTabManuallySelected(true);
+                            }}
+                        >
                             <a
                                 className={
                                     'nav-link border-0 m-0' +
@@ -449,11 +499,14 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                                 Console
                             </a>
                         </li>
-                    }
-                    <li className="nav-item" onClick={() => {
-                        setTab('output');
-                        setIsTabManuallySelected(true);
-                    }}>
+                    )}
+                    <li
+                        className="nav-item"
+                        onClick={() => {
+                            setTab('output');
+                            setIsTabManuallySelected(true);
+                        }}
+                    >
                         <a
                             className={
                                 'nav-link border-0 m-0' +
@@ -466,10 +519,13 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                             Output
                         </a>
                     </li>
-                    <li className="nav-item" onClick={() => {
-                        setTab('llm');
-                        setIsTabManuallySelected(true);
-                    }}>
+                    <li
+                        className="nav-item"
+                        onClick={() => {
+                            setTab('llm');
+                            setIsTabManuallySelected(true);
+                        }}
+                    >
                         <a
                             className={
                                 'nav-link border-0 m-0' +
@@ -484,23 +540,30 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                     </li>
                 </ul>
 
-                {tab === 'console' && consoleEvents ? (<div
-                    className="agent-content flex-grow-1 p-4"
-                    style={{ backgroundColor: `rgba(${rbg} / 0.08)`}}>
+                {tab === 'console' && consoleEvents ? (
+                    <div
+                        className="agent-content flex-grow-1 p-4"
+                        style={{ backgroundColor: `rgba(${rbg} / 0.08)` }}
+                    >
                         <ConsoleDisplay
                             consoleEvents={consoleEvents}
+                            collapsible={false}
                         />
                     </div>
-                    ) : <AutoScrollContainer
+                ) : (
+                    <AutoScrollContainer
                         className="agent-content flex-grow-1 p-4"
                         style={{ backgroundColor: `rgba(${rbg} / 0.08)` }}
                     >
                         {tab === 'browser' && screenshots && (
                             <BrowserDisplay
                                 screenshots={screenshots}
+                                collapsible={false}
                             />
                         )}
-                        {tab === 'output' && <MessageList messages={messages} />}
+                        {tab === 'output' && (
+                            <MessageList messages={messages} />
+                        )}
                         {tab === 'llm' && selectedItem && (
                             <LogsViewer
                                 processId={selectedItem.parentId || ''}
@@ -509,7 +572,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                             />
                         )}
                     </AutoScrollContainer>
-                }
+                )}
             </div>
         );
     };

@@ -43,6 +43,7 @@ import {
     extractBase64Image,
     resizeAndTruncateForGemini,
 } from '../utils/image_utils.js';
+import { DeltaBuffer, bufferDelta, flushBufferedDeltas } from '../utils/delta_buffer.js';
 
 // Convert our tool definition to Gemini's updated FunctionDeclaration format
 function convertToGeminiFunctionDeclarations(
@@ -149,6 +150,16 @@ function getImageMimeType(imageData: string): string {
  */
 function cleanBase64Data(imageData: string): string {
     return imageData.replace(/^data:image\/[a-z]+;base64,/, '');
+}
+
+/**
+ * Format Google search grounding chunks into readable text
+ */
+function formatGroundingChunks(chunks: any[]): string {
+    return chunks
+        .filter(c => c?.web?.uri)
+        .map((c, i) => `${i + 1}. ${c.web.title || 'Untitled'} – ${c.web.uri}`)
+        .join('\n');
 }
 
 // Convert message history to Gemini's content format
@@ -326,6 +337,14 @@ async function convertToGeminiContents(
     return contents;
 }
 
+// Define mappings for thinking budget configurations
+const THINKING_BUDGET_CONFIGS: Record<string, number> = {
+    '-low': 0,
+    '-medium': 2048,
+    '-high': 12288,
+    '-max': 24576,
+};
+
 /**
  * Gemini model provider implementation
  */
@@ -360,9 +379,23 @@ export class GeminiProvider implements ModelProvider {
     ): Promise<number[] | number[][]> {
         try {
             // Handle 'gemini/' prefix if present
-            const actualModelId = modelId.startsWith('gemini/')
+            let actualModelId = modelId.startsWith('gemini/')
                 ? modelId.substring(7)
                 : modelId;
+
+            // Check for suffix and remove it from actual model ID while setting thinking config
+            let thinkingConfig: { thinkingBudget: number } | null = null;
+
+            // Check if model has any of the defined suffixes
+            for (const [suffix, budget] of Object.entries(
+                THINKING_BUDGET_CONFIGS
+            )) {
+                if (actualModelId.endsWith(suffix)) {
+                    thinkingConfig = { thinkingBudget: budget };
+                    actualModelId = actualModelId.slice(0, -suffix.length);
+                    break;
+                }
+            }
 
             console.log(
                 `[Gemini] Generating embedding with model ${actualModelId}`
@@ -374,8 +407,13 @@ export class GeminiProvider implements ModelProvider {
                 contents: input,
                 config: {
                     taskType: opts?.taskType ?? 'SEMANTIC_SIMILARITY',
-                },
+                } as any, // Cast to any to allow additional properties
             };
+
+            // Add thinking configuration if suffix was detected
+            if (thinkingConfig) {
+                payload.config.thinkingConfig = thinkingConfig;
+            }
 
             // Call the Gemini API
             const response = await this.client.models.embedContent(payload);
@@ -557,13 +595,19 @@ export class GeminiProvider implements ModelProvider {
         messages: ResponseInput,
         agent: Agent
     ): AsyncGenerator<StreamingEvent> {
-        const tools: ToolFunction[] | undefined = agent ? await agent.getTools() : [];
+        const tools: ToolFunction[] | undefined = agent
+            ? await agent.getTools()
+            : [];
         const settings: ModelSettings | undefined = agent?.modelSettings;
 
         let contentBuffer = '';
         const messageId = uuidv4();
         let eventOrder = 0;
+        // Buffer map for throttling message_delta emissions
+        const deltaBuffers = new Map<string, DeltaBuffer>();
         let hasYieldedToolStart = false;
+        // Track shown grounding URLs to avoid duplicates
+        const shownGrounding = new Set<string>();
 
         let requestId: string | undefined = undefined;
         const chunks: GenerateContentResponse[] = [];
@@ -586,8 +630,27 @@ export class GeminiProvider implements ModelProvider {
                 );
             }
 
+            // Handle model suffixes for thinking budget
+            let thinkingConfig: { thinkingBudget: number } | null = null;
+
+            // Check if model has any of the defined suffixes
+            for (const [suffix, budget] of Object.entries(
+                THINKING_BUDGET_CONFIGS
+            )) {
+                if (model.endsWith(suffix)) {
+                    thinkingConfig = { thinkingBudget: budget };
+                    model = model.slice(0, -suffix.length);
+                    break;
+                }
+            }
+
             // Prepare generation config
             const config: any = {};
+
+            // Add thinking configuration if suffix was detected
+            if (thinkingConfig) {
+                config.thinkingConfig = thinkingConfig;
+            }
             if (settings?.stop_sequence) {
                 config.stopSequences = settings.stop_sequence;
             }
@@ -664,7 +727,13 @@ export class GeminiProvider implements ModelProvider {
             if (hasGoogleWebSearch) {
                 console.log('[Gemini] Enabling Google Search grounding');
                 // Configure the Google Search grounding
-                config.googleSearch = { enabled: true };
+                config.tools = [{ googleSearch: {} }];
+                config.toolConfig = {
+                    functionCallingConfig: {
+                        mode: FunctionCallingConfigMode.ANY,
+                        allowedFunctionNames: ['googleSearch'],
+                    },
+                };
             }
 
             const requestParams = {
@@ -736,15 +805,35 @@ export class GeminiProvider implements ModelProvider {
                     }
                 }
 
-                // Handle text content
+                // Handle text content (buffered)
                 if (chunk.text) {
-                    yield {
+                    contentBuffer += chunk.text;
+
+                    for (const ev of bufferDelta(deltaBuffers, messageId, chunk.text, (content) => ({
                         type: 'message_delta',
-                        content: chunk.text,
+                        content,
                         message_id: messageId,
                         order: eventOrder++,
-                    };
-                    contentBuffer += chunk.text;
+                    } as StreamingEvent))) {
+                        yield ev;
+                    }
+                }
+
+                // Handle search grounding results
+                const gChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
+                if (Array.isArray(gChunks)) {
+                    const newChunks = gChunks.filter(c => c?.web?.uri && !shownGrounding.has(c.web.uri));
+                    if (newChunks.length) {
+                        newChunks.forEach(c => shownGrounding.add(c.web.uri));
+                        const formatted = formatGroundingChunks(newChunks);
+                        yield {
+                            type: 'message_delta',
+                            content: '\n\nSearch Results:\n' + formatted + '\n',
+                            message_id: messageId,
+                            order: eventOrder++,
+                        };
+                        contentBuffer += '\n\nSearch Results:\n' + formatted + '\n';
+                    }
                 }
 
                 // Handle images or other modalities
@@ -768,6 +857,16 @@ export class GeminiProvider implements ModelProvider {
                     // Always use the latest usage metadata?
                     usageMetadata = chunk.usageMetadata;
                 }
+            }
+
+            // Flush any buffered deltas that didn't meet the threshold
+            for (const ev of flushBufferedDeltas(deltaBuffers, (_id, content) => ({
+                type: 'message_delta',
+                content,
+                message_id: messageId,
+                order: eventOrder++,
+            } as StreamingEvent))) {
+                yield ev;
             }
 
             if (usageMetadata) {
@@ -807,6 +906,7 @@ export class GeminiProvider implements ModelProvider {
                 };
             }
         } catch (error) {
+            log_llm_error(requestId, error);
             console.error('Error during Gemini stream processing:', error);
             const errorMessage =
                 error instanceof Error
@@ -824,7 +924,6 @@ export class GeminiProvider implements ModelProvider {
                 type: 'error',
                 error: `Gemini error ${model}: ${errorMessage}`,
             };
-            log_llm_error(requestId, error);
 
             // Emit any partial content if we haven't yielded a tool call
             if (!hasYieldedToolStart && contentBuffer) {

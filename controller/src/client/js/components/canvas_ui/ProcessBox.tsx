@@ -123,9 +123,7 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
                     onViewLogs={onViewLogs ? () => onViewLogs(id) : undefined}
                 />
 
-                <AutoScrollContainer
-                    className="process-logs card-body"
-                >
+                <AutoScrollContainer className="process-logs card-body">
                     <MessageList
                         agent={process?.agent}
                         messages={messages}

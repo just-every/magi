@@ -29,7 +29,8 @@ interface GridPosition {
 // --- Helper Functions ---
 
 /** Creates a unique string key for a grid cell */
-const getGridKey = (row: number, col: number): string => `${row},${col}`;
+// Uncomment when needed
+// const getGridKey = (row: number, col: number): string => `${row},${col}`;
 
 export const getOrigin = (containerSize: {
     width: number;
@@ -115,8 +116,7 @@ const gridToScreenCoords = (
 export const calculateBoxPositions = (
     coreProcessId: string,
     processes: Map<string, ProcessData>,
-    containerSize: { width: number; height: number },
-    existingPositions: Map<string, BoxPosition> // Kept for API compatibility
+    containerSize: { width: number; height: number }
 ): Map<string, BoxPosition> => {
     if (processes.size === 0) return new Map<string, BoxPosition>();
 
@@ -321,7 +321,8 @@ export const calculateZoomToFit = (
             boxPositions.size === 1 &&
             Number.isFinite(contentWidth + contentHeight)
         ) {
-            const position = boxPositions.values().next().value;
+            // Uncomment when needed
+            // const position = boxPositions.values().next().value;
             // Use bounding box center for single item as well
             const contentCenterX = minX + contentWidth / 2;
             const contentCenterY = minY + contentHeight / 2;

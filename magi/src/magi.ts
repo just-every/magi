@@ -20,6 +20,7 @@ import {
     addMonologue,
     getHistory,
     mergeHistoryThread,
+    processPendingHistoryThreads,
 } from './utils/history.js';
 import {
     initCommunication,
@@ -106,7 +107,7 @@ export async function spawnThought(
         return;
     }
 
-    const agent = createAgent(args);
+    const agent = await createAgent(args);
     if (!primaryAgentId) {
         primaryAgentId = agent.agent_id;
     } else {
@@ -173,6 +174,9 @@ export async function mainLoop(
 
     do {
         try {
+            // Process any pending history threads at the start of each mech loop
+            await processPendingHistoryThreads();
+
             // Get conversation history
             const history = getHistory();
 
@@ -294,7 +298,7 @@ async function main(): Promise<void> {
     move_to_working_dir(projects.length > 0 ? `projects/${projects[0]}` : '');
 
     // Initialize database connection
-    if (!await initDatabase()) {
+    if (!(await initDatabase())) {
         return endProcess(1, 'Database connection failed.');
     }
 
@@ -329,11 +333,7 @@ async function main(): Promise<void> {
             type: 'process_running',
         });
 
-        if (args.tool === 'run_task') {
-            args.agent = 'operator';
-        }
-
-        const agent = createAgent(args);
+        const agent = await createAgent(args);
         if (!primaryAgentId) {
             primaryAgentId = agent.agent_id;
         } else {
@@ -346,7 +346,7 @@ async function main(): Promise<void> {
             status: 'process_start',
         });
 
-        if (args.tool && args.tool === 'run_task') {
+        if (args.tool && args.tool !== 'none') {
             // Use memory-enhanced MECH for task runs
             const mechResult = await runMECHWithMemory(
                 agent,
@@ -360,13 +360,7 @@ async function main(): Promise<void> {
             // inside the task_complete / task_fatal_error tools
 
             // Log task completion with metrics
-            console.log(
-                `Task ${mechResult.status}: ${
-                    mechResult.status === 'complete'
-                        ? mechResult.result
-                        : 'Error: ' + (mechResult as any).error
-                }`
-            );
+            console.log(`Task ${mechResult.status}: ${mechResult.mechOutcome}`);
             console.log(
                 `Duration: ${mechResult.durationSec}s, Cost: $${mechResult.totalCost.toFixed(6)}`
             );

@@ -76,16 +76,17 @@ ${MAGI_CONTEXT}
 - You will see the results next time you run after the Meta Frequency.
 `,
             tools: [...getMetaCognitionTools()],
-            modelClass: 'reasoning',
+            modelClass: 'metacognition',
             // Don't run more than one round of tools
             maxToolCallRoundsPerTurn: 1,
             modelSettings: {
                 tool_choice: 'required',
             },
+            historyThread: [],
         });
 
         // Use a high-quality reasoning model
-        metaAgent.model = await getModelFromClass('reasoning');
+        metaAgent.model = await getModelFromClass('metacognition');
         metaAgent.agent_id = agent.agent_id;
 
         let messages: ResponseInput = [];
@@ -100,7 +101,7 @@ ${agent.name} Running Time: ${readableTime(new Date().getTime() - startTime.getT
 ${agent.name} Thought Delay: ${getThoughtDelay()} seconds [delay between ${agent.name} LLM requests - change with set_thought_delay(delay)]
 
 ${agent.name} Projects:
-${listActiveProjects()}
+${await listActiveProjects()}
 
 ${agent.name} Active Tools:
 ${runningToolTracker.listActive()}
@@ -120,7 +121,7 @@ ${listModelScores(agent.modelClass)}
         });
 
         const showCount = 10 + parseInt(mechState.metaFrequency) * 3;
-        messages = describeHistory(showCount, messages);
+        messages = describeHistory(agent, messages, showCount);
 
         // Run the metacognition agent with Runner
         const response = await Runner.runStreamedWithTools(

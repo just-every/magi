@@ -20,6 +20,7 @@ import type {
     ResponseThinkingMessage,
     StreamEventType,
     ErrorEvent,
+    ResponseOutputMessage,
 } from '../types/shared-types.js';
 import { Agent } from './agent.js';
 import { getModelProvider } from '../model_providers/model_provider.js';
@@ -35,7 +36,6 @@ import { capitalize } from './llm_utils.js';
 import { getCommunicationManager, sendComms } from './communication.js';
 import { isPaused, sleep } from './communication.js';
 import { mechState, getModelScore } from './mech_state.js';
-import { initRunningToolEventBridge } from './running_tool_event_bridge.js';
 
 const EVENT_TIMEOUT_MS = 300000; // 5 min timeout for events
 
@@ -528,6 +528,7 @@ export class Runner {
                                 signature: message.thinking_signature || '',
                                 thinking_id: message.message_id || '',
                                 status: 'completed',
+                                model: agent.model,
                             };
                             messageItems.push(thinkingMessage);
                             if (agent.onThinking) {
@@ -538,12 +539,18 @@ export class Runner {
                         if (message.content) {
                             fullResponse = message.content;
                             // Add the assistant's response
-                            messageItems.push({
+                            const contentMessage: ResponseOutputMessage = {
+                                id: message.message_id,
                                 type: 'message',
                                 role: 'assistant',
                                 content: message.content,
                                 status: 'completed',
-                            });
+                                model: agent.model,
+                            };
+                            messageItems.push(contentMessage);
+                            if (agent.onResponse) {
+                                await agent.onResponse(contentMessage);
+                            }
                         }
                         break;
                     }
@@ -796,6 +803,7 @@ export class Runner {
                         call_id: toolCall.call_id || toolCall.id,
                         name: toolCall.function.name,
                         arguments: toolCall.function.arguments,
+                        model: agent.model,
                     });
 
                     // Add the corresponding tool result
@@ -809,6 +817,7 @@ export class Runner {
                             call_id: toolCall.call_id || toolCall.id,
                             name: toolCall.function.name,
                             output: result.output,
+                            model: agent.model,
                         });
                     }
                 }
@@ -890,11 +899,6 @@ export class Runner {
                         );
                     }
                 }
-            }
-
-            // Allow the agent to process the final response before returning
-            if (agent.onResponse) {
-                fullResponse = await agent.onResponse(fullResponse);
             }
 
             agent.model = undefined; // Allow a new model to be selected for the next run
@@ -1358,6 +1362,3 @@ export class Runner {
         return model;
     }
 }
-
-// Initialize the running tool event bridge
-initRunningToolEventBridge();

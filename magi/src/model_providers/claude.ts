@@ -7,6 +7,78 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { v4 as uuidv4 } from 'uuid';
+
+/**
+ * Format web search results into a readable text format
+ */
+function formatWebSearchResults(results: any[]): string {
+    if (!Array.isArray(results)) return '';
+    return results
+        .filter(r => r.type === 'web_search_result')
+        .map((r, i) => `${i + 1}. ${r.title || 'Untitled'} – ${r.url}`)
+        .join('\n');
+}
+
+/**
+ * Citation tracking for footnotes
+ */
+interface CitationTracker {
+    citations: Map<string, { title: string; url: string; citedText: string }>;
+    lastIndex: number;
+}
+
+/**
+ * Create a new citation tracker
+ */
+function createCitationTracker(): CitationTracker {
+    return {
+        citations: new Map(),
+        lastIndex: 0
+    };
+}
+
+/**
+ * Format citation as a footnote and return a reference marker
+ */
+function formatCitation(
+    tracker: CitationTracker,
+    citation: { title: string; url: string; cited_text: string; encrypted_index?: string }
+): string {
+    // Use URL as key to deduplicate citations
+    const url = citation.url;
+    let index: number;
+
+    if (tracker.citations.has(url)) {
+        // Find the index of this citation in the tracker (1-based)
+        const entries = Array.from(tracker.citations.entries());
+        index = entries.findIndex(([k]) => k === url) + 1;
+    } else {
+        // Create new citation
+        tracker.lastIndex++;
+        index = tracker.lastIndex;
+        tracker.citations.set(url, {
+            title: citation.title,
+            url: citation.url,
+            citedText: citation.cited_text
+        });
+    }
+
+    // Return the reference marker
+    return ` [${index}]`;
+}
+
+/**
+ * Generate formatted footnotes from citation tracker
+ */
+function generateFootnotes(tracker: CitationTracker): string {
+    if (tracker.citations.size === 0) return '';
+
+    const footnotes = Array.from(tracker.citations.values())
+        .map((citation, i) => `[${i + 1}] ${citation.title} – ${citation.url}`)
+        .join('\n');
+
+    return '\n\nReferences:\n' + footnotes;
+}
 import {
     ModelProvider,
     ToolFunction,
@@ -33,6 +105,7 @@ import {
     resizeAndTruncateForClaude,
 } from '../utils/image_utils.js';
 import { convertImageToTextIfNeeded } from '../utils/image_to_text.js';
+import { DeltaBuffer, bufferDelta, flushBufferedDeltas } from '../utils/delta_buffer.js';
 
 // Convert our tool definition to Claude's format
 function convertToClaudeTools(tools: ToolFunction[]): any[] {
@@ -739,6 +812,9 @@ export class ClaudeProvider implements ModelProvider {
             const messageId = uuidv4(); // Generate a unique ID for this message
             // Track delta positions for ordered message chunks
             let deltaPosition = 0;
+            const deltaBuffers = new Map<string, DeltaBuffer>();
+            // Citation tracking
+            const citationTracker = createCitationTracker();
 
             // Make the API call
             const stream = await this.client.messages.create(requestParams);
@@ -815,12 +891,14 @@ export class ClaudeProvider implements ModelProvider {
                             event.delta.type === 'text_delta' &&
                             event.delta.text
                         ) {
-                            yield {
+                            for (const ev of bufferDelta(deltaBuffers, messageId, event.delta.text, (content) => ({
                                 type: 'message_delta',
-                                content: event.delta.text,
+                                content,
                                 message_id: messageId,
                                 order: deltaPosition++,
-                            };
+                            } as StreamingEvent))) {
+                                yield ev;
+                            }
                             accumulatedContent += event.delta.text;
                         } else if (
                             event.delta.type === 'input_json_delta' &&
@@ -860,6 +938,21 @@ export class ClaudeProvider implements ModelProvider {
                                     event
                                 );
                             }
+                        } else if (
+                            event.delta.type === 'citations_delta' &&
+                            event.delta.citation
+                        ) {
+                            // Format the citation and append a reference marker
+                            const citationMarker = formatCitation(citationTracker, event.delta.citation);
+
+                            // Yield the citation marker
+                            yield {
+                                type: 'message_delta',
+                                content: citationMarker,
+                                message_id: messageId,
+                                order: deltaPosition++,
+                            };
+                            accumulatedContent += citationMarker;
                         }
                     }
                     // Handle content block start for text
@@ -868,12 +961,14 @@ export class ClaudeProvider implements ModelProvider {
                         event.content_block?.type === 'text'
                     ) {
                         if (event.content_block.text) {
-                            yield {
+                            for (const ev of bufferDelta(deltaBuffers, messageId, event.content_block.text, (content) => ({
                                 type: 'message_delta',
-                                content: event.content_block.text,
+                                content,
                                 message_id: messageId,
                                 order: deltaPosition++,
-                            };
+                            } as StreamingEvent))) {
+                                yield ev;
+                            }
                             accumulatedContent += event.content_block.text;
                         }
                     }
@@ -884,6 +979,26 @@ export class ClaudeProvider implements ModelProvider {
                     ) {
                         // No specific action needed here usually if deltas are handled,
                         // but keep the structure in case API behavior changes.
+                    }
+                    // Handle web search tool results
+                    else if (
+                        event.type === 'content_block_start' &&
+                        event.content_block?.type === 'web_search_tool_result'
+                    ) {
+                        if (event.content_block.content) {
+                            // Format the web search results as a nicely formatted list
+                            const formatted = formatWebSearchResults(event.content_block.content);
+                            if (formatted) {
+                                // Yield the formatted results
+                                yield {
+                                    type: 'message_delta',
+                                    content: '\n\nSearch Results:\n' + formatted + '\n',
+                                    message_id: messageId,
+                                    order: deltaPosition++,
+                                };
+                                accumulatedContent += '\n\nSearch Results:\n' + formatted + '\n';
+                            }
+                        }
                     }
                     // Handle tool use start
                     else if (
@@ -975,8 +1090,23 @@ export class ClaudeProvider implements ModelProvider {
                             currentToolCall = null; // Reset anyway
                         }
 
+                        // Flush any buffered deltas before final message_complete
+                        for (const ev of flushBufferedDeltas(deltaBuffers, (_id, content) => ({
+                            type: 'message_delta',
+                            content,
+                            message_id: messageId,
+                            order: deltaPosition++,
+                        } as StreamingEvent))) {
+                            yield ev;
+                        }
                         // Emit message_complete if there's content
                         if (accumulatedContent || accumulatedThinking) {
+                            // Add footnotes if there are citations
+                            if (citationTracker.citations.size > 0) {
+                                const footnotes = generateFootnotes(citationTracker);
+                                accumulatedContent += footnotes;
+                            }
+
                             yield {
                                 type: 'message_complete',
                                 message_id: messageId,
@@ -991,6 +1121,7 @@ export class ClaudeProvider implements ModelProvider {
                     }
                     // Handle error event
                     else if (event.type === 'error') {
+                        log_llm_error(requestId, event);
                         console.error('Claude API error event:', event.error);
                         yield {
                             type: 'error',
@@ -1001,7 +1132,6 @@ export class ClaudeProvider implements ModelProvider {
                                       JSON.stringify(event.error)
                                     : 'Unknown error'),
                         };
-                        log_llm_error(requestId, event);
                         // Don't mark as successful on API error
                         streamCompletedSuccessfully = false;
                         break; // Stop processing on error
@@ -1018,6 +1148,21 @@ export class ClaudeProvider implements ModelProvider {
                     console.warn(
                         'Stream finished successfully but message_stop might not have triggered message_complete emission. Emitting now.'
                     );
+                    // Flush any buffered deltas before final message_complete
+                    for (const ev of flushBufferedDeltas(deltaBuffers, (_id, content) => ({
+                        type: 'message_delta',
+                        content,
+                        message_id: messageId,
+                        order: deltaPosition++,
+                    } as StreamingEvent))) {
+                        yield ev;
+                    }
+                    // Add footnotes if there are citations (same as in message_stop)
+                    if (citationTracker.citations.size > 0) {
+                        const footnotes = generateFootnotes(citationTracker);
+                        accumulatedContent += footnotes;
+                    }
+
                     yield {
                         type: 'message_complete',
                         message_id: messageId,
@@ -1028,22 +1173,22 @@ export class ClaudeProvider implements ModelProvider {
                     messageCompleteYielded = true; // Mark as yielded here too
                 }
             } catch (streamError) {
+                log_llm_error(requestId, streamError);
                 console.error('Error processing Claude stream:', streamError);
                 yield {
                     type: 'error',
                     error: `Claude stream error (${model}): ${streamError}`,
                 };
-                log_llm_error(requestId, streamError);
             } finally {
                 log_llm_response(requestId, events);
             }
         } catch (error) {
+            log_llm_error(requestId, error);
             console.error('Error in Claude streaming completion setup:', error);
             yield {
                 type: 'error',
                 error: `Claude request error (${model}): ${error}`,
             };
-            log_llm_error(requestId, error);
         } finally {
             // Track cost if we have token usage data
             if (totalInputTokens > 0 || totalOutputTokens > 0) {

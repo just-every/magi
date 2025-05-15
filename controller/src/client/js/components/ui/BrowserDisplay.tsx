@@ -8,7 +8,8 @@ import { ScreenshotEvent } from '../../../../types/shared-types';
  */
 const BrowserDisplay: React.FC<{
     screenshots: ScreenshotEvent[];
-}> = ({ screenshots }) => {
+    collapsible?: boolean;
+}> = ({ screenshots, collapsible }) => {
     // Convert ScreenshotEvent[] to TimelinePoint[]
     const points = useMemo<TimelinePoint[]>(() => {
         if (!screenshots || screenshots.length === 0) return [];
@@ -29,7 +30,13 @@ const BrowserDisplay: React.FC<{
     if (points.length === 0) return null;
 
     // Render the TimelinePlayer with converted points
-    return <TimelinePlayer mode="browser" points={points} />;
+    return (
+        <TimelinePlayer
+            mode="browser"
+            points={points}
+            collapsible={collapsible}
+        />
+    );
 };
 
 export default BrowserDisplay;

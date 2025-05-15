@@ -75,8 +75,7 @@ const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
         const newPositions = calculateBoxPositions(
             coreProcessId,
             processes,
-            containerSize,
-            boxPositions
+            containerSize
         );
 
         setBoxPositions(newPositions);

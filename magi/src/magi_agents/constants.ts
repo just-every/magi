@@ -62,14 +62,13 @@ Your taskID is: ${process.env.PROCESS_ID}`;
  * Returns the Docker environment information text.
  */
 export function getDockerEnvText(): string {
-    const outputDir = get_output_dir();
     const projectsContext = getProjectsContext();
 
     return `ENVIRONMENT INFO:
 - You are running in a Docker container with Debian Bookworm
 - You can run programs and modify you environment without fear of permanent damage
 - You have full network access for web searches and browsing
-- Both you and whoever receives your response has read/write access to all files in ${outputDir}
+- Both you and whoever receives your response has read/write access to all files in /magi_output
 
 ${projectsContext}
 `;
@@ -94,9 +93,7 @@ export const CUSTOM_TOOLS_TEXT = `RESOLVE AND OPTIMIZE WITH CUSTOM TOOLS:
 When your hit up against a problem which you can not immediately solve, or is taking too long, you have access to a very special tool called "custom_tool".
 **Custom tools allow you to create and run new tools on the fly, which can be used to solve any problem.**
 Use a custom tool like this;
-\`\`\`
-CUSTOM_TOOL(problem: 'I have a large amount of text I need to translate', input: '{ file_path: "/magi_output/XYZ/en.txt" }', result: 'Translated text from English to French in a new file')
-\`\`\`
+\`CUSTOM_TOOL(problem: 'I have a large amount of text I need to translate', input: '{ file_path: "/magi_output/XYZ/en.txt" }', result: 'Translated text from English to French in a new file')\`
 CUSTOM_TOOL() will then write whatever code it needed to resolve the problem. In this case, it might use the Google Translate API to translate the text in the file. Under the hood a specialized human-like coding agent will create and run the tool.
 Custom tools are *incredibly powerful*, because once they are built, they will be automatically included in the list of available tools for other agents solving similar problems. You'll also have access to the tool for future tool calls. This means you can build a library of tools that are useful and optimize your work.`;
 

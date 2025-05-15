@@ -1,21 +1,16 @@
 import * as React from 'react';
 import { useSocket } from '../../context/SocketContext';
-import { useState } from 'react';
 
-interface StatusDisplayProps {
-    forceExpand?: boolean;
-}
+// No props needed for StatusDisplay
+interface StatusDisplayProps {}
 
 /**
  * Status Display Component
  *
  * Displays system status from the current thought cycle.
  */
-const StatusDisplay: React.FC<StatusDisplayProps> = ({
-    forceExpand = false,
-}) => {
+const StatusDisplay: React.FC<StatusDisplayProps> = () => {
     const { systemStatus } = useSocket();
-    const [expanded, setExpanded] = useState<boolean>(forceExpand);
 
     if (!systemStatus) {
         return (
@@ -24,7 +19,12 @@ const StatusDisplay: React.FC<StatusDisplayProps> = ({
     }
 
     return (
-        <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+        <pre
+            style={{
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+            }}
+        >
             {systemStatus}
         </pre>
     );

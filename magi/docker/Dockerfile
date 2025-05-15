@@ -34,11 +34,11 @@ ARG TARGET_GID=1001
 ARG USER_NAME=magi_user
 ARG GROUP_NAME=magi_user
 
-# Install latest npm globally
-RUN npm install -g npm
+# Install latest npm globally and ensure fresh registry data
+RUN npm install -g npm && npm update -g
 
 # Global installs needed at runtime
-RUN npm install -g @anthropic-ai/claude-code@latest @openai/codex@latest ts-node esbuild
+RUN npm install -g ts-node esbuild @anthropic-ai/claude-code@latest @openai/codex@latest
 
 # Install system dependencies required at runtime, including sudo and git
 # Also install gosu for switching users in the entrypoint

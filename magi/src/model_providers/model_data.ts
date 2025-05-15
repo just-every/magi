@@ -118,7 +118,7 @@ export const MODEL_CLASSES = {
     standard: {
         models: [
             'gpt-4.1', // OpenAI
-            'gemini-2.5-flash-preview-04-17', // Google
+            'gemini-2.5-flash-preview-04-17-low', // Google
             'claude-3-5-haiku-latest', // Anthropic
             'grok-3-mini-fast', // X.AI
             'deepseek-chat', // DeepSeek
@@ -142,8 +142,10 @@ export const MODEL_CLASSES = {
     // Advanced reasoning models
     reasoning: {
         models: [
-            'gemini-2.5-pro-exp-03-25', // Google
-            'o3', // OpenAI
+            'gemini-2.5-pro-preview-05-06', // 'gemini-2.5-pro-exp-03-25', // Google
+            'gemini-2.5-flash-preview-04-17-max', // Google
+            'o4-mini-high', // OpenAI
+            'o3-high', // OpenAI
             'claude-3-7-sonnet-latest', // Anthropic
             'grok-3-mini-fast', // X.AI
         ],
@@ -153,7 +155,7 @@ export const MODEL_CLASSES = {
     // Fast, cheap reasoning models
     reasoning_mini: {
         models: [
-            'gemini-2.5-flash-preview-04-17', // Google
+            'gemini-2.5-flash-preview-04-17-medium', // Google
             'grok-3-mini-fast', // X.AI
         ],
         random: true,
@@ -162,15 +164,28 @@ export const MODEL_CLASSES = {
     // Monologue models
     monologue: {
         models: [
-            'gemini-2.5-pro-exp-03-25', // Google
-            'o4-mini', // OpenAI
-            //'gpt-4.1',                // OpenAI
+            'gemini-2.5-pro-preview-05-06', // 'gemini-2.5-pro-exp-03-25', // Google
+            'gemini-2.5-flash-preview-04-17-medium', // Google
+            'o4-mini-low', // OpenAI
+            'o3-low', // OpenAI
             'claude-3-7-sonnet-latest', // Anthropic
-            //'grok-3',                 // X.AI
             'grok-3-mini-fast', // X.AI
             //'deepseek-reasoner',      // DeepSeek
             //'meta-llama/llama-4-maverick', // Meta/OpenRouter
-            'qwen/qwen3-235b-a22b', // Qwen/OpenRouter
+            //'qwen/qwen3-235b-a22b-medium', // Qwen/OpenRouter
+        ],
+        random: true,
+    },
+
+    // Metacognition models
+    metacognition: {
+        models: [
+            'gemini-2.5-pro-preview-05-06', // 'gemini-2.5-pro-exp-03-25', // Google
+            'gemini-2.5-flash-preview-04-17-high', // Google
+            //'o4-mini-high', // OpenAI
+            'o3-medium', // OpenAI
+            'claude-3-7-sonnet-latest', // Anthropic
+            'grok-3-mini-fast', // X.AI
         ],
         random: true,
     },
@@ -188,7 +203,7 @@ export const MODEL_CLASSES = {
     // Writing models - optimized for conversation and text generation
     writing: {
         models: [
-            'gemini-2.5-flash-preview-04-17', // Google
+            'gemini-2.5-flash-preview-04-17-low', // Google
             'gpt-4.1-mini', // OpenAI
         ],
         random: true,
@@ -199,7 +214,7 @@ export const MODEL_CLASSES = {
     summary: {
         models: [
             //'meta-llama/llama-4-scout', // Meta/OpenRouter
-            'gemini-2.5-flash-preview-04-17', // Google
+            'gemini-2.5-flash-preview-04-17-low', // Google
             'gpt-4.1-mini', // OpenAI
             //'mistral/ministral-8b', // Mistral/OpenRouter
         ],
@@ -210,13 +225,13 @@ export const MODEL_CLASSES = {
     vision: {
         models: [
             //'computer-use-preview',     // OpenAI
-            //'o4-mini', // OpenAI
-            //'o3', // OpenAI
-            'gemini-2.5-flash-preview-04-17', // Google
-            'gemini-2.5-pro-exp-03-25', // Google
+            'o4-mini-medium', // OpenAI
+            'o3-low', // OpenAI
+            'gemini-2.5-flash-preview-04-17-max', // Google
+            'gemini-2.5-pro-preview-05-06', // 'gemini-2.5-pro-exp-03-25', // Google
             'claude-3-7-sonnet-latest', // Anthropic
             //'grok-2-vision', // X.AI
-            'gpt-4.1', // OpenAI
+            //'gpt-4.1', // OpenAI
         ],
         random: true,
     },
@@ -226,6 +241,7 @@ export const MODEL_CLASSES = {
         models: [
             'gpt-4.1-mini', // OpenAI
             'gemini-2.0-flash-lite', // Google
+            'gemini-2.5-flash-preview-04-17-low', // Google
         ],
         random: true,
     },
@@ -233,10 +249,11 @@ export const MODEL_CLASSES = {
     // Models with search capabilities
     search: {
         models: [
-            'gpt-4o', // OpenAI
-            'o4-mini', // OpenAI
+            'gpt-4.1', // OpenAI
+            //'o4-mini', // OpenAI
             'deepseek-reasoner', // DeepSeek
             'gemini-2.5-flash-preview-04-17', // Google
+            'perplexity/sonar-deep-research', // Perplexity
         ],
         random: true,
     },
@@ -364,6 +381,11 @@ export const MODEL_REGISTRY: ModelEntry[] = [
     },
     {
         id: 'qwen/qwen3-235b-a22b',
+        aliases: [
+            'qwen/qwen3-235b-a22b-low',
+            'qwen/qwen3-235b-a22b-medium',
+            'qwen/qwen3-235b-a22b-high',
+        ],
         provider: 'openrouter',
         cost: {
             input_per_million: 0.1,
@@ -731,7 +753,12 @@ export const MODEL_REGISTRY: ModelEntry[] = [
     // O series models
     {
         id: 'o4-mini',
-        aliases: ['o4-mini-2025-04-16'],
+        aliases: [
+            'o4-mini-2025-04-16',
+            'o4-mini-low',
+            'o4-mini-medium',
+            'o4-mini-high',
+        ],
         provider: 'openai',
         cost: {
             input_per_million: 1.1,
@@ -757,7 +784,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
     },
     {
         id: 'o3',
-        aliases: ['o3-2025-04-16'],
+        aliases: ['o3-2025-04-16', 'o3-low', 'o3-medium', 'o3-high'],
         provider: 'openai',
         cost: {
             input_per_million: 10,
@@ -876,6 +903,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
     // Claude 3.7 Sonnet
     {
         id: 'claude-3-7-sonnet-latest', // Maps to claude-3-7-sonnet-20250219
+        aliases: ['claude-3-7-sonnet'],
         provider: 'anthropic',
         cost: {
             input_per_million: 3.0,
@@ -905,6 +933,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
     // Claude 3.5 Haiku
     {
         id: 'claude-3-5-haiku-latest', // Maps to claude-3-5-haiku-20241022
+        aliases: ['claude-3-5-haiku'],
         provider: 'anthropic',
         cost: {
             input_per_million: 0.8,
@@ -976,7 +1005,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
             json_output: true,
             max_output_tokens: 65536, // Confirmed
         },
-        rate_limit_fallback: 'gemini-2.5-pro-preview-03-25',
+        rate_limit_fallback: 'gemini-2.5-pro-preview-05-06',
         class: 'reasoning',
         score: 85, // Legacy overall score
         scores: {
@@ -989,7 +1018,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
     },
     // Gemini 2.5 Pro (Paid Preview)
     {
-        id: 'gemini-2.5-pro-preview-03-25',
+        id: 'gemini-2.5-pro-preview-05-06',
         aliases: ['gemini-2.5-pro'],
         provider: 'google',
         cost: {
@@ -1021,7 +1050,13 @@ export const MODEL_REGISTRY: ModelEntry[] = [
     },
     {
         id: 'gemini-2.5-flash-preview-04-17',
-        aliases: ['gemini-2.5-flash-preview-04-17'],
+        aliases: [
+            'gemini-2.5-flash',
+            'gemini-2.5-flash-preview-04-17-low',
+            'gemini-2.5-flash-preview-04-17-medium',
+            'gemini-2.5-flash-preview-04-17-high',
+            'gemini-2.5-flash-preview-04-17-max',
+        ],
         provider: 'google',
         cost: {
             input_per_million: 0.15,
@@ -1166,6 +1201,102 @@ export const MODEL_REGISTRY: ModelEntry[] = [
             code: 44, // HumanEval score (legacy)
         },
         description: 'OpenAI model optimized for coding tasks',
+    },
+    // Perplexity Sonar models
+    {
+        id: 'perplexity/sonar',
+        provider: 'openrouter',
+        cost: {
+            input_per_million: 1.0,
+            output_per_million: 1.0,
+        },
+        features: {
+            context_length: 32768,
+            input_modality: ['text'],
+            output_modality: ['text'],
+            tool_use: true,
+            streaming: true,
+            json_output: true,
+        },
+        class: 'search',
+        description:
+            'Lightweight, cost-effective search model designed for quick, grounded answers.',
+    },
+    {
+        id: 'perplexity/sonar-pro',
+        provider: 'openrouter',
+        cost: {
+            input_per_million: 3.0,
+            output_per_million: 15.0,
+        },
+        features: {
+            context_length: 32768,
+            input_modality: ['text'],
+            output_modality: ['text'],
+            tool_use: true,
+            streaming: true,
+            json_output: true,
+        },
+        class: 'search',
+        description:
+            'Advanced search model optimized for complex queries and deeper content understanding.',
+    },
+    {
+        id: 'perplexity/sonar-reasoning',
+        provider: 'openrouter',
+        cost: {
+            input_per_million: 1.0,
+            output_per_million: 5.0,
+        },
+        features: {
+            context_length: 32768,
+            input_modality: ['text'],
+            output_modality: ['text'],
+            tool_use: true,
+            streaming: true,
+            json_output: true,
+        },
+        class: 'reasoning_mini',
+        description:
+            'Quick problem-solving and reasoning model, ideal for evaluating complex queries.',
+    },
+    {
+        id: 'perplexity/sonar-reasoning-pro',
+        provider: 'openrouter',
+        cost: {
+            input_per_million: 2.0,
+            output_per_million: 8.0,
+        },
+        features: {
+            context_length: 32768,
+            input_modality: ['text'],
+            output_modality: ['text'],
+            tool_use: true,
+            streaming: true,
+            json_output: true,
+        },
+        class: 'reasoning',
+        description:
+            'Enhanced reasoning model with multi-step problem-solving capabilities and real-time search.',
+    },
+    {
+        id: 'perplexity/sonar-deep-research',
+        provider: 'openrouter',
+        cost: {
+            input_per_million: 2.0,
+            output_per_million: 8.0,
+        },
+        features: {
+            context_length: 32768,
+            input_modality: ['text'],
+            output_modality: ['text'],
+            tool_use: true,
+            streaming: true,
+            json_output: true,
+        },
+        class: 'search',
+        description:
+            'Best suited for exhaustive research, generating detailed reports and in-depth insights.',
     },
 ];
 

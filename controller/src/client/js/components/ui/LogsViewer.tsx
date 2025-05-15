@@ -148,7 +148,7 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
             }
             const data = await response.json();
             setSelectedLogFile(data);
-            setSelectedLogFileName(fileName)
+            setSelectedLogFileName(fileName);
             setLoading(false);
         } catch (err) {
             console.error('Error fetching log file:', err);
@@ -177,7 +177,9 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
                 );
 
                 // Calculate time difference in seconds
-                const diffSeconds = Math.floor((new Date().getTime() - logTime.getTime()) / 1000);
+                const diffSeconds = Math.floor(
+                    (new Date().getTime() - logTime.getTime()) / 1000
+                );
 
                 // Format the time ago string
                 let timeAgo;
@@ -216,7 +218,7 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
         return (
             <div className="row h-100">
                 <div className="col-md-3 border-end h-100 overflow-scroll">
-                    { !inlineTab && <h5 className="mb-3">Log Files</h5> }
+                    {!inlineTab && <h5 className="mb-3">Log Files</h5>}
                     <div className="list-group">
                         {llmLogs.map((log, index) => (
                             <button
@@ -231,17 +233,77 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
                 </div>
                 <div className="col-md-9 h-100">
                     {selectedLogFile ? (
-                        <div className='d-flex flex-column h-100'>
+                        <div className="d-flex flex-column h-100">
                             <div>
                                 <ul className="nav nav-underline mb-3">
-                                    <li className="nav-item" onClick={() => setActiveLLMTab('request')}>
-                                        <span className={"nav-link"+(activeLLMTab === 'request' ? ' active' : '')}>Request ({selectedLogFile.request?.messages?.length || selectedLogFile.request?.input?.length || selectedLogFile.request?.contents?.length || 0})</span>
+                                    <li
+                                        className="nav-item"
+                                        onClick={() =>
+                                            setActiveLLMTab('request')
+                                        }
+                                    >
+                                        <span
+                                            className={
+                                                'nav-link' +
+                                                (activeLLMTab === 'request'
+                                                    ? ' active'
+                                                    : '')
+                                            }
+                                        >
+                                            Request (
+                                            {selectedLogFile.request?.messages
+                                                ?.length ||
+                                                selectedLogFile.request?.input
+                                                    ?.length ||
+                                                selectedLogFile.request
+                                                    ?.contents?.length ||
+                                                0}
+                                            )
+                                        </span>
                                     </li>
-                                    <li className="nav-item" onClick={() => setActiveLLMTab('response')}>
-                                        <span className={"nav-link"+(activeLLMTab === 'response' ? ' active' : '')}>Response ({selectedLogFile.response?.length || 0})</span>
+                                    <li
+                                        className="nav-item"
+                                        onClick={() =>
+                                            setActiveLLMTab('response')
+                                        }
+                                    >
+                                        <span
+                                            className={
+                                                'nav-link' +
+                                                (activeLLMTab === 'response'
+                                                    ? ' active'
+                                                    : '')
+                                            }
+                                        >
+                                            Response (
+                                            {selectedLogFile.response?.length ||
+                                                0}
+                                            )
+                                        </span>
                                     </li>
-                                    <li className="nav-item" onClick={() => setActiveLLMTab('errors')}>
-                                        <span className={"nav-link"+(activeLLMTab === 'errors' ? ' active' : '')+(selectedLogFile.errors?.length  > 0 ? ' text-danger' : '')}>Errors ({selectedLogFile.errors?.length || 0})</span>
+                                    <li
+                                        className="nav-item"
+                                        onClick={() =>
+                                            setActiveLLMTab('errors')
+                                        }
+                                    >
+                                        <span
+                                            className={
+                                                'nav-link' +
+                                                (activeLLMTab === 'errors'
+                                                    ? ' active'
+                                                    : '') +
+                                                (selectedLogFile.errors
+                                                    ?.length > 0
+                                                    ? ' text-danger'
+                                                    : '')
+                                            }
+                                        >
+                                            Errors (
+                                            {selectedLogFile.errors?.length ||
+                                                0}
+                                            )
+                                        </span>
                                     </li>
                                 </ul>
 
@@ -259,7 +321,9 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
                                 </div>
                             </div>
                             <div className="pb-3 overflow-scroll">
-                                <strong className='text-capitalize'>{activeLLMTab}:</strong>
+                                <strong className="text-capitalize">
+                                    {activeLLMTab}:
+                                </strong>
                                 <pre
                                     className="bg-light p-3 mt-2 rounded"
                                     style={{
@@ -267,11 +331,13 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
                                         wordBreak: 'break-word',
                                     }}
                                 >
-                                    {selectedLogFile[activeLLMTab] ? JSON.stringify(
-                                        selectedLogFile[activeLLMTab],
-                                        null,
-                                        2
-                                    ).replace(/\\n/g, '\n') : `No ${activeLLMTab} found`}
+                                    {selectedLogFile[activeLLMTab]
+                                        ? JSON.stringify(
+                                              selectedLogFile[activeLLMTab],
+                                              null,
+                                              2
+                                          ).replace(/\\n/g, '\n')
+                                        : `No ${activeLLMTab} found`}
                                 </pre>
                             </div>
                         </div>
@@ -337,9 +403,11 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
                     </div>
                     <div className="card-body">
                         <h2 className="text-center">
-                            ${(typeof costData.total === 'string'
+                            $
+                            {(typeof costData.total === 'string'
                                 ? parseFloat(costData.total)
-                                : costData.total).toFixed(6)}
+                                : costData.total
+                            ).toFixed(6)}
                         </h2>
                     </div>
                 </div>
@@ -359,7 +427,10 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
                             </thead>
                             <tbody>
                                 {Object.entries(costData.byModel).map(
-                                    ([model, data]: [string, ModelCostData]) => (
+                                    ([model, data]: [
+                                        string,
+                                        ModelCostData,
+                                    ]) => (
                                         <tr key={model}>
                                             <td>{model}</td>
                                             <td>{data.calls}</td>
@@ -367,7 +438,8 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
                                                 $
                                                 {(typeof data.cost === 'string'
                                                     ? parseFloat(data.cost)
-                                                    : data.cost).toFixed(6)}
+                                                    : data.cost
+                                                ).toFixed(6)}
                                             </td>
                                         </tr>
                                     )

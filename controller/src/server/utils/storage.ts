@@ -20,7 +20,6 @@ const useExternalPath =
 // Set the storage directory
 const STORAGE_DIR = useExternalPath ? externalPath : localPath;
 
-
 /**
  * Initializes the storage directory
  */

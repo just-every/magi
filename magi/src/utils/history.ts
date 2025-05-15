@@ -18,6 +18,7 @@ import { formatHistoryForSummary, createSummary } from './summary_utils.js';
 import { truncateLargeValues } from './file_utils.js';
 import { readableTime } from './date_tools.js';
 import { runningToolTracker } from './running_tool_tracker.js';
+import type { Agent } from './agent.js';
 
 /**
  * Interrupts any active thought delays and terminates waiting tools
@@ -422,7 +423,9 @@ export async function processPendingHistoryThreads(): Promise<void> {
         return; // No pending threads to process
     }
 
-    console.log(`[History] Processing ${pendingHistoryThreads.length} pending history threads`);
+    console.log(
+        `[History] Processing ${pendingHistoryThreads.length} pending history threads`
+    );
 
     // Process all pending threads in the order they were added
     for (const thread of pendingHistoryThreads) {
@@ -571,30 +574,39 @@ export function describeHistoryMessages(history: ResponseInput): string {
 }
 
 export function describeHistory(
-    count: number,
-    messages?: ResponseInput
+    agent: Agent,
+    messages: ResponseInput,
+    count: number
 ): ResponseInput {
     messages = messages || [];
 
     const history = getHistory();
 
     // Only add initial input if history has at least one message
-    if (history.length > 0) {
+    let startIndex = 0;
+    if (agent.instructions) {
+        messages.push({
+            type: 'message',
+            role: 'user',
+            content: `Initial Command: ${agent.instructions}`,
+        });
+    } else if (history.length > 0) {
         messages.push({
             type: 'message',
             role: 'user',
             content: `Initial Command: ${describeHistoryMessages([history[0]])}`,
         });
+        startIndex++;
     }
 
     // For recent history, ensure we don't include history[0] and handle edge cases
-    if (history.length > 1) {
+    if (history.length > startIndex) {
         // Get recent messages excluding the first one
-        // If history is smaller than or equal to count+1, this will get all except history[0]
-        // If history is more than count+1 messages, this will get the count most recent
+        // If history is smaller than or equal to count+startIndex, this will get all except history[0]
+        // If history is more than count+startIndex messages, this will get the count most recent
         const recentMessages =
-            history.length <= count + 1
-                ? history.slice(1)
+            history.length <= count + startIndex
+                ? history.slice(startIndex)
                 : history.slice(-count);
 
         messages.push({

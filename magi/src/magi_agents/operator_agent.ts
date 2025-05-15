@@ -22,6 +22,8 @@ import {
     ResponseInput,
     ToolCall,
     ResponseThinkingMessage,
+    AgentDefinition,
+    ResponseOutputMessage,
 } from '../types/shared-types.js';
 import { dateFormat, readableTime } from '../utils/date_tools.js';
 import { runningToolTracker } from '../utils/running_tool_tracker.js';
@@ -30,7 +32,7 @@ import { getThoughtDelay } from '../utils/thought_utils.js';
 import { getImageGenerationTools } from '../utils/image_generation.js';
 
 export const startTime = new Date();
-async function addOperatorStatus(
+export async function addOperatorStatus(
     messages: ResponseInput
 ): Promise<ResponseInput> {
     // Prepare the system status message
@@ -41,7 +43,7 @@ Your Running Time: ${readableTime(new Date().getTime() - startTime.getTime())}
 Your Thought Delay: ${getThoughtDelay()} seconds
 
 Your Projects:
-${listActiveProjects()}
+${await listActiveProjects()}
 
 Active Tools:
 ${runningToolTracker.listActive()}`;
@@ -62,7 +64,7 @@ ${runningToolTracker.listActive()}`;
  * @param settings Additional settings to control the ensemble and inter-agent validation features
  * @returns The configured OperatorAgent instance
  */
-export function createOperatorAgent(): Agent {
+export function createOperatorAgent(definition?: AgentDefinition): Agent {
     const agent = new Agent({
         name: 'OperatorAgent',
         description: 'Operator of specialized agents for complex tasks',
@@ -116,21 +118,8 @@ When you are done, please use the task_complete(result) tool to report that the 
             messages = await addOperatorStatus(messages);
             return [agent, messages];
         },
-        onResponse: async (response: string): Promise<string> => {
-            if (response && response.trim()) {
-                // Add the response to the monologue
-                await addHistory(
-                    {
-                        type: 'message',
-                        role: 'assistant',
-                        status: 'completed',
-                        content: response,
-                    },
-                    agent.historyThread,
-                    agent.model
-                );
-            }
-            return response;
+        onResponse: async (message: ResponseOutputMessage): Promise<void> => {
+            return addHistory(message, agent.historyThread, agent.model);
         },
         onThinking: async (message: ResponseThinkingMessage): Promise<void> => {
             return addHistory(message, agent.historyThread, agent.model);
@@ -164,6 +153,7 @@ When you are done, please use the task_complete(result) tool to report that the 
                 agent.model
             );
         },
+        ...definition,
     });
 
     return agent;

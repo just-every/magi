@@ -16,14 +16,32 @@ import {
     CostUpdateEvent,
     GlobalCostData,
     MagiMessage,
-    CommandMessage,
-    SystemCommandMessage,
     AgentProcess,
-    EventHandler,
-    ContainerConnection,
     StreamingEvent,
+    GitPullRequestEvent,
 } from '../../types/index';
-import e from '@types/express';
+
+// Define message interfaces locally
+interface CommandMessage {
+    type: 'command' | 'connect';
+    command: string;
+    args?: Record<string, any>;
+}
+
+interface SystemCommandMessage {
+    type: 'system_command';
+    command: string;
+}
+
+interface EventHandler {
+    (event: StreamingEvent, processId: string): Promise<any>;
+}
+
+interface ContainerConnection {
+    processId: string;
+    lastMessage: Date;
+    messageHistory: MagiMessage[];
+}
 
 interface ProcessState {
     accumulatedData: CostUpdateData;
@@ -550,6 +568,39 @@ export class CommunicationManager {
             }
         }
 
+        // Run any registered completion handlers for process_done
+        if (event.type === 'process_done') {
+            try {
+                // Call process manager to run registered completion handlers
+                await this.processManager.runCompletionHandlers(processId);
+            } catch (err) {
+                console.error(
+                    `Error running completion handlers for process ${processId}:`,
+                    err
+                );
+            }
+        }
+
+        // Handle git pull request events
+        if (event.type === 'git_pull_request') {
+            const gitPullRequest = event as GitPullRequestEvent;
+            console.log(
+                `Detected git_pull_request from ${processId} for project ${gitPullRequest.projectId}`
+            );
+            try {
+                // Forward to process manager for handling
+                this.processManager.handlePullRequestReady(
+                    gitPullRequest.processId,
+                    gitPullRequest.projectId,
+                    gitPullRequest.branch,
+                    gitPullRequest.message
+                );
+            } catch (error) {
+                console.error('Error handling git_pull_request:', error);
+            }
+            return;
+        }
+
         if (event.type === 'command_start') {
             if (
                 event.command &&
@@ -578,15 +629,22 @@ export class CommunicationManager {
             );
         } else if (event.type === 'project_create') {
             try {
-                createNewProject(event.project_id);
-            }
-            catch (error) {
+                await createNewProject(event.project_id, this.processManager);
                 this.sendMessage(
                     this.processManager.coreProcessId,
                     JSON.stringify({
                         type: 'project_update',
                         project_id: event.project_id,
-                        message: `Error creating project: ${error}`,
+                        message: `${event.project_id} successfully created`,
+                    })
+                );
+            } catch (error) {
+                this.sendMessage(
+                    this.processManager.coreProcessId,
+                    JSON.stringify({
+                        type: 'project_update',
+                        project_id: event.project_id,
+                        message: `Error creating project ${event.project_id}: ${error}`,
                     })
                 );
             }

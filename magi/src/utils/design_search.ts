@@ -93,7 +93,10 @@ async function takeScreenshot(url: string): Promise<string | null> {
         }
 
         // Extract the base64 image data
-        const base64Data = status.screenshot.replace(/^data:image\/png;base64,/, '');
+        const base64Data = status.screenshot.replace(
+            /^data:image\/png;base64,/,
+            ''
+        );
 
         // Write to file
         fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
@@ -108,11 +111,19 @@ async function takeScreenshot(url: string): Promise<string | null> {
 /**
  * Search for design inspiration on Dribbble
  */
-async function searchDribbble(query: string, limit: number = 10): Promise<DesignSearchResult[]> {
+async function searchDribbble(
+    query: string,
+    limit: number = 10
+): Promise<DesignSearchResult[]> {
     try {
         // Dribbble doesn't have a public API, so we'll use a web search approach
         const searchQuery = `site:dribbble.com ${query} web design`;
-        const searchResultsStr = await web_search('design-agent', 'anthropic', searchQuery, limit);
+        const searchResultsStr = await web_search(
+            'design-agent',
+            'anthropic',
+            searchQuery,
+            limit
+        );
 
         // Parse the JSON result
         const searchResults = JSON.parse(searchResultsStr);
@@ -123,14 +134,17 @@ async function searchDribbble(query: string, limit: number = 10): Promise<Design
         }
 
         // Filter results to only include dribbble shots
-        const filteredResults = searchResults.filter(result =>
-            result && result.url && result.url.includes('dribbble.com/shots/')
+        const filteredResults = searchResults.filter(
+            result =>
+                result &&
+                result.url &&
+                result.url.includes('dribbble.com/shots/')
         );
 
         return filteredResults.map(result => ({
             url: result.url,
             title: result.title,
-            thumbnail: result.image_url || undefined
+            thumbnail: result.image_url || undefined,
         }));
     } catch (error) {
         console.error('Error in searchDribbble:', error);
@@ -141,11 +155,19 @@ async function searchDribbble(query: string, limit: number = 10): Promise<Design
 /**
  * Search for design inspiration on Behance
  */
-async function searchBehance(query: string, limit: number = 10): Promise<DesignSearchResult[]> {
+async function searchBehance(
+    query: string,
+    limit: number = 10
+): Promise<DesignSearchResult[]> {
     try {
         // Behance doesn't have a simple public API, so we'll use a web search approach
         const searchQuery = `site:behance.net ${query} web design`;
-        const searchResultsStr = await web_search('design-agent', 'anthropic', searchQuery, limit);
+        const searchResultsStr = await web_search(
+            'design-agent',
+            'anthropic',
+            searchQuery,
+            limit
+        );
 
         // Parse the JSON result
         const searchResults = JSON.parse(searchResultsStr);
@@ -156,14 +178,17 @@ async function searchBehance(query: string, limit: number = 10): Promise<DesignS
         }
 
         // Filter results to only include behance projects
-        const filteredResults = searchResults.filter(result =>
-            result && result.url && result.url.includes('behance.net/gallery/')
+        const filteredResults = searchResults.filter(
+            result =>
+                result &&
+                result.url &&
+                result.url.includes('behance.net/gallery/')
         );
 
         return filteredResults.map(result => ({
             url: result.url,
             title: result.title,
-            thumbnail: result.image_url || undefined
+            thumbnail: result.image_url || undefined,
         }));
     } catch (error) {
         console.error('Error in searchBehance:', error);
@@ -174,10 +199,18 @@ async function searchBehance(query: string, limit: number = 10): Promise<DesignS
 /**
  * Search for design inspiration on Envato/ThemeForest
  */
-async function searchEnvato(query: string, limit: number = 10): Promise<DesignSearchResult[]> {
+async function searchEnvato(
+    query: string,
+    limit: number = 10
+): Promise<DesignSearchResult[]> {
     try {
         const searchQuery = `site:themeforest.net ${query} website template`;
-        const searchResultsStr = await web_search('design-agent', 'anthropic', searchQuery, limit);
+        const searchResultsStr = await web_search(
+            'design-agent',
+            'anthropic',
+            searchQuery,
+            limit
+        );
 
         // Parse the JSON result
         const searchResults = JSON.parse(searchResultsStr);
@@ -190,7 +223,7 @@ async function searchEnvato(query: string, limit: number = 10): Promise<DesignSe
         return searchResults.map(result => ({
             url: result.url,
             title: result.title,
-            thumbnail: result.image_url || undefined
+            thumbnail: result.image_url || undefined,
         }));
     } catch (error) {
         console.error('Error in searchEnvato:', error);
@@ -201,10 +234,18 @@ async function searchEnvato(query: string, limit: number = 10): Promise<DesignSe
 /**
  * Search for design inspiration on Pinterest
  */
-async function searchPinterest(query: string, limit: number = 10): Promise<DesignSearchResult[]> {
+async function searchPinterest(
+    query: string,
+    limit: number = 10
+): Promise<DesignSearchResult[]> {
     try {
         const searchQuery = `site:pinterest.com ${query} web design`;
-        const searchResultsStr = await web_search('design-agent', 'anthropic', searchQuery, limit);
+        const searchResultsStr = await web_search(
+            'design-agent',
+            'anthropic',
+            searchQuery,
+            limit
+        );
 
         // Parse the JSON result
         const searchResults = JSON.parse(searchResultsStr);
@@ -217,7 +258,7 @@ async function searchPinterest(query: string, limit: number = 10): Promise<Desig
         return searchResults.map(result => ({
             url: result.url,
             title: result.title,
-            thumbnail: result.image_url || undefined
+            thumbnail: result.image_url || undefined,
         }));
     } catch (error) {
         console.error('Error in searchPinterest:', error);
@@ -228,10 +269,18 @@ async function searchPinterest(query: string, limit: number = 10): Promise<Desig
 /**
  * Search for design inspiration on Landingfolio
  */
-async function searchLandingfolio(query: string, limit: number = 10): Promise<DesignSearchResult[]> {
+async function searchLandingfolio(
+    query: string,
+    limit: number = 10
+): Promise<DesignSearchResult[]> {
     try {
         const searchQuery = `site:landingfolio.com ${query}`;
-        const searchResultsStr = await web_search('design-agent', 'anthropic', searchQuery, limit);
+        const searchResultsStr = await web_search(
+            'design-agent',
+            'anthropic',
+            searchQuery,
+            limit
+        );
 
         // Parse the JSON result
         const searchResults = JSON.parse(searchResultsStr);
@@ -244,7 +293,7 @@ async function searchLandingfolio(query: string, limit: number = 10): Promise<De
         return searchResults.map(result => ({
             url: result.url,
             title: result.title,
-            thumbnail: result.image_url || undefined
+            thumbnail: result.image_url || undefined,
         }));
     } catch (error) {
         console.error('Error in searchLandingfolio:', error);
@@ -255,10 +304,18 @@ async function searchLandingfolio(query: string, limit: number = 10): Promise<De
 /**
  * Search for design inspiration on Awwwards
  */
-async function searchAwwwards(query: string, limit: number = 10): Promise<DesignSearchResult[]> {
+async function searchAwwwards(
+    query: string,
+    limit: number = 10
+): Promise<DesignSearchResult[]> {
     try {
         const searchQuery = `site:awwwards.com ${query} website`;
-        const searchResultsStr = await web_search('design-agent', 'anthropic', searchQuery, limit);
+        const searchResultsStr = await web_search(
+            'design-agent',
+            'anthropic',
+            searchQuery,
+            limit
+        );
 
         // Parse the JSON result
         const searchResults = JSON.parse(searchResultsStr);
@@ -269,14 +326,14 @@ async function searchAwwwards(query: string, limit: number = 10): Promise<Design
         }
 
         // Filter to only include websites, not articles
-        const filteredResults = searchResults.filter(result =>
-            result && result.url && result.url.includes('/websites/')
+        const filteredResults = searchResults.filter(
+            result => result && result.url && result.url.includes('/websites/')
         );
 
         return filteredResults.map(result => ({
             url: result.url,
             title: result.title,
-            thumbnail: result.image_url || undefined
+            thumbnail: result.image_url || undefined,
         }));
     } catch (error) {
         console.error('Error in searchAwwwards:', error);
@@ -287,10 +344,18 @@ async function searchAwwwards(query: string, limit: number = 10): Promise<Design
 /**
  * Search for design inspiration on SiteInspire
  */
-async function searchSiteInspire(query: string, limit: number = 10): Promise<DesignSearchResult[]> {
+async function searchSiteInspire(
+    query: string,
+    limit: number = 10
+): Promise<DesignSearchResult[]> {
     try {
         const searchQuery = `site:siteinspire.com ${query}`;
-        const searchResultsStr = await web_search('design-agent', 'anthropic', searchQuery, limit);
+        const searchResultsStr = await web_search(
+            'design-agent',
+            'anthropic',
+            searchQuery,
+            limit
+        );
 
         // Parse the JSON result
         const searchResults = JSON.parse(searchResultsStr);
@@ -303,7 +368,7 @@ async function searchSiteInspire(query: string, limit: number = 10): Promise<Des
         return searchResults.map(result => ({
             url: result.url,
             title: result.title,
-            thumbnail: result.image_url || undefined
+            thumbnail: result.image_url || undefined,
         }));
     } catch (error) {
         console.error('Error in searchSiteInspire:', error);
@@ -314,7 +379,10 @@ async function searchSiteInspire(query: string, limit: number = 10): Promise<Des
 /**
  * Generic web search for websites related to a query
  */
-async function genericWebSearch(query: string, limit: number = 10): Promise<DesignSearchResult[]> {
+async function genericWebSearch(
+    query: string,
+    limit: number = 10
+): Promise<DesignSearchResult[]> {
     try {
         // Use LLM to generate a better search query
         const enhancedQuery = await quick_llm_call(
@@ -325,7 +393,12 @@ async function genericWebSearch(query: string, limit: number = 10): Promise<Desi
         );
 
         // Use the enhanced query to search for websites
-        const searchResultsStr = await web_search('design-agent', 'anthropic', enhancedQuery.trim(), limit);
+        const searchResultsStr = await web_search(
+            'design-agent',
+            'anthropic',
+            enhancedQuery.trim(),
+            limit
+        );
 
         // Parse the JSON result
         const searchResults = JSON.parse(searchResultsStr);
@@ -340,16 +413,18 @@ async function genericWebSearch(query: string, limit: number = 10): Promise<Desi
             if (!result || !result.url) return false;
 
             // Exclude common non-website results
-            return !result.url.includes('wikipedia.org') &&
+            return (
+                !result.url.includes('wikipedia.org') &&
                 !result.url.includes('youtube.com') &&
                 !result.url.includes('amazon.com') &&
-                !result.url.includes('reddit.com');
+                !result.url.includes('reddit.com')
+            );
         });
 
         return websiteResults.map(result => ({
             url: result.url,
             title: result.title,
-            thumbnail: result.image_url || undefined
+            thumbnail: result.image_url || undefined,
         }));
     } catch (error) {
         console.error('Error in genericWebSearch:', error);
@@ -360,7 +435,9 @@ async function genericWebSearch(query: string, limit: number = 10): Promise<Desi
 /**
  * Main function to search for design inspiration
  */
-export async function design_search(options: DesignSearchOptions): Promise<{ results: DesignSearchResult[] }> {
+export async function design_search(
+    options: DesignSearchOptions
+): Promise<{ results: DesignSearchResult[] }> {
     const { query, engine, limit = 10, takeScreenshots = false } = options;
 
     // Select the appropriate search function based on the engine
@@ -399,7 +476,7 @@ export async function design_search(options: DesignSearchOptions): Promise<{ res
 
     // Take screenshots if requested
     if (takeScreenshots) {
-        const screenshotPromises = results.map(async (result) => {
+        const screenshotPromises = results.map(async result => {
             const screenshotPath = await takeScreenshot(result.url);
             if (screenshotPath) {
                 result.screenshotPath = screenshotPath;
@@ -425,24 +502,37 @@ export function createDesignSearchTool() {
             properties: {
                 query: {
                     type: 'string',
-                    description: 'The search query, e.g. "b2b customer support homepage"'
+                    description:
+                        'The search query, e.g. "b2b customer support homepage"',
                 },
                 engine: {
                     type: 'string',
-                    enum: ['dribbble', 'behance', 'envato', 'pinterest', 'landingfolio', 'awwwards', 'siteinspire', 'generic_web'],
-                    description: 'The design platform to search for inspiration'
+                    enum: [
+                        'dribbble',
+                        'behance',
+                        'envato',
+                        'pinterest',
+                        'landingfolio',
+                        'awwwards',
+                        'siteinspire',
+                        'generic_web',
+                    ],
+                    description:
+                        'The design platform to search for inspiration',
                 },
                 limit: {
                     type: 'number',
-                    description: 'Maximum number of results to return (default: 10)'
+                    description:
+                        'Maximum number of results to return (default: 10)',
                 },
                 takeScreenshots: {
                     type: 'boolean',
-                    description: 'Whether to capture screenshots of the websites (default: false)'
-                }
+                    description:
+                        'Whether to capture screenshots of the websites (default: false)',
+                },
             },
-            required: ['query', 'engine']
+            required: ['query', 'engine'],
         },
-        function: design_search
+        function: design_search,
     };
 }

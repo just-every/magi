@@ -7,7 +7,11 @@ import * as marked from 'marked';
  * Custom renderer for Markdown with enhanced link and image handling
  */
 export class CustomRenderer extends marked.Renderer {
-    link(href: any, title: any, text: any): string {
+    link(
+        href: string | { href?: string } | null,
+        title: string | null,
+        text: string | null
+    ): string {
         // Convert href to string and handle object case
         const hrefStr =
             typeof href === 'object'

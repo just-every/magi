@@ -15,6 +15,7 @@ import {
     ResponseInput,
     ToolCall,
     ResponseThinkingMessage,
+    type ResponseOutputMessage,
 } from '../../types/shared-types.js';
 import { MAGI_CONTEXT } from '../constants.js';
 
@@ -25,8 +26,9 @@ import { MAGI_CONTEXT } from '../constants.js';
  */
 export function createTestAgent(): Agent {
     const agent = new Agent({
-        name: 'TestAgent',
-        description: 'Specializes in testing and quality assurance for website implementations',
+        name: 'WebTestAgent',
+        description:
+            'Specializes in testing and quality assurance for website implementations',
         instructions: `${MAGI_CONTEXT}
 ---
 
@@ -80,65 +82,8 @@ DO NOT:
 
 Your goal is to validate that the website implementation meets requirements, performs correctly, and provides a good user experience. Report issues clearly with specific actionable feedback.
 `,
-        tools: [
-            ...getCommonTools(),
-        ],
-        modelClass: 'monologue',
-        maxToolCallRoundsPerTurn: 1,
-
-        onRequest: async (
-            agent: Agent,
-            messages: ResponseInput
-        ): Promise<[Agent, ResponseInput]> => {
-            return [agent, messages];
-        },
-        onResponse: async (response: string): Promise<string> => {
-            if (response && response.trim()) {
-                await addHistory(
-                    {
-                        type: 'message',
-                        role: 'assistant',
-                        status: 'completed',
-                        content: response,
-                    },
-                    agent.historyThread,
-                    agent.model
-                );
-            }
-            return response;
-        },
-        onThinking: async (message: ResponseThinkingMessage): Promise<void> => {
-            return addHistory(message, agent.historyThread, agent.model);
-        },
-        onToolCall: async (toolCall: ToolCall): Promise<void> => {
-            await addHistory(
-                {
-                    id: toolCall.id,
-                    type: 'function_call',
-                    call_id: toolCall.call_id || toolCall.id,
-                    name: toolCall.function.name,
-                    arguments: toolCall.function.arguments,
-                },
-                agent.historyThread,
-                agent.model
-            );
-        },
-        onToolResult: async (
-            toolCall: ToolCall,
-            result: string
-        ): Promise<void> => {
-            await addHistory(
-                {
-                    id: toolCall.id,
-                    type: 'function_call_output',
-                    call_id: toolCall.call_id || toolCall.id,
-                    name: toolCall.function.name,
-                    output: result,
-                },
-                agent.historyThread,
-                agent.model
-            );
-        },
+        tools: [...getCommonTools()],
+        modelClass: 'reasoning_mini',
     });
 
     return agent;

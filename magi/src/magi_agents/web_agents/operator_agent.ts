@@ -17,62 +17,28 @@ import { createBackendAgent } from './backend_agent.js';
 import { createTestAgent } from './test_agent.js';
 import {
     CUSTOM_TOOLS_TEXT,
-    getTaskContext,
+    AGENT_DESCRIPTIONS,
     MAGI_CONTEXT,
+    SIMPLE_SELF_SUFFICIENCY_TEXT,
+    getDockerEnvText,
 } from '../constants.js';
 import { getCommonTools } from '../../utils/index.js';
 import { getRunningToolTools } from '../../utils/running_tools.js';
-import { addHistory } from '../../utils/history.js';
 import {
     ResponseInput,
-    ToolCall,
-    ResponseThinkingMessage,
 } from '../../types/shared-types.js';
 import { dateFormat, readableTime } from '../../utils/date_tools.js';
 import { runningToolTracker } from '../../utils/running_tool_tracker.js';
-import { listActiveProjects } from '../../utils/project_utils.js';
 import { getThoughtDelay } from '../../utils/thought_utils.js';
-import { getImageGenerationTools } from '../../utils/image_generation.js';
-// Project cache functionality is not currently available
-// import { cacheProjectIfNeeded, loadCachedProject } from '../../utils/project_cache.js';
-
-export const startTime = new Date();
-async function addWebsiteOperatorStatus(
-    messages: ResponseInput
-): Promise<ResponseInput> {
-    // Prepare the system status message
-    const status = `=== Website Operator Status ===
-
-Current Time: ${dateFormat()}
-Your Running Time: ${readableTime(new Date().getTime() - startTime.getTime())}
-Your Thought Delay: ${getThoughtDelay()} seconds
-
-Your Projects:
-${listActiveProjects()}
-
-Active Tools:
-${runningToolTracker.listActive()}`;
-
-    // Add the system status to the messages
-    messages.push({
-        type: 'message',
-        role: 'developer',
-        content: status,
-    });
-
-    return messages;
-}
+import { createOperatorAgent, startTime } from '../operator_agent.js';
 
 /**
  * Create the website operator agent for specialized website construction
  *
  * @returns The configured WebsiteOperatorAgent instance
  */
-export function createWebsiteOperatorAgent(): Agent {
-    const agent = new Agent({
-        name: 'WebsiteOperatorAgent',
-        description: 'Orchestrates research → design → code → test for websites',
-        instructions: `${MAGI_CONTEXT}
+export function createWebOperatorAgent(): Agent {
+    const instructions = `${MAGI_CONTEXT}
 ---
 
 Your role in MAGI is as a Website Construction Operator. You have been given a task to build a website.
@@ -112,7 +78,18 @@ General Guidance:
 • Use parallel agent launches where beneficial.
 • On final success call task_complete(result).
 
-${getTaskContext()}
+You operate in a shared browsing session with a human overseeing your operation. This allows you to interact with websites together. You can access accounts this person is already logged into and perform actions for them.
+
+The agents in your system are;
+- ${AGENT_DESCRIPTIONS['SearchAgent']}
+- ${AGENT_DESCRIPTIONS['BrowserAgent']}
+- ${AGENT_DESCRIPTIONS['CodeAgent']}
+- ${AGENT_DESCRIPTIONS['ShellAgent']}
+- ${AGENT_DESCRIPTIONS['ReasoningAgent']}
+
+${getDockerEnvText()}
+
+${SIMPLE_SELF_SUFFICIENCY_TEXT}
 
 You should give agents a degree of autonomy, they may encounter problems and if your instructions are too explicit they will not be able to resolve the problem autonomously. Focus on providing context and high level instructions. If they fail on the first attempt, try another more specific approach.
 
@@ -132,10 +109,15 @@ ${CUSTOM_TOOLS_TEXT}
 COMPLETION:
 If you think you're complete, review your work and make sure you have not missed anything. If you are not sure, ask the other agents for their opinion.
 
-When you are done, please use the task_complete(result) tool to report that the task has been completed successfully. If you encounter an error that you can not recover from, use the task_fatal_error(error) tool to report that you were not able to complete the task. You should only use task_fatal_error() once you have made many attempts to resolve the issue and you are sure that you can not complete the task.`,
+When you are done, please use the task_complete(result) tool to report that the task has been completed successfully. If you encounter an error that you can not recover from, use the task_fatal_error(error) tool to report that you were not able to complete the task. You should only use task_fatal_error() once you have made many attempts to resolve the issue and you are sure that you can not complete the task.`;
+
+    return createOperatorAgent({
+        name: 'WebOperatorAgent',
+        description:
+            'Orchestrates research → design → code → test for websites',
+        instructions,
         tools: [
             ...getRunningToolTools(),
-            ...getImageGenerationTools(),
             ...getCommonTools(),
         ],
         workers: [
@@ -149,74 +131,26 @@ When you are done, please use the task_complete(result) tool to report that the 
             createShellAgent,
             createReasoningAgent,
         ],
-        modelClass: 'monologue',
-        maxToolCallRoundsPerTurn: 1, // Allow models to interleave with each other
-
         onRequest: async (
             agent: Agent,
             messages: ResponseInput
         ): Promise<[Agent, ResponseInput]> => {
-            messages = await addWebsiteOperatorStatus(messages);
 
-            // Project cache functionality commented out (not currently available)
-            // try {
-            //     const projectPath = process.cwd();
-            //     // Handle project cache here if needed in the future
-            // } catch (error) {
-            //     console.error('Error loading project cache:', error);
-            // }
+            // Add the system status to the messages
+            messages.push({
+                type: 'message',
+                role: 'developer',
+                content: `=== Operator Status ===
+
+Current Time: ${dateFormat()}
+Your Running Time: ${readableTime(new Date().getTime() - startTime.getTime())}
+Your Thought Delay: ${getThoughtDelay()} seconds
+
+Active Tools:
+${runningToolTracker.listActive()}`,
+            });
 
             return [agent, messages];
         },
-        onResponse: async (response: string): Promise<string> => {
-            if (response && response.trim()) {
-                // Add the response to the monologue
-                await addHistory(
-                    {
-                        type: 'message',
-                        role: 'assistant',
-                        status: 'completed',
-                        content: response,
-                    },
-                    agent.historyThread,
-                    agent.model
-                );
-            }
-            return response;
-        },
-        onThinking: async (message: ResponseThinkingMessage): Promise<void> => {
-            return addHistory(message, agent.historyThread, agent.model);
-        },
-        onToolCall: async (toolCall: ToolCall): Promise<void> => {
-            await addHistory(
-                {
-                    id: toolCall.id,
-                    type: 'function_call',
-                    call_id: toolCall.call_id || toolCall.id,
-                    name: toolCall.function.name,
-                    arguments: toolCall.function.arguments,
-                },
-                agent.historyThread,
-                agent.model
-            );
-        },
-        onToolResult: async (
-            toolCall: ToolCall,
-            result: string
-        ): Promise<void> => {
-            await addHistory(
-                {
-                    id: toolCall.id,
-                    type: 'function_call_output',
-                    call_id: toolCall.call_id || toolCall.id,
-                    name: toolCall.function.name,
-                    output: result,
-                },
-                agent.historyThread,
-                agent.model
-            );
-        },
     });
-
-    return agent;
 }

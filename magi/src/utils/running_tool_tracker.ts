@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { addSystemMessage } from './history.js';
 import { readableTime } from './date_tools.js';
 import { EventEmitter } from 'events';
+import { Agent } from './agent.js';
 
 // Helper function to truncate long strings
 const truncateString = (string = '', maxLength = 200) =>
@@ -17,6 +18,9 @@ export interface RunningTool {
     agent: string;
     args: string;
     status: 'running' | 'completed' | 'failed' | 'terminated';
+    /** True when the original tool call returned `TIMEOUT` and
+     * the tool kept executing in the background. */
+    timedOut?: boolean;
     started: Date;
     duration?: number; // Duration in ms, calculated when complete
     output?: string;
@@ -89,7 +93,11 @@ class RunningToolTracker extends EventEmitter {
      * @param output The function's output
      * @returns true if the function was found and updated, false otherwise
      */
-    async completeRunningTool(id: string, output: string): Promise<boolean> {
+    async completeRunningTool(
+        id: string,
+        output: string,
+        agent: Agent
+    ): Promise<boolean> {
         const fn = this.functions.get(id);
         if (!fn) return false;
 
@@ -100,20 +108,18 @@ class RunningToolTracker extends EventEmitter {
         fn.output = output;
         fn.duration = new Date().getTime() - fn.started.getTime();
 
-        // Add system message with final output
-        await addSystemMessage(
-            `RunningTool ${fn.name} (id: ${id}) completed after ${readableTime(fn.duration)} with output: ${output}`,
-            `RunningTool ${fn.name} (id: ${id}) completed`
-        );
-
-        // Create a copy of the tool for the event
-        const completedTool = { ...fn };
+        // Only notify if the tool had previously timed-out OR the agent
+        // has no onToolResult handler to surface the result.
+        if (fn.timedOut || !agent?.onToolResult) {
+            await addSystemMessage(
+                `RunningTool ${fn.name} (id: ${id}) completed after ${readableTime(fn.duration)} with output: ${output}`,
+                `RunningTool ${fn.name} (id: ${id}) completed`,
+                agent.historyThread
+            );
+        }
 
         // Remove from tracking
         this.functions.delete(id);
-
-        // Emit completion event
-        this.emit('complete', id, completedTool);
 
         return true;
     }
@@ -125,7 +131,11 @@ class RunningToolTracker extends EventEmitter {
      * @param error The error message
      * @returns true if the function was found and updated, false otherwise
      */
-    async failRunningTool(id: string, error: string): Promise<boolean> {
+    async failRunningTool(
+        id: string,
+        error: string,
+        agent: Agent
+    ): Promise<boolean> {
         const fn = this.functions.get(id);
         if (!fn) return false;
 
@@ -139,41 +149,14 @@ class RunningToolTracker extends EventEmitter {
         // Add system message with error
         await addSystemMessage(
             `RunningTool ${fn.name} (id: ${id}) failed after ${readableTime(fn.duration)} with error: ${error}`,
-            `RunningTool ${fn.name} (id: ${id}) failed`
+            `RunningTool ${fn.name} (id: ${id}) failed`,
+            agent.historyThread
         );
-
-        // Create a copy of the tool for the event
-        const failedTool = { ...fn };
 
         // Remove from tracking
         this.functions.delete(id);
 
-        // Emit failure event
-        this.emit('fail', id, failedTool);
-
         return true;
-    }
-
-    /**
-     * Register event handlers for tool completion
-     *
-     * @param callback Function to call when a tool completes
-     * @returns this (for chaining)
-     */
-    onComplete(callback: (id: string, tool: RunningTool) => void): this {
-        this.on('complete', callback);
-        return this;
-    }
-
-    /**
-     * Register event handlers for tool failure
-     *
-     * @param callback Function to call when a tool fails
-     * @returns this (for chaining)
-     */
-    onFail(callback: (id: string, tool: RunningTool) => void): this {
-        this.on('fail', callback);
-        return this;
     }
 
     /**
@@ -285,6 +268,17 @@ Running Time: ${readableTime(new Date().getTime() - fn.started.getTime())}`;
      */
     public getAllRunningTools(): RunningTool[] {
         return Array.from(this.functions.values());
+    }
+
+    /**
+     * Mark a running tool as timed-out so we know the completion
+     * happened in the background.
+     */
+    markTimedOut(id: string): boolean {
+        const fn = this.functions.get(id);
+        if (!fn) return false;
+        fn.timedOut = true;
+        return true;
     }
 }
 

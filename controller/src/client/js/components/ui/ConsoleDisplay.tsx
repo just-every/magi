@@ -4,7 +4,8 @@ import { ConsoleEvent } from '../../../../types/shared-types';
 
 const ConsoleDisplay: React.FC<{
     consoleEvents: ConsoleEvent[];
-}> = ({ consoleEvents }) => {
+    collapsible?: boolean;
+}> = ({ consoleEvents, collapsible }) => {
     // Convert ScreenshotEvent[] to TimelinePoint[]
     const points = useMemo<TimelinePoint[]>(() => {
         if (!consoleEvents || consoleEvents.length === 0) return [];
@@ -22,7 +23,14 @@ const ConsoleDisplay: React.FC<{
     if (points.length === 0) return null;
 
     // Render the TimelineConsole with converted points
-    return <TimelinePlayer mode="console" points={points} />;
+    return (
+        <TimelinePlayer
+            mode="console"
+            points={points}
+            collapsible={collapsible}
+            model={consoleEvents[consoleEvents.length - 1]?.agent?.model}
+        />
+    );
 };
 
 export default ConsoleDisplay;

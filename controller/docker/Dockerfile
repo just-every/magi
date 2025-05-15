@@ -5,7 +5,7 @@ FROM node:23-slim AS builder
 RUN apt-get update && \
     apt-get install -y rsync python3 make g++ --no-install-recommends && \
     rm -rf /var/lib/apt/lists/* && \
-    npm install -g npm
+    npm install -g npm && npm update -g
 
 # Set working directory for the build stage
 WORKDIR /build

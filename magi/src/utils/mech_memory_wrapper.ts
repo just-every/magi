@@ -12,9 +12,11 @@
 
 import { Agent } from './agent.js';
 import { runMECH } from './mech_tools.js';
+import { sendStreamEvent } from './communication.js';
 import { addHistory, getHistory, describeHistory } from './history.js';
 import { costTracker } from './cost_tracker.js';
 import { embed } from './embedding_utils.js';
+import { planAndCommitChanges } from './commit_planner.js';
 import {
     recordTaskStart,
     recordTaskEnd,
@@ -26,8 +28,8 @@ import {
 import { registerRelevantCustomTools } from './index.js';
 import { MechResult } from './mech_tools.js';
 import { quick_llm_call } from './llm_call_utils.js';
-import { MAGI_CONTEXT } from '../magi_agents/constants.js';
 import { ResponseInput } from '../types/shared-types.js';
+import { getProcessProjectIds } from './project_utils.js';
 
 /**
  * Runs the Meta-cognition Ensemble Chain-of-thought Hierarchy (MECH) with memory
@@ -124,25 +126,46 @@ ${formattedMemories}`,
         // Step 3: Record completion metrics and extract learnings
         if (taskId) {
             try {
-                // Record task completion metrics
-                await recordTaskEnd({
-                    task_id: taskId,
-                    status,
-                    durationSec,
-                    totalCost,
-                });
+                // Execute all post-task operations concurrently
+                const taskOperations = [
+                    // Record task completion metrics
+                    recordTaskEnd({
+                        task_id: taskId,
+                        status,
+                        durationSec,
+                        totalCost,
+                    }),
 
-                // Extract learnings from the task history
-                await extractAndStoreMemories(
-                    agent,
-                    taskId,
-                    status,
-                    embedding,
-                    memories
-                );
+                    // Extract learnings from the task history
+                    extractAndStoreMemories(
+                        agent,
+                        taskId,
+                        status,
+                        embedding,
+                        memories
+                    ),
+                ];
+
+                // Add git operations if needed
+                const projectIds = getProcessProjectIds();
+                if (projectIds && projectIds.length > 0) {
+                    // Add each project's git operation directly to taskOperations
+                    taskOperations.push(
+                        ...projectIds.map(projectId =>
+                            planAndCommitChanges(agent, projectId)
+                        )
+                    );
+                }
+
+                // Run all operations concurrently
+                await Promise.all(taskOperations);
             } catch (err) {
                 console.error('Failed to record task completion:', err);
             }
+        }
+
+        if (mechResult.mechOutcome?.event) {
+            sendStreamEvent(mechResult.mechOutcome.event); // Cast to any to bypass type checking
         }
 
         // Return the result to the caller
@@ -176,7 +199,7 @@ ${formattedMemories}`,
         // Return an error result
         return {
             status: 'fatal_error',
-            error: `Unexpected error: ${error}`,
+            mechOutcome: { error: `Unexpected error: ${error}` },
             history: getHistory(),
             durationSec,
             totalCost,
@@ -199,6 +222,14 @@ async function extractAndStoreMemories(
     embedding: number[] | null,
     memories: MemoryMatch[]
 ): Promise<void> {
+    // Skip MemoryAgent for project_analyze processes
+    if (agent.args?.tool === 'project_analyze') {
+        console.log(
+            'MemoryAgent disabled for project_analyze; skipping learnings extraction.'
+        );
+        return;
+    }
+
     try {
         console.log('Extracting learnings from task history...');
 
@@ -214,38 +245,50 @@ Task Result: **${status === 'complete' ? 'COMPLETED SUCCESSFULLY' : 'FAILED WITH
 
         // Call the reasoning model to extract learnings using our utility with JSON mode
         const response = await quick_llm_call(
-            describeHistory(100, messages),
+            describeHistory(agent, messages, 100),
             null,
             {
                 name: 'MemoryAgent',
                 description: 'Extract learnings from task history',
-                instructions: `Your role as a **MemoryAgent** is to review a completed task performed by **${agent.name}**.
+                instructions:
+                    `You are **MemoryAgent**.
 
-Now that the task has run, your job is to discover if the approach taken worked well or or was not successful. Your should extract key lessons and insights from the completed task.
+Most tasks teach us *nothing new*.
+Return insights **only if they clear a very high bar**.
+
+╭─  HIGH-BAR CHECKLIST  ───────────────────────────────────────────────╮
+│ 0. **Novelty gate** →                                                │
+│    • Would a skilled developer NOT know this without seeing the      │
+│      task succeed/fail?                                              │
+│    • Is it missing from PREVIOUS LEARNINGS?                          │
+│    If “no” to either → discard.                                      │
+│                                                                      │
+│ 1. If it *is* novel, write ONE sentence in this exact template:      │
+│    “[Tag] <Actionable advice>. Learned <how / when / why we          │
+│     discovered this>.”                                               │
+│    • Start with “Always…”, “Avoid…”, “Prefer…”, or “Consider…”.      │
+│    • Tag = [BestPractice] [Pitfall] or [Idea].                       │
+│    • ≤ 35 words.  Max 3 items.                                       │
+╰──────────────────────────────────────────────────────────────────────╯
+
+Typical outcome: **no items** ⇒ respond \`{"learnings": []}\`.
+
+GOOD vs. BAD
+────────────────────────────────────────────────────────────────────────────
+❌ Narrative only: “We cloned the repo.”
+❌ Obvious tip: “[BestPractice] Use a virtualenv.”
+✅ “[Pitfall] Avoid running ‘npm ci’ inside Docker on Apple Silicon. \
+Learned after repeated segfaults due to incompatible node-gyp binaries.”
+✅ “[BestPractice] Prefer shallow git clones ( --depth 1 ) to cut CI time \
+by 40 %. Learned when full clone exceeded the runner’s memory limit.”
 
 ---
-${MAGI_CONTEXT}
----
 
-PREVIOUS LEARNINGS:
-${formatMemories(memories)}
-(these are older learnings from other tasks that were provided to this task)
-
-YOUR TASK:
-Please review the task history below and identify any specific learnings or patterns that would be useful for future similar tasks. Focus on techniques that worked, approaches that failed, common pitfalls, and any insights about effective problem-solving strategies.
-Return up to 3 learnings. Each learning should be 1-3 sentences, specific enough to be useful but general enough to apply to similar situations.
-
-RESPOND ONLY WITH VALID JSON in the following format:
-{
-  "learnings": [
-    "First learning point here.",
-    "Second learning point here.",
-  ]
-}
-
-IMPORTANT:
-- Respond ONLY with the JSON object containing learnings array. Do not include any explanations or prefixes.
-- If task was simple or nothing new was learned, return an empty array or an array with an empty string.`,
+` +
+                    (memories.length > 0
+                        ? `PREVIOUS LEARNINGS (skip duplicates):
+${formatMemories(memories)}`
+                        : ''),
                 modelClass: 'reasoning_mini',
                 modelSettings: {
                     force_json: true,

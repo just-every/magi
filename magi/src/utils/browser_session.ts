@@ -237,6 +237,56 @@ export class AgentBrowserSessionCDP {
                     `[browser_session_cdp] Enabled required CDP domains for target: ${targetId}`
                 );
 
+                // Set up CDP guard to catch any tabs that manage to open despite our injected script
+                try {
+                    console.log(
+                        `[browser_session_cdp] Setting up CDP Target.targetCreated guard for tab ${this.tabId}`
+                    );
+
+                    // Store original targetId for comparison
+                    const ourTabId = targetId;
+
+                    this.cdpClient.Target.on('targetCreated', async (params) => {
+                        const newTarget = params.targetInfo;
+
+                        // If a new page-type target was created and it was initiated by our tab
+                        if (newTarget.type === 'page' && newTarget.openerTabId === ourTabId) {
+                            console.log(
+                                `[browser_session_cdp] Intercepted new tab creation from tab ${this.tabId}. ` +
+                                `Closing new tab ${newTarget.targetId} and redirecting to: ${newTarget.url || '(unknown)'}`
+                            );
+
+                            // 1. Try to close the new tab immediately
+                            try {
+                                await this.cdpClient.Target.closeTarget({ targetId: newTarget.targetId });
+                                console.log(`[browser_session_cdp] Successfully closed intercepted tab ${newTarget.targetId}`);
+
+                                // 2. If there's a URL, redirect our current tab to it to maintain navigation
+                                if (newTarget.url && newTarget.url !== 'about:blank') {
+                                    console.log(`[browser_session_cdp] Redirecting current tab to: ${newTarget.url}`);
+                                    await this.cdpClient.Runtime.evaluate({
+                                        expression: `location.href = ${JSON.stringify(newTarget.url)}`,
+                                        userGesture: true
+                                    });
+                                }
+                            } catch (err) {
+                                console.error(
+                                    `[browser_session_cdp] Error closing intercepted tab ${newTarget.targetId}:`,
+                                    err
+                                );
+                            }
+                        }
+                    });
+
+                    console.log(`[browser_session_cdp] CDP Target.targetCreated guard installed for tab ${this.tabId}`);
+                } catch (guardError) {
+                    console.error(
+                        `[browser_session_cdp] Failed to set up Target.targetCreated guard for tab ${this.tabId}:`,
+                        guardError
+                    );
+                    // Non-fatal error, continue with initialization
+                }
+
                 // *** ADD SCRIPT INJECTION HERE ***
                 try {
                     console.log(
@@ -244,30 +294,83 @@ export class AgentBrowserSessionCDP {
                     );
                     await this.cdpClient.Page.addScriptToEvaluateOnNewDocument({
                         source: `(() => {
-                            // override window.open to just navigate the current tab
+                            // Hardened window.open override with Proxy to catch all call paths
                             const originalOpen = window.open;
-                            window.open = (url, name, features) => {
-                              if (url) { // Only navigate if URL is provided
-                                location.href = url;
-                              }
-                              // Return null or a mock window object if needed by calling scripts
-                              // Returning null might be simpler if compatibility isn't an issue.
-                              return null;
+                            const openProxy = new Proxy(originalOpen, {
+                                apply(_t, _this, args) {
+                                    const url = args[0];
+                                    if (url) location.href = url;
+                                    return null;
+                                }
+                            });
+                            // Lock down the property so it cannot be overwritten by other scripts
+                            Object.defineProperty(window, 'open', {
+                                value: openProxy,
+                                writable: false,
+                                configurable: false
+                            });
+
+                            // Extract URL from various element types and attributes
+                            const urlFrom = n => n?.href ??
+                                n?.getAttribute?.('href') ??
+                                n?.getAttribute?.('post-outbound-link') ??
+                                n?.dataset?.url ??
+                                n?.dataset?.href ?? null;
+
+                            // Intercept handler that works on event path (handles shadow DOM)
+                            const intercept = e => {
+                                const path = e.composedPath?.() ?? [];
+                                for (const n of path) {
+                                    if (!n?.getAttribute) continue;
+                                    if (n.getAttribute('target') === '_blank') {
+                                        const url = urlFrom(n);
+                                        if (url) {
+                                            e.preventDefault();
+                                            e.stopImmediatePropagation();
+                                            location.href = url;
+                                        }
+                                        return;
+                                    }
+                                }
                             };
 
-                            // also catch <a target="_blank"> clicks
-                            // Use capture phase to catch the event early
-                            document.addEventListener('click', e => {
-                              // Find the closest anchor tag starting from the event target
-                              const a = e.target.closest('a[target="_blank"]');
-                              // Check if an anchor was found, it has an href, and it's not just a fragment identifier
-                              if (a && a.href && !a.href.startsWith(location.origin + location.pathname + '#')) {
-                                e.preventDefault(); // Stop the default behavior (opening new tab)
-                                e.stopPropagation(); // Stop the event from propagating further
-                                location.href = a.href; // Navigate the current tab
-                              }
-                            }, true); // Use capture phase (true)
-                          })();`,
+                            // Attach intercept to multiple event types in capture phase
+                            ['pointerdown', 'click', 'auxclick'].forEach(ev =>
+                                document.addEventListener(ev, intercept, { capture: true })
+                            );
+
+                            // Handle keyboard navigation (Enter/Space on focused _blank links)
+                            document.addEventListener('keydown', e => {
+                                if ((e.key === 'Enter' || e.key === ' ') &&
+                                    document.activeElement?.getAttribute?.('target') === '_blank') {
+                                    e.preventDefault();
+                                    const url = urlFrom(document.activeElement);
+                                    if (url) location.href = url;
+                                }
+                            }, { capture: true });
+
+                            // Handle form submissions with target="_blank"
+                            document.addEventListener('submit', e => {
+                                if (e.target?.target === '_blank') {
+                                    e.preventDefault();
+                                    e.target.target = '_self';
+                                    e.target.submit();
+                                }
+                            }, { capture: true });
+
+                            // Helper to attach our listeners to shadow roots
+                            const attach = root =>
+                                ['pointerdown', 'click', 'auxclick'].forEach(ev =>
+                                    root.addEventListener(ev, intercept, { capture: true })
+                                );
+
+                            // Set up MutationObserver to watch for shadow DOM elements
+                            new MutationObserver(muts => {
+                                muts.forEach(m =>
+                                    m.addedNodes.forEach(n => n.shadowRoot && attach(n.shadowRoot))
+                                );
+                            }).observe(document.documentElement, { subtree: true, childList: true });
+                        })();`,
                     });
                     console.log(
                         `[browser_session_cdp] Script injected successfully for target: ${targetId}`
