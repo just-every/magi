@@ -35,7 +35,13 @@ const ToolResultMessage: React.FC<ToolResultMessageProps> = ({
     }
 
     return (
-        <div className={"message-group tool-result-message"+(followsCall ? ' follows-tool' : '')} key={message.id}>
+        <div
+            className={
+                'message-group tool-result-message' +
+                (followsCall ? ' follows-tool' : '')
+            }
+            key={message.id}
+        >
             <div className="message-bubble tool-result-bubble">
                 {!followsCall && (
                     <div className="message-header">

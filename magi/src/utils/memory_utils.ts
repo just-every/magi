@@ -110,13 +110,14 @@ function save_memory(term: string, memory: string): string {
         loadMemoriesFromFiles(term);
 
         // Generate a unique ID for the memory
-        // For long-term memory, check length limit
-        if (memory.length > MAX_MEMORY_LENGTH) {
-            return `Memory must be 2000 characters or less. Current length: ${memory.length}`;
-        }
 
         let memoryId: number;
         if (term === 'short') {
+            // For short-term memory, check length limit
+            if (memory.length > MAX_MEMORY_LENGTH) {
+                return `Short term memory must be 2000 characters or less. Current length: ${memory.length}`;
+            }
+
             memoryId =
                 shortTermMemories.length > 0
                     ? shortTermMemories[shortTermMemories.length - 1].id + 1

@@ -45,7 +45,9 @@ export class AudioPlayer {
             if (!this.audioContext) {
                 console.log('Creating new AudioContext...');
                 this.audioContext = new (window.AudioContext ||
-                    (window as any).webkitAudioContext)();
+                    (window as { webkitAudioContext?: typeof AudioContext })
+                        .webkitAudioContext ||
+                    AudioContext)();
             }
             if (this.audioContext.state === 'suspended') {
                 console.log('Resuming suspended AudioContext...');
@@ -328,7 +330,18 @@ export class AudioPlayer {
 /**
  * Handle incoming audio messages (PCM chunked)
  */
-export function handleAudioMessage(event: any): void {
+export function handleAudioMessage(event: {
+    event: {
+        pcmParameters?: {
+            sampleRate: number;
+            channels: number;
+            bitDepth: number;
+        };
+        data: string;
+        chunkIndex: number;
+        isFinalChunk: boolean;
+    };
+}): void {
     const audioPlayer = AudioPlayer.getInstance();
     if (
         !audioPlayer['audioContext'] ||

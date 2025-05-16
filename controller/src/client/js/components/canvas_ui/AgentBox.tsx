@@ -3,9 +3,14 @@ import { useRef, useEffect, useState } from 'react';
 import { ClientMessage } from '../../context/SocketContext';
 import MessageList from '../message/MessageList';
 import ProcessHeader from '../ui/ProcessHeader';
-import { ProcessStatus, ScreenshotEvent } from '../../../../types/shared-types';
+import {
+    ProcessStatus,
+    ScreenshotEvent,
+    type ConsoleEvent,
+} from '../../../../types/shared-types';
 import AutoScrollContainer from '../ui/AutoScrollContainer';
 import BrowserDisplay from '../ui/BrowserDisplay';
+import ConsoleDisplay from '../ui/ConsoleDisplay';
 
 interface AgentBoxProps {
     id: string;
@@ -20,6 +25,7 @@ interface AgentBoxProps {
     messages: ClientMessage[];
     isTyping: boolean;
     screenshots?: ScreenshotEvent[];
+    consoleEvents?: ConsoleEvent[];
 }
 
 interface AgentBoxWithParentProcess extends AgentBoxProps {
@@ -41,6 +47,7 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
     parentProcessId,
     onFocusAgent,
     screenshots,
+    consoleEvents,
 }) => {
     const clickTimeout = useRef<number | null>(null);
     const clickCount = useRef<number>(0);
@@ -114,12 +121,21 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
                 <ProcessHeader agentName={agentName} colors={colors} />
 
                 {screenshots && screenshots.length > 0 && (
-                    <BrowserDisplay screenshots={screenshots} />
+                    <BrowserDisplay
+                        screenshots={screenshots}
+                        collapsible={true}
+                    />
                 )}
+                {!(screenshots && screenshots.length > 0) &&
+                    consoleEvents &&
+                    consoleEvents.length > 0 && (
+                        <ConsoleDisplay
+                            consoleEvents={consoleEvents}
+                            collapsible={true}
+                        />
+                    )}
 
-                <AutoScrollContainer
-                    className="process-logs card-body"
-                >
+                <AutoScrollContainer className="process-logs card-body">
                     <MessageList
                         messages={messages}
                         isTyping={isTyping}

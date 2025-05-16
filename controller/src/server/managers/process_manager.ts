@@ -16,6 +16,8 @@ import {
 } from '../../types/index';
 import { execPromise } from '../utils/docker_commands';
 import { generateProcessColors } from './color_manager';
+import { pushBranchAndOpenPR } from '../utils/git_push';
+import { PREventsManager } from './pr_events_manager';
 import {
     isDockerAvailable,
     checkDockerImageExists,
@@ -60,8 +62,13 @@ interface Processes {
 export class ProcessManager {
     private processes: Processes = {};
     private communicationManager: CommunicationManager;
+    private processCompletionHandlers: Map<
+        string,
+        Array<() => Promise<void> | void>
+    > = new Map();
     public io: Server;
     public coreProcessId: string | undefined;
+    private prEventsManager: PREventsManager | undefined;
 
     constructor(io: Server) {
         this.io = io;
@@ -78,6 +85,15 @@ export class ProcessManager {
 
     setCommunicationManager(communicationManager: CommunicationManager): void {
         this.communicationManager = communicationManager;
+    }
+
+    /**
+     * Set the PR events manager
+     *
+     * @param prEventsManager PR events manager instance
+     */
+    setPrEventsManager(prEventsManager: PREventsManager): void {
+        this.prEventsManager = prEventsManager;
     }
 
     /**
@@ -193,6 +209,52 @@ export class ProcessManager {
      * @param processId - The ID of the process to update
      * @param errorMessage - The error message to record
      */
+    /**
+     * Register a function to be called when a process completes successfully
+     * @param processId Process ID to register handler for
+     * @param handler Function to call when process completes
+     */
+    registerProcessCompletionHandler(
+        processId: string,
+        handler: () => Promise<void> | void
+    ): void {
+        if (!this.processCompletionHandlers.has(processId)) {
+            this.processCompletionHandlers.set(processId, []);
+        }
+
+        this.processCompletionHandlers.get(processId).push(handler);
+        console.log(`Registered completion handler for process ${processId}`);
+    }
+
+    /**
+     * Run all registered completion handlers for a process
+     * @param processId Process ID that completed
+     */
+    async runCompletionHandlers(processId: string): Promise<void> {
+        const handlers = this.processCompletionHandlers.get(processId);
+
+        if (handlers && handlers.length > 0) {
+            console.log(
+                `Running ${handlers.length} completion handlers for process ${processId}`
+            );
+
+            for (const handler of handlers) {
+                try {
+                    // Handler may return a Promise or void
+                    await handler();
+                } catch (error) {
+                    console.error(
+                        `Error in completion handler for process ${processId}:`,
+                        error
+                    );
+                }
+            }
+
+            // Remove all handlers after execution
+            this.processCompletionHandlers.delete(processId);
+        }
+    }
+
     updateProcessWithError(processId: string, errorMessage: string): void {
         if (!this.processes[processId]) {
             console.error(
@@ -431,6 +493,8 @@ export class ProcessManager {
                             id: processId,
                             status: newStatus,
                         } as ProcessUpdateEvent);
+
+                        // Note: Git changes are now handled via the pull_request_ready event
                     }
 
                     // Clean up monitoring resources
@@ -822,6 +886,60 @@ export class ProcessManager {
                 console.log(`Cleaning up terminated process ${id} from memory`);
                 delete this.processes[id];
             }
+        }
+    }
+
+    /**
+     * Handle a pull request ready event from a container
+     *
+     * @param processId - The ID of the MAGI process that generated the changes
+     * @param projectId - The ID of the project to push changes for
+     * @param branch - The name of the branch to push
+     * @param message - The commit message for potential merge
+     * @returns Promise resolving to true if successful, false otherwise
+     */
+    async handlePullRequestReady(
+        processId: string,
+        projectId: string,
+        branch: string,
+        message: string
+    ): Promise<boolean> {
+        console.log(
+            `[process-manager] Handling pull request ready for ${projectId} from process ${processId}`
+        );
+
+        try {
+            const result = await pushBranchAndOpenPR(
+                processId,
+                projectId,
+                branch,
+                message,
+                this.prEventsManager
+            );
+            console.log(
+                `[process-manager] Pull request ${result ? 'pushed successfully' : 'failed'} for ${projectId}`
+            );
+
+            // Log to the process logs
+            this.updateProcess(
+                processId,
+                `[git] Branch ${branch} for project ${projectId} ${result ? 'pushed successfully' : 'failed to push'}`
+            );
+
+            return result;
+        } catch (error) {
+            console.error(
+                '[process-manager] Error handling pull request:',
+                error
+            );
+
+            // Log to the process logs
+            this.updateProcessWithError(
+                processId,
+                `Failed to push git changes: ${error instanceof Error ? error.message : String(error)}`
+            );
+
+            return false;
         }
     }
 }

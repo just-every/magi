@@ -6,6 +6,7 @@
  */
 
 import { getDB } from './db.js';
+import { Project } from '../types/shared-types.js';
 
 // Define types for our database records
 export interface MechTask {
@@ -447,6 +448,64 @@ export async function getCustomToolByName(
         }
 
         return result.rows[0] as CustomTool;
+    } finally {
+        db.release();
+    }
+}
+
+export async function updateProject(project: Project): Promise<void> {
+    const db = await getDB();
+    try {
+        const columns: string[] = [];
+        const values: any[] = [];
+
+        const add = (col: string, val: any) => {
+            if (val === undefined || (typeof val === 'string' && !val.length))
+                return;
+            columns.push(`${col} = $${columns.length + 2}`);
+            values.push(val);
+        };
+
+        add('project_type', project.project_type);
+        add('simple_description', project.simple_description);
+        add('detailed_description', project.detailed_description);
+        add('repository_url', project.repository_url);
+
+        if (!columns.length) return; // nothing to do
+
+        await db.query(
+            `UPDATE projects SET ${columns.join(', ')}, updated_at = NOW()
+             WHERE project_id = $1`,
+            [project.project_id, ...values]
+        );
+    } catch (error) {
+        console.error('Error updating project:', error);
+    } finally {
+        db.release();
+    }
+}
+
+/**
+ * Get a project by ID
+ * @param project_id The ID of the project to retrieve
+ * @returns The project if found, null otherwise
+ */
+export async function getProject(project_id: string): Promise<Project | null> {
+    const db = await getDB();
+    try {
+        const result = await db.query(
+            'SELECT * FROM projects WHERE project_id = $1',
+            [project_id]
+        );
+
+        if (result.rows.length === 0) {
+            return null;
+        }
+
+        return result.rows[0] as Project;
+    } catch (error) {
+        console.error('Error getting project:', error);
+        return null;
     } finally {
         db.release();
     }

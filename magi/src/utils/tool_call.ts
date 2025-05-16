@@ -547,12 +547,20 @@ export async function handleToolCall(
                 }
 
                 // Mark as completed in tracker if it hasn't timed out
-                await runningToolTracker.completeRunningTool(fnId, result);
+                await runningToolTracker.completeRunningTool(
+                    fnId,
+                    result,
+                    agent
+                );
 
                 return result;
             } catch (error) {
                 // Record the error in the tracker
-                await runningToolTracker.failRunningTool(fnId, String(error));
+                await runningToolTracker.failRunningTool(
+                    fnId,
+                    String(error),
+                    agent
+                );
                 throw error;
             }
         };
@@ -621,6 +629,9 @@ export async function handleToolCall(
 
         // If we got a timeout, inform the user but let the function continue running
         if (result === 'TIMEOUT') {
+            // Flag the tracker so it knows to emit a completion message later
+            runningToolTracker.markTimedOut(fnId);
+
             // The function is still running in the background
             // executeFunction() will complete/fail the function in the tracker when it finishes
             result = `Tool ${name} is running in the background (RunningTool: ${fnId}).`;
@@ -722,9 +733,10 @@ export function createToolFunction(
             paramInfoObj = { description: paramInfoRaw }; // Create a basic object for consistency
         } else if (typeof paramInfoRaw === 'object' && paramInfoRaw !== null) {
             paramInfoObj = paramInfoRaw;
-            paramInfoDesc = typeof paramInfoRaw.description === 'function'
-                ? paramInfoRaw.description()
-                : paramInfoRaw.description;
+            paramInfoDesc =
+                typeof paramInfoRaw.description === 'function'
+                    ? paramInfoRaw.description()
+                    : paramInfoRaw.description;
         }
 
         // Convert to snake_case for API consistency if needed

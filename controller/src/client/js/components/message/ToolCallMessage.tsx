@@ -31,9 +31,11 @@ const ToolCallMessage: React.FC<ToolCallMessageProps> = ({
                 key={message.message_id || message.id}
             >
                 {message.agent?.model && (
-                    <div className="message-header"><div className="message-model">
-                        {message.agent.model}
-                    </div></div>
+                    <div className="message-header">
+                        <div className="message-model">
+                            {message.agent.model}
+                        </div>
+                    </div>
                 )}
                 <div
                     className={'message-bubble assistant-bubble talk-bubble'}
@@ -72,7 +74,10 @@ const ToolCallMessage: React.FC<ToolCallMessageProps> = ({
                 </div>
                 {message.command && (
                     <div
-                        className={"message-bubble tool-call-command"+(callFollows ? ' call-follows' : '')}
+                        className={
+                            'message-bubble tool-call-command' +
+                            (callFollows ? ' call-follows' : '')
+                        }
                         style={{ color: `rgba(${rgb} / 1)` }}
                     >
                         <div
@@ -83,7 +88,12 @@ const ToolCallMessage: React.FC<ToolCallMessageProps> = ({
                     </div>
                 )}
                 {!message.command && (
-                    <div className={"message-bubble tool-call-command"+(callFollows ? ' call-follows' : '')}>
+                    <div
+                        className={
+                            'message-bubble tool-call-command' +
+                            (callFollows ? ' call-follows' : '')
+                        }
+                    >
                         <pre>
                             {message.toolName}(
                             {toolCallParams && toolCallParams !== '{}'

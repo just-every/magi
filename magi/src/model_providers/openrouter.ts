@@ -12,7 +12,19 @@ export class OpenRouterProvider extends OpenAIChat {
         super(
             'openrouter',
             process.env.OPENROUTER_API_KEY,
-            'https://openrouter.ai/api/v1'
+            'https://openrouter.ai/api/v1',
+            {
+                'User-Agent': 'magi',
+                'HTTP-Referer': 'https://withmagi.com/',
+                'X-Title': 'magi',
+            },
+            {
+                provider: {
+                    require_parameters: true,
+                    sort: 'throughput',
+                    ignore: ['Novita'], // Fails frequently with Qwen tool calling
+                },
+            }
         );
     }
 }

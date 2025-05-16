@@ -13,6 +13,13 @@ import {
     execPromiseFallback,
 } from '../utils/docker_commands';
 import { ProcessToolType } from '../../types/index';
+import {
+    getProject,
+    updateProject,
+    addProjectHistory,
+    getAllProjectIds,
+} from '../utils/db_utils';
+import { ProcessManager } from './process_manager';
 
 export interface DockerBuildOptions {
     tag?: string;
@@ -205,19 +212,56 @@ async function prepareGitRepository(
 }
 
 /**
- * Create a new project in /external/host with a git repository
+ * Copy template files to a project directory
  *
- * @param project The repository options
+ * @param projectPath The path to the project directory
+ * @param projectType The type of project template to use
+ * @returns Promise resolving to true if successful
+ */
+async function copyTemplateToProject(
+    projectPath: string,
+    projectType: string
+): Promise<boolean> {
+    // Template source directory
+    const templatePath = `/app/templates/${projectType}`;
+    const defaultTemplatePath = '/app/templates/next-app';
+
+    // Check if the specified template exists
+    const sourcePath = fs.existsSync(templatePath)
+        ? templatePath
+        : defaultTemplatePath;
+
+    try {
+        console.log(`Copying template from ${sourcePath} to ${projectPath}`);
+
+        // Copy files recursively using cp -r
+        await execPromise(`cp -r ${sourcePath}/* ${projectPath}/`);
+        await execPromise(
+            `cp -r ${sourcePath}/.* ${projectPath}/ 2>/dev/null || true`
+        );
+
+        return true;
+    } catch (error) {
+        console.error(`Error copying template files: ${error}`);
+        return false;
+    }
+}
+
+/**
+ * Create a new project in /external/host with a git repository and template files
+ *
+ * @param projectId The ID of the project to create
+ * @param processManager Optional ProcessManager instance to create an agent process
  * @returns The project name if successful, null if it fails
  */
-export function createNewProject(projectId: string): string {
-    if (!/^[a-zA-Z0-9_-]+$/.test(projectId)) {
-        throw new Error(
-            `Invalid project name '${projectId}'. Only letters, numbers, dashes and underscores are allowed.`
-        );
+export async function createNewProject(
+    projectId: string,
+    processManager: ProcessManager
+): Promise<string> {
+    const project = await getProject(projectId);
+    if (!project) {
+        throw new Error(`Project ${projectId} not found in database`);
     }
-
-    projectId = projectId.trim().toLowerCase();
 
     // Check if parent directory exists
     const parentDir = '/external/host';
@@ -225,16 +269,14 @@ export function createNewProject(projectId: string): string {
         throw new Error(`Parent directory ${parentDir} does not exist`);
     }
 
-    // Make sure we have a unique project name
-    let i = 0;
-    let finalProjectName = projectId;
-    while (fs.existsSync(path.join(parentDir, finalProjectName))) {
-        finalProjectName = 'magi-' + projectId + (i > 0 ? `-${i}` : '');
-        i++;
+    const projectPath = path.join(parentDir, projectId);
+    if (!fs.existsSync(projectPath)) {
+        throw new Error(
+            `Sorry the project ${projectId} already exists in the parent directory. Please choose another project_id.`
+        );
     }
 
     // Create a directory for the git repo
-    const projectPath = path.join(parentDir, finalProjectName);
     try {
         fs.mkdirSync(projectPath, { recursive: true });
     } catch (mkdirError) {
@@ -248,8 +290,56 @@ export function createNewProject(projectId: string): string {
         execSync('git config --global init.defaultBranch main');
         execSync(`git -C "${projectPath}" init`);
 
+        // Copy template files to project
+        await copyTemplateToProject(projectPath, project.project_type);
 
-        return finalProjectName;
+        // Stage all files and create initial commit
+        execSync(`git -C "${projectPath}" add .`);
+        execSync(`git -C "${projectPath}" commit -m "Initial template setup"`);
+
+        // Add entry to project history
+        await addProjectHistory(projectId, 'Added initial template files');
+
+        //project.is_ready = true;
+        //await updateProject(project);
+
+        // Create a unique process ID for the agent
+        const processId = `AI-${Math.random().toString(36).substring(2, 8)}`;
+
+        // Register a completion handler to mark project as ready when analysis completes
+        processManager.registerProcessCompletionHandler(processId, async () => {
+            const proj = await getProject(projectId);
+            if (proj && !proj.is_ready) {
+                proj.is_ready = true;
+                await updateProject(proj);
+                await addProjectHistory(
+                    projectId,
+                    'Project analysis completed',
+                    { processId }
+                );
+                console.log(
+                    `[container-manager] Marked project ${projectId} as ready (analysis by ${processId})`
+                );
+            }
+        });
+
+        // Start the project_analyze process
+        await processManager.createAgentProcess({
+            processId,
+            started: new Date(),
+            status: 'running',
+            tool: 'project_analyze',
+            command: `We've just created the project ${projectId} from a ${project.project_type} template. Please analyze the template files and fill in the project details.`,
+            name: `Analyzing ${projectId}`,
+            projectIds: [projectId],
+        });
+
+        // Add entry to project history about agent process creation
+        await addProjectHistory(projectId, 'Started project analysis agent', {
+            processId,
+        });
+
+        return projectId;
     } catch (error) {
         // Clean up the created directory on error
         try {
@@ -304,11 +394,13 @@ export async function runDockerContainer(
         console.log('***** runDockerContainer', options);
 
         // Mount git repositories if specified
-        const projects = listProjects();
+        const projects = await getAllProjectIds();
         const gitProjectsArray =
             coreProcessId && coreProcessId === processId
                 ? projects
-                : (projectIds || []).filter(project => projects.includes(project));
+                : (projectIds || []).filter(project =>
+                      projects.includes(project)
+                  );
 
         console.log('gitProjectsArray', gitProjectsArray);
 

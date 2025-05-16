@@ -72,10 +72,9 @@ async function wait_for_running_tool(
     while (Date.now() - startTime < timeoutMs) {
         // Check if the operation was aborted
         if (abort_signal?.aborted) {
-            const abortReason =
-                (abort_signal as any)?.reason
-                    ? ` Reason: ${(abort_signal as any)?.reason}.`
-                    : '';
+            const abortReason = (abort_signal as any)?.reason
+                ? ` Reason: ${(abort_signal as any)?.reason}.`
+                : '';
             finalResult = `Wait for running tool ${runningToolId} was aborted.${abortReason}`;
             // Send stream event indicating abort
             sendStreamEvent({
@@ -142,10 +141,9 @@ async function wait_for_running_tool(
                     });
                 } catch (error) {
                     if (abort_signal?.aborted) {
-                        const abortReason2 =
-                            (abort_signal as any)?.reason
-                                ? ` Reason: ${(abort_signal as any)?.reason}.`
-                                : '';
+                        const abortReason2 = (abort_signal as any)?.reason
+                            ? ` Reason: ${(abort_signal as any)?.reason}.`
+                            : '';
                         finalResult = `Wait for running tool ${runningToolId} was aborted during polling delay.${abortReason2}`;
                         // Send stream event
                         sendStreamEvent({

@@ -9,12 +9,27 @@
 import { Agent } from './agent.js';
 import { Runner } from './runner.js';
 import { getCommunicationManager, sendComms } from './communication.js';
-import { addHistory, getHistory, processPendingHistoryThreads } from './history.js';
+import {
+    addHistory,
+    getHistory,
+    processPendingHistoryThreads,
+} from './history.js';
 import { runThoughtDelay, getThoughtDelay } from './thought_utils.js';
-import { ToolFunction, ResponseInput } from '../types/shared-types.js';
+import {
+    ToolFunction,
+    ResponseInput,
+    StreamingEvent,
+} from '../types/shared-types.js';
 import { createToolFunction } from './tool_call.js';
 import { mechState, spawnMetaThoughtIfNeeded } from './mech_state.js';
 import { costTracker } from './cost_tracker.js';
+
+export type MechOutcome = {
+    status?: 'complete' | 'fatal_error';
+    result?: string;
+    error?: string;
+    event?: StreamingEvent;
+};
 
 /**
  * Result structure returned from running MECH
@@ -22,14 +37,14 @@ import { costTracker } from './cost_tracker.js';
 export type MechResult =
     | {
           status: 'complete';
-          result: string;
+          mechOutcome?: MechOutcome;
           history: ResponseInput;
           durationSec: number;
           totalCost: number;
       }
     | {
           status: 'fatal_error';
-          error: string;
+          mechOutcome?: MechOutcome;
           history: ResponseInput;
           durationSec: number;
           totalCost: number;
@@ -37,11 +52,7 @@ export type MechResult =
 
 // Shared state for MECH execution
 let mechComplete = false;
-let mechOutcome: {
-    status?: 'complete' | 'fatal_error';
-    result?: string;
-    error?: string;
-} = {};
+let mechOutcome: MechOutcome = {};
 
 /**
  * Runs the Meta-cognition Ensemble Chain-of-thought Hierarchy (MECH)
@@ -89,11 +100,11 @@ export async function runMECH(
     const comm = getCommunicationManager();
 
     do {
-        // Process any pending history threads at the start of each mech loop
-        await processPendingHistoryThreads();
-
         try {
             await spawnMetaThoughtIfNeeded(agent);
+
+            // Process any pending history threads at the start of each mech loop
+            await processPendingHistoryThreads();
 
             // Rotate the model using the MECH hierarchy-aware rotation (influenced by model scores)
             agent.model = model || Runner.rotateModel(agent);
@@ -164,9 +175,7 @@ export async function runMECH(
     if (mechOutcome.status === 'complete') {
         return {
             status: 'complete',
-            result:
-                mechOutcome.result ||
-                'Task completed successfully (no result provided)',
+            mechOutcome,
             history: getHistory(),
             durationSec,
             totalCost,
@@ -174,9 +183,7 @@ export async function runMECH(
     } else if (mechOutcome.status === 'fatal_error') {
         return {
             status: 'fatal_error',
-            error:
-                mechOutcome.error ||
-                'Task failed with an error (no details provided)',
+            mechOutcome,
             history: getHistory(),
             durationSec,
             totalCost,
@@ -188,7 +195,6 @@ export async function runMECH(
         );
         return {
             status: 'complete',
-            result: 'Task completed (no explicit result provided)',
             history: getHistory(),
             durationSec,
             totalCost,
@@ -204,12 +210,6 @@ const taskStartTime = new Date();
  * This also triggers automatic handling of git repositories for the task.
  */
 export async function task_complete(result: string): Promise<string> {
-    mechComplete = true;
-    mechOutcome = {
-        status: 'complete',
-        result,
-    };
-
     console.log(`[TaskRun] Task completed successfully: ${result}`);
 
     // Calculate metrics for immediate use in the response
@@ -221,13 +221,16 @@ export async function task_complete(result: string): Promise<string> {
     // Add metrics to the result message
     const resultWithMetrics = `${result}\n\n=== METRICS ===\nDuration  : ${durationSec}s\nTotal cost: $${totalCost.toFixed(6)}`;
 
-    const comm = getCommunicationManager();
-    // Use type assertion to avoid TypeScript errors
-    comm.send({
-        type: 'process_done',
-        output: resultWithMetrics,
-        history: getHistory(),
-    } as any); // Cast to any to bypass type checking
+    mechComplete = true;
+    mechOutcome = {
+        status: 'complete',
+        result,
+        event: {
+            type: 'process_done',
+            output: resultWithMetrics,
+            history: getHistory(),
+        },
+    };
 
     return `Task ended successfully\n\n${resultWithMetrics}`;
 }
@@ -236,12 +239,6 @@ export async function task_complete(result: string): Promise<string> {
  * Tool function to mark a task as failed with a fatal error.
  */
 export function task_fatal_error(error: string): string {
-    mechComplete = true;
-    mechOutcome = {
-        status: 'fatal_error',
-        error,
-    };
-
     console.error(`[TaskRun] Task failed: ${error}`);
 
     // Calculate metrics for immediate use in the response
@@ -253,13 +250,16 @@ export function task_fatal_error(error: string): string {
     // Add metrics to the error message
     const errorWithMetrics = `Error: ${error}\n\n=== METRICS ===\nDuration  : ${durationSec}s\nTotal cost: $${totalCost.toFixed(6)}`;
 
-    const comm = getCommunicationManager();
-    // Use type assertion to avoid TypeScript errors
-    comm.send({
-        type: 'process_failed',
-        error: errorWithMetrics,
-        history: getHistory(),
-    } as any); // Cast to any to bypass type checking
+    mechComplete = true;
+    mechOutcome = {
+        status: 'fatal_error',
+        error,
+        event: {
+            type: 'process_failed',
+            error: errorWithMetrics,
+            history: getHistory(),
+        },
+    };
 
     return `Task failed\n\n${errorWithMetrics}`;
 }

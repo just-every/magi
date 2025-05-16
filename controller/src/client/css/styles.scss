@@ -1210,6 +1210,8 @@ header {
 
 
 .timeline-player-console {
+    height: 100%;
+
     .display-container {
         background-color: #000;
         height: 100%;
@@ -1217,16 +1219,16 @@ header {
     }
 
     .url-bar, .control-bar {
-        background-color: #2a2a2a !important;
+        background-color: #000 !important;
         color: #e0e0e0 !important;
     }
 
     .url-bar {
-        border-bottom: 1px solid #444 !important;
+        border-bottom: 1px solid #333 !important;
     }
 
     .control-bar {
-        border-top: 1px solid #444 !important;
+        border-top: 1px solid #333 !important;
     }
 }
 

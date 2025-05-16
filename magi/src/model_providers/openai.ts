@@ -30,6 +30,49 @@ import {
     extractBase64Image,
     resizeAndSplitForOpenAI,
 } from '../utils/image_utils.js';
+import { DeltaBuffer, bufferDelta, flushBufferedDeltas } from '../utils/delta_buffer.js';
+
+/**
+ * Citation tracking for footnotes
+ */
+interface CitationTracker {
+    citations: Map<string, { title: string; url: string }>;
+}
+
+/**
+ * Create a new citation tracker
+ */
+function createCitationTracker(): CitationTracker {
+    return {
+        citations: new Map()
+    };
+}
+
+/**
+ * Format citation as a footnote and return a reference marker
+ */
+function formatCitation(
+    tracker: CitationTracker,
+    citation: { title: string; url: string }
+): string {
+    if (!tracker.citations.has(citation.url)) {
+        tracker.citations.set(citation.url, citation);
+    }
+    return ` [${Array.from(tracker.citations.keys()).indexOf(citation.url) + 1}]`;
+}
+
+/**
+ * Generate formatted footnotes from citation tracker
+ */
+function generateFootnotes(tracker: CitationTracker): string {
+    if (tracker.citations.size === 0) return '';
+
+    const footnotes = Array.from(tracker.citations.values())
+        .map((citation, i) => `[${i + 1}] ${citation.title} – ${citation.url}`)
+        .join('\n');
+
+    return '\n\nReferences:\n' + footnotes;
+}
 
 // Convert our tool definition to OpenAI's format
 function convertToOpenAITools(requestParams: any): any {
@@ -492,7 +535,9 @@ export class OpenAIProvider implements ModelProvider {
         messages: ResponseInput,
         agent: Agent
     ): AsyncGenerator<StreamingEvent> {
-        const tools: ToolFunction[] | undefined = agent ? await agent.getTools() : [];
+        const tools: ToolFunction[] | undefined = agent
+            ? await agent.getTools()
+            : [];
         const settings: ModelSettings | undefined = agent?.modelSettings;
         let requestId: string;
 
@@ -503,12 +548,13 @@ export class OpenAIProvider implements ModelProvider {
 
             // Process all messages
             for (const messageFull of messages) {
-                const message = { ...messageFull };
+                let message = { ...messageFull };
                 // Keep the original model for class comparison
-                const originalModel: string | undefined = (message as any).model;
+                const originalModel: string | undefined = (message as any)
+                    .model;
 
                 delete message.timestamp;
-                // Don't delete message.model yet - we need it for reasoning filter
+                delete message.model;
 
                 // Handle thinking messages
                 if (message.type === 'thinking') {
@@ -518,13 +564,12 @@ export class OpenAIProvider implements ModelProvider {
                     // Use a complete type assertion to bypass TypeScript's type checking for this object
                     // The OpenAI API expects a structure different from our ResponseInputItem types
 
-                    // Check if both models are of the same class (both o-class models)
-                    const sameClass =
-                        model.startsWith('o') &&
-                        originalModel?.startsWith('o');
-
                     // Only convert to reasoning if both current model and source model are o-class
-                    if (message.thinking_id && sameClass) {
+                    if (
+                        model.startsWith('o') &&
+                        message.thinking_id &&
+                        model === originalModel
+                    ) {
                         console.log(
                             `[OpenAI] Processing thinking message with ID: ${message.thinking_id}`,
                             message
@@ -599,29 +644,27 @@ export class OpenAIProvider implements ModelProvider {
                         status: message.status || 'completed',
                     });
 
-                    // Now it's safe to delete the model field
-                    delete (message as any).model;
                     continue;
                 }
-
-                // Now it's safe to delete the model field for non-thinking messages
-                delete (message as any).model;
 
                 // Handle function call messages
                 if (message.type === 'function_call') {
                     // Check if id doesn't start with 'fc_', and remove it if so
-                    let messageToAdd: any = { ...message };
-                    if (message.id && !message.id.startsWith('fc_')) {
+                    if (
+                        message.id &&
+                        (!message.id.startsWith('fc_') ||
+                            model !== originalModel)
+                    ) {
                         // If id exists and doesn't start with 'fc_', remove it
                         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                        const { id, ...rest } = messageToAdd;
-                        messageToAdd = rest;
+                        const { id, ...rest } = message;
+                        message = rest;
                     }
 
-                    messageToAdd.status = message.status || 'completed';
+                    message.status = message.status || 'completed';
 
                     // Add the message (potentially without id)
-                    input.push(messageToAdd);
+                    input.push(message);
                     continue;
                 }
 
@@ -664,6 +707,21 @@ export class OpenAIProvider implements ModelProvider {
                     (message.type ?? 'message') === 'message' &&
                     'content' in message
                 ) {
+                    if (
+                        'id' in message &&
+                        message.id &&
+                        (!message.id.startsWith('msg_') ||
+                            model !== originalModel)
+                    ) {
+                        // If id exists and doesn't start with 'msg_', remove it
+                        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                        const { id, ...rest } = message;
+                        message = rest;
+                        console.log(
+                            `[OpenAI] Removed message ID: ${id} model: ${model} originalModel: ${originalModel}`
+                        );
+                    }
+
                     // Check if the message content contains an image
                     if (typeof message.content === 'string') {
                         const extracted = extractBase64Image(message.content);
@@ -712,18 +770,6 @@ export class OpenAIProvider implements ModelProvider {
                     }
                     continue;
                 }
-
-                // Default: add the original message
-                // Only add type:'message' if it's a valid message with role and content
-                if (
-                    message.type === undefined &&
-                    'role' in message &&
-                    'content' in message
-                ) {
-                    input.push({ ...message, type: 'message' });
-                } else {
-                    input.push(message);
-                }
             }
 
             // Format the request according to the Responses API specification
@@ -745,7 +791,34 @@ export class OpenAIProvider implements ModelProvider {
                     requestParams.top_p = settings.top_p;
                 }
             }
-            if (model.startsWith('o')) {
+
+            // Define mapping for OpenAI reasoning effort configurations
+            const REASONING_EFFORT_CONFIGS: Array<string> = [
+                'low',
+                'medium',
+                'high',
+            ];
+
+            // Check if model has any of the defined suffixes
+            let hasEffortSuffix = false;
+
+            for (const effort of REASONING_EFFORT_CONFIGS) {
+                const suffix = `-${effort}`;
+                if (model.endsWith(suffix)) {
+                    hasEffortSuffix = true;
+                    // Apply the specific reasoning effort and remove the suffix
+                    requestParams.reasoning = {
+                        effort: effort,
+                        summary: 'auto',
+                    };
+                    model = model.slice(0, -suffix.length);
+                    requestParams.model = model; // Update the model in the request
+                    break;
+                }
+            }
+
+            // Default reasoning for o-models if no suffix
+            if (model.startsWith('o') && !hasEffortSuffix) {
                 requestParams.reasoning = {
                     effort: 'high',
                     summary: 'auto',
@@ -844,6 +917,10 @@ export class OpenAIProvider implements ModelProvider {
             const messagePositions = new Map<string, number>();
             const reasoningPositions = new Map<string, number>();
             const reasoningAggregates = new Map<string, string>();
+            // Adaptive buffers for throttling message_delta emissions
+            const deltaBuffers = new Map<string, DeltaBuffer>();
+            // Track citations to display as footnotes
+            const citationTracker = createCitationTracker();
 
             const toolCallStates = new Map<string, ToolCall>();
 
@@ -898,6 +975,7 @@ export class OpenAIProvider implements ModelProvider {
                     ) {
                         // Response failed entirely
                         const errorInfo = event.response.error;
+                        log_llm_error(requestId, errorInfo);
                         console.error(
                             `Response ${event.response.id} failed: [${errorInfo.code}] ${errorInfo.message}`
                         );
@@ -905,13 +983,16 @@ export class OpenAIProvider implements ModelProvider {
                             type: 'error',
                             error: `OpenAI response  failed: [${errorInfo.code}] ${errorInfo.message}`,
                         };
-                        log_llm_error(requestId, errorInfo);
                     } else if (
                         event.type === 'response.incomplete' &&
                         event.response?.incomplete_details
                     ) {
                         // Response finished but is incomplete (e.g., max_tokens hit)
                         const reason = event.response.incomplete_details.reason;
+                        log_llm_error(
+                            requestId,
+                            'OpenAI response incomplete: ' + reason
+                        );
                         console.warn(
                             `Response ${event.response.id} incomplete: ${reason}`
                         );
@@ -919,10 +1000,6 @@ export class OpenAIProvider implements ModelProvider {
                             type: 'error', // Or a more general 'response_incomplete'
                             error: 'OpenAI response incomplete: ' + reason,
                         };
-                        log_llm_error(
-                            requestId,
-                            'OpenAI response incomplete: ' + reason
-                        );
                     }
 
                     // --- Output Item Lifecycle Events ---
@@ -995,34 +1072,45 @@ export class OpenAIProvider implements ModelProvider {
                         event.type === 'response.output_text.delta' &&
                         event.delta
                     ) {
-                        // Streamed text chunk
-                        const itemId = event.item_id; // Use item_id from the event
-                        if (!messagePositions.has(itemId)) {
-                            messagePositions.set(itemId, 0);
-                        }
-                        const position = messagePositions.get(itemId)!;
-                        yield {
+                        // Streamed text chunk (buffered)
+                        const itemId = event.item_id;
+                        let position = messagePositions.get(itemId) ?? 0;
+
+                        for (const ev of bufferDelta(deltaBuffers, itemId, event.delta, (content) => ({
                             type: 'message_delta',
-                            content: event.delta,
-                            message_id: itemId, // Use item_id
-                            order: position,
-                        };
-                        messagePositions.set(itemId, position + 1);
+                            content,
+                            message_id: itemId,
+                            order: position++,
+                        } as StreamingEvent))) {
+                            yield ev;
+                        }
+
+                        messagePositions.set(itemId, position);
                     } else if (
                         event.type ===
                             'response.output_text.annotation.added' &&
                         event.annotation
                     ) {
-                        // An annotation (e.g., file citation) was added to the text
-                        console.log('Annotation added:', event.annotation);
-                        // You might want to yield a specific annotation event or store them
-                        /*yield {
-							type: 'annotation_added',
-							item_id: event.item_id,
-							content_index: event.content_index,
-							annotation_index: event.annotation_index,
-							annotation: event.annotation
-						};*/
+                        // Handle URL citation annotations
+                        if (event.annotation?.type === 'url_citation' &&
+                            event.annotation.url) {
+                            const marker = formatCitation(citationTracker, {
+                                title: event.annotation.title || event.annotation.url,
+                                url: event.annotation.url
+                            });
+                            // Append to aggregate buffer for this item
+                            let position = messagePositions.get(event.item_id) ?? 0;
+                            yield {
+                                type: 'message_delta',
+                                content: marker,
+                                message_id: event.item_id,
+                                order: position++
+                            };
+                            messagePositions.set(event.item_id, position);
+                        } else {
+                            // Log other types of annotations
+                            console.log('Annotation added:', event.annotation);
+                        }
                     } else if (
                         event.type === 'response.output_text.done' &&
                         event.text !== undefined
@@ -1030,11 +1118,20 @@ export class OpenAIProvider implements ModelProvider {
                         // Check text exists
                         // Text block finalized
                         const itemId = event.item_id; // Use item_id from the event
+
+                        // Add footnotes if we have citations
+                        let finalText = event.text;
+                        if (citationTracker.citations.size > 0) {
+                            const footnotes = generateFootnotes(citationTracker);
+                            finalText += footnotes;
+                        }
+
                         yield {
                             type: 'message_complete',
-                            content: event.text,
+                            content: finalText,
                             message_id: itemId, // Use item_id
                         };
+
                         // Optional: Clean up position tracking for this message item
                         messagePositions.delete(itemId);
                         // console.log(`Text output done for item ${itemId}.`);
@@ -1056,6 +1153,10 @@ export class OpenAIProvider implements ModelProvider {
                         event.refusal
                     ) {
                         // Refusal text finalized
+                        log_llm_error(
+                            requestId,
+                            'OpenAI refusal error: ' + event.refusal
+                        );
                         console.log(
                             `Refusal done for item ${event.item_id}: ${event.refusal}`
                         );
@@ -1063,10 +1164,6 @@ export class OpenAIProvider implements ModelProvider {
                             type: 'error',
                             error: 'OpenAI refusal error: ' + event.refusal,
                         };
-                        log_llm_error(
-                            requestId,
-                            'OpenAI refusal error: ' + event.refusal
-                        );
                     }
 
                     // --- Function Call Events (Based on Docs) ---
@@ -1228,6 +1325,7 @@ export class OpenAIProvider implements ModelProvider {
 
                     // --- API Stream Error Event ---
                     else if (event.type === 'error' && event.message) {
+                        log_llm_error(requestId, event);
                         // An error reported by the API within the stream
                         console.error(
                             `API Stream Error (${model}): [${event.code || 'N/A'}] ${event.message}`
@@ -1236,7 +1334,6 @@ export class OpenAIProvider implements ModelProvider {
                             type: 'error',
                             error: `OpenAI API error (${model}): [${event.code || 'N/A'}] ${event.message}`,
                         };
-                        log_llm_error(requestId, event);
                     }
 
                     // --- Catch unexpected event types (shouldn't happen if user confirmation is correct) ---
@@ -1245,13 +1342,13 @@ export class OpenAIProvider implements ModelProvider {
                     // }
                 }
             } catch (streamError) {
+                log_llm_error(requestId, streamError);
                 // Catch errors during stream iteration/processing
                 console.error('Error processing response stream:', streamError);
                 yield {
                     type: 'error',
                     error: `OpenAI stream request error (${model}): ${streamError}`,
                 };
-                log_llm_error(requestId, streamError);
             } finally {
                 // Clean up: Check if any tool calls were started but not completed
                 if (toolCallStates.size > 0) {
@@ -1270,6 +1367,15 @@ export class OpenAIProvider implements ModelProvider {
                     }
                     toolCallStates.clear(); // Clear the map
                 }
+                // Flush any buffered d
+                for (const ev of flushBufferedDeltas(deltaBuffers, (id, content) => ({
+                    type: 'message_delta',
+                    content,
+                    message_id: id,
+                    order: messagePositions.get(id) ?? 0,
+                } as StreamingEvent))) {
+                    yield ev;
+                }
                 messagePositions.clear(); // Clear positions map
                 // console.log("Stream processing finished.");
 
@@ -1277,6 +1383,7 @@ export class OpenAIProvider implements ModelProvider {
                 log_llm_response(requestId, events);
             }
         } catch (error) {
+            log_llm_error(requestId, error);
             console.error('Error in OpenAI streaming response:', error);
             yield {
                 type: 'error',
@@ -1284,7 +1391,6 @@ export class OpenAIProvider implements ModelProvider {
                     'OpenAI streaming error: ' +
                     (error instanceof Error ? error.stack : String(error)),
             };
-            log_llm_error(requestId, error);
         }
     }
 }

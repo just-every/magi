@@ -38,6 +38,7 @@
         "ef-infinite-canvas": "^0.6.7",
         "express": "^4.21.2",
         "marked": "^15.0.7",
+        "micromatch": "^4.0.8",
         "node-telegram-bot-api": "^0.66.0",
         "openai": "^4.90.0",
         "pg": "^8.15.6",

@@ -11,6 +11,7 @@ import {
     StreamingEvent,
     ToolCall,
     ResponseThinkingMessage,
+    type ResponseOutputMessage,
 } from '../types/shared-types.js';
 import { v4 as uuidv4 } from 'uuid';
 import { addHistory, addMonologue } from '../utils/history.js';
@@ -22,20 +23,22 @@ import {
     getMemoryTools,
     listShortTermMemories,
 } from '../utils/memory_utils.js';
-import { listActiveProjects, getProjectTools, getExternalProjectIds } from '../utils/project_utils.js';
+import {
+    listActiveProjects,
+    getProjectTools,
+    getExternalProjectIds,
+} from '../utils/project_utils.js';
 import { getProcessTools } from '../utils/process_tools.js';
 import { MAGI_CONTEXT, CUSTOM_TOOLS_TEXT } from './constants.js';
 import { sendStreamEvent } from '../utils/communication.js';
 import { getCommonTools } from '../utils/index.js';
 import { getRunningToolTools } from '../utils/running_tools.js';
-import { getCommunicationManager } from '../utils/communication.js';
 
 export const startTime = new Date();
 // Track when we last checked task health
 export let lastTaskHealthCheckTime = new Date();
 // How often to check task health (10 minutes)
 export const TASK_HEALTH_CHECK_INTERVAL_MS = 10 * 60 * 1000;
-
 
 async function* sendEvent(
     type: 'talk_complete',
@@ -54,7 +57,6 @@ async function* sendEvent(
 async function addSystemStatus(
     messages: ResponseInput
 ): Promise<ResponseInput> {
-
     const status = `=== System Status ===
 
 Current Time: ${dateFormat()}
@@ -62,7 +64,7 @@ Time Running: ${readableTime(new Date().getTime() - startTime.getTime())}
 Thought Delay: ${getThoughtDelay()} seconds [Change with set_thought_delay()]
 
 Active Projects:
-${listActiveProjects(false)}
+${await listActiveProjects(false)}
 [Create with create_project()]
 
 Active Tasks:
@@ -368,20 +370,23 @@ You are your own user. Your messages will be sent back to you to continue your t
 
             return [agent, messages];
         },
-        onResponse: async (response: string): Promise<string> => {
-            if (response && response.trim()) {
+        onResponse: async (message: ResponseOutputMessage): Promise<void> => {
+            if (
+                typeof message.content === 'string' &&
+                message.content &&
+                message.content.trim()
+            ) {
                 // Add the response to the monologue
-                await addMonologue(response, agent.historyThread);
+                await addMonologue(message.content, agent.historyThread);
             }
-            return response;
         },
         onThinking: async (message: ResponseThinkingMessage): Promise<void> => {
+            delete message.thinking_id; // We don't want to confuse o models as we don't always have the output or functions associated with the thinking
             return addHistory(message, agent.historyThread);
         },
         onToolCall: async (toolCall: ToolCall): Promise<void> => {
             await addHistory(
                 {
-                    id: toolCall.id,
                     type: 'function_call',
                     call_id: toolCall.call_id || toolCall.id,
                     name: toolCall.function.name,

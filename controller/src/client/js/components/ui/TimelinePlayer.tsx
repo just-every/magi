@@ -26,12 +26,18 @@ export interface TimelinePoint {
         width: number;
         height: number;
     };
-    cursor?: { x: number; y: number, button?: 'none' | 'left' | 'middle' | 'right' };
+    cursor?: {
+        x: number;
+        y: number;
+        button?: 'none' | 'left' | 'middle' | 'right';
+    };
 }
 
 interface TimelinePlayerProps {
     mode: 'browser' | 'console'; // new points may be pushed in over time
     points: TimelinePoint[]; // new points may be pushed in over time
+    collapsible?: boolean; // whether the player can be collapsed
+    model?: string; // optional model name for console mode
     initialTime?: number; // optional starting time; defaults to latest
     className?: string; // extra wrapper classes for the main card
     style?: React.CSSProperties; // inline styles on the card
@@ -60,6 +66,8 @@ const formatTime = (secs: number): string => {
 const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
     mode,
     points,
+    collapsible,
+    model,
     initialTime,
     onTimeChange,
     className,
@@ -84,8 +92,10 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
     const fitAddonRef = useRef<FitAddon | null>(null); // Ref for FitAddon instance
     const isUserScrolledUpRef = useRef<boolean>(false);
     const terminalViewportRef = useRef<HTMLElement | null>(null);
-    const prevTerminalPointDataRef = useRef<{ message_id?: string; time: number } | null>(null);
-
+    const prevTerminalPointDataRef = useRef<{
+        message_id?: string;
+        time: number;
+    } | null>(null);
 
     // --- Memoized Derived Data ---
     const sortedPoints: TimelinePoint[] = useMemo(
@@ -110,24 +120,30 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
         [currentIndex, sortedPoints]
     );
 
-    const calculateAndScroll = useCallback((
-        container: HTMLDivElement,
-        img: HTMLImageElement,
-        point: TimelinePoint
-    ) => {
-        if (!point.cursor) return;
-        const containerHeight = container.clientHeight;
-        const naturalHeight = point.viewport?.height ?? img.naturalHeight;
-        if (naturalHeight === 0) return;
-        const displayedHeight = img.clientHeight || containerHeight;
-        const scale = displayedHeight / naturalHeight;
-        const displayedY = point.cursor.y * scale;
-        const targetScrollTop = Math.max(0, displayedY - (containerHeight / 2));
-        container.scrollTo({
-            top: targetScrollTop,
-            behavior: 'smooth'
-        });
-    }, []);
+    const calculateAndScroll = useCallback(
+        (
+            container: HTMLDivElement,
+            img: HTMLImageElement,
+            point: TimelinePoint
+        ) => {
+            if (!point.cursor) return;
+            const containerHeight = container.clientHeight;
+            const naturalHeight = point.viewport?.height ?? img.naturalHeight;
+            if (naturalHeight === 0) return;
+            const displayedHeight = img.clientHeight || containerHeight;
+            const scale = displayedHeight / naturalHeight;
+            const displayedY = point.cursor.y * scale;
+            const targetScrollTop = Math.max(
+                0,
+                displayedY - containerHeight / 2
+            );
+            container.scrollTo({
+                top: targetScrollTop,
+                behavior: 'smooth',
+            });
+        },
+        []
+    );
 
     // --- Effects ---
 
@@ -168,21 +184,28 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
         // Initial fit after terminal is open and container is likely sized
         // Using requestAnimationFrame to ensure DOM is ready for measurement
         requestAnimationFrame(() => {
-            if (fitAddonRef.current && terminalContainerRef.current && terminalContainerRef.current.clientHeight > 0) {
-                 fitAddonRef.current.fit();
+            if (
+                fitAddonRef.current &&
+                terminalContainerRef.current &&
+                terminalContainerRef.current.clientHeight > 0
+            ) {
+                fitAddonRef.current.fit();
             }
         });
 
-
         let cleanupViewportScroll: (() => void) | undefined;
         const attemptToSetupViewport = () => {
-            const viewport = terminalContainerRef.current?.querySelector('.xterm-viewport') as HTMLElement;
+            const viewport = terminalContainerRef.current?.querySelector(
+                '.xterm-viewport'
+            ) as HTMLElement;
             if (viewport) {
                 terminalViewportRef.current = viewport;
                 const handleScroll = () => {
                     if (terminalViewportRef.current) {
-                        const { scrollTop, scrollHeight, clientHeight } = terminalViewportRef.current;
-                        isUserScrolledUpRef.current = (scrollHeight - scrollTop - clientHeight) > 5;
+                        const { scrollTop, scrollHeight, clientHeight } =
+                            terminalViewportRef.current;
+                        isUserScrolledUpRef.current =
+                            scrollHeight - scrollTop - clientHeight > 5;
                     }
                 };
                 viewport.addEventListener('scroll', handleScroll);
@@ -228,9 +251,17 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
     // Effect to call fit() when terminal becomes visible (un-collapsed) or on window resize
     useEffect(() => {
         const handleResize = () => {
-            if (mode === 'console' && !collapsed && fitAddonRef.current && terminalInstanceRef.current?.element) {
-                 // Ensure terminal is attached and visible
-                if (terminalContainerRef.current && terminalContainerRef.current.clientHeight > 0) {
+            if (
+                mode === 'console' &&
+                !collapsed &&
+                fitAddonRef.current &&
+                terminalInstanceRef.current?.element
+            ) {
+                // Ensure terminal is attached and visible
+                if (
+                    terminalContainerRef.current &&
+                    terminalContainerRef.current.clientHeight > 0
+                ) {
                     fitAddonRef.current.fit();
                 }
             }
@@ -250,7 +281,6 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
             window.removeEventListener('resize', handleResize);
         };
     }, [mode, collapsed]);
-
 
     // Update terminal content
     useEffect(() => {
@@ -272,22 +302,44 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
             return;
         }
 
-        const { message_id: currentMessageId, time: currentTimeValue } = currentPoint;
+        const { message_id: currentMessageId, time: currentTimeValue } =
+            currentPoint;
         const prevData = prevTerminalPointDataRef.current;
-        const needsReset = !prevData || prevData.message_id !== currentMessageId || (prevData.message_id === currentMessageId && currentTimeValue < prevData.time);
+        const needsReset =
+            !prevData ||
+            prevData.message_id !== currentMessageId ||
+            (prevData.message_id === currentMessageId &&
+                currentTimeValue < prevData.time);
 
         if (needsReset) {
             terminal.reset();
-            const pointsToDisplay = sortedPoints.filter(p => p.message_id === currentMessageId && p.time <= currentTimeValue);
+            const pointsToDisplay = sortedPoints.filter(
+                p =>
+                    p.message_id === currentMessageId &&
+                    p.time <= currentTimeValue
+            );
             const fullLog = pointsToDisplay.map(p => p.console || '').join('');
             if (fullLog) terminal.write(fullLog);
             // Check if terminal is scrollable and at the bottom before forcing scroll
-            if (terminal.buffer.active.baseY + (fitAddonRef.current ? terminal.rows: 40) >= terminal.buffer.active.length) {
-                 terminal.scrollToBottom();
+            if (
+                terminal.buffer.active.baseY +
+                    (fitAddonRef.current ? terminal.rows : 40) >=
+                terminal.buffer.active.length
+            ) {
+                terminal.scrollToBottom();
             }
             isUserScrolledUpRef.current = false;
-        } else if (prevData && prevData.message_id === currentMessageId && currentTimeValue > prevData.time) {
-            const newPoints = sortedPoints.filter(p => p.message_id === currentMessageId && p.time > prevData.time && p.time <= currentTimeValue);
+        } else if (
+            prevData &&
+            prevData.message_id === currentMessageId &&
+            currentTimeValue > prevData.time
+        ) {
+            const newPoints = sortedPoints.filter(
+                p =>
+                    p.message_id === currentMessageId &&
+                    p.time > prevData.time &&
+                    p.time <= currentTimeValue
+            );
             const newData = newPoints.map(p => p.console || '').join('');
             if (newData) {
                 const userWasAtBottom = !isUserScrolledUpRef.current;
@@ -295,17 +347,27 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
                 if (userWasAtBottom) terminal.scrollToBottom();
             }
         }
-        prevTerminalPointDataRef.current = { message_id: currentMessageId, time: currentTimeValue };
+        prevTerminalPointDataRef.current = {
+            message_id: currentMessageId,
+            time: currentTimeValue,
+        };
     }, [mode, currentPoint, sortedPoints]);
 
     // Center cursor in browser mode
     useEffect(() => {
-        if (mode !== 'browser' || !currentPoint || !currentPoint.screenshot || !screenshotContainerRef.current) return;
+        if (
+            mode !== 'browser' ||
+            !currentPoint ||
+            !currentPoint.screenshot ||
+            !screenshotContainerRef.current
+        )
+            return;
         const container = screenshotContainerRef.current;
         const img = container.querySelector('img');
         if (!img) return;
         const attemptScroll = () => {
-            if (img.complete && img.naturalHeight > 0) calculateAndScroll(container, img, currentPoint);
+            if (img.complete && img.naturalHeight > 0)
+                calculateAndScroll(container, img, currentPoint);
         };
         if (img.complete && img.naturalHeight > 0) {
             attemptScroll();
@@ -345,7 +407,8 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
             if (currentTime !== newLatestTime || currentIndex !== newIndex) {
                 setCurrentTime(newLatestTime);
                 setCurrentIndex(newIndex);
-                if (onTimeChange && sortedPoints[newIndex]) onTimeChange(sortedPoints[newIndex]);
+                if (onTimeChange && sortedPoints[newIndex])
+                    onTimeChange(sortedPoints[newIndex]);
             }
         } else {
             // User has either explicitly set isLive=false or manually positioned the timeline
@@ -356,13 +419,19 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
                 if (diff < minDiff) {
                     minDiff = diff;
                     foundIndex = i;
-                } else if (diff === minDiff && p.time > (sortedPoints[foundIndex]?.time ?? -Infinity) ) {
+                } else if (
+                    diff === minDiff &&
+                    p.time > (sortedPoints[foundIndex]?.time ?? -Infinity)
+                ) {
                     foundIndex = i;
                 }
             });
             if (foundIndex !== -1) {
                 const closestPoint = sortedPoints[foundIndex];
-                if (currentTime !== closestPoint.time || currentIndex !== foundIndex) {
+                if (
+                    currentTime !== closestPoint.time ||
+                    currentIndex !== foundIndex
+                ) {
                     setCurrentTime(closestPoint.time);
                     setCurrentIndex(foundIndex);
                 }
@@ -377,7 +446,8 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
                     setCurrentTime(newLatestTime);
                     setCurrentIndex(sortedPoints.length - 1);
                     setIsLive(true);
-                    if (onTimeChange && sortedPoints[sortedPoints.length - 1]) onTimeChange(sortedPoints[sortedPoints.length - 1]);
+                    if (onTimeChange && sortedPoints[sortedPoints.length - 1])
+                        onTimeChange(sortedPoints[sortedPoints.length - 1]);
                 }
             }
         }
@@ -386,7 +456,8 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
     // Set initial time
     useEffect(() => {
         // Skip if the user has manually positioned the timeline or there are no points
-        if (userHasManuallySelectedRef.current || sortedPoints.length === 0) return;
+        if (userHasManuallySelectedRef.current || sortedPoints.length === 0)
+            return;
 
         let targetTime: number;
         let targetIndex = -1;
@@ -415,56 +486,83 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
     }, [initialTime, points, onTimeChange, endTime, sortedPoints]); // endTime added as it's used for setIsLive
 
     // --- Slider Calculation Helpers ---
-    const timeToPercentage = useCallback((t: number): number => {
-        if (duration <= 0) return t >= endTime ? 100 : 0;
-        const relativeTime = t - startTime;
-        const percentage = (relativeTime / duration) * 100;
-        return Math.max(0, Math.min(percentage, 100));
-    }, [startTime, duration, endTime]);
+    const timeToPercentage = useCallback(
+        (t: number): number => {
+            if (duration <= 0) return t >= endTime ? 100 : 0;
+            const relativeTime = t - startTime;
+            const percentage = (relativeTime / duration) * 100;
+            return Math.max(0, Math.min(percentage, 100));
+        },
+        [startTime, duration, endTime]
+    );
 
-    const findClosestPointIndex = useCallback((targetTime: number): number => {
-        if (sortedPoints.length === 0) return -1;
-        if (sortedPoints.length === 1) return 0;
-        let closestIndex = 0;
-        let minDifference = Infinity;
-        sortedPoints.forEach((point, index) => {
-            const difference = Math.abs(point.time - targetTime);
-            if (difference < minDifference) {
-                minDifference = difference;
-                closestIndex = index;
-            } else if (difference === minDifference && point.time > (sortedPoints[closestIndex]?.time ?? -Infinity)) {
-                closestIndex = index;
-            }
-        });
-        return closestIndex;
-    }, [sortedPoints]);
+    const findClosestPointIndex = useCallback(
+        (targetTime: number): number => {
+            if (sortedPoints.length === 0) return -1;
+            if (sortedPoints.length === 1) return 0;
+            let closestIndex = 0;
+            let minDifference = Infinity;
+            sortedPoints.forEach((point, index) => {
+                const difference = Math.abs(point.time - targetTime);
+                if (difference < minDifference) {
+                    minDifference = difference;
+                    closestIndex = index;
+                } else if (
+                    difference === minDifference &&
+                    point.time > (sortedPoints[closestIndex]?.time ?? -Infinity)
+                ) {
+                    closestIndex = index;
+                }
+            });
+            return closestIndex;
+        },
+        [sortedPoints]
+    );
 
-    const getTimeFromClientX = useCallback((clientX: number): number => {
-        if (!trackRef.current || sortedPoints.length === 0) return currentTime;
-        const trackRect = trackRef.current.getBoundingClientRect();
-        const relativeX = Math.max(0, Math.min(clientX - trackRect.left, trackRect.width));
-        const percentage = trackRect.width > 0 ? relativeX / trackRect.width : 0;
-        const calculatedTime = startTime + percentage * duration;
-        const closestIndex = findClosestPointIndex(calculatedTime);
-        return closestIndex !== -1 ? sortedPoints[closestIndex].time : currentTime;
-    }, [startTime, duration, sortedPoints, currentTime, findClosestPointIndex]);
+    const getTimeFromClientX = useCallback(
+        (clientX: number): number => {
+            if (!trackRef.current || sortedPoints.length === 0)
+                return currentTime;
+            const trackRect = trackRef.current.getBoundingClientRect();
+            const relativeX = Math.max(
+                0,
+                Math.min(clientX - trackRect.left, trackRect.width)
+            );
+            const percentage =
+                trackRect.width > 0 ? relativeX / trackRect.width : 0;
+            const calculatedTime = startTime + percentage * duration;
+            const closestIndex = findClosestPointIndex(calculatedTime);
+            return closestIndex !== -1
+                ? sortedPoints[closestIndex].time
+                : currentTime;
+        },
+        [startTime, duration, sortedPoints, currentTime, findClosestPointIndex]
+    );
 
     // --- Event Handlers ---
-    const handleGlobalMouseMove = useCallback((event: MouseEvent | TouchEvent) => {
-        if (!isDraggingRef.current) return;
-        if (event.type === 'touchmove' && event.cancelable) event.preventDefault();
-        const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
-        const newTime = getTimeFromClientX(clientX);
-        if (currentTime !== newTime) {
-            const newIndex = sortedPoints.findIndex(p => p.time === newTime);
-            if (newIndex !== -1) {
-                setCurrentTime(newTime);
-                setCurrentIndex(newIndex);
-                setIsLive(newTime === endTime);
-                if (onTimeChange && sortedPoints[newIndex]) onTimeChange(sortedPoints[newIndex]);
+    const handleGlobalMouseMove = useCallback(
+        (event: MouseEvent | TouchEvent) => {
+            if (!isDraggingRef.current) return;
+            if (event.type === 'touchmove' && event.cancelable)
+                event.preventDefault();
+            const clientX =
+                'touches' in event ? event.touches[0].clientX : event.clientX;
+            const newTime = getTimeFromClientX(clientX);
+            if (currentTime !== newTime) {
+                const newIndex = sortedPoints.findIndex(
+                    p => p.time === newTime
+                );
+                if (newIndex !== -1) {
+                    setCurrentTime(newTime);
+                    setCurrentIndex(newIndex);
+                    setIsLive(newTime === endTime);
+                    if (onTimeChange && sortedPoints[newIndex])
+                        onTimeChange(sortedPoints[newIndex]);
+                }
             }
-        }
-    }, [getTimeFromClientX, sortedPoints, endTime, onTimeChange, currentTime]);
+        },
+        [getTimeFromClientX, sortedPoints, endTime, onTimeChange, currentTime]
+    );
 
     const handleInteractionEnd = useCallback(() => {
         if (isDraggingRef.current) {
@@ -476,88 +574,153 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
         }
     }, [handleGlobalMouseMove]);
 
-    const handleInteractionStart = useCallback((clientX: number) => {
-        if (sortedPoints.length === 0) return;
-        isDraggingRef.current = true;
-        setIsDragging(true);
-        document.body.style.userSelect = 'none';
+    const handleInteractionStart = useCallback(
+        (clientX: number) => {
+            if (sortedPoints.length === 0) return;
+            isDraggingRef.current = true;
+            setIsDragging(true);
+            document.body.style.userSelect = 'none';
 
-        // User is manually interacting with the timeline
-        userHasManuallySelectedRef.current = true;
+            // User is manually interacting with the timeline
+            userHasManuallySelectedRef.current = true;
 
-        const newTime = getTimeFromClientX(clientX);
-        if (newTime !== currentTime) {
-            const newIndex = sortedPoints.findIndex(p => p.time === newTime);
-            if (newIndex !== -1) {
-                setCurrentTime(newTime);
-                setCurrentIndex(newIndex);
-                setIsLive(newTime === endTime);
-                if (onTimeChange && sortedPoints[newIndex]) onTimeChange(sortedPoints[newIndex]);
+            const newTime = getTimeFromClientX(clientX);
+            if (newTime !== currentTime) {
+                const newIndex = sortedPoints.findIndex(
+                    p => p.time === newTime
+                );
+                if (newIndex !== -1) {
+                    setCurrentTime(newTime);
+                    setCurrentIndex(newIndex);
+                    setIsLive(newTime === endTime);
+                    if (onTimeChange && sortedPoints[newIndex])
+                        onTimeChange(sortedPoints[newIndex]);
+                }
             }
-        }
-        window.addEventListener('mousemove', handleGlobalMouseMove);
-        window.addEventListener('touchmove', handleGlobalMouseMove, { passive: false });
-        window.addEventListener('mouseup', handleInteractionEnd, { once: true });
-        window.addEventListener('touchend', handleInteractionEnd, { once: true });
-    }, [sortedPoints, getTimeFromClientX, currentTime, endTime, onTimeChange, handleGlobalMouseMove, handleInteractionEnd]);
+            window.addEventListener('mousemove', handleGlobalMouseMove);
+            window.addEventListener('touchmove', handleGlobalMouseMove, {
+                passive: false,
+            });
+            window.addEventListener('mouseup', handleInteractionEnd, {
+                once: true,
+            });
+            window.addEventListener('touchend', handleInteractionEnd, {
+                once: true,
+            });
+        },
+        [
+            sortedPoints,
+            getTimeFromClientX,
+            currentTime,
+            endTime,
+            onTimeChange,
+            handleGlobalMouseMove,
+            handleInteractionEnd,
+        ]
+    );
 
     const handleTrackMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
-        if (isDraggingRef.current || !trackRef.current || sortedPoints.length < 1) {
+        if (
+            isDraggingRef.current ||
+            !trackRef.current ||
+            sortedPoints.length < 1
+        ) {
             setHoverIndex(null);
             return;
         }
         const trackRect = trackRef.current.getBoundingClientRect();
         const clientX = event.clientX;
-        const relativeX = Math.max(0, Math.min(clientX - trackRect.left, trackRect.width));
-        const hoverRatio = trackRect.width > 0 ? relativeX / trackRect.width : 0;
+        const relativeX = Math.max(
+            0,
+            Math.min(clientX - trackRect.left, trackRect.width)
+        );
+        const hoverRatio =
+            trackRect.width > 0 ? relativeX / trackRect.width : 0;
         const hoverTime = startTime + hoverRatio * duration;
         let targetHoverIndex: number | null = null;
         for (let i = sortedPoints.length - 1; i >= 0; i--) {
             if (sortedPoints[i].time <= hoverTime) {
-                if (sortedPoints[i].time < currentTime || (i === 0 && hoverTime < (sortedPoints[0]?.time ?? -Infinity))) {
+                if (
+                    sortedPoints[i].time < currentTime ||
+                    (i === 0 &&
+                        hoverTime < (sortedPoints[0]?.time ?? -Infinity))
+                ) {
                     if (sortedPoints[i].thumbnail) targetHoverIndex = i;
                 }
                 break;
             }
         }
-        if (targetHoverIndex === null && hoverTime < (sortedPoints[0]?.time ?? startTime) && sortedPoints.length > 0 && sortedPoints[0].thumbnail && (sortedPoints[0]?.time ?? -Infinity) < currentTime) {
+        if (
+            targetHoverIndex === null &&
+            hoverTime < (sortedPoints[0]?.time ?? startTime) &&
+            sortedPoints.length > 0 &&
+            sortedPoints[0].thumbnail &&
+            (sortedPoints[0]?.time ?? -Infinity) < currentTime
+        ) {
             targetHoverIndex = 0;
         }
         setHoverIndex(targetHoverIndex);
     };
 
     const handleTrackMouseLeave = () => setHoverIndex(null);
-    const toggleCollapse = () => setCollapsed(c => !c);
+    const toggleCollapse = () => (collapsible ? setCollapsed(c => !c) : null);
 
     // --- Render Calculations ---
     const progressPercentage = timeToPercentage(currentTime);
 
     function renderScreenshot() {
-        return <div ref={screenshotContainerRef} className="display-container position-relative border-start border-end bg-white" style={{ overflowY: 'auto' }}>
-            {currentPoint && currentPoint.screenshot ? (
-                <img
-                    key={currentPoint.time + (currentPoint.screenshot || '')}
-                    src={currentPoint.screenshot}
-                    className="img-fluid w-100 d-block"
-                    alt={`Screenshot at ${formatTime(currentPoint.time)} for ${currentPoint.url || 'current view'}`}
-                    onError={(e) => {
-                        console.error("Failed to load screenshot:", currentPoint.screenshot);
-                        (e.target as HTMLImageElement).src = `https://placehold.co/600x400/CCCCCC/4F4F4F?text=Error+Loading+Image`;
-                    }}
-                />
-            ) : (
-                <div className="py-3 text-center text-muted small" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {points.length > 0 ? 'Loading screenshot...' : 'No timeline data'}
-                </div>
-            )}
-        </div>;
+        return (
+            <div
+                ref={screenshotContainerRef}
+                className="display-container position-relative border-start border-end bg-white"
+                style={{ overflowY: 'auto' }}
+            >
+                {currentPoint && currentPoint.screenshot ? (
+                    <img
+                        key={
+                            currentPoint.time + (currentPoint.screenshot || '')
+                        }
+                        src={currentPoint.screenshot}
+                        className="img-fluid w-100 d-block"
+                        alt={`Screenshot at ${formatTime(currentPoint.time)} for ${currentPoint.url || 'current view'}`}
+                        onError={e => {
+                            console.error(
+                                'Failed to load screenshot:',
+                                currentPoint.screenshot
+                            );
+                            (e.target as HTMLImageElement).src =
+                                `https://placehold.co/600x400/CCCCCC/4F4F4F?text=Error+Loading+Image`;
+                        }}
+                    />
+                ) : (
+                    <div
+                        className="py-3 text-center text-muted small"
+                        style={{
+                            height: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        }}
+                    >
+                        {points.length > 0
+                            ? 'Loading screenshot...'
+                            : 'No timeline data'}
+                    </div>
+                )}
+            </div>
+        );
     }
 
     function renderConsole() {
-        return <div ref={terminalContainerRef} className="display-container position-relative border-start border-end px-3">
-            {/* Terminal is mounted here by its useEffect. CSS needed for height.
+        return (
+            <div
+                ref={terminalContainerRef}
+                className="display-container position-relative border-start border-end px-3"
+            >
+                {/* Terminal is mounted here by its useEffect. CSS needed for height.
                 e.g., .timeline-player-console .display-container { height: 300px; background-color: #1e1e1e; } */}
-        </div>;
+            </div>
+        );
     }
 
     // --- JSX ---
@@ -566,27 +729,53 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
             className={`timeline-player shadow-sm ${mode === 'browser' ? 'timeline-player-browser' : 'timeline-player-console'} ${className || ''}`}
             style={style}
         >
-            <div className="url-bar d-flex align-items-center py-1 px-2 text-center bg-light border rounded-top" onClick={toggleCollapse} style={{ cursor: 'pointer' }}>
-                {mode === 'browser' && <div
-                    className="url-text mx-auto text-truncate small font-monospace text-start flex-grow-1"
-                    title={currentPoint?.url ?? ''}>
-                    {currentPoint?.url || '…'}
-                </div>}
-                {mode === 'console' && <div
-                    className="url-text mx-auto text-truncate small font-monospace text-start flex-grow-1">
-                    Console Output {currentPoint?.message_id ? `(${currentPoint.message_id})` : ''}
-                </div>}
-                <button
-                    type="button"
-                    className="btn btn-sm p-0 ms-2 border-0 text-secondary"
-                    aria-label={collapsed ? 'Expand' : 'Collapse'}
-                    title={collapsed ? 'Expand' : 'Collapse'}
-                    aria-expanded={!collapsed}
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" className="tsp-collapse-icon" style={{ transition: 'transform 0.2s ease-in-out', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>
-                        <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
-                    </svg>
-                </button>
+            <div
+                className="url-bar d-flex align-items-center py-2 px-3 text-center bg-light border rounded-top"
+                onClick={toggleCollapse}
+                style={{ cursor: 'pointer' }}
+            >
+                {mode === 'browser' && (
+                    <div
+                        className="url-text mx-auto text-truncate small font-monospace text-start flex-grow-1"
+                        title={currentPoint?.url ?? ''}
+                    >
+                        {currentPoint?.url || '…'}
+                    </div>
+                )}
+                {mode === 'console' && (
+                    <div className="url-text mx-auto text-truncate small font-monospace text-start flex-grow-1">
+                        Console Output{' '}
+                        {model || currentPoint?.message_id
+                            ? `(${model || currentPoint.message_id})`
+                            : ''}
+                    </div>
+                )}
+                {collapsible && (
+                    <button
+                        type="button"
+                        className="btn btn-sm p-0 ms-2 border-0 text-secondary"
+                        aria-label={collapsed ? 'Expand' : 'Collapse'}
+                        title={collapsed ? 'Expand' : 'Collapse'}
+                        aria-expanded={!collapsed}
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            width="18"
+                            height="18"
+                            fill="currentColor"
+                            className="tsp-collapse-icon"
+                            style={{
+                                transition: 'transform 0.2s ease-in-out',
+                                transform: collapsed
+                                    ? 'rotate(-90deg)'
+                                    : 'rotate(0deg)',
+                            }}
+                        >
+                            <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
+                        </svg>
+                    </button>
+                )}
             </div>
 
             {!collapsed && (
@@ -599,56 +788,142 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
                                     <div
                                         ref={trackRef}
                                         className="tsp-track-container"
-                                        onMouseDown={e => handleInteractionStart(e.clientX)}
-                                        onTouchStart={e => handleInteractionStart(e.touches[0].clientX)}
+                                        onMouseDown={e =>
+                                            handleInteractionStart(e.clientX)
+                                        }
+                                        onTouchStart={e =>
+                                            handleInteractionStart(
+                                                e.touches[0].clientX
+                                            )
+                                        }
                                         onMouseMove={handleTrackMouseMove}
                                         onMouseLeave={handleTrackMouseLeave}
-                                        style={{ cursor: 'pointer', padding: '8px 0' }}
+                                        style={{
+                                            cursor: 'pointer',
+                                            padding: '8px 0',
+                                        }}
                                     >
                                         <div className="tsp-track">
-                                            <div className="tsp-track-bar-active" style={{ width: `${progressPercentage}%` }} />
+                                            <div
+                                                className="tsp-track-bar-active"
+                                                style={{
+                                                    width: `${progressPercentage}%`,
+                                                }}
+                                            />
                                         </div>
-                                        <div className="tsp-knob-container" style={{ left: `${progressPercentage}%` }}>
+                                        <div
+                                            className="tsp-knob-container"
+                                            style={{
+                                                left: `${progressPercentage}%`,
+                                            }}
+                                        >
                                             <div
                                                 className={`tsp-knob ${isDragging ? 'tsp-knob--dragging' : ''}`}
                                                 role="slider"
                                                 aria-valuemin={startTime}
                                                 aria-valuemax={endTime}
                                                 aria-valuenow={currentTime}
-                                                aria-valuetext={formatTime(currentTime - startTime)}
+                                                aria-valuetext={formatTime(
+                                                    currentTime - startTime
+                                                )}
                                                 tabIndex={0}
-                                                onKeyDown={(e) => {
+                                                onKeyDown={e => {
                                                     let newIndex = currentIndex;
-                                                    if (e.key === 'ArrowLeft') newIndex = Math.max(0, currentIndex - 1);
-                                                    else if (e.key === 'ArrowRight') newIndex = Math.min(sortedPoints.length - 1, currentIndex + 1);
+                                                    if (e.key === 'ArrowLeft')
+                                                        newIndex = Math.max(
+                                                            0,
+                                                            currentIndex - 1
+                                                        );
+                                                    else if (
+                                                        e.key === 'ArrowRight'
+                                                    )
+                                                        newIndex = Math.min(
+                                                            sortedPoints.length -
+                                                                1,
+                                                            currentIndex + 1
+                                                        );
 
-                                                    if (newIndex !== currentIndex && sortedPoints[newIndex]) {
-                                                        const newPoint = sortedPoints[newIndex];
-                                                        setCurrentTime(newPoint.time);
-                                                        setCurrentIndex(newIndex);
-                                                        setIsLive(newPoint.time === endTime);
-                                                        if (onTimeChange) onTimeChange(newPoint);
+                                                    if (
+                                                        newIndex !==
+                                                            currentIndex &&
+                                                        sortedPoints[newIndex]
+                                                    ) {
+                                                        const newPoint =
+                                                            sortedPoints[
+                                                                newIndex
+                                                            ];
+                                                        setCurrentTime(
+                                                            newPoint.time
+                                                        );
+                                                        setCurrentIndex(
+                                                            newIndex
+                                                        );
+                                                        setIsLive(
+                                                            newPoint.time ===
+                                                                endTime
+                                                        );
+                                                        if (onTimeChange)
+                                                            onTimeChange(
+                                                                newPoint
+                                                            );
                                                     }
                                                 }}
                                             />
                                         </div>
-                                        {hoverIndex !== null && sortedPoints[hoverIndex]?.thumbnail && (
-                                            <div className="tsp-thumbnail-preview" style={{ left: `${timeToPercentage(sortedPoints[hoverIndex].time)}%` }}>
-                                                <img src={sortedPoints[hoverIndex].thumbnail} className="tsp-thumbnail-image" alt="Timeline preview" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                                                <div className="tsp-thumbnail-time">{formatTime(sortedPoints[hoverIndex].time - startTime)}</div>
-                                            </div>
-                                        )}
+                                        {hoverIndex !== null &&
+                                            sortedPoints[hoverIndex]
+                                                ?.thumbnail && (
+                                                <div
+                                                    className="tsp-thumbnail-preview"
+                                                    style={{
+                                                        left: `${timeToPercentage(sortedPoints[hoverIndex].time)}%`,
+                                                    }}
+                                                >
+                                                    <img
+                                                        src={
+                                                            sortedPoints[
+                                                                hoverIndex
+                                                            ].thumbnail
+                                                        }
+                                                        className="tsp-thumbnail-image"
+                                                        alt="Timeline preview"
+                                                        onError={e => {
+                                                            (
+                                                                e.target as HTMLImageElement
+                                                            ).style.display =
+                                                                'none';
+                                                        }}
+                                                    />
+                                                    <div className="tsp-thumbnail-time">
+                                                        {formatTime(
+                                                            sortedPoints[
+                                                                hoverIndex
+                                                            ].time - startTime
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
                                     </div>
                                 </div>
-                                <div className="tsp-labels d-flex justify-content-between small text-muted mt-1 px-1">
-                                    <span>{formatTime(currentTime - startTime)}</span>
-                                    <span className={isLive ? 'tsp-labels-live' : ''}>
-                                        {isLive ? 'LIVE' : `-${formatTime(endTime - currentTime)}`}
+                                <div className="tsp-labels d-flex justify-content-between small mt-1 px-1">
+                                    <span>
+                                        {formatTime(currentTime - startTime)}
+                                    </span>
+                                    <span
+                                        className={
+                                            isLive ? 'tsp-labels-live' : ''
+                                        }
+                                    >
+                                        {isLive
+                                            ? 'LIVE'
+                                            : `-${formatTime(endTime - currentTime)}`}
                                     </span>
                                 </div>
                             </div>
                         ) : (
-                            <div className="text-muted small w-100 text-center py-2">No time data available</div>
+                            <div className="text-muted small w-100 text-center py-2">
+                                No time data available
+                            </div>
                         )}
                     </div>
                 </>

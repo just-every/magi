@@ -458,6 +458,11 @@ function handleDirectorySelection(): void {
 
 // Core dependencies are now installed by bootstrap.js before this script runs
 
+// Validation function for auto-merge settings
+function isValidMergeLevel(value: string): boolean {
+    return ['none', 'low_risk', 'moderate_risk', 'all'].includes(value);
+}
+
 function ensureAllEnvVars(): void {
     console.log('');
     console.log(
@@ -479,6 +484,8 @@ function ensureAllEnvVars(): void {
         { key: 'TELEGRAM_BOT_TOKEN' },
         { key: 'TELEGRAM_ALLOWED_CHAT_IDS' },
         { key: 'PROJECT_REPOSITORIES' },
+        { key: 'AUTO_MERGE_MAGI_PROJECTS', defaultValue: 'all' },
+        { key: 'AUTO_MERGE_EXISTING_PROJECTS', defaultValue: 'low_risk' },
     ];
 
     // Check if .env file already exists and load existing values
@@ -638,6 +645,18 @@ function promptForMissingKeys(): void {
             defaultValue: rootDir,
             customPrompt: true, // Flag to handle custom directory selection UI
         },
+        {
+            key: 'AUTO_MERGE_MAGI_PROJECTS',
+            prompt: 'Auto-merge level for NEW Magi-created projects (none | low_risk | moderate_risk | all) [default all]: ',
+            defaultValue: 'all',
+            description: 'Controls how aggressively Magi merges its own PRs without human review.',
+        },
+        {
+            key: 'AUTO_MERGE_EXISTING_PROJECTS',
+            prompt: 'Auto-merge level for EXISTING repositories (none | low_risk | moderate_risk | all) [default low_risk]: ',
+            defaultValue: 'low_risk',
+            description: 'Controls auto-merge of PRs to repositories listed in PROJECT_REPOSITORIES.',
+        },
     ];
 
     // Find first key that needs prompting (either missing or marked for editing)
@@ -712,6 +731,20 @@ function promptForMissingKeys(): void {
             // Clean up the edit flag
             if (isEditing) {
                 delete envVars[`_edit_${nextPrompt.key}`];
+            }
+
+            // Validate auto-merge settings
+            if ((nextPrompt.key === 'AUTO_MERGE_MAGI_PROJECTS' ||
+                 nextPrompt.key === 'AUTO_MERGE_EXISTING_PROJECTS') &&
+                 keyValue && keyValue.trim() !== '' &&
+                 !isValidMergeLevel(keyValue.trim())) {
+                console.log('\x1b[31m%s\x1b[0m', `Error: "${keyValue}" is not a valid merge level.`);
+                console.log('\x1b[33m%s\x1b[0m', 'Valid options are: none, low_risk, moderate_risk, all');
+
+                // Re-ask for this value by re-marking it for editing
+                envVars[`_edit_${nextPrompt.key}`] = 'true';
+                promptForMissingKeys();
+                return;
             }
 
             if (keyValue && keyValue.trim() !== '') {
@@ -830,6 +863,16 @@ function saveEnvFile(): void {
                 key: 'PROJECT_REPOSITORIES',
                 comment:
                     '# Directory names (relative to parent dir) that Magi can access, separated by commas',
+            },
+            {
+                key: 'AUTO_MERGE_MAGI_PROJECTS',
+                comment:
+                    '# What level of code changes is Magi allowed to automatically merge WITHOUT human review in NEW projects it creates?',
+            },
+            {
+                key: 'AUTO_MERGE_EXISTING_PROJECTS',
+                comment:
+                    '# Same as above, but for EXISTING repositories listed in PROJECT_REPOSITORIES',
             },
         ];
 

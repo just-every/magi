@@ -19,6 +19,7 @@ import {
     ScreenshotEvent,
     ConsoleEvent,
     AgentStatusEvent,
+    AudioEvent,
 } from '../../../types/shared-types';
 // Comment out direct import - we'll use simpler approach to avoid TypeScript errors
 // import { ContainerConnection, MagiMessage } from '../../../server/managers/communication_manager';
@@ -351,9 +352,20 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
             if (
                 event.message &&
                 (!event.message.event.type ||
-                    !['message_delta', 'console', 'tool_delta', 'quota_update', 'cost_update'].includes(event.message.event.type))
+                    ![
+                        'message_delta',
+                        'console',
+                        'tool_delta',
+                        'quota_update',
+                        'cost_update',
+                    ].includes(event.message.event.type))
             ) {
-                console.log(`process:message`, event.id, event.message.event.type, event.message);
+                console.log(
+                    `process:message`,
+                    event.id,
+                    event.message.event.type,
+                    event.message
+                );
             }
 
             setProcesses(prevProcesses => {
@@ -515,29 +527,37 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                 // Utility to flush pending screenshots for an agent
                 function flushPending(agent_id: string): void {
                     // Find the target agent
-                    const targetAgent = process.agent!.agent_id === agent_id
-                        ? process.agent!
-                        : process.agent!.workers?.get(agent_id);
+                    const targetAgent =
+                        process.agent!.agent_id === agent_id
+                            ? process.agent!
+                            : process.agent!.workers?.get(agent_id);
 
                     if (targetAgent) {
-                        const pendingMessages = process.pendingMessages.get(agent_id);
-                        if(pendingMessages?.length > 0) {
+                        const pendingMessages =
+                            process.pendingMessages.get(agent_id);
+                        if (pendingMessages?.length > 0) {
                             pendingMessages.forEach(message => {
-                                addMessage(completeMessage(message), agent_id, targetAgent);
+                                addMessage(
+                                    completeMessage(message),
+                                    agent_id,
+                                    targetAgent
+                                );
                             });
                             process.pendingMessages.delete(agent_id);
                         }
 
-                        const pendingScreenshots = process.pendingScreenshots.get(agent_id);
-                        if(pendingScreenshots?.length > 0) {
+                        const pendingScreenshots =
+                            process.pendingScreenshots.get(agent_id);
+                        if (pendingScreenshots?.length > 0) {
                             pendingScreenshots.forEach(screenshotEvent => {
                                 mergeScreenshot(targetAgent, screenshotEvent);
                             });
                             process.pendingScreenshots.delete(agent_id);
                         }
 
-                        const pendingConsoleEvents = process.pendingConsoleEvents.get(agent_id);
-                        if(pendingConsoleEvents?.length > 0) {
+                        const pendingConsoleEvents =
+                            process.pendingConsoleEvents.get(agent_id);
+                        if (pendingConsoleEvents?.length > 0) {
                             pendingConsoleEvents.forEach(consoleEvent => {
                                 mergeConsoleEvent(targetAgent, consoleEvent);
                             });
@@ -554,7 +574,11 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
                     // If message couldn't be added to an agent (agent not found), queue it
                     if (!result && agent_id) {
-                        queuePending(process.pendingMessages, agent_id, message);
+                        queuePending(
+                            process.pendingMessages,
+                            agent_id,
+                            message
+                        );
                     }
 
                     return result;
@@ -564,7 +588,28 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                 if (eventType === 'audio_stream') {
                     // Process audio data event for browser playback
                     if (isAudioEnabled) {
-                        handleAudioMessage(data);
+                        // Convert optional parameters to required ones for the AudioUtils handler
+                        const audioEvent = streamingEvent as AudioEvent;
+                        handleAudioMessage({
+                            event: {
+                                pcmParameters: audioEvent.pcmParameters
+                                    ? {
+                                          sampleRate:
+                                              audioEvent.pcmParameters
+                                                  .sampleRate || 44100,
+                                          channels:
+                                              audioEvent.pcmParameters
+                                                  .channels || 1,
+                                          bitDepth:
+                                              audioEvent.pcmParameters
+                                                  .bitDepth || 16,
+                                      }
+                                    : undefined,
+                                data: audioEvent.data || '',
+                                chunkIndex: audioEvent.chunkIndex || 0,
+                                isFinalChunk: audioEvent.isFinalChunk || false,
+                            },
+                        });
                     }
                     return newProcesses; // No need to update the process state
                 } else if (
@@ -669,7 +714,11 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     // Assistant message
                     if ('message_id' in streamingEvent) {
                         const content = streamingEvent.content || '';
-                        const thinking_content = streamingEvent.thinking_content && streamingEvent.thinking_content !== '{empty}' ? streamingEvent.thinking_content  : '';
+                        const thinking_content =
+                            streamingEvent.thinking_content &&
+                            streamingEvent.thinking_content !== '{empty}'
+                                ? streamingEvent.thinking_content
+                                : '';
                         const message_id = streamingEvent.message_id || '';
 
                         if ((content || thinking_content) && message_id) {
@@ -797,7 +846,10 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                             }
                         }
                     }
-                } else if (eventType === 'screenshot' || eventType === 'console') {
+                } else if (
+                    eventType === 'screenshot' ||
+                    eventType === 'console'
+                ) {
                     // We call this a screenshot if it has the data property (for the base64 image)
                     // Access the screenshot properties using in-operator checks for type safety
                     const data = streamingEvent.data;
@@ -818,8 +870,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         if (eventType === 'screenshot') {
                             // Use our helper to merge the screenshot with downsampling
                             mergeScreenshot(targetAgent, streamingEvent);
-                        }
-                        else if (eventType === 'console') {
+                        } else if (eventType === 'console') {
                             // Use our helper to merge the console data
                             mergeConsoleEvent(targetAgent, streamingEvent);
                         }
@@ -828,8 +879,13 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                             // Agent already updated in place
                         } else if (process.agent.workers) {
                             // Update the worker reference in the parent
-                            const updatedWorkers = new Map(process.agent.workers);
-                            updatedWorkers.set(targetAgent.agent_id!, targetAgent);
+                            const updatedWorkers = new Map(
+                                process.agent.workers
+                            );
+                            updatedWorkers.set(
+                                targetAgent.agent_id!,
+                                targetAgent
+                            );
                             process.agent = {
                                 ...process.agent,
                                 workers: updatedWorkers,
@@ -837,7 +893,13 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         }
                     } else if (agent_id && data) {
                         // Queue the screenshot for later when the agent becomes available
-                        queuePending(eventType === 'screenshot' ? process.pendingScreenshots : process.pendingConsoleEvents, agent_id, streamingEvent);
+                        queuePending(
+                            eventType === 'screenshot'
+                                ? process.pendingScreenshots
+                                : process.pendingConsoleEvents,
+                            agent_id,
+                            streamingEvent
+                        );
                     }
                 } else if (eventType === 'error') {
                     // Error message
@@ -899,7 +961,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         const agent_id = streamingEvent.agent.agent_id;
 
                         // Check if this is the first time we're getting the agent_id
-                        const isNewAgentId = !process.agent!.agent_id ||
+                        const isNewAgentId =
+                            !process.agent!.agent_id ||
                             process.agent!.agent_id != agent_id;
 
                         if (isNewAgentId) {
@@ -926,18 +989,18 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     eventType === 'tool_done'
                 ) {
                     updateAgent({ isTyping: false });
-                }
-                else if (
-                    eventType === 'agent_status'
-                ) {
-                    updateAgent({ statusEvent: streamingEvent }, streamingEvent.agent_id);
+                } else if (eventType === 'agent_status') {
+                    updateAgent(
+                        { statusEvent: streamingEvent },
+                        streamingEvent.agent_id
+                    );
                 }
 
                 // Default update: If the event wasn't handled above or didn't need a specific update,
                 // ensure the process is still set in the new map (might be redundant in some cases, but safe).
                 // This covers cases where an event type doesn't modify the process state directly here.
                 if (!newProcesses.has(event.id)) {
-                     newProcesses.set(event.id, { ...process });
+                    newProcesses.set(event.id, { ...process });
                 }
 
                 return newProcesses; // Return the potentially modified map

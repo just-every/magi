@@ -1,3 +1,5 @@
+import { type ExecSyncOptions, execSync } from 'child_process';
+
 /**
  * Common type definitions for the MAGI system.
  *
@@ -153,6 +155,8 @@ export interface AgentDefinition {
     maxToolCalls?: number;
     maxToolCallRoundsPerTurn?: number; // Maximum number of tool call rounds per turn
     jsonSchema?: object; // JSON schema definition for structured output
+    historyThread?: ResponseInput | undefined;
+    cwd?: string; // Working directory for model providers that need a real shell context
 
     onToolCall?: (toolCall: ToolCall) => Promise<void>;
     onToolResult?: (toolCall: ToolCall, result: string) => Promise<void>;
@@ -160,7 +164,7 @@ export interface AgentDefinition {
         agent: AgentInterface, // Reverted back to AgentInterface
         messages: ResponseInput
     ) => Promise<[any, ResponseInput]>; // Reverted back to AgentInterface
-    onResponse?: (response: string) => Promise<string>;
+    onResponse?: (message: ResponseOutputMessage) => Promise<void>;
     onThinking?: (message: ResponseThinkingMessage) => Promise<void>;
     tryDirectExecution?: (
         messages: ResponseInput
@@ -185,6 +189,7 @@ export interface AgentExportDefinition {
     parent_id?: string;
     model?: string;
     modelClass?: string;
+    cwd?: string; // Working directory for model providers that need a real shell context
 }
 
 /**
@@ -310,6 +315,7 @@ export interface ResponseReasoningItem extends ResponseBaseMessage {
  * ResponseOutputMessage
  */
 export interface ResponseOutputMessage extends ResponseBaseMessage {
+    id?: string;
     type: 'message';
     content: ResponseContent;
     role: 'assistant';
@@ -405,7 +411,9 @@ export type StreamEventType =
     // New types for waiting on tasks
     | 'task_wait_start'
     | 'task_waiting'
-    | 'task_wait_complete';
+    | 'task_wait_complete'
+    // Git-related events
+    | 'git_pull_request';
 
 /**
  * Base streaming event interface
@@ -483,6 +491,18 @@ export interface TaskWaitCompleteEvent extends StreamEvent {
 }
 
 /**
+ * Git pull request event for container to controller communication
+ */
+export interface GitPullRequestEvent extends StreamEvent {
+    type: 'git_pull_request';
+    processId: string;
+    projectId: string;
+    branch: string;
+    message: string;
+    timestamp: string;
+}
+
+/**
  * Agent updated streaming event
  */
 export interface ConnectedEvent extends StreamEvent {
@@ -514,7 +534,6 @@ export interface Project {
     project_type?: ProjectType;
     simple_description?: string;
     detailed_description?: string;
-    file_system_structure?: any;
     repository_url?: string;
     is_generated?: boolean;
     is_ready?: boolean;
@@ -530,7 +549,7 @@ export interface ProjectEvent extends StreamEvent {
     project_id: string;
 }
 
-export type ProcessToolType = 'research_engine' | 'godel_machine' | 'run_task';
+export type ProcessToolType = 'research_engine' | 'godel_machine' | 'run_task' | 'project_analyze';
 
 /**
  * Agent updated streaming event
@@ -745,6 +764,7 @@ export type StreamingEvent =
     | AudioEvent
     | ScreenshotEvent
     | ConsoleEvent
+    | GitPullRequestEvent
     // Add new wait events
     | ToolWaitStartEvent
     | ToolWaitingEvent
@@ -928,6 +948,7 @@ export type ModelClassID =
     | 'reasoning'
     | 'reasoning_mini'
     | 'monologue'
+    | 'metacognition'
     | 'code'
     | 'writing'
     | 'summary'
@@ -1155,3 +1176,51 @@ export type EventHandler = (
     event: any,
     sourceProcessId?: string
 ) => Promise<any>;
+
+export type MergePolicy = 'none' | 'low_risk' | 'moderate_risk' | 'all';
+export type MergeAction = 'merge' | 'push_only';
+
+export interface RiskBreakdown {
+    totalRiskScore: number;
+    pathRisk: string[];
+    typeRisk: string[];
+    patternRisk: string[];
+    dependencyFileChanged: boolean;
+    allowListed: boolean;
+}
+
+/**
+ * Change‑set metrics returned by computeMetrics().
+ * All fields are normalised to the branch‑vs‑main diff (not HEAD~1).
+ */
+export interface Metrics {
+    /* raw size / scope */
+    filesChanged: number;
+    totalLines: number;
+    directoryCount: number;
+    hunks: number;
+
+    /* dispersion / complexity */
+    entropyNormalised: number;   // 0–1
+    churnRatio: number;          // ≥1  (adds+dels / adds)
+    cyclomaticDelta: number;     // ∑ΔCC across modified functions (fallback 0)
+
+    /* developer & history */
+    developerUnfamiliarity: number; // 0–1 (1 = author never touched these files)
+
+    /* content / pattern flags */
+    secretRegexHits: number;
+    apiSignatureEdits: number;
+    controlFlowEdits: number;
+
+    /* legacy risk breakdown (still useful) */
+    risk: RiskBreakdown;
+
+    /**
+     * Weighted risk score in the range 0‑1; higher = riskier.
+     *   score <= LOW_RISK_MAX    ⇒ "low"
+     *   score <= MOD_RISK_MAX    ⇒ "moderate"
+     *   else                     ⇒ "high"
+     */
+    score: number;
+}

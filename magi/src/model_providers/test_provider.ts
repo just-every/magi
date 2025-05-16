@@ -205,7 +205,8 @@ export class TestProvider implements ModelProvider {
                     // Use execute_command as a well-known tool
                     const availableTool = toolArray.find(tool =>
                         this.config.toolName
-                            ? tool.definition.function.name === this.config.toolName
+                            ? tool.definition.function.name ===
+                              this.config.toolName
                             : true
                     );
 

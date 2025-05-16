@@ -10,6 +10,8 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import path from 'path';
 import WebSocket from 'ws';
 import { exec } from 'child_process';
+import { bootstrapProjectsOnce } from '../utils/bootstrap';
+import { PREventsManager } from './pr_events_manager';
 import {
     ProcessCommandEvent,
     ServerInfoEvent,
@@ -95,12 +97,36 @@ const getContentType = (filePath: string): string | undefined => {
 
 export class ServerManager {
     private app = express();
+
+    /**
+     * Get the Express application instance
+     * Used to register additional routes
+     */
+    getExpressApp(): express.Application {
+        return this.app;
+    }
     private server = http.createServer(this.app);
     private io = new SocketIOServer(this.server);
     private wss = new WebSocket.Server({ noServer: true });
     private liveReloadClients = new Set<WebSocket>();
     private processManager: ProcessManager;
     private communicationManager: CommunicationManager;
+    private prEventsManager: PREventsManager;
+    private bootstrapRan = false;
+
+    /**
+     * Get the process manager instance
+     */
+    getProcessManager(): ProcessManager {
+        return this.processManager;
+    }
+
+    /**
+     * Get the PR events manager instance
+     */
+    getPrEventsManager(): PREventsManager {
+        return this.prEventsManager;
+    }
     private cleanupInProgress = false;
     private isSystemPaused = false;
     private uiMode: 'column' | 'canvas' = 'column';
@@ -115,6 +141,12 @@ export class ServerManager {
             this.server,
             this.processManager
         );
+
+        // Initialize the PR events manager
+        this.prEventsManager = new PREventsManager(this.io);
+
+        // Connect the PR events manager to the process manager
+        this.processManager.setPrEventsManager(this.prEventsManager);
 
         // Load persisted app settings if available
         const settings = loadAppSettings();
@@ -556,7 +588,7 @@ export class ServerManager {
 
         // Set up Socket.io connection handlers
         this.io.on('connection', this.handleSocketConnection.bind(this));
-   }
+    }
 
     /**
      * Set up Express routes
@@ -1126,6 +1158,17 @@ export class ServerManager {
 
         // Create a new process
         await this.processManager.createProcess(processId, command);
+
+        // Run bootstrap for projects on first command
+        if (!this.bootstrapRan) {
+            this.bootstrapRan = true;
+            console.log('First command received, bootstrapping projects...');
+            try {
+                await bootstrapProjectsOnce(this.processManager);
+            } catch (err) {
+                console.error('Failed to bootstrap projects:', err);
+            }
+        }
     }
 
     /**

@@ -40,7 +40,7 @@ export async function quick_llm_call(
         typeof modelClass === 'string'
             ? createQuickAgent(modelClass)
             : typeof agent === 'string'
-              ? createAgent({ agent })
+              ? await createAgent({ agent })
               : new Agent(agent as AgentDefinition);
 
     // Let the controller know this isn't the root agent

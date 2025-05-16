@@ -4,6 +4,9 @@ set -e
 # Entrypoint script for MAGI controller container
 # Handles proper signal forwarding and different start modes
 
+echo "Configuring Git to trust directories in /magi_output..."
+git config --global --add safe.directory '*'
+
 # Define cleanup function
 cleanup() {
     echo "Container is shutting down..."

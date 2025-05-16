@@ -57,6 +57,6 @@ FINALLY:
 - Synthesize findings into a comprehensive answer`,
         tools: [...getSearchTools(), ...getCommonTools()],
         workers: [createBrowserAgent],
-        modelClass: 'search',
+        modelClass: 'reasoning_mini',
     });
 }

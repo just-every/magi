@@ -3,6 +3,7 @@
  * Handles streaming responses, native tool calls, and simulated tool calls via text parsing.
  * Cleans simulated tool call markers from final yielded content events.
  * Updated to handle MULTIPLE simulated tool calls in an array format.
+ * Supports extended stream formats from providers like Perplexity/OpenRouter with reasoning and citations.
  */
 
 import {
@@ -25,6 +26,23 @@ import { Agent } from '../utils/agent.js'; // Adjust path as needed
 import { ModelProviderID } from './model_data.js'; // Adjust path as needed
 import { extractBase64Image } from '../utils/image_utils.js';
 import { convertImageToTextIfNeeded } from '../utils/image_to_text.js';
+import { DeltaBuffer, bufferDelta, flushBufferedDeltas } from '../utils/delta_buffer.js';
+
+// Extended types for Perplexity/OpenRouter response formats
+interface ExtendedDelta extends OpenAI.Chat.Completions.ChatCompletionChunk.Choice.Delta {
+    reasoning?: string;
+    annotations?: Array<{
+        type: string;
+        url_citation?: {
+            title: string;
+            url: string;
+        }
+    }>;
+}
+
+interface ExtendedChunk extends OpenAI.Chat.Completions.ChatCompletionChunk {
+    citations?: string[];
+}
 
 // --- Constants for Simulated Tool Call Handling ---
 // Regex to find the MULTIPLE simulated tool call pattern (TOOL_CALLS: [ ... ]) at the end
@@ -34,6 +52,51 @@ const SIMULATED_TOOL_CALL_REGEX =
 const TOOL_CALL_CLEANUP_REGEX =
     /\n?\s*(?:```(?:json)?\s*)?\s*TOOL_CALLS:\s*\[.*\](?:\s*```)?/gms; // Use greedy .* here too for consistency
 const CLEANUP_PLACEHOLDER = '[Simulated Tool Calls Removed]';
+
+/**
+ * Citation tracking for footnotes
+ */
+interface CitationTracker {
+    citations: Map<string, { title: string; url: string }>;
+    last: number;
+}
+
+/**
+ * Create a new citation tracker
+ */
+function createCitationTracker(): CitationTracker {
+    return {
+        citations: new Map(),
+        last: 0
+    };
+}
+
+/**
+ * Format citation as a footnote and return a reference marker
+ */
+function formatCitation(
+    tracker: CitationTracker,
+    citation: { title: string; url: string }
+): string {
+    if (!tracker.citations.has(citation.url)) {
+        tracker.citations.set(citation.url, citation);
+        tracker.last++;
+    }
+    return ` [${Array.from(tracker.citations.keys()).indexOf(citation.url) + 1}]`;
+}
+
+/**
+ * Generate formatted footnotes from citation tracker
+ */
+function generateFootnotes(tracker: CitationTracker): string {
+    if (tracker.citations.size === 0) return '';
+
+    const footnotes = Array.from(tracker.citations.values())
+        .map((citation, i) => `[${i + 1}] ${citation.title} – ${citation.url}`)
+        .join('\n');
+
+    return '\n\nReferences:\n' + footnotes;
+}
 
 // --- Helper Functions ---
 
@@ -299,23 +362,24 @@ export class OpenAIChat implements ModelProvider {
     protected client: OpenAI;
     protected provider: ModelProviderID;
     protected baseURL: string | undefined;
+    protected commonParams: any = {};
 
     constructor(
         provider?: ModelProviderID,
         apiKey?: string,
         baseURL?: string,
-        defaultHeaders: Record<string, string | null | undefined> = {}
+        defaultHeaders?: Record<string, string | null | undefined>,
+        commonParams?: any
     ) {
         // ... (constructor unchanged)
         this.provider = provider || 'openai';
         this.baseURL = baseURL;
+        this.commonParams = commonParams || {};
         this.client = new OpenAI({
             apiKey: apiKey || process.env.OPENAI_API_KEY,
             baseURL: this.baseURL,
             defaultHeaders: defaultHeaders || {
                 'User-Agent': 'magi',
-                'HTTP-Referer': 'https://withmagi.com/',
-                'X-Title': 'magi',
             },
         });
 
@@ -618,6 +682,34 @@ export class OpenAIChat implements ModelProvider {
             if (tools && tools.length > 0)
                 requestParams.tools = convertToOpenAITools(tools);
 
+            const overrideParams = { ...this.commonParams };
+
+            // Define mapping for OpenAI style reasoning effort configurations
+            // Works for OpenRouter
+            const REASONING_EFFORT_CONFIGS: Array<string> = [
+                'low',
+                'medium',
+                'high',
+            ];
+
+            for (const effort of REASONING_EFFORT_CONFIGS) {
+                const suffix = `-${effort}`;
+                if (model.endsWith(suffix)) {
+                    // Apply the specific reasoning effort and remove the suffix
+                    overrideParams.reasoning = {
+                        effort: effort,
+                    };
+                    model = model.slice(0, -suffix.length);
+                    requestParams.model = model; // Update the model in the request
+                    break;
+                }
+            }
+            // Merge common parameters with requestParams
+            requestParams = {
+                ...requestParams,
+                ...overrideParams,
+            };
+
             requestParams = this.prepareParameters(requestParams);
             requestId = log_llm_request(
                 agent.agent_id,
@@ -636,9 +728,13 @@ export class OpenAIChat implements ModelProvider {
             const partialToolCallsByIndex = new Map<number, ToolCall>();
             let finishReason: string | null = null;
             let usage: OpenAI.CompletionUsage | undefined = undefined;
+            // Track citations to display as footnotes
+            const citationTracker = createCitationTracker();
 
             const chunks: OpenAI.Chat.Completions.ChatCompletionChunk[] = [];
             try {
+                // Track delta buffers for message content
+                const deltaBuffers = new Map<string, DeltaBuffer>();
                 for await (const chunk of stream) {
                     chunks.push(chunk);
 
@@ -648,12 +744,72 @@ export class OpenAIChat implements ModelProvider {
                     const delta = choice.delta;
                     if (delta.content) {
                         aggregatedContent += delta.content;
-                        yield {
+
+                        for (const ev of bufferDelta(deltaBuffers, messageId, delta.content, (content) => ({
                             type: 'message_delta',
-                            content: delta.content,
+                            content,
                             message_id: messageId,
                             order: messageIndex++,
-                        };
+                        } as StreamingEvent))) {
+                            yield ev;
+                        }
+                    }
+
+                    // Handle reasoning content (Perplexity/OpenRouter format)
+                    const extendedDelta = delta as ExtendedDelta;
+                    if (extendedDelta.reasoning) {
+                        aggregatedContent += extendedDelta.reasoning;
+                        for (const ev of bufferDelta(deltaBuffers, messageId, extendedDelta.reasoning, (content) => ({
+                            type: 'message_delta',
+                            content,
+                            message_id: messageId,
+                            order: messageIndex++,
+                        } as StreamingEvent))) {
+                            yield ev;
+                        }
+                    }
+
+                    // Handle annotations (citations in Perplexity/OpenRouter format)
+                    if (Array.isArray(extendedDelta.annotations)) {
+                        for (const ann of extendedDelta.annotations) {
+                            if (ann.type === 'url_citation' && ann.url_citation?.url) {
+                                const marker = formatCitation(citationTracker, {
+                                    title: ann.url_citation.title || ann.url_citation.url,
+                                    url: ann.url_citation.url
+                                });
+                                aggregatedContent += marker;
+                                yield {
+                                    type: 'message_delta',
+                                    content: marker,
+                                    message_id: messageId,
+                                    order: messageIndex++
+                                };
+                            }
+                        }
+                    }
+
+                    // Handle citations array at chunk level (another format variant)
+                    const extendedChunk = chunk as ExtendedChunk;
+                    if (Array.isArray(extendedChunk.citations) && extendedChunk.citations.length > 0) {
+                        for (const url of extendedChunk.citations) {
+                            if (typeof url === 'string' && !citationTracker.citations.has(url)) {
+                                const title = url.split('/').pop() || url;
+                                const marker = formatCitation(citationTracker, {
+                                    title,
+                                    url
+                                });
+                                // Only add the marker if this is a new citation
+                                if (marker) {
+                                    aggregatedContent += marker;
+                                    yield {
+                                        type: 'message_delta',
+                                        content: marker,
+                                        message_id: messageId,
+                                        order: messageIndex++
+                                    };
+                                }
+                            }
+                        }
                     }
                     if ('reasoning_content' in delta) {
                         const thinking_content =
@@ -730,6 +886,19 @@ export class OpenAIChat implements ModelProvider {
                     if (chunk.usage) usage = chunk.usage;
                 } // End stream loop
 
+                // Add footnotes to the content if we have citations
+                if (citationTracker.citations.size > 0) {
+                    const footnotes = generateFootnotes(citationTracker);
+                    aggregatedContent += footnotes;
+                    // Yield as a separate delta so it appears after all other content
+                    yield {
+                        type: 'message_delta',
+                        content: footnotes,
+                        message_id: messageId,
+                        order: messageIndex++
+                    };
+                }
+
                 // --- Post-Stream Processing ---
                 if (usage) {
                     costTracker.addUsage({
@@ -749,6 +918,16 @@ export class OpenAIChat implements ModelProvider {
                     console.warn(
                         `(${this.provider}) Usage info not found in stream for cost tracking.`
                     );
+                }
+
+                // Flush any remaining buffered deltas and yield them
+                for (const ev of flushBufferedDeltas(deltaBuffers, (id, content) => ({
+                    type: 'message_delta',
+                    content,
+                    message_id: id,
+                    order: messageIndex++,
+                } as StreamingEvent))) {
+                    yield ev;
                 }
 
                 // --- Handle Final State Based on Finish Reason ---
@@ -782,6 +961,10 @@ export class OpenAIChat implements ModelProvider {
                             tool_calls: completedToolCalls,
                         };
                     } else {
+                        log_llm_error(
+                            requestId,
+                            `Error (${this.provider}): Model indicated tool calls, but none were parsed correctly.`
+                        );
                         console.warn(
                             `(${this.provider}) Finish reason 'tool_calls', but no complete native tool calls parsed.`
                         );
@@ -789,37 +972,33 @@ export class OpenAIChat implements ModelProvider {
                             type: 'error',
                             error: `Error (${this.provider}): Model indicated tool calls, but none were parsed correctly.`,
                         };
-                        log_llm_error(
-                            requestId,
-                            `Error (${this.provider}): Model indicated tool calls, but none were parsed correctly.`
-                        );
                     }
                 } else if (finishReason === 'length') {
                     const cleanedPartialContent = aggregatedContent.replaceAll(
                         TOOL_CALL_CLEANUP_REGEX,
                         CLEANUP_PLACEHOLDER
                     );
-                    yield {
-                        type: 'error',
-                        error: `Error (${this.provider}): Response truncated (max_tokens). Partial: ${cleanedPartialContent.substring(0, 100)}...`,
-                    };
                     log_llm_error(
                         requestId,
                         `Error (${this.provider}): Response truncated (max_tokens). Partial: ${cleanedPartialContent.substring(0, 100)}...`
                     );
+                    yield {
+                        type: 'error',
+                        error: `Error (${this.provider}): Response truncated (max_tokens). Partial: ${cleanedPartialContent.substring(0, 100)}...`,
+                    };
                 } else if (finishReason) {
                     const cleanedReasonContent = aggregatedContent.replaceAll(
                         TOOL_CALL_CLEANUP_REGEX,
                         CLEANUP_PLACEHOLDER
                     );
-                    yield {
-                        type: 'error',
-                        error: `Error (${this.provider}): Response stopped due to: ${finishReason}. Content: ${cleanedReasonContent.substring(0, 100)}...`,
-                    };
                     log_llm_error(
                         requestId,
                         `Error (${this.provider}): Response stopped due to: ${finishReason}. Content: ${cleanedReasonContent.substring(0, 100)}...`
                     );
+                    yield {
+                        type: 'error',
+                        error: `Error (${this.provider}): Response stopped due to: ${finishReason}. Content: ${cleanedReasonContent.substring(0, 100)}...`,
+                    };
                 } else {
                     // Handle stream ending without a finish reason
                     if (aggregatedContent) {
@@ -846,6 +1025,10 @@ export class OpenAIChat implements ModelProvider {
                         }
                     } else if (partialToolCallsByIndex.size > 0) {
                         // ... (unchanged native tool call error handling) ...
+                        log_llm_error(
+                            requestId,
+                            `Error (${this.provider}): Stream ended unexpectedly during native tool call generation.`
+                        );
                         console.warn(
                             `(${this.provider}) Stream finished without finish_reason during native tool call generation.`
                         );
@@ -853,12 +1036,12 @@ export class OpenAIChat implements ModelProvider {
                             type: 'error',
                             error: `Error (${this.provider}): Stream ended unexpectedly during native tool call generation.`,
                         };
-                        log_llm_error(
-                            requestId,
-                            `Error (${this.provider}): Stream ended unexpectedly during native tool call generation.`
-                        );
                     } else {
                         // ... (unchanged empty stream error handling) ...
+                        log_llm_error(
+                            requestId,
+                            `Error (${this.provider}): Stream finished unexpectedly empty.`
+                        );
                         console.warn(
                             `(${this.provider}) Stream finished empty without reason, content, or tool calls.`
                         );
@@ -866,13 +1049,10 @@ export class OpenAIChat implements ModelProvider {
                             type: 'error',
                             error: `Error (${this.provider}): Stream finished unexpectedly empty.`,
                         };
-                        log_llm_error(
-                            requestId,
-                            `Error (${this.provider}): Stream finished unexpectedly empty.`
-                        );
                     }
                 }
             } catch (streamError) {
+                log_llm_error(requestId, streamError);
                 console.error(
                     `(${this.provider}) Error processing chat completions stream:`,
                     streamError
@@ -883,14 +1063,13 @@ export class OpenAIChat implements ModelProvider {
                         `Stream processing error (${this.provider} ${model}): ` +
                         (streamError instanceof OpenAI.APIError ||
                         streamError instanceof APIError
-                            ? `${streamError.status} ${streamError.name} ${streamError.message}`
+                            ? `${streamError.status} ${streamError.name} ${streamError.message} ${JSON.stringify(streamError.error)}`
                             : streamError instanceof Error
                               ? streamError.stack
                               : Object.getPrototypeOf(streamError) +
                                 ' ' +
                                 String(streamError)),
                 };
-                log_llm_error(requestId, streamError);
             } finally {
                 partialToolCallsByIndex.clear();
 
@@ -898,6 +1077,7 @@ export class OpenAIChat implements ModelProvider {
                 log_llm_response(requestId, chunks);
             }
         } catch (error) {
+            log_llm_error(requestId, error);
             console.error(
                 `Error running ${this.provider} chat completions stream:`,
                 error
@@ -913,7 +1093,6 @@ export class OpenAIChat implements ModelProvider {
                           ? error.stack
                           : Object.getPrototypeOf(error) + ' ' + String(error)),
             };
-            log_llm_error(requestId, error);
         }
     }
 }

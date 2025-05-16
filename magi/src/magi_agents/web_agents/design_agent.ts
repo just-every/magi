@@ -16,6 +16,7 @@ import {
     ResponseInput,
     ToolCall,
     ResponseThinkingMessage,
+    type ResponseOutputMessage,
 } from '../../types/shared-types.js';
 import { MAGI_CONTEXT } from '../constants.js';
 
@@ -26,8 +27,9 @@ import { MAGI_CONTEXT } from '../constants.js';
  */
 export function createDesignAgent(): Agent {
     const agent = new Agent({
-        name: 'DesignAgent',
-        description: 'Specializes in UI design, mockups and visual assets for websites',
+        name: 'WebDesignAgent',
+        description:
+            'Specializes in UI design, mockups and visual assets for websites',
         instructions: `${MAGI_CONTEXT}
 ---
 
@@ -81,66 +83,8 @@ Save assets in a structured format:
 
 The frontend engineer will use your designs as reference for implementation, so clarity is critical.
 `,
-        tools: [
-            ...getImageGenerationTools(),
-            ...getCommonTools(),
-        ],
-        modelClass: 'monologue',
-        maxToolCallRoundsPerTurn: 1,
-
-        onRequest: async (
-            agent: Agent,
-            messages: ResponseInput
-        ): Promise<[Agent, ResponseInput]> => {
-            return [agent, messages];
-        },
-        onResponse: async (response: string): Promise<string> => {
-            if (response && response.trim()) {
-                await addHistory(
-                    {
-                        type: 'message',
-                        role: 'assistant',
-                        status: 'completed',
-                        content: response,
-                    },
-                    agent.historyThread,
-                    agent.model
-                );
-            }
-            return response;
-        },
-        onThinking: async (message: ResponseThinkingMessage): Promise<void> => {
-            return addHistory(message, agent.historyThread, agent.model);
-        },
-        onToolCall: async (toolCall: ToolCall): Promise<void> => {
-            await addHistory(
-                {
-                    id: toolCall.id,
-                    type: 'function_call',
-                    call_id: toolCall.call_id || toolCall.id,
-                    name: toolCall.function.name,
-                    arguments: toolCall.function.arguments,
-                },
-                agent.historyThread,
-                agent.model
-            );
-        },
-        onToolResult: async (
-            toolCall: ToolCall,
-            result: string
-        ): Promise<void> => {
-            await addHistory(
-                {
-                    id: toolCall.id,
-                    type: 'function_call_output',
-                    call_id: toolCall.call_id || toolCall.id,
-                    name: toolCall.function.name,
-                    output: result,
-                },
-                agent.historyThread,
-                agent.model
-            );
-        },
+        tools: [...getImageGenerationTools(), ...getCommonTools()],
+        modelClass: 'reasoning_mini',
     });
 
     return agent;

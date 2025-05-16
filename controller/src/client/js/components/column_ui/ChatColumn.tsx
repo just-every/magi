@@ -244,7 +244,7 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                     </div>
 
                     <div className="mt-4">
-                        <StatusDisplay forceExpand={true} />
+                        <StatusDisplay />
                     </div>
                 </div>
             </CollapsibleSection>
@@ -287,20 +287,23 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                         ) {
                             document = (
                                 <div className={`mt-2`}>
-                                    <div className={`d-inline-block p-3 rounded-top-3 bg-white text-black border border-light-subtle rounded-end-3 font-monospace`}>
-                                            <div style={{
-                                                    textAlign: 'left',
-                                                    fontSize: '0.8em',
-                                                    backgroundColor:
-                                                        'rgb(255 255 255 / 35%) !important',
-                                                    borderColor:
-                                                        'rgb(255 255 255 / 65%) !important',
-                                                }}
-                                                dangerouslySetInnerHTML={parseMarkdown(
-                                                    toolCallMessage.toolParams
-                                                        .document as string
-                                                )}
-                                            />
+                                    <div
+                                        className={`d-inline-block p-3 rounded-top-3 bg-white text-black border border-light-subtle rounded-end-3 font-monospace`}
+                                    >
+                                        <div
+                                            style={{
+                                                textAlign: 'left',
+                                                fontSize: '0.8em',
+                                                backgroundColor:
+                                                    'rgb(255 255 255 / 35%) !important',
+                                                borderColor:
+                                                    'rgb(255 255 255 / 65%) !important',
+                                            }}
+                                            dangerouslySetInnerHTML={parseMarkdown(
+                                                toolCallMessage.toolParams
+                                                    .document as string
+                                            )}
+                                        />
                                     </div>
                                 </div>
                             );

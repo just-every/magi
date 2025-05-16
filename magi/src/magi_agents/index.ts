@@ -5,7 +5,6 @@
  */
 
 import { Agent } from '../utils/agent.js';
-import { createManagerAgent } from './common_agents/manager_agent.js';
 import { createReasoningAgent } from './common_agents/reasoning_agent.js';
 import { createCodeAgent } from './common_agents/code_agent.js';
 import { createBrowserAgent } from './common_agents/browser_agent.js';
@@ -15,6 +14,8 @@ import { createImageAgent } from './common_agents/image_agent.js';
 import { createOverseerAgent } from './overseer_agent.js';
 import { ModelClassID } from '../model_providers/model_data.js';
 import { createOperatorAgent } from './operator_agent.js';
+import { createProjectOperatorAgent } from './project_agents/operator_agent.js';
+import { createWebOperatorAgent } from './web_agents/operator_agent.js';
 
 // Export all constants from the constants module
 export * from './constants.js';
@@ -26,13 +27,11 @@ export type AgentType =
     | 'quick'
     | 'overseer'
     | 'operator'
-    | 'website_operator'
     | 'design'
     | 'frontend'
     | 'backend'
     | 'test'
     | 'supervisor'
-    | 'manager'
     | 'reasoning'
     | 'code'
     | 'browser'
@@ -44,54 +43,69 @@ export type AgentType =
 /**
  * Create an agent of the specified type with optional model override and agent_id
  */
-export function createAgent(args: Record<string, unknown>): Agent {
+export async function createAgent(
+    args: Record<string, unknown>
+): Promise<Agent> {
     const {
         agent: type,
         model,
         modelClass,
         agent_id,
+        tool,
     } = args as {
         agent: AgentType | ModelClassID;
         model?: string;
         modelClass?: ModelClassID;
         agent_id?: string;
+        tool?: string;
     };
     let agent: Agent;
 
-    switch (type) {
-        case 'quick':
-            agent = createQuickAgent();
-            break;
-        case 'overseer':
-            agent = createOverseerAgent();
-            break;
-        case 'operator':
-            agent = createOperatorAgent();
-            break;
-        case 'manager':
-            agent = createManagerAgent();
-            break;
-        case 'reasoning':
-            agent = createReasoningAgent();
-            break;
-        case 'code':
-            agent = createCodeAgent();
-            break;
-        case 'browser':
-            agent = createBrowserAgent();
-            break;
-        case 'search':
-            agent = createSearchAgent();
-            break;
-        case 'shell':
-            agent = createShellAgent();
-            break;
-        case 'image':
-            agent = createImageAgent();
-            break;
-        default:
-            agent = createQuickAgent(type as ModelClassID);
-            break;
+    if (tool && tool !== 'none') {
+        switch (tool) {
+            case 'project_analyze':
+                agent = await createProjectOperatorAgent();
+                break;
+            case 'web_build':
+                agent = createWebOperatorAgent();
+                break;
+            default:
+                agent = createOperatorAgent();
+                break;
+        }
+    } else {
+        switch (type) {
+            case 'quick':
+                agent = createQuickAgent();
+                break;
+            case 'overseer':
+                agent = createOverseerAgent();
+                break;
+            case 'operator':
+                agent = createOperatorAgent();
+                break;
+            case 'reasoning':
+                agent = createReasoningAgent();
+                break;
+            case 'code':
+                agent = createCodeAgent();
+                break;
+            case 'browser':
+                agent = createBrowserAgent();
+                break;
+            case 'search':
+                agent = createSearchAgent();
+                break;
+            case 'shell':
+                agent = createShellAgent();
+                break;
+            case 'image':
+                agent = createImageAgent();
+                break;
+            default:
+                agent = createQuickAgent(type as ModelClassID);
+                break;
+        }
     }
 
     agent.args = args;
@@ -126,11 +140,11 @@ function createQuickAgent(modelClass: ModelClassID = 'reasoning_mini'): Agent {
 // Export all agent creation functions
 export {
     createQuickAgent,
-    createManagerAgent,
     createReasoningAgent,
     createCodeAgent,
     createBrowserAgent,
     createSearchAgent,
     createShellAgent,
     createImageAgent,
+    createProjectOperatorAgent,
 };

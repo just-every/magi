@@ -532,8 +532,8 @@ export function log_llm_request(
         const logsDir = get_output_dir('logs/llm');
 
         // Format timestamp for filename
-        const formattedTime = timestamp.toISOString().replaceAll(/[:.]/g, '-');
-        const fileName = `${formattedTime}_${model}.json`;
+        const formattedTime = timestamp.toISOString().replaceAll(/[:./]/g, '-');
+        const fileName = `${formattedTime}_${model.replaceAll(/[:./]/g, '-')}.json`;
         const file_path = path.join(logsDir, fileName);
 
         // Add timestamp and agent ID to the logged data
@@ -621,8 +621,14 @@ export function log_llm_error(
     errorData: any,
     timestamp: Date = new Date()
 ): void {
-    if (!requestId) return;
-
+    if (!requestId) {
+        console.error(
+            'log_llm_error failed: requestId is undefined',
+            requestId,
+            truncateLargeValues(errorData)
+        );
+        return;
+    }
     try {
         if (testMode) {
             console.log(
@@ -646,16 +652,12 @@ export function log_llm_error(
         // Read and parse the existing log file
         const existingData = JSON.parse(fs.readFileSync(requestId, 'utf8'));
 
-        // Add error timestamp
-        existingData.last_error_timestamp = timestamp.toISOString();
-
-        // Initialize error array if it doesn't exist
-        if (!existingData.errors) {
-            existingData.errors = [];
-        }
-
-        // Add error data to the array
-        existingData.errors.push(truncateLargeValues(errorData));
+        // Add error data to the log
+        existingData.errors = existingData.errors || [];
+        existingData.errors.push({
+            timestamp: timestamp.toISOString(),
+            error: truncateLargeValues(errorData),
+        });
 
         // Write the updated log file
         fs.writeFileSync(

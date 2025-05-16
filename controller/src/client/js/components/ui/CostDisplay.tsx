@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useSocket } from '../../context/SocketContext';
 import { useState } from 'react';
 
+// No props needed
 interface CostDisplayProps {
     forceExpand?: boolean;
 }

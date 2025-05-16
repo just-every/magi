@@ -128,8 +128,8 @@ const renderMessage = (
             }
             const nextToolResultMessage =
                 nextMessage && nextMessage.type === 'tool_call'
-                        ? (nextMessage as ToolResultMessageType)
-                        : undefined;
+                    ? (nextMessage as ToolResultMessageType)
+                    : undefined;
             return (
                 <ToolCallMessage
                     key={toolCallMessage.id}

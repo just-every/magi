@@ -19,6 +19,7 @@ const BRAVE_SEARCH_ENDPOINT = 'https://api.search.brave.com/res/v1/web/search';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 /**
  * Search using the Brave Search API
@@ -124,7 +125,7 @@ export async function web_search(
                     model: 'claude-3-7-sonnet-latest',
                     name: 'ClaudeSearch',
                     description: 'Search the web',
-                    instructions: 'Please run a search for this query.',
+                    instructions: 'Please search the web for this this query.',
                     modelSettings: {
                         max_tokens: 1024,
                     },
@@ -141,7 +142,7 @@ export async function web_search(
                     model: 'gpt-4.1',
                     name: 'OpenAISearch',
                     description: 'Search the web',
-                    instructions: 'Please run a search for this query.',
+                    instructions: 'Please search the web for this this query.',
                     tools: [signalToolFunction('openai_web_search')],
                 },
                 inject_agent_id
@@ -155,8 +156,25 @@ export async function web_search(
                     model: 'gemini-2.5-flash-preview-04-17',
                     name: 'GoogleSearch',
                     description: 'Search the web',
-                    instructions: 'Please run a search for this query.',
+                    instructions: 'Please answer this using search grounding.',
                     tools: [signalToolFunction('google_web_search')],
+                },
+                inject_agent_id
+            );
+        case 'sonar':
+        case 'sonar-pro':
+        case 'sonar-deep-research':
+            if (!OPENROUTER_API_KEY)
+                return 'Error: OpenRouter API key not configured.';
+            return await quick_llm_call(
+                query,
+                null,
+                {
+                    model: `perplexity/${engine === 'sonar-deep-research' ? engine : engine === 'sonar-pro' ? 'sonar-reasoning-pro' : 'sonar-reasoning'}`,
+                    name: `Perplexity${engine === 'sonar-deep-research' ? 'Research' : engine === 'sonar-pro' ? 'ProSearch' : 'Search'}`,
+                    description: 'Search the web',
+                    instructions:
+                        'Please answer this using the latest information available.',
                 },
                 inject_agent_id
             );
@@ -195,6 +213,20 @@ export function getSearchTools(): ToolFunction[] {
             '- google: freshest breaking-news facts via Gemini grounding'
         );
     }
+    if (OPENROUTER_API_KEY) {
+        availableEngines.push('sonar');
+        engineDescriptions.push(
+            '- sonar: (perplexity) lightweight, cost-effective search model with grounding'
+        );
+        availableEngines.push('sonar-pro');
+        engineDescriptions.push(
+            '- sonar-pro: (perplexity) advanced search offering with grounding, supporting complex queries and follow-ups'
+        );
+        availableEngines.push('sonar-deep-research');
+        engineDescriptions.push(
+            '- sonar-deep-research: (perplexity) expert-level research model conducting exhaustive searches and generating comprehensive reports'
+        );
+    }
 
     if (availableEngines.length === 0) {
         // Optionally, don't offer the tool if no engines are configured
@@ -204,7 +236,7 @@ export function getSearchTools(): ToolFunction[] {
     return [
         createToolFunction(
             web_search,
-            'Adaptive web search—pick the engine that best fits the query.',
+            'Adaptive web search - pick the engines that best fit the query.',
             {
                 engine: {
                     type: 'string',
@@ -213,7 +245,8 @@ export function getSearchTools(): ToolFunction[] {
                 },
                 query: {
                     type: 'string',
-                    description: 'Plain-language web query.',
+                    description:
+                        'Plain-language search query. Each engine has AI interpretation, so you can leave it up to the engine to decide how to search.',
                 },
                 numResults: {
                     type: 'number',

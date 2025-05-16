@@ -18,6 +18,7 @@ import {
     ToolCall,
     ResponseThinkingMessage,
     ToolParameterMap,
+    ResponseOutputMessage,
 } from '../types/shared-types.js';
 import { createToolFunction } from './tool_call.js';
 
@@ -25,7 +26,6 @@ import { v4 as uuid } from 'uuid';
 // Import removed to fix lint error
 import { Runner } from './runner.js';
 import { ModelClassID } from '../model_providers/model_data.js';
-import { getCommonTools } from './index.js';
 import { truncateLargeValues } from './file_utils.js';
 import { getAgentSpecificTools } from './custom_tool_utils.js';
 
@@ -91,6 +91,7 @@ export class Agent implements AgentInterface {
     args: any;
     jsonSchema?: object; // JSON schema for structured output
     historyThread?: ResponseInput | undefined;
+    cwd?: string; // Working directory for the agent (used by model providers that need a real shell)
 
     // Optional callback to preprocess parameters before runAgentTool
     params?: ToolParameterMap; // Map of parameter names to their definitions
@@ -111,7 +112,7 @@ export class Agent implements AgentInterface {
         agent: Agent,
         messages: ResponseInput
     ) => Promise<[Agent, ResponseInput]>;
-    onResponse?: (response: string) => Promise<string>;
+    onResponse?: (message: ResponseOutputMessage) => Promise<void>;
     onThinking?: (message: ResponseThinkingMessage) => Promise<void>;
     tryDirectExecution?: (
         messages: ResponseInput
@@ -133,6 +134,8 @@ export class Agent implements AgentInterface {
         this.maxToolCalls = definition.maxToolCalls || 200; // Default to 10 if not specified
         this.maxToolCallRoundsPerTurn = definition.maxToolCallRoundsPerTurn; // No default, undefined means no limit
         this.processParams = definition.processParams;
+        this.historyThread = definition.historyThread;
+        this.cwd = definition.cwd; // Working directory for model providers that need a real shell
 
         this.onToolCall = definition.onToolCall;
         this.onToolResult = definition.onToolResult;
@@ -297,8 +300,7 @@ export class Agent implements AgentInterface {
         const combinedTools = new Map<string, ToolFunction>();
 
         // 1. Add statically assigned tools (from this.tools) or common tools as a base
-        const baseTools =
-            this.tools && this.tools.length > 0 ? this.tools : getCommonTools();
+        const baseTools = this.tools && this.tools.length > 0 ? this.tools : [];
         for (const tool of baseTools) {
             if (
                 tool &&
@@ -309,14 +311,23 @@ export class Agent implements AgentInterface {
                 // Clone the tool to avoid modifying the original
                 const clonedTool = { ...tool };
                 clonedTool.definition = { ...tool.definition };
-                clonedTool.definition.function = { ...tool.definition.function };
-                clonedTool.definition.function.parameters = { ...tool.definition.function.parameters };
-                clonedTool.definition.function.parameters.properties = { ...tool.definition.function.parameters.properties };
+                clonedTool.definition.function = {
+                    ...tool.definition.function,
+                };
+                clonedTool.definition.function.parameters = {
+                    ...tool.definition.function.parameters,
+                };
+                clonedTool.definition.function.parameters.properties = {
+                    ...tool.definition.function.parameters.properties,
+                };
 
                 // Process dynamic properties in parameters
                 await this.processDynamicToolParameters(clonedTool);
 
-                combinedTools.set(clonedTool.definition.function.name, clonedTool);
+                combinedTools.set(
+                    clonedTool.definition.function.name,
+                    clonedTool
+                );
             } else {
                 console.warn(
                     '[Agent.getTools] Encountered a base tool with missing definition or name:',
@@ -327,9 +338,7 @@ export class Agent implements AgentInterface {
 
         // 2. Add/override with tools from agentToolCache (via getAgentSpecificTools)
         if (this.agent_id) {
-            const cachedAgentTools = getAgentSpecificTools(
-                this.agent_id
-            );
+            const cachedAgentTools = getAgentSpecificTools(this.agent_id);
             for (const tool of cachedAgentTools) {
                 if (
                     tool &&
@@ -340,14 +349,23 @@ export class Agent implements AgentInterface {
                     // Clone the tool to avoid modifying the original
                     const clonedTool = { ...tool };
                     clonedTool.definition = { ...tool.definition };
-                    clonedTool.definition.function = { ...tool.definition.function };
-                    clonedTool.definition.function.parameters = { ...tool.definition.function.parameters };
-                    clonedTool.definition.function.parameters.properties = { ...tool.definition.function.parameters.properties };
+                    clonedTool.definition.function = {
+                        ...tool.definition.function,
+                    };
+                    clonedTool.definition.function.parameters = {
+                        ...tool.definition.function.parameters,
+                    };
+                    clonedTool.definition.function.parameters.properties = {
+                        ...tool.definition.function.parameters.properties,
+                    };
 
                     // Process dynamic properties in parameters
                     await this.processDynamicToolParameters(clonedTool);
 
-                    combinedTools.set(clonedTool.definition.function.name, clonedTool); // Overwrites if name exists
+                    combinedTools.set(
+                        clonedTool.definition.function.name,
+                        clonedTool
+                    ); // Overwrites if name exists
                 } else {
                     console.warn(
                         '[Agent.getTools] Encountered a cached tool with missing definition or name:',
@@ -363,7 +381,9 @@ export class Agent implements AgentInterface {
      * Process dynamic tool parameters (descriptions and enums)
      * @param tool The tool to process
      */
-    private async processDynamicToolParameters(tool: ToolFunction): Promise<void> {
+    private async processDynamicToolParameters(
+        tool: ToolFunction
+    ): Promise<void> {
         const properties = tool.definition.function.parameters.properties;
 
         for (const paramName in properties) {
@@ -424,6 +444,9 @@ export class Agent implements AgentInterface {
         if (this.parent_id) {
             // Make sure parent is an Agent with an export method
             agentExport.parent_id = this.parent_id;
+        }
+        if (this.cwd) {
+            agentExport.cwd = this.cwd;
         }
         return agentExport;
     }

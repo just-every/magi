@@ -5,16 +5,7 @@ import { ToolFunction, ProjectType } from '../types/shared-types.js';
 import { sendStreamEvent } from './communication.js';
 import { getDB } from './db.js';
 import { createToolFunction } from './tool_call.js';
-
-const projectTypes: ProjectType[] = [
-        'web-app',
-        'web-static',
-        'game-2d',
-        'game-3d',
-        'mobile-app',
-        'desktop-app',
-        'plain'
-    ];
+import { PROJECT_TYPES, PROJECT_TYPE_DESCRIPTIONS } from '../constants/project_types.js';
 
 export function getExternalProjectIds(): string[] {
     // Get the list of projects from the environment variable
@@ -42,7 +33,9 @@ export async function getAllProjectIds(): Promise<string[]> {
     // Get all project IDs from the database
     const db = await getDB();
     try {
-        const result = await db.query('SELECT project_id FROM projects ORDER BY project_id');
+        const result = await db.query(
+            'SELECT project_id FROM projects ORDER BY project_id'
+        );
         return result.rows.map(row => row.project_id);
     } catch (error) {
         console.error('Error getting project IDs:', error);
@@ -52,7 +45,9 @@ export async function getAllProjectIds(): Promise<string[]> {
     }
 }
 
-export async function listActiveProjects(only_process: boolean = true): Promise<string> {
+export async function listActiveProjects(
+    only_process: boolean = true
+): Promise<string> {
     // Get the list of all projects from the database
     let projectIds = await getAllProjectIds();
 
@@ -81,16 +76,15 @@ export async function listActiveProjects(only_process: boolean = true): Promise<
             );
 
             // Filter to only include projects in our filtered IDs list
-            const filteredRows = only_process ?
-                result.rows.filter(row =>
-                    projectIds.includes(row.project_id)
-                ) :
-                result.rows;
+            const filteredRows = only_process
+                ? result.rows.filter(row => projectIds.includes(row.project_id))
+                : result.rows;
 
             projectsList = filteredRows
                 .map(row => {
-                    const description = row.simple_description || 'No description';
-                    const status = row.is_ready ? '' : ' [Creation in progress...]';
+                    const description =
+                        row.simple_description || 'No description';
+                    const status = row.is_ready ? '' : ' [Scanning files...]';
                     return `- ${row.project_id}: ${description}${status}`;
                 })
                 .join('\n');
@@ -111,14 +105,14 @@ export async function listActiveProjects(only_process: boolean = true): Promise<
  * @param project_type The type of project (web-static, web-app, game-2d, etc.)
  * @returns A string indicating success or failure
  */
-export async function create_project(params: {
-    project_id: string;
-    simple_description: string;
-    project_type: ProjectType;
-}): Promise<string> {
+export async function create_project(
+    project_id: string,
+    simple_description: string,
+    project_type: ProjectType,
+): Promise<string> {
     // Validate project_id format
     const idRegex = /^[a-zA-Z0-9_-]+$/;
-    if (!idRegex.test(params.project_id)) {
+    if (!idRegex.test(project_id)) {
         return 'Error: project_id must contain only letters, numbers, dashes and underscores.';
     }
 
@@ -128,11 +122,11 @@ export async function create_project(params: {
         // Check if project already exists
         const existingProject = await db.query(
             'SELECT project_id FROM projects WHERE project_id = $1',
-            [params.project_id]
+            [project_id]
         );
 
         if (existingProject.rows.length > 0) {
-            return `Error: A project with ID '${params.project_id}' already exists.`;
+            return `Error: A project with ID '${project_id}' already exists.`;
         }
 
         // Insert new project
@@ -140,16 +134,21 @@ export async function create_project(params: {
             `INSERT INTO projects
             (project_id, project_type, simple_description, is_generated)
             VALUES ($1, $2, $3, $4)`,
-            [params.project_id, params.project_type, params.simple_description, true]
+            [
+                project_id,
+                project_type,
+                simple_description,
+                true,
+            ]
         );
 
         sendStreamEvent({
             type: 'project_create',
-            project_id: params.project_id,
+            project_id: project_id,
         });
 
         // Return success message
-        return `Project '${params.project_id}' created successfully.`;
+        return `Project '${project_id}' created successfully.`;
     } catch (error) {
         console.error('Error creating project:', error);
         return `Error creating project: ${error instanceof Error ? error.message : String(error)}`;
@@ -167,13 +166,19 @@ export function getProjectTools(): ToolFunction[] {
             create_project,
             'Create a new project with a common git repository to work on. You can then give agents access to it.',
             {
-                project_id: 'No spaces - letters, numbers, dashes and underscores only.',
-                simple_description: 'A sentence describing the project. This will be used to identify the project in the list.',
+                project_id:
+                    'No spaces - letters, numbers, dashes and underscores only.',
+                simple_description:
+                    'A sentence describing the project. This will be used to identify the project in the list.',
                 project_type: {
                     type: 'string',
-                    description: 'What type of files will be in the project. Use \'plain\' if no other type matches.',
-                    enum: projectTypes,
-                }
+                    description:
+                        "What type of files will be in the project. Use 'plain' if no other type matches.",
+                    enum: PROJECT_TYPES,
+                    enumDescriptions: Object.entries(PROJECT_TYPE_DESCRIPTIONS).map(
+                        ([type, description]) => `${type}: ${description}`
+                    ),
+                },
             }
         ),
     ];
