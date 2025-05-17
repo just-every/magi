@@ -190,38 +190,33 @@ export async function updatePrEvent(
 ): Promise<boolean> {
     const db = await getDB();
     try {
-        const updates: string[] = ['status = $1'];
-        const params: any[] = [status];
+        const updates: string[] = ['status = $1', 'resolved_at = NOW()', 'resolved_by = $2'];
+        const params: any[] = [status, userId];
 
-        // Set resolution time and user
-        updates.push('resolved_at = NOW()');
-        updates.push('resolved_by = $2');
-        params.push(userId);
+        let paramIndex = 3;
 
         // Set resolution if provided
-        if (resolution) {
-            updates.push('resolution = $3');
+        if (resolution !== undefined) {
+            updates.push(`resolution = $${paramIndex}`);
             params.push(resolution);
+            paramIndex++;
+        }
 
-            // Additional parameters start from index 4
-            let paramIndex = 4;
+        // Set commit SHA if provided
+        if (commitSha) {
+            updates.push(`merge_commit_sha = $${paramIndex}`);
+            params.push(commitSha);
+            paramIndex++;
+        }
 
-            // Set commit SHA if provided
-            if (commitSha) {
-                updates.push(`merge_commit_sha = $${paramIndex}`);
-                params.push(commitSha);
-                paramIndex++;
-            }
+        params.push(id); // Last parameter is always the ID
 
-            params.push(id); // Last parameter is always the ID
-
-            await db.query(
-                `UPDATE pull_request_events
+        await db.query(
+            `UPDATE pull_request_events
                 SET ${updates.join(', ')}
                 WHERE id = $${paramIndex}`,
-                params
-            );
-        }
+            params
+        );
 
         // Get the project_id to update history
         const { rows } = await db.query(
