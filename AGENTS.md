@@ -15,38 +15,44 @@ High-level machine-readable index of the repository. Use it to quickly locate en
 
 ## Common Bash Commands
 ```bash
-npm install            # install all workspaces
-npm run dev            # concurrently start React UI & backend watchers
-npm run build          # compile TypeScript bundles
-vitest                 # run unit tests
-playwright test        # run E2E tests
-docker compose up -d   # spin up Postgres & pgvector
+# install all workspaces
+npm install
+# concurrently start React UI & backend watchers
+npm run dev
+# compile TypeScript bundles
+npm run build
+# run unit tests
+vitest
+# run E2E tests
+playwright test
+# spin up Postgres & pgvector
+docker compose up -d
 ```
 
 ## Code Style Guidelines
 - TypeScript strict mode; run `npm run lint` (ESLint)
 - Prettier enforced via `.prettierrc`
-- Commit hooks with Husky ensure formatting & tests pass.
+- # Commit hooks with Husky ensure formatting & tests pass.
 
 ## Testing Instructions
-- Unit tests live in `test/` and are executed with Vitest.
-- E2E tests use Playwright in `test/e2e`.
+- # Unit tests live in `test/` and are executed with Vitest.
+- # E2E tests use Playwright in `test/e2e`.
 
 ## Repository Etiquette
 - Branch names: `feat/<ticket>`, `fix/<issue>`
-- Conventional Commits required.
-- PRs must pass CI and require at least one approving review.
+- # Use Conventional Commits.
+- # PRs must pass CI and require at least one approving review.
 
 ## Developer Environment Setup
-1. `cp .env.example .env` and fill in API keys.
+1. `cp .env.example .env` # and fill in API keys.
 2. `npm install`
 3. `docker compose up -d db`
-4. `npm run dev` – open http://localhost:5173
+4. `npm run dev` # – open http://localhost:5173
 
 ## Project-Specific Warnings
-- Do NOT commit real API keys. `.env` is git-ignored.
-- Heavy tasks may consume OpenAI/Anthropic quotas quickly.
+- # IMPORTANT: Do NOT commit real API keys. `.env` is git-ignored.
+- # WARNING: Heavy tasks may consume OpenAI/Anthropic quotas quickly.
 
 ## Key Utility Functions / APIs
-- `common/llm/` – wrapper around Anthropic, OpenAI, Gemini
-- `common/utils/docker.ts` – programmatic Docker control
+- # Internal: `common/llm/` – wrapper around Anthropic, OpenAI, Gemini
+- # Internal: `common/utils/docker.ts` – programmatic Docker control

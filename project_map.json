@@ -1,0 +1,129 @@
+{
+  "root": "magi-system",
+  "summary": "MAGI System is an ensemble autonomous AI framework designed to solve tasks with minimal human intervention. It uses a persistent chain of thought with a central AI persona (Magi) for orchestration and task management. The system is modular, fault-tolerant, and aims to solve problems in the best way possible by recovering from errors gracefully.",
+  "primary_language": "TypeScript",
+  "frameworks": [
+    "Node.js",
+    "React",
+    "Express",
+    "Socket.IO",
+    "Docker",
+    "PostgreSQL",
+    "Webpack"
+  ],
+  "dependencies": {
+    "frontend": [
+      "react",
+      "react-dom",
+      "socket.io-client",
+      "bootstrap",
+      "marked",
+      "ef-infinite-canvas"
+    ],
+    "backend": [
+      "express",
+      "socket.io",
+      "dockerode",
+      "pg",
+      "ws",
+      "node-telegram-bot-api"
+    ],
+    "ai": [
+      "@anthropic-ai/sdk",
+      "openai",
+      "@google/genai",
+      "chrome-remote-interface"
+    ]
+  },
+  "entry_points": {
+    "server": "/controller/src/server/server.ts",
+    "client": "/controller/src/client/client.tsx",
+    "magi": "/magi/src/magi.ts"
+  },
+  "commands": {
+    "setup": "npm run setup",
+    "build": {
+      "all": "npm run build",
+      "docker": "npm run build:docker",
+      "controller": "cd controller && npm run build",
+      "magi": "cd magi && npm run build"
+    },
+    "dev": "npm run dev",
+    "test": {
+      "unit": "npm test",
+      "e2e": "npm run test:e2e"
+    },
+    "lint": "npm run lint",
+    "lint:fix": "npm run lint:fix"
+  },
+  "important_directories": {
+    "controller": {
+      "description": "Web UI & container manager",
+      "paths": [
+        "/controller/src/server",
+        "/controller/src/client"
+      ]
+    },
+    "magi": {
+      "description": "Agent runtime & model providers",
+      "paths": [
+        "/magi/src/magi_agents",
+        "/magi/src/model_providers",
+        "/magi/src/utils"
+      ]
+    },
+    "db": {
+      "description": "Database migrations",
+      "paths": [
+        "/db/migrations"
+      ]
+    },
+    "host": {
+      "description": "Browser bridge CLI",
+      "paths": [
+        "/host/src/browser"
+      ]
+    },
+    "common": {
+      "description": "Shared types & templates",
+      "paths": [
+        "/common"
+      ]
+    },
+    "test": {
+      "description": "Testing utilities",
+      "paths": [
+        "/test"
+      ]
+    }
+  },
+  "important_files": {
+    "docker": [
+      "/docker-compose.yml",
+      "/controller/docker/Dockerfile",
+      "/magi/docker/Dockerfile"
+    ],
+    "configuration": [
+      "/controller/tsconfig.json",
+      "/magi/tsconfig.json",
+      "/controller/webpack.config.js"
+    ],
+    "documentation": [
+      "/README.md",
+      "/CLAUDE.md",
+      "/POSTGRES.md",
+      "/docs/CUSTOM_TOOLS.md",
+      "/docs/MECH.md",
+      "/docs/TESTING.md"
+    ]
+  },
+  "project_structure": {
+    "controller": "Web UI & container manager with React/Express/Socket.IO",
+    "magi": "Agent runtime & LLM model providers",
+    "host": "Browser bridge CLI for Chrome automation",
+    "db": "PostgreSQL migrations and schema",
+    "common": "Shared TypeScript types",
+    "test": "Testing utilities and scripts",
+    "templates": "Project templates for new projects"
+  }
+}
