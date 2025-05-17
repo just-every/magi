@@ -18,6 +18,7 @@ import path from 'path';
 import { getAgentBrowserSession } from './browser_session.js';
 import { quick_llm_call } from './llm_call_utils.js';
 import { web_search } from './search_utils.js';
+import { createToolFunction } from './tool_call.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // Type definitions
@@ -38,12 +39,6 @@ export type DesignSearchEngine =
     | 'siteinspire'
     | 'generic_web';
 
-export interface DesignSearchOptions {
-    query: string;
-    engine: DesignSearchEngine;
-    limit?: number;
-    takeScreenshots?: boolean;
-}
 
 // Base directory for storing screenshots
 const DESIGN_ASSETS_DIR = path.join(process.cwd(), 'design_assets');
@@ -436,9 +431,10 @@ async function genericWebSearch(
  * Main function to search for design inspiration
  */
 export async function design_search(
-    options: DesignSearchOptions
+    query: string,
+    engine: DesignSearchEngine,
+    limit: number = 10
 ): Promise<{ results: DesignSearchResult[] }> {
-    const { query, engine, limit = 10, takeScreenshots = false } = options;
 
     // Select the appropriate search function based on the engine
     let results: DesignSearchResult[];
@@ -474,18 +470,16 @@ export async function design_search(
     // Limit results
     results = results.slice(0, limit);
 
-    // Take screenshots if requested
-    if (takeScreenshots) {
-        const screenshotPromises = results.map(async result => {
-            const screenshotPath = await takeScreenshot(result.url);
-            if (screenshotPath) {
-                result.screenshotPath = screenshotPath;
-            }
-            return result;
-        });
+    // Always capture screenshots of the results
+    const screenshotPromises = results.map(async result => {
+        const screenshotPath = await takeScreenshot(result.url);
+        if (screenshotPath) {
+            result.screenshotPath = screenshotPath;
+        }
+        return result;
+    });
 
-        results = await Promise.all(screenshotPromises);
-    }
+    results = await Promise.all(screenshotPromises);
 
     return { results };
 }
@@ -494,45 +488,32 @@ export async function design_search(
  * Create a custom tool for design_search
  */
 export function createDesignSearchTool() {
-    return {
-        name: 'design_search',
-        description: 'Search for design inspiration from various sources',
-        parameters: {
-            type: 'object',
-            properties: {
-                query: {
-                    type: 'string',
-                    description:
-                        'The search query, e.g. "b2b customer support homepage"',
-                },
-                engine: {
-                    type: 'string',
-                    enum: [
-                        'dribbble',
-                        'behance',
-                        'envato',
-                        'pinterest',
-                        'landingfolio',
-                        'awwwards',
-                        'siteinspire',
-                        'generic_web',
-                    ],
-                    description:
-                        'The design platform to search for inspiration',
-                },
-                limit: {
-                    type: 'number',
-                    description:
-                        'Maximum number of results to return (default: 10)',
-                },
-                takeScreenshots: {
-                    type: 'boolean',
-                    description:
-                        'Whether to capture screenshots of the websites (default: false)',
-                },
+    return createToolFunction(
+        design_search,
+        'Search for design inspiration from various sources',
+        {
+            query:
+                'The search query, e.g. "b2b customer support homepage"',
+            engine: {
+                type: 'string',
+                enum: [
+                    'dribbble',
+                    'behance',
+                    'envato',
+                    'pinterest',
+                    'landingfolio',
+                    'awwwards',
+                    'siteinspire',
+                    'generic_web',
+                ],
+                description: 'The design platform to search for inspiration',
             },
-            required: ['query', 'engine'],
-        },
-        function: design_search,
-    };
+            limit: {
+                type: 'number',
+                description:
+                    'Maximum number of results to return (default: 10)',
+                optional: true,
+            },
+        }
+    );
 }
