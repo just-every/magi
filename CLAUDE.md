@@ -7,8 +7,12 @@ MAGI System is a modular, autonomous AI orchestration framework. It coordinates 
   - src/client/ – React UI code
 - magi/: Core orchestration logic for agents
   - src/magi.ts – Main bootstrapping entry for the Overseer
-- common/: Shared TypeScript utilities
-- host/, db/, docker-compose.yml – Local dev environment, Postgres, pgvector
+  - src/magi_agents/ – Specialized agent implementations
+  - src/model_providers/ – LLM providers (Anthropic, OpenAI, Google)
+- common/: Shared TypeScript utilities and types
+- host/: Browser bridge for Chrome automation via CDP
+- db/: PostgreSQL migrations and schema
+- docker-compose.yml – Container orchestration
 
 ## `project_map.json`
 High-level machine-readable index of the repository. Use it to quickly locate entry points, key directories, and common commands.
@@ -18,35 +22,47 @@ High-level machine-readable index of the repository. Use it to quickly locate en
 npm install            # install all workspaces
 npm run dev            # concurrently start React UI & backend watchers
 npm run build          # compile TypeScript bundles
+npm run browser:start  # launch Chrome for browser agent
 vitest                 # run unit tests
-playwright test        # run E2E tests
+npm run test:e2e       # run E2E tests
 docker compose up -d   # spin up Postgres & pgvector
 ```
 
 ## Code Style Guidelines
 - TypeScript strict mode; run `npm run lint` (ESLint)
-- Prettier enforced via `.prettierrc`
-- Commit hooks with Husky ensure formatting & tests pass.
+- Prettier enforced via Husky pre-commit hooks
+- Commit hooks ensure formatting & tests pass
 
 ## Testing Instructions
-- Unit tests live in `test/` and are executed with Vitest.
-- E2E tests use Playwright in `test/e2e`.
+- Unit tests with Vitest in `test/`
+- E2E tests with Playwright in `test/playwright/`
+- Integration tests for individual agents with `test/magi-docker.sh`
 
 ## Repository Etiquette
 - Branch names: `feat/<ticket>`, `fix/<issue>`
-- Conventional Commits required.
-- PRs must pass CI and require at least one approving review.
+- Conventional Commits required
+- PRs must pass CI and require at least one approving review
 
 ## Developer Environment Setup
-1. `cp .env.example .env` and fill in API keys.
+1. `cp .env.example .env` and fill in API keys
 2. `npm install`
 3. `docker compose up -d db`
-4. `npm run dev` – open http://localhost:5173
+4. `npm run dev` – open http://localhost:3010
 
 ## Project-Specific Warnings
 - Do NOT commit real API keys. `.env` is git-ignored.
 - Heavy tasks may consume OpenAI/Anthropic quotas quickly.
+- Agent containers require proper configuration in docker-compose.yml.
 
 ## Key Utility Functions / APIs
-- `common/llm/` – wrapper around Anthropic, OpenAI, Gemini
-- `common/utils/docker.ts` – programmatic Docker control
+- `magi/src/utils/runner.js` – Core agent runner
+- `magi/src/utils/history.js` – Conversation history management
+- `magi/src/utils/memory.js` – Memory persistence
+- `magi/src/model_providers/` – LLM API wrappers
+- `controller/src/server/docker_interface.ts` – Container management
+
+## Special Features
+- MECH (Meta-cognition Ensemble Chain-of-thought Hierarchy) - Intelligent model selection
+- Custom Tools - Dynamic tool creation by agents at runtime
+- Browser control - CDP-based browser automation
+- Multi-provider support - Works with various LLM providers with automatic fallback
