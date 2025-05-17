@@ -195,6 +195,7 @@ export const MODEL_CLASSES = {
         models: [
             'claude-code', // Anthropic
             'codex', // OpenAI
+            'codex-mini-latest', // OpenAI
         ],
         //random: true,
     },
@@ -1200,6 +1201,28 @@ export const MODEL_REGISTRY: ModelEntry[] = [
             code: 44, // HumanEval score (legacy)
         },
         description: 'OpenAI model optimized for coding tasks',
+    },
+    {
+        id: 'codex-mini-latest',
+        provider: 'openai',
+        cost: {
+            input_per_million: 1.5,
+            cached_input_per_million: 0.375,
+            output_per_million: 6.0,
+        },
+        features: {
+            context_length: 200000,
+            max_output_tokens: 100000,
+            input_modality: ['text', 'image'],
+            output_modality: ['text'],
+            tool_use: false,
+            streaming: true,
+            json_output: true,
+            reasoning_output: true,
+        },
+        class: 'code',
+        description:
+            'Fine-tuned o4-mini model for Codex CLI with reasoning token support',
     },
     // Perplexity Sonar models
     {
