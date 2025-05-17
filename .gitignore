@@ -71,5 +71,6 @@ yarn-error.log
 !host/setup.js
 !controller/webpack.config.js
 !eslint.config.js
+!templates/web-static/tailwind.config.js
 
 /*chrome*
