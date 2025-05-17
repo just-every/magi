@@ -4,6 +4,7 @@ import { useSocket } from '../../context/SocketContext';
 import ChatColumn from './ChatColumn';
 import ProcessTreeColumn from './ProcessTreeColumn';
 import OutputColumn from './OutputColumn';
+import PullRequestFailures from '../PullRequestFailures';
 import { PRIMARY_RGB } from '../../utils/constants';
 
 interface ColumnLayoutProps {}
@@ -12,6 +13,8 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
     const { processes, coreProcessId, costData, isPaused, togglePauseState } =
         useSocket();
     const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+    const [middleTab, setMiddleTab] =
+        useState<'tasks' | 'code' | 'complete'>('tasks');
 
     useEffect(() => {
         // Focus input when visible
@@ -44,17 +47,62 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                     />
                 </div>
 
-                {/* Middle Column: Process Tree */}
+                {/* Middle Column: Tasks / Code / Complete */}
                 <div
-                    className="col-md-3 h-100"
+                    className="col-md-3 h-100 d-flex flex-column"
                     style={{
                         padding: '1rem',
                     }}
                 >
-                    <ProcessTreeColumn
-                        selectedItemId={selectedItemId}
-                        setSelectedItemId={setSelectedItemId}
-                    />
+                    <ul className="nav nav-tabs small mb-2">
+                        <li className="nav-item">
+                            <button
+                                className={`nav-link${
+                                    middleTab === 'tasks' ? ' active' : ''
+                                }`}
+                                onClick={() => setMiddleTab('tasks')}
+                            >
+                                Tasks
+                            </button>
+                        </li>
+                        <li className="nav-item">
+                            <button
+                                className={`nav-link${
+                                    middleTab === 'code' ? ' active' : ''
+                                }`}
+                                onClick={() => setMiddleTab('code')}
+                            >
+                                Code
+                            </button>
+                        </li>
+                        <li className="nav-item">
+                            <button
+                                className={`nav-link${
+                                    middleTab === 'complete' ? ' active' : ''
+                                }`}
+                                onClick={() => setMiddleTab('complete')}
+                            >
+                                Complete
+                            </button>
+                        </li>
+                    </ul>
+                    <div className="flex-grow-1 overflow-auto">
+                        {middleTab === 'tasks' ? (
+                            <ProcessTreeColumn
+                                selectedItemId={selectedItemId}
+                                setSelectedItemId={setSelectedItemId}
+                                statusFilter={['running', 'failed', 'terminated', 'ending']}
+                            />
+                        ) : middleTab === 'code' ? (
+                            <PullRequestFailures />
+                        ) : (
+                            <ProcessTreeColumn
+                                selectedItemId={selectedItemId}
+                                setSelectedItemId={setSelectedItemId}
+                                statusFilter={['completed']}
+                            />
+                        )}
+                    </div>
                 </div>
 
                 {/* Right Column: Output */}
