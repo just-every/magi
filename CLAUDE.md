@@ -17,14 +17,24 @@ MAGI System is a modular, autonomous AI orchestration framework. It coordinates 
 ## `project_map.json`
 High-level machine-readable index of the repository. Use it to quickly locate entry points, key directories, and common commands.
 
+## Build Process
+The system relies on Docker for reproducible environments. Use `npm run build` to compile TypeScript and build the images.
+- `npm run build:host` – compile host utilities only
+- `npm run build:docker` – build controller and magi images
+
+
 ## Common Bash Commands
 ```bash
 npm install            # install all workspaces
-npm run dev            # concurrently start React UI & backend watchers
+npm run setup          # configure Chrome and shared volumes
+npm run dev            # start watchers and Docker services
 npm run build          # compile TypeScript bundles
+npm run build:docker   # build controller and magi images
+npm run build:host     # compile host utilities
 npm run browser:start  # launch Chrome for browser agent
-vitest                 # run unit tests
-npm run test:e2e       # run E2E tests
+npm test               # run unit tests (Vitest)
+npm run test:e2e       # run E2E tests (Playwright)
+npm run test:tools     # execute example custom tools
 docker compose up -d   # spin up Postgres & pgvector
 ```
 
@@ -36,7 +46,9 @@ docker compose up -d   # spin up Postgres & pgvector
 ## Testing Instructions
 - Unit tests with Vitest in `test/`
 - E2E tests with Playwright in `test/playwright/`
+- Example custom tools in `test/tools` (run via `npm run test:tools`)
 - Integration tests for individual agents with `test/magi-docker.sh`
+- See `docs/TESTING.md` for advanced scenarios
 
 ## Repository Etiquette
 - Branch names: `feat/<ticket>`, `fix/<issue>`
@@ -46,8 +58,9 @@ docker compose up -d   # spin up Postgres & pgvector
 ## Developer Environment Setup
 1. `cp .env.example .env` and fill in API keys
 2. `npm install`
-3. `docker compose up -d db`
-4. `npm run dev` – open http://localhost:3010
+3. `npm run setup`    # builds host tools and prepares Chrome
+4. `docker compose up -d db`
+5. `npm run dev` – open http://localhost:3010
 
 ## Project-Specific Warnings
 - Do NOT commit real API keys. `.env` is git-ignored.
