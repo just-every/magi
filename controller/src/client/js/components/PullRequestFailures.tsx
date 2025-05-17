@@ -118,9 +118,7 @@ const PullRequestFailures: React.FC<PullRequestFailuresProps> = ({
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    userId: 'current-user', // TODO: Use actual user ID
-                }),
+                body: JSON.stringify({}),
             });
             const data = await response.json();
 
@@ -162,9 +160,7 @@ const PullRequestFailures: React.FC<PullRequestFailuresProps> = ({
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    userId: 'current-user', // TODO: Use actual user ID
-                }),
+                body: JSON.stringify({}),
             });
             const data = await response.json();
 
