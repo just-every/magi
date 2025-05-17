@@ -833,6 +833,36 @@ export class AgentBrowserSessionCDP {
     }
 
     /**
+     * Capture a simple screenshot of the current viewport.
+     * Primarily used for lightweight screenshot needs where DOM metadata is unnecessary.
+     * @param delayMs Optional delay before capture to allow the page to settle.
+     * @returns Base64 data URL string on success or an error object on failure.
+     */
+    async captureScreenshot(
+        delayMs: number = 0
+    ): Promise<string | { error: string }> {
+        await this.ensureInitialized();
+        try {
+            await this.ensureViewportSize();
+            if (delayMs > 0) {
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+            }
+            const result = await this.cdpClient!.Page.captureScreenshot({
+                format: 'png',
+                fromSurface: true,
+                optimizeForSpeed: true,
+            });
+            return `data:image/png;base64,${result.data}`;
+        } catch (error: any) {
+            console.error(
+                `[browser_session_cdp] Error capturing screenshot for tab ${this.tabId}:`,
+                error
+            );
+            return { error: error.message || String(error) };
+        }
+    }
+
+    /**
      * Captures a screenshot and gathers browser status information (URL, dimensions, element map).
      * Sets consistent viewport dimensions but allows native device pixel ratio (DPR).
      * Detects the actual DPR and scroll position, passing them to `buildElementArray`

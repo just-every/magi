@@ -64,42 +64,41 @@ function ensureDesignAssetsDir() {
  * @returns Path to the screenshot file
  */
 async function takeScreenshot(url: string): Promise<string | null> {
+    ensureDesignAssetsDir();
+
+    // Generate a unique filename for the screenshot
+    const filename = `${uuidv4()}.png`;
+    const filePath = path.join(DESIGN_ASSETS_DIR, 'screenshots', filename);
+
+    // Use a throwaway session per capture to avoid interference with other tabs
+    const sessionId = `design-search-${uuidv4()}`;
+    const session = getAgentBrowserSession(sessionId, url);
+
     try {
-        ensureDesignAssetsDir();
-
-        // Generate a filename
-        const filename = `${uuidv4()}.png`;
-        const filePath = path.join(DESIGN_ASSETS_DIR, 'screenshots', filename);
-
-        // Use browserStatus instead of direct browser manipulation
-        const session = getAgentBrowserSession('screenshot-session');
-
-        // Navigate to the URL
         await session.navigate(url);
 
-        // Wait a bit for lazy-loaded content
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // Take screenshot using browserStatus
-        const status = await session.browserStatus();
-
-        if ('error' in status) {
-            throw new Error(`Browser error: ${status.error}`);
+        // Capture a lightweight screenshot of the viewport
+        const result = await session.captureScreenshot(2000);
+        if (typeof result === 'object' && 'error' in result) {
+            throw new Error(`Browser error: ${result.error}`);
         }
 
         // Extract the base64 image data
-        const base64Data = status.screenshot.replace(
-            /^data:image\/png;base64,/,
-            ''
-        );
+        const base64Data = result.replace(/^data:image\/png;base64,/, '');
 
-        // Write to file
         fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
 
         return filePath;
     } catch (error) {
         console.error(`Error taking screenshot of ${url}:`, error);
         return null;
+    } finally {
+        // Clean up the temporary session
+        try {
+            await session.closeSession();
+        } catch (closeError) {
+            console.error('Error closing screenshot session:', closeError);
+        }
     }
 }
 
