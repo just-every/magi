@@ -1,36 +1,106 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Next.js Full-Stack Web Application Template
 
-## Getting Started
+A complete, production-ready template for building full-stack web applications with user authentication, database integration, and modern UI components.
 
-First, run the development server:
+## Features
+
+- **Next.js App Router** - Latest Next.js framework with React Server Components
+- **TypeScript** - Type-safe development experience with full type checking
+- **Authentication** - NextAuth implementation with JWT and session management
+- **Database Integration** - Prisma ORM with PostgreSQL support and migrations
+- **Form Handling** - React Hook Form with Zod validation
+- **UI Components** - Radix UI primitives with Tailwind CSS styling
+- **Docker Support** - Containerized development and deployment
+- **API Routes** - Built-in backend API with proper routing
+- **Turbopack** - Enhanced development experience with faster builds and hot reloading
+
+## Quick Start
 
 ```bash
+# Install dependencies
+npm install
+
+# Initialize database (first-time setup)
+npx prisma migrate dev
+npx prisma db seed
+
+# Start development server with hot-reload
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+
+# Build for production
+npm run build
+
+# Start production server
+npm start
+
+# Lint code
+npm run lint
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Visit [http://localhost:3000](http://localhost:3000) to see your application.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+/
+├── prisma/                  # Database schema and seeds
+│   ├── schema.prisma        # Database models and relationships
+│   └── seed.ts              # Initial data for development
+├── src/
+│   ├── app/                 # Next.js App Router pages
+│   │   ├── api/             # Backend API routes
+│   │   │   ├── auth/        # Authentication endpoints
+│   │   │   └── users/       # User data endpoints
+│   │   ├── login/           # User login page
+│   │   ├── register/        # User registration page
+│   │   ├── page.tsx         # Homepage
+│   │   └── layout.tsx       # Root layout with providers
+│   ├── components/          # Reusable UI components
+│   │   ├── Header.tsx       # Navigation header with authentication status
+│   │   ├── logout.tsx       # Logout button component
+│   │   └── ui/              # Design system components
+│   ├── lib/                 # Utilities and shared code
+│   │   ├── prisma.ts        # Database client
+│   │   └── utils.ts         # Helper functions
+│   └── types/               # TypeScript declarations
+│       └── next-auth.d.ts   # NextAuth type extensions
+├── Dockerfile               # Docker configuration
+├── next.config.ts           # Next.js configuration
+└── package.json             # Dependencies and scripts
+```
 
-## Learn More
+## Authentication
 
-To learn more about Next.js, take a look at the following resources:
+The template includes a complete authentication system with:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- User registration with password hashing (using bcrypt)
+- Login functionality with JWT session handling
+- Enhanced session with user ID, name, and email available client-side
+- Protected routes and API endpoints
+- User profile display in the header when logged in
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Database Integration
 
-## Deploy on Vercel
+Prisma ORM is preconfigured with:
+- PostgreSQL database connection
+- Migration system for schema changes
+- Seed script for initial data population
+- Type-safe database queries
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## UI Components
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The template provides a set of ready-to-use UI components:
+- Form inputs with validation
+- Buttons with various styles
+- Layout components for consistent design
+- Responsive design with Tailwind CSS
+
+## Next Steps
+
+- Customize the authentication flow for your application
+- Extend the database schema for your data model
+- Create additional API endpoints
+- Add more UI components and pages
+- Configure deployment settings
+
+This template is designed to be a starting point for AI agents developing full-stack web applications.

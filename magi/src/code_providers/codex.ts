@@ -79,7 +79,7 @@ export class CodexProvider implements ModelProvider {
             // Run Codex CLI via run_pty
             const { stream } = runPty(
                 'codex',
-                ['-q', prompt],
+                ['--full-auto', '--dangerously-auto-approve-everything', prompt],
                 ptyOpts
             );
 

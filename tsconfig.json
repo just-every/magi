@@ -29,8 +29,9 @@
         "browser/**/*",
         "common/**/*",
         "setup/**/*",
-        "test/**/*"
-, "templates/next-app"    ],
+        "test/**/*",
+        "templates/**/*"
+    ],
     "exclude": ["controller/node_modules", "controller/dist"],
     "files": [
         "test/tools/tool-types.d.ts"

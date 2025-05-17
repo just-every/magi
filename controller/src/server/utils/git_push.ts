@@ -12,6 +12,7 @@
 import { execSync, ExecSyncOptions } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import lockfile from 'proper-lockfile';
 import { MergePolicy } from '../../types/index';
 import { computeMetrics } from './../managers/commit_metrics';
 import { getProject } from './db_utils';
@@ -53,6 +54,193 @@ function envFloat(key: string, dflt: number) {
 /* -------------------------------------------------------------------------- */
 /* Risk‑band checks                                                           */
 /* -------------------------------------------------------------------------- */
+
+/* -------------------------------------------------------------------------- */
+/* Locking mechanism to prevent concurrent operations on same branch          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Execute a task with exclusive lock on a project branch using filesystem locking
+ * Works across processes and containers that share the magi_output volume
+ * @param projectId Project identifier
+ * @param branch Branch name
+ * @param task Function to execute while holding the lock
+ * @returns Result of the task
+ */
+/**
+ * Ensure locks directory exists with proper permissions for all containers
+ * @param projectId Project identifier
+ * @returns Path to the locks directory
+ */
+function ensureLocksDir(projectId: string): string {
+    // Create parent locks directory if it doesn't exist
+    const parentLocksDir = path.join('/magi_output', 'locks');
+
+    if (!fs.existsSync(parentLocksDir)) {
+        fs.mkdirSync(parentLocksDir, { recursive: true });
+
+        try {
+            // Set sticky bit + rwxrwxrwx permissions so all containers can create locks
+            fs.chmodSync(parentLocksDir, 0o1777);
+            console.log(`[git-push] Set shared permissions on locks directory: ${parentLocksDir}`);
+        } catch (err) {
+            // Non-fatal - containers with same UID will still work
+            console.warn(`[git-push] Failed to set permissions on locks directory: ${err}`);
+        }
+    }
+
+    // Create project-specific locks directory
+    const locksDir = path.join(parentLocksDir, projectId);
+    fs.mkdirSync(locksDir, { recursive: true });
+
+    return locksDir;
+}
+
+/**
+ * Execute a task with exclusive lock on a project branch using filesystem locking
+ * Works across processes and containers that share the magi_output volume
+ * @param projectId Project identifier
+ * @param branch Branch name
+ * @param task Function to execute while holding the lock
+ * @param isLongRunning Whether this is expected to be a long-running operation
+ * @returns Result of the task
+ */
+async function withBranchLock<T>(
+    projectId: string,
+    branch: string,
+    task: () => Promise<T>,
+    isLongRunning: boolean = false
+): Promise<T> {
+    // Ensure the locks directory exists with proper permissions
+    const locksDir = ensureLocksDir(projectId);
+
+    // Create a lockfile path that's safe for filesystem
+    const lockPath = path.join(locksDir, `${branch.replace(/[^a-zA-Z0-9-_]/g, '_')}.lock`);
+
+    console.log(`[git-push] Acquiring filesystem lock at ${lockPath}`);
+
+    // Use longer stale timeout for operations expected to take time (like merges)
+    // This reduces the chance of orphaned locks causing problems
+    const staleTimeout = isLongRunning ? 300000 : 60000; // 5 minutes or 1 minute
+
+    let release: () => Promise<void>;
+    try {
+        // Acquire the lock - this will wait if another process holds it
+        release = await lockfile.lock(lockPath, {
+            retries: 120,         // Try for up to 2 minutes
+            retryWait: 1000,      // Wait 1 second between retries
+            stale: staleTimeout,  // Consider lock stale after timeout
+            realpath: false       // Don't follow symlinks
+        });
+
+        console.log(`[git-push] Lock acquired for ${projectId}:${branch}`);
+
+        // Execute the task while holding the lock
+        return await task();
+    } finally {
+        // Release the lock when done
+        if (release) {
+            try {
+                await release();
+                console.log(`[git-push] Lock released for ${projectId}:${branch}`);
+            } catch (err) {
+                console.warn(`[git-push] Failed to release lock: ${err}`);
+            }
+        }
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Helper functions                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Checks if a merge is in progress in the given repository
+ * @param repo Path to the git repository
+ * @returns Boolean indicating if a merge is in progress
+ */
+function mergeInProgress(repo: string): boolean {
+    return fs.existsSync(path.join(repo, '.git', 'MERGE_HEAD'));
+}
+
+/**
+ * Checks if a rebase is in progress in the given repository
+ * @param repo Path to the git repository
+ * @returns Boolean indicating if a rebase is in progress
+ */
+function rebaseInProgress(repo: string): boolean {
+    return fs.existsSync(path.join(repo, '.git', 'rebase-merge')) ||
+           fs.existsSync(path.join(repo, '.git', 'rebase-apply'));
+}
+
+/**
+ * Gets the host repository path deterministically from the project path
+ * @param projectPath Path to the git working copy
+ * @returns Host repository path
+ */
+function hostRepoPath(projectPath: string): string {
+    // Extract the project ID from the path (last directory component)
+    const projectId = path.basename(projectPath);
+    return path.join('/external/host', projectId);
+}
+
+/**
+ * Safely fast-forwards the host repository to match the mirror
+ * Protects against:
+ * 1. Uncommitted local changes
+ * 2. Divergent commits that would be lost
+ *
+ * @param hostPath Path to the host repository
+ * @param mirrorPath Path to the mirror repository
+ * @param branch Branch to fetch
+ */
+function safeFastForward(hostPath: string, mirrorPath: string, branch: string): void {
+    console.log(`[git-push] Safely fast-forwarding host repo at ${hostPath}`);
+
+    // Step 1: Fetch the branch from the mirror
+    try {
+        runGit(hostPath, `fetch '${mirrorPath}' ${branch}`);
+        console.log(`[git-push] Fetched ${branch} from mirror`);
+    } catch (err) {
+        console.error(`[git-push] Failed to fetch from mirror: ${err}`);
+        throw err;
+    }
+
+    // Step 2: Check if there are uncommitted changes
+    try {
+        const dirtyCheck = execSync(`git -C "${hostPath}" status --porcelain`, {
+            encoding: 'utf8',
+        }).trim();
+
+        if (dirtyCheck) {
+            console.warn('[git-push] Host repository has uncommitted changes, skipping fast-forward');
+            console.warn('[git-push] Creating branch magi-incoming instead');
+            const timestamp = Date.now();
+            runGit(hostPath, `branch magi-incoming-${timestamp} FETCH_HEAD`);
+            console.log(`[git-push] Created branch magi-incoming-${timestamp} pointing to FETCH_HEAD`);
+            return;
+        }
+    } catch (err) {
+        console.error(`[git-push] Failed to check work-tree status: ${err}`);
+        throw err;
+    }
+
+    // Step 3: Check if fast-forward is possible (HEAD is ancestor of FETCH_HEAD)
+    try {
+        runGit(hostPath, 'merge-base --is-ancestor HEAD FETCH_HEAD', { quiet: true });
+
+        // Fast-forward is possible, do it
+        runGit(hostPath, 'reset --hard FETCH_HEAD');
+        console.log('[git-push] Successfully fast-forwarded host work-tree');
+    } catch (err) {
+        // Not an ancestor - local and remote have diverged
+        console.warn('[git-push] Local and MAGI commits have diverged, cannot fast-forward');
+        console.warn('[git-push] Creating branch magi-incoming instead');
+        const timestamp = Date.now();
+        runGit(hostPath, `branch magi-incoming-${timestamp} FETCH_HEAD`);
+        console.log(`[git-push] Created branch magi-incoming-${timestamp} pointing to FETCH_HEAD`);
+    }
+}
 
 /* -------------------------------------------------------------------------- */
 /* Core git atomics                                                           */
@@ -126,24 +314,82 @@ function rebaseOntoDefault(projectPath: string): void {
         runGit(projectPath, `pull --rebase origin ${defaultBranch}`);
     } catch (err) {
         console.warn('[git-push] rebase failed — aborting:', err);
-        try {
-            runGit(projectPath, 'rebase --abort', { quiet: true });
-        } catch (e) {
-            console.debug('[git-push] failed to abort rebase:', e);
+        if (rebaseInProgress(projectPath)) {
+            try {
+                runGit(projectPath, 'rebase --abort', { quiet: true });
+            } catch (e) {
+                console.debug('[git-push] failed to abort rebase:', e);
+            }
+        } else {
+            console.debug('[git-push] no rebase in progress to abort');
         }
     }
 }
 
-function pushBranch(projectPath: string, branch: string): void {
+/**
+ * Get the mirror path corresponding to a working copy path
+ * @param projectPath Path to the working copy
+ * @returns Path to the mirror repository
+ */
+function getMirrorPath(projectPath: string): string {
+    try {
+        // Project path format: /magi_output/<processId>/projects/<projectId>
+        const pathParts = projectPath.split('/');
+        const projectsIndex = pathParts.indexOf('projects');
+
+        if (projectsIndex === -1 || projectsIndex === pathParts.length - 1) {
+            throw new Error(`Invalid project path format: ${projectPath}`);
+        }
+
+        const processId = pathParts[projectsIndex - 1];
+        const projectId = pathParts[projectsIndex + 1];
+
+        // Mirror path format: /magi_output/<processId>/projects/<projectId>.mirror.git
+        return path.join('/magi_output', processId, 'projects', `${projectId}.mirror.git`);
+    } catch (error) {
+        // Fallback: assume the mirror is alongside the working copy with a .mirror.git suffix
+        console.warn(`[git-push] Failed to parse project path (${error}), using fallback mirror path calculation`);
+        const projectDir = path.dirname(projectPath);
+        const projectName = path.basename(projectPath);
+        return path.join(projectDir, `${projectName}.mirror.git`);
+    }
+}
+
+function pushBranch(projectPath: string, branch: string, hostPath?: string): void {
     console.log(`[git-push] push ${branch}`);
     try {
         runGit(projectPath, `push -u origin ${branch}`);
+
+        // Forward update to host repo by fetch + safe fast-forward
+        if (hostPath) {
+            // Get the mirror path for fetch operation
+            const mirrorPath = getMirrorPath(projectPath);
+
+            // Use safe fast-forward that protects local changes
+            safeFastForward(hostPath, mirrorPath, branch);
+        }
     } catch (e) {
         if (/rejected/.test(String(e))) {
             console.log(
                 '[git-push] remote branch exists – retrying with --force-with-lease'
             );
             runGit(projectPath, `push -u --force-with-lease origin ${branch}`);
+
+            // Try to update host repo after force push
+            if (hostPath) {
+                try {
+                    // Get the mirror path for fetch operation
+                    const mirrorPath = getMirrorPath(projectPath);
+
+                    console.log('[git-push] Safe fast-forward host work-tree after force push');
+
+                    // Use safe fast-forward that protects local changes
+                    safeFastForward(hostPath, mirrorPath, branch);
+                } catch (hostErr) {
+                    console.error('[git-push] failed to update host repo:', hostErr);
+                    // Continue without throwing as the primary push succeeded
+                }
+            }
         } else {
             throw e;
         }
@@ -180,10 +426,14 @@ function mergeIntoDefault(
         return true;
     } catch (err) {
         console.error('[git-push] merge failed:', err);
-        try {
-            runGit(projectPath, 'merge --abort', { quiet: true });
-        } catch (e) {
-            console.debug('[git-push] failed to abort merge:', e);
+        if (mergeInProgress(projectPath)) {
+            try {
+                runGit(projectPath, 'merge --abort', { quiet: true });
+            } catch (e) {
+                console.debug('[git-push] failed to abort merge:', e);
+            }
+        } else {
+            console.debug('[git-push] no merge in progress to abort');
         }
         try {
             runGit(projectPath, `checkout ${branch}`, { quiet: true });
@@ -236,24 +486,41 @@ export async function retryMerge(
             return false;
         }
 
-        // Safely stash any local changes before merge
-        const hadStash = stashSave(projectPath);
+        // Get the default branch to use for locking
+        const defaultBranch = getDefaultBranch(projectPath);
+        const projectId = path.basename(projectPath); // Extract project ID from path
 
-        // Attempt the merge
-        const mergeSucceeded = mergeIntoDefault(
-            projectPath,
-            branchName,
-            commitMsg
-        );
+        // Get the host repo path for fast-forwarding
+        const hostPath = hostRepoPath(projectPath);
 
-        // Restore stashed changes regardless of merge result
-        stashPop(projectPath, hadStash);
+        // Execute merge with a lock on the default branch to prevent concurrent merges
+        console.log(`[git-push] Acquiring lock on ${projectId}:${defaultBranch} before merge retry operation`);
+        return await withBranchLock(projectId, defaultBranch, async () => {
+            // Safely stash any local changes before merge
+            const hadStash = stashSave(projectPath);
 
-        if (!mergeSucceeded) {
-            console.error('[git-push] Manual merge attempt failed');
-        }
+            try {
+                // Attempt the merge
+                const mergeSucceeded = mergeIntoDefault(
+                    projectPath,
+                    branchName,
+                    commitMsg
+                );
 
-        return mergeSucceeded;
+                // Push changes to branch after merge attempt
+                if (mergeSucceeded) {
+                    // Push changes to branch & sync with host
+                    pushBranch(projectPath, branchName, hostPath);
+                } else {
+                    console.error('[git-push] Manual merge attempt failed');
+                }
+
+                return mergeSucceeded;
+            } finally {
+                // Restore stashed changes regardless of merge result
+                stashPop(projectPath, hadStash);
+            }
+        });
     } catch (err) {
         console.error('[git-push] Unexpected error during merge retry:', err);
         return false;
@@ -351,7 +618,14 @@ export async function pushBranchAndOpenPR(
         );
 
         try {
-            pushBranch(projectPath, branchName);
+            // Get the host repo path for fast-forwarding
+            const hostPath = hostRepoPath(projectPath);
+
+            // Acquire lock on branch to prevent concurrent force-push operations to the same branch
+            await withBranchLock(projectId, branchName, async () => {
+                pushBranch(projectPath, branchName, hostPath);
+                return true;
+            });
         } catch (err) {
             // Record push failure
             await recordFailure(prEventsManager, {
@@ -381,58 +655,68 @@ export async function pushBranchAndOpenPR(
         }
 
         if (action === 'merge') {
-            // Safely stash any local changes before merge
-            const hadStash = stashSave(projectPath);
+            // Get the default branch to use for locking
+            const defaultBranch = getDefaultBranch(projectPath);
+            console.log(`[git-push] Acquiring lock on ${projectId}:${defaultBranch} before merge operation`);
 
-            // Attempt the merge
-            const mergeSucceeded = mergeIntoDefault(
-                projectPath,
-                branchName,
-                commitMsg
-            );
+            // Execute merge with a lock on the default branch to prevent concurrent merges
+            return await withBranchLock(projectId, defaultBranch, async () => {
+                // Safely stash any local changes before merge
+                const hadStash = stashSave(projectPath);
 
-            // Restore stashed changes regardless of merge result
-            stashPop(projectPath, hadStash);
-
-            if (!mergeSucceeded) {
-                console.error(
-                    '[git-push] Auto-merge failed, PR created but not merged'
-                );
-
-                // Record merge failure for manual resolution
-                await recordFailure(prEventsManager, {
-                    processId,
-                    projectId,
-                    branchName,
-                    commitMsg,
-                    metrics,
-                    errorMessage:
-                        'Auto-merge failed, manual intervention required',
-                });
-            } else {
-                // Record successful merge in the database
                 try {
-                    const mergeCommitSha = execSync(`git -C "${projectPath}" rev-parse HEAD`, {
-                        encoding: 'utf8',
-                    }).trim();
-
-                    console.log(`[git-push] Successful merge with commit ${mergeCommitSha}`);
-
-                    // Record merge event
-                    await recordMerge({
-                        processId,
-                        projectId,
+                    // Attempt the merge
+                    const mergeSucceeded = mergeIntoDefault(
+                        projectPath,
                         branchName,
-                        commitMsg,
-                        metrics,
-                        mergeCommitSha,
-                    });
-                } catch (logErr) {
-                    console.warn('[git-push] Failed to record merge event:', logErr);
-                    // Don't throw here - we still want to return success even if logging fails
+                        commitMsg
+                    );
+
+                    if (!mergeSucceeded) {
+                        console.error(
+                            '[git-push] Auto-merge failed, PR created but not merged'
+                        );
+
+                        // Record merge failure for manual resolution
+                        await recordFailure(prEventsManager, {
+                            processId,
+                            projectId,
+                            branchName,
+                            commitMsg,
+                            metrics,
+                            errorMessage:
+                                'Auto-merge failed, manual intervention required',
+                        });
+                    } else {
+                        // Record successful merge in the database
+                        try {
+                            const mergeCommitSha = execSync(`git -C "${projectPath}" rev-parse HEAD`, {
+                                encoding: 'utf8',
+                            }).trim();
+
+                            console.log(`[git-push] Successful merge with commit ${mergeCommitSha}`);
+
+                            // Record merge event
+                            await recordMerge({
+                                processId,
+                                projectId,
+                                branchName,
+                                commitMsg,
+                                metrics,
+                                mergeCommitSha,
+                            });
+                        } catch (logErr) {
+                            console.warn('[git-push] Failed to record merge event:', logErr);
+                            // Don't throw here - we still want to return success even if logging fails
+                        }
+                    }
+
+                    return mergeSucceeded;
+                } finally {
+                    // Restore stashed changes regardless of merge result
+                    stashPop(projectPath, hadStash);
                 }
-            }
-            return mergeSucceeded;
+            });
         } else {
             return true;
         }

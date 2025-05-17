@@ -28,6 +28,8 @@ import { get_working_dir, log_llm_request } from '../utils/file_utils.js';
 import type { Agent } from '../utils/agent.js';
 import { findModel } from '../model_providers/model_data.js';
 import { runPty, PtyRunOptions } from '../utils/run_pty.js';
+import { claudeLimiter } from '../utils/claude_limiter.js';
+import { codexProvider } from './codex.js';
 
 /**
  * Convert human-readable number strings to integers.
@@ -202,207 +204,227 @@ export class ClaudeCodeProvider implements ModelProvider {
         agent: Agent
     ): AsyncGenerator<StreamingEvent> {
         const messageId = uuidv4();
-        let accumulatedCleanOutput = ''; // For metadata parsing
-        let finalContent = ''; // Accumulate actual yielded content for message_complete
 
-        // --- Token Tracking for Cost Estimation ---
-        let liveOutputTokens = 0;
-        let costReceived = false;
+        // Try to acquire a Claude slot or fall back to Codex
+        let release: (() => void) | undefined;
+        try {
+            release = await claudeLimiter.acquire();
+        } catch (error) {
+            // Concurrency limit reached, fall back to Codex
+            console.log(`[ClaudeCodeProvider] Concurrency limit reached, falling back to Codex for message ${messageId}`);
 
-        const updateLiveTokenEstimate = (n: number) => {
-            if (n > liveOutputTokens) {
-                liveOutputTokens = n;
-                console.log(
-                    `[ClaudeCodeProvider] Updated token count: ${liveOutputTokens} for message ${messageId}`
-                );
+            // Delegate to Codex provider
+            for await (const event of codexProvider.createResponseStream(model, messages, agent)) {
+                yield event;
             }
-        };
 
-        // Define line hook for accumulating clean output
-        const lineHook = (line: string) => {
-            if (line) {
-                accumulatedCleanOutput += line + '\n';
+            // Exit early - Codex has handled the request
+            return;
+        }
 
-                // Detect cost summary as soon as it appears
-                if (!costReceived && line.includes('Total cost')) {
-                    costReceived = true;
-                    console.log(`[ClaudeCodeProvider] Cost summary detected for message ${messageId}`);
+        // If we get here, we successfully acquired a Claude slot
+        // Continue with the normal Claude code provider logic
+        try {
+            let accumulatedCleanOutput = ''; // For metadata parsing
+            let finalContent = ''; // Accumulate actual yielded content for message_complete
+
+            // --- Token Tracking for Cost Estimation ---
+            let liveOutputTokens = 0;
+            let costReceived = false;
+
+            const updateLiveTokenEstimate = (n: number) => {
+                if (n > liveOutputTokens) {
+                    liveOutputTokens = n;
+                    console.log(
+                        `[ClaudeCodeProvider] Updated token count: ${liveOutputTokens} for message ${messageId}`
+                    );
                 }
-            }
-        };
+            };
 
-        // Process metadata at the end of the stream
-        // Variables to track duration metadata
-        let finalApiDuration: string | null = null;
-        let finalWallDuration: string | null = null;
+            // Define line hook for accumulating clean output
+            const lineHook = (line: string) => {
+                if (line) {
+                    accumulatedCleanOutput += line + '\n';
 
-        const processFinalMetadata = () => {
-            // --- Extract final metadata (cost, duration) ---
-            try {
-                // Parse cost summary using regex
-                const costMatch = accumulatedCleanOutput.match(
-                    /Total cost\s*:[\s\t]*\$([\d.]+)/m
-                );
-                const apiDurationMatch = accumulatedCleanOutput.match(
-                    /Total duration \(API\)\s*:[\s\t]*([\d.]+s?)/m
-                );
-                const wallDurationMatch = accumulatedCleanOutput.match(
-                    /Total duration \(wall\)\s*:[\s\t]*([\d.]+s?)/m
-                );
-
-                // Extract API and wall duration if available
-                finalApiDuration = apiDurationMatch && apiDurationMatch[1] ? apiDurationMatch[1] : null;
-                finalWallDuration = wallDurationMatch && wallDurationMatch[1] ? wallDurationMatch[1] : null;
-
-                if (finalApiDuration) {
-                    console.log(`[ClaudeCodeProvider] Extracted API duration: ${finalApiDuration}`);
+                    // Detect cost summary as soon as it appears
+                    if (!costReceived && line.includes('Total cost')) {
+                        costReceived = true;
+                        console.log(`[ClaudeCodeProvider] Cost summary detected for message ${messageId}`);
+                    }
                 }
-                if (finalWallDuration) {
-                    console.log(`[ClaudeCodeProvider] Extracted wall duration: ${finalWallDuration}`);
-                }
+            };
 
-                // Extract tokens from the "Token usage by model" section
-                const tokenUsageRe = /^\s*(\S+):\s*([\d.,_a-zA-Z]+)\s+input,\s*([\d.,_a-zA-Z]+)\s+output/gim;
+            // Process metadata at the end of the stream
+            // Variables to track duration metadata
+            let finalApiDuration: string | null = null;
+            let finalWallDuration: string | null = null;
 
-                let parsedInputTokens = 0;
-                let parsedOutputTokens = 0;
-                let totalPreciseCost = 0;
+            const processFinalMetadata = () => {
+                // --- Extract final metadata (cost, duration) ---
+                try {
+                    // Parse cost summary using regex
+                    const costMatch = accumulatedCleanOutput.match(
+                        /Total cost\s*:[\s\t]*\$([\d.]+)/m
+                    );
+                    const apiDurationMatch = accumulatedCleanOutput.match(
+                        /Total duration \(API\)\s*:[\s\t]*([\d.]+s?)/m
+                    );
+                    const wallDurationMatch = accumulatedCleanOutput.match(
+                        /Total duration \(wall\)\s*:[\s\t]*([\d.]+s?)/m
+                    );
 
-                // Collect all token usages by model and sum them
-                for (const m of accumulatedCleanOutput.matchAll(tokenUsageRe)) {
-                    try {
-                        const modelName = m[1].trim();
-                        const inTok = humanReadableToInt(m[2]);
-                        const outTok = humanReadableToInt(m[3]);
+                    // Extract API and wall duration if available
+                    finalApiDuration = apiDurationMatch && apiDurationMatch[1] ? apiDurationMatch[1] : null;
+                    finalWallDuration = wallDurationMatch && wallDurationMatch[1] ? wallDurationMatch[1] : null;
 
-                        console.log(
-                            `[ClaudeCodeProvider] Found token usage for ${modelName}: ${inTok} input, ${outTok} output`
-                        );
+                    if (finalApiDuration) {
+                        console.log(`[ClaudeCodeProvider] Extracted API duration: ${finalApiDuration}`);
+                    }
+                    if (finalWallDuration) {
+                        console.log(`[ClaudeCodeProvider] Extracted wall duration: ${finalWallDuration}`);
+                    }
 
-                        // Add to totals
-                        parsedInputTokens += inTok;
-                        parsedOutputTokens += outTok;
+                    // Extract tokens from the "Token usage by model" section
+                    const tokenUsageRe = /^\s*(\S+):\s*([\d.,_a-zA-Z]+)\s+input,\s*([\d.,_a-zA-Z]+)\s+output/gim;
 
-                        // Try to get precise pricing from model registry
-                        let modelEntry = findModel(modelName);
+                    let parsedInputTokens = 0;
+                    let parsedOutputTokens = 0;
+                    let totalPreciseCost = 0;
 
-                        // If not found, try with -latest suffix (common pattern for Claude models)
-                        if (!modelEntry && !modelName.endsWith('-latest')) {
-                            modelEntry = findModel(`${modelName}-latest`);
-                        }
-
-                        if (modelEntry &&
-                            typeof modelEntry.cost.input_per_million === 'number' &&
-                            typeof modelEntry.cost.output_per_million === 'number') {
-
-                            // Calculate precise cost using model-specific pricing
-                            const modelCost =
-                                (inTok / 1_000_000) * modelEntry.cost.input_per_million +
-                                (outTok / 1_000_000) * modelEntry.cost.output_per_million;
-
-                            totalPreciseCost += modelCost;
+                    // Collect all token usages by model and sum them
+                    for (const m of accumulatedCleanOutput.matchAll(tokenUsageRe)) {
+                        try {
+                            const modelName = m[1].trim();
+                            const inTok = humanReadableToInt(m[2]);
+                            const outTok = humanReadableToInt(m[3]);
 
                             console.log(
-                                `[ClaudeCodeProvider] Calculated precise cost for ${modelName}: $${modelCost.toFixed(6)}`
+                                `[ClaudeCodeProvider] Found token usage for ${modelName}: ${inTok} input, ${outTok} output`
                             );
-                        }
-                    } catch (e) {
-                        console.warn(`[ClaudeCodeProvider] Failed to parse token usage: ${e}`);
-                    }
-                }
 
-                // Construct the prompt to estimate token count if needed
-                const prompt = messages
-                    .map(msg => {
-                        let textContent = '';
-                        if ('content' in msg) {
-                            if (typeof msg.content === 'string') {
-                                textContent = msg.content;
-                            } else if (Array.isArray(msg.content)) {
-                                textContent = msg.content
-                                    .filter(part => part.type === 'input_text')
-                                    .map(part => (part as any).text)
-                                    .join('\n');
+                            // Add to totals
+                            parsedInputTokens += inTok;
+                            parsedOutputTokens += outTok;
+
+                            // Try to get precise pricing from model registry
+                            let modelEntry = findModel(modelName);
+
+                            // If not found, try with -latest suffix (common pattern for Claude models)
+                            if (!modelEntry && !modelName.endsWith('-latest')) {
+                                modelEntry = findModel(`${modelName}-latest`);
                             }
+
+                            if (modelEntry &&
+                                typeof modelEntry.cost.input_per_million === 'number' &&
+                                typeof modelEntry.cost.output_per_million === 'number') {
+
+                                // Calculate precise cost using model-specific pricing
+                                const modelCost =
+                                    (inTok / 1_000_000) * modelEntry.cost.input_per_million +
+                                    (outTok / 1_000_000) * modelEntry.cost.output_per_million;
+
+                                totalPreciseCost += modelCost;
+
+                                console.log(
+                                    `[ClaudeCodeProvider] Calculated precise cost for ${modelName}: $${modelCost.toFixed(6)}`
+                                );
+                            }
+                        } catch (e) {
+                            console.warn(`[ClaudeCodeProvider] Failed to parse token usage: ${e}`);
                         }
-                        return textContent;
-                    })
-                    .filter(Boolean)
-                    .join('\n\n---\n');
-
-                // Calculate token counts, using parsed values if available
-                const input_tokens = parsedInputTokens > 0
-                    ? parsedInputTokens
-                    : Math.ceil((prompt?.length || 0) / 4);
-
-                let output_tokens = 0;
-                let cost = 0;
-
-                // First try to extract the cost from the output summary
-                if (costMatch && costMatch[1]) {
-                    cost = parseFloat(costMatch[1]);
-                    if (isNaN(cost)) {
-                        cost = 0;
                     }
 
-                    // Set output token count based on parsed value or fallback to estimate
-                    output_tokens = parsedOutputTokens > 0
-                        ? parsedOutputTokens
-                        : Math.ceil(finalContent.length / 4);
-                } else if (totalPreciseCost > 0) {
-                    // Use precise model-based cost calculation if available
-                    cost = totalPreciseCost;
-                    output_tokens = parsedOutputTokens;
+                    // Construct the prompt to estimate token count if needed
+                    const prompt = messages
+                        .map(msg => {
+                            let textContent = '';
+                            if ('content' in msg) {
+                                if (typeof msg.content === 'string') {
+                                    textContent = msg.content;
+                                } else if (Array.isArray(msg.content)) {
+                                    textContent = msg.content
+                                        .filter(part => part.type === 'input_text')
+                                        .map(part => (part as any).text)
+                                        .join('\n');
+                                }
+                            }
+                            return textContent;
+                        })
+                        .filter(Boolean)
+                        .join('\n\n---\n');
 
-                    console.log(
-                        `[ClaudeCodeProvider] Using precise model-based cost calculation: $${cost.toFixed(6)}`
-                    );
-                } else {
-                    // Set output token count based on parsed value or fallbacks
-                    output_tokens = parsedOutputTokens > 0
-                        ? parsedOutputTokens
-                        : liveOutputTokens ||
-                        Math.ceil(finalContent.length / 4);
+                    // Calculate token counts, using parsed values if available
+                    const input_tokens = parsedInputTokens > 0
+                        ? parsedInputTokens
+                        : Math.ceil((prompt?.length || 0) / 4);
 
-                    // Estimate pricing: $3/1M input tokens, $15/1M output tokens
-                    const inputCost = (input_tokens * 0.003) / 1000;
-                    const outputCost = (output_tokens * 0.015) / 1000;
-                    cost = inputCost + outputCost;
-                    console.log(
-                        `[ClaudeCodeProvider] Estimated cost for Sonnet: $${cost.toFixed(6)}`
+                    let output_tokens = 0;
+                    let cost = 0;
+
+                    // First try to extract the cost from the output summary
+                    if (costMatch && costMatch[1]) {
+                        cost = parseFloat(costMatch[1]);
+                        if (isNaN(cost)) {
+                            cost = 0;
+                        }
+
+                        // Set output token count based on parsed value or fallback to estimate
+                        output_tokens = parsedOutputTokens > 0
+                            ? parsedOutputTokens
+                            : Math.ceil(finalContent.length / 4);
+                    } else if (totalPreciseCost > 0) {
+                        // Use precise model-based cost calculation if available
+                        cost = totalPreciseCost;
+                        output_tokens = parsedOutputTokens;
+
+                        console.log(
+                            `[ClaudeCodeProvider] Using precise model-based cost calculation: $${cost.toFixed(6)}`
+                        );
+                    } else {
+                        // Set output token count based on parsed value or fallbacks
+                        output_tokens = parsedOutputTokens > 0
+                            ? parsedOutputTokens
+                            : liveOutputTokens ||
+                            Math.ceil(finalContent.length / 4);
+
+                        // Estimate pricing: $3/1M input tokens, $15/1M output tokens
+                        const inputCost = (input_tokens * 0.003) / 1000;
+                        const outputCost = (output_tokens * 0.015) / 1000;
+                        cost = inputCost + outputCost;
+                        console.log(
+                            `[ClaudeCodeProvider] Estimated cost for Sonnet: $${cost.toFixed(6)}`
+                        );
+                    }
+
+                    console.log(`[ClaudeCodeProvider] Extracted cost from stream: $${cost.toFixed(6)}`);
+
+                    // Log usage to cost tracker
+                    costTracker.addUsage({
+                        model,
+                        cost,
+                        input_tokens,
+                        output_tokens,
+                        metadata: {
+                            api_duration: parseFloat(finalApiDuration || '0') || 0,
+                            wall_duration: parseFloat(finalWallDuration || '0') || 0,
+                        },
+                    });
+
+                    // Return metadata for message_complete
+                    return {
+                        cost,
+                        apiDuration: finalApiDuration,
+                        wallDuration: finalWallDuration,
+                    };
+                } catch (metadataParseError: any) {
+                    // Log if parsing fails, but don't block completion
+                    console.warn(
+                        `[ClaudeCodeProvider] Failed to parse metadata from accumulated output: ${metadataParseError.message}`
                     );
+                    return null;
                 }
+            };
 
-                console.log(`[ClaudeCodeProvider] Extracted cost from stream: $${cost.toFixed(6)}`);
-
-                // Log usage to cost tracker
-                costTracker.addUsage({
-                    model,
-                    cost,
-                    input_tokens,
-                    output_tokens,
-                    metadata: {
-                        api_duration: parseFloat(finalApiDuration || '0') || 0,
-                        wall_duration: parseFloat(finalWallDuration || '0') || 0,
-                    },
-                });
-
-                // Return metadata for message_complete
-                return {
-                    cost,
-                    apiDuration: finalApiDuration,
-                    wallDuration: finalWallDuration,
-                };
-            } catch (metadataParseError: any) {
-                // Log if parsing fails, but don't block completion
-                console.warn(
-                    `[ClaudeCodeProvider] Failed to parse metadata from accumulated output: ${metadataParseError.message}`
-                );
-                return null;
-            }
-        };
-
-        try {
             // 1. Construct the prompt string from input messages.
             const prompt = messages
                 .map(msg => {
@@ -449,6 +471,10 @@ export class ClaudeCodeProvider implements ModelProvider {
                 onTokenProgress: updateLiveTokenEstimate,
                 onLine: lineHook,
                 silenceTimeoutMs: 5000,
+                env: {
+                    ...process.env,
+                    DISABLE_AUTOUPDATER: '1',
+                },
                 emitComplete: false // Provider will decide when to emit complete event
             };
 
@@ -512,6 +538,11 @@ export class ClaudeCodeProvider implements ModelProvider {
         } finally {
             // Ensure proper cleanup on both success and error paths
             console.log(`[ClaudeCodeProvider] Finalizing Claude Code provider for message ${messageId}`);
+
+            // Always release the Claude slot if we acquired one
+            if (release) {
+                release();
+            }
         }
     }
 }

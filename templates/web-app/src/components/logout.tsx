@@ -4,14 +4,13 @@ import { signOut } from 'next-auth/react';
 
 const Logout = () => {
     return (
-        <span
-            className="cursor-pointer"
-            onClick={() => {
-                signOut();
-            }}
+        <button
+            className="text-white hover:underline"
+            onClick={() => signOut({ callbackUrl: '/' })}
+            aria-label="Logout"
         >
             Logout
-        </span>
+        </button>
     );
 };
 

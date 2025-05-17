@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { getServerSession } from 'next-auth';
+import { authOptions } from './api/auth/[...nextauth]/route';
 import { SessionProvider } from './providers';
 import './globals.css';
-import Link from 'next/link';
-import Logout from '../components/logout';
+import Header from '@/components/Header';
 
 const geistSans = Geist({
     variable: '--font-geist-sans',
@@ -26,21 +26,14 @@ export default async function RootLayout({
 }: Readonly<{
     children: React.ReactNode;
 }>) {
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
 
     return (
         <html lang="en">
             <body
-                className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+                className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
             >
-                <nav className="bg-violet-500 h-12 text-white flex items-center p-4">
-                    <div className="flex gap-x-4">
-                        <Link href="/">Home</Link>
-                        {!!session && <Logout />}
-                        {!session && <Link href="/login">Login</Link>}
-                        {!session && <Link href="/register">Register</Link>}
-                    </div>
-                </nav>
+                <Header />
                 <SessionProvider session={session}>{children}</SessionProvider>
             </body>
         </html>

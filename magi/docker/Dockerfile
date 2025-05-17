@@ -38,7 +38,7 @@ ARG GROUP_NAME=magi_user
 RUN npm install -g npm && npm update -g
 
 # Global installs needed at runtime
-RUN npm install -g ts-node esbuild @anthropic-ai/claude-code@latest @openai/codex@latest
+RUN npm install -g ts-node esbuild
 
 # Install system dependencies required at runtime, including sudo and git
 # Also install gosu for switching users in the entrypoint
@@ -91,6 +91,9 @@ COPY --chown=${USER_NAME}:${GROUP_NAME} ./common/shared-types.ts ./src/types/sha
 
 # Build the application (runs as root)
 RUN npm run build
+
+# Reload these often
+RUN npm install -g @anthropic-ai/claude-code@latest @openai/codex@latest
 
 # DO NOT switch user here - let the entrypoint script run as root initially
 # The entrypoint script should use 'gosu ${USER_NAME} <command>' to run the main process as the non-root user

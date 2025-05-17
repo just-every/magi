@@ -1,6 +1,7 @@
 import prisma from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
+import bcrypt from 'bcryptjs';
 
 const schema = z.object({
     email: z.string().email(),
@@ -28,8 +29,15 @@ export async function POST(req: NextRequest) {
             throw new Error('A user with the same email already exists!');
         }
 
+        // Hash the password before storing it
+        const hashedPassword = bcrypt.hashSync(password, 10);
+
         await prisma.user.create({
-            data: { email, name, password },
+            data: {
+                email,
+                name,
+                password: hashedPassword
+            },
         })
     } catch (e) {
         console.log({ e });
@@ -45,4 +53,3 @@ export async function POST(req: NextRequest) {
         { status: 201 }
     );
 }
-

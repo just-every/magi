@@ -11,14 +11,13 @@ import { ProjectType } from '../types/shared-types.js';
  * Map of project types to their descriptions
  */
 export const PROJECT_TYPE_DESCRIPTIONS: Record<ProjectType, string> = {
-    'web-app':
-        'Web application with server-side logic (Next.js, React, Angular, Vue, etc.)',
-    'web-static': 'Simple HTML/CSS/JS website without a framework or backend',
-    'game-2d': '2D game project (Phaser, Pixi.js, etc.)',
-    'game-3d': '3D game project (Unity, Three.js, etc.)',
-    'mobile-app': 'Mobile application (React Native, Flutter, etc.)',
-    'desktop-app': 'Desktop application (Electron, etc.)',
-    plain: "General-purpose project that doesn't fit other categories",
+    'web-app': 'Full-stack web application with authentication, database integration, and modern UI components (Next.js, Postgres, etc.)',
+    'web-static': 'Lightweight website for landing pages and content sites (Next.js)',
+    'game-3d': '3D application for interactive games and visualizations (Three.js, etc.)',
+    'game-2d': '2D game projects (Phaser, etc.)',
+    'mobile-app': 'Mobile applications (React Native, etc.)',
+    'desktop-app': 'Desktop applications (Electron, etc.)',
+    'plain': 'Empty project with no framework or structure',
 };
 
 /**

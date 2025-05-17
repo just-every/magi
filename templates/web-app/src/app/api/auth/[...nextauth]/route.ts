@@ -18,11 +18,9 @@ export const authOptions = {
                 }
 
                 const user = await prisma.user.findFirst({
-                    where: { email: credentials.email },
-                    omit: { password: false }
+                    where: { email: credentials.email }
+                    // Removed unnecessary omit - Prisma includes all fields by default
                 });
-
-                console.log('USER', user);
 
                 if (user === null || !bcrypt.compareSync(credentials.password, user.password)) {
                     return null;
@@ -32,6 +30,26 @@ export const authOptions = {
             }
         })
     ],
+    callbacks: {
+        async jwt({ token, user }) {
+            // Persist user id, name, and email to the token
+            if (user) {
+                token.id = user.id;
+                token.name = user.name;
+                token.email = user.email;
+            }
+            return token;
+        },
+        async session({ session, token }) {
+            // Add user id, name, and email from token to session
+            if (session.user) {
+                session.user.id = token.id;
+                session.user.name = token.name;
+                session.user.email = token.email;
+            }
+            return session;
+        },
+    },
     pages: {
         signIn: '/login',
     },
