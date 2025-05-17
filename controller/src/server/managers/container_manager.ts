@@ -272,8 +272,7 @@ async function copyTemplateToProject(
  */
 export async function createNewProject(
     projectId: string,
-    processManager: ProcessManager
-): Promise<string> {
+): Promise<void> {
     const project = await getProject(projectId);
     if (!project) {
         throw new Error(`Project ${projectId} not found in database`);
@@ -324,46 +323,8 @@ export async function createNewProject(
         // Add entry to project history
         await addProjectHistory(projectId, 'Added initial template files');
 
-        //project.is_ready = true;
-        //await updateProject(project);
-
-        // Create a unique process ID for the agent
-        const processId = `AI-${Math.random().toString(36).substring(2, 8)}`;
-
-        // Register a completion handler to mark project as ready when analysis completes
-        processManager.registerProcessCompletionHandler(processId, async () => {
-            const proj = await getProject(projectId);
-            if (proj && !proj.is_ready) {
-                proj.is_ready = true;
-                await updateProject(proj);
-                await addProjectHistory(
-                    projectId,
-                    'Project analysis completed',
-                    { processId }
-                );
-                console.log(
-                    `[container-manager] Marked project ${projectId} as ready (analysis by ${processId})`
-                );
-            }
-        });
-
-        // Start the project_analyze process
-        await processManager.createAgentProcess({
-            processId,
-            started: new Date(),
-            status: 'running',
-            tool: 'project_analyze',
-            command: `We've just created the project ${projectId} from a ${project.project_type} template. Please analyze the template files and fill in the project details.`,
-            name: `Analyzing ${projectId}`,
-            projectIds: [projectId],
-        });
-
-        // Add entry to project history about agent process creation
-        await addProjectHistory(projectId, 'Started project analysis agent', {
-            processId,
-        });
-
-        return projectId;
+        project.is_ready = true;
+        await updateProject(project);
     } catch (error) {
         // Clean up the created directory on error
         try {
@@ -444,12 +405,17 @@ export async function runDockerContainer(
                 // If this run _is_ the core process, skip waiting and exclude itself
                 if (
                     coreProcessId &&
-                    coreProcessId === processId &&
-                    projectId === coreProcessId
+                    coreProcessId === processId
                 ) {
-                    console.log(
-                        `[container-manager] Skipping project ${projectId} for core process run`
-                    );
+                    readyProjects.push(projectId);
+                    continue;
+                }
+
+                if (
+                    tool &&
+                    tool === 'project_analyze'
+                ) {
+                    readyProjects.push(projectId);
                     continue;
                 }
 

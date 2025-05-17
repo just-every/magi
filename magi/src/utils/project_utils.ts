@@ -72,7 +72,7 @@ export async function listActiveProjects(
         try {
             // Get all project details from the database
             const result = await db.query(
-                'SELECT project_id, simple_description, is_ready FROM projects'
+                'SELECT project_id, simple_description, is_ready, is_generated FROM projects'
             );
 
             // Filter to only include projects in our filtered IDs list

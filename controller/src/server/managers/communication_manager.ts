@@ -630,7 +630,7 @@ export class CommunicationManager {
             );
         } else if (event.type === 'project_create') {
             try {
-                await createNewProject(event.project_id, this.processManager);
+                await createNewProject(event.project_id);
                 this.sendMessage(
                     this.processManager.coreProcessId,
                     JSON.stringify({
