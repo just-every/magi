@@ -20,6 +20,8 @@ import { quick_llm_call } from './llm_call_utils.js';
 import { web_search } from './search_utils.js';
 import { createToolFunction } from './tool_call.js';
 import { v4 as uuidv4 } from 'uuid';
+import fetch from 'node-fetch';
+import { JSDOM } from 'jsdom';
 
 // Type definitions
 export interface DesignSearchResult {
@@ -42,6 +44,7 @@ export type DesignSearchEngine =
 
 // Base directory for storing screenshots
 const DESIGN_ASSETS_DIR = path.join(process.cwd(), 'design_assets');
+const SLEEP = (ms = 1000) => new Promise(res => setTimeout(res, ms));
 
 /**
  * Ensure the design assets directory exists
@@ -110,36 +113,26 @@ async function searchDribbble(
     limit: number = 10
 ): Promise<DesignSearchResult[]> {
     try {
-        // Dribbble doesn't have a public API, so we'll use a web search approach
-        const searchQuery = `site:dribbble.com ${query} web design`;
-        const searchResultsStr = await web_search(
-            'design-agent',
-            'anthropic',
-            searchQuery,
-            limit
-        );
+        const url = `https://dribbble.com/search/${encodeURIComponent(query)}`;
+        const html = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }).then(r => r.text());
+        await SLEEP();
 
-        // Parse the JSON result
-        const searchResults = JSON.parse(searchResultsStr);
+        const dom = new JSDOM(html);
+        const document = dom.window.document;
 
-        if (!Array.isArray(searchResults)) {
-            console.warn('Search results is not an array:', searchResults);
-            return [];
+        const results: DesignSearchResult[] = [];
+        const anchors = Array.from(document.querySelectorAll('a[data-tn="shot-link"]')).slice(0, limit);
+        for (const a of anchors) {
+            const shot = a.getAttribute('href');
+            const imgEl = a.querySelector('img');
+            const img = imgEl?.getAttribute('src')?.replace('/thumbnail/', '/large/') ?? undefined;
+            results.push({
+                url: `https://dribbble.com${shot}`,
+                title: imgEl?.getAttribute('alt') ?? undefined,
+                thumbnail: img,
+            });
         }
-
-        // Filter results to only include dribbble shots
-        const filteredResults = searchResults.filter(
-            result =>
-                result &&
-                result.url &&
-                result.url.includes('dribbble.com/shots/')
-        );
-
-        return filteredResults.map(result => ({
-            url: result.url,
-            title: result.title,
-            thumbnail: result.image_url || undefined,
-        }));
+        return results;
     } catch (error) {
         console.error('Error in searchDribbble:', error);
         return [];
@@ -154,36 +147,28 @@ async function searchBehance(
     limit: number = 10
 ): Promise<DesignSearchResult[]> {
     try {
-        // Behance doesn't have a simple public API, so we'll use a web search approach
-        const searchQuery = `site:behance.net ${query} web design`;
-        const searchResultsStr = await web_search(
-            'design-agent',
-            'anthropic',
-            searchQuery,
-            limit
-        );
+        const url = `https://www.behance.net/search/projects?search=${encodeURIComponent(query)}`;
+        const html = await fetch(url).then(r => r.text());
+        await SLEEP();
 
-        // Parse the JSON result
-        const searchResults = JSON.parse(searchResultsStr);
+        const dom = new JSDOM(html);
+        const document = dom.window.document;
 
-        if (!Array.isArray(searchResults)) {
-            console.warn('Search results is not an array:', searchResults);
-            return [];
+        const results: DesignSearchResult[] = [];
+        const anchors = Array.from(document.querySelectorAll('a.Project-cover-link')).slice(0, limit);
+        for (const a of anchors) {
+            const projectUrl = a.getAttribute('href');
+            const img = a.querySelector('img')?.getAttribute('src') ?? undefined;
+            const title = a.querySelector('img')?.getAttribute('alt') ?? undefined;
+            if (projectUrl) {
+                results.push({
+                    url: projectUrl.startsWith('http') ? projectUrl : `https://www.behance.net${projectUrl}`,
+                    title,
+                    thumbnail: img,
+                });
+            }
         }
-
-        // Filter results to only include behance projects
-        const filteredResults = searchResults.filter(
-            result =>
-                result &&
-                result.url &&
-                result.url.includes('behance.net/gallery/')
-        );
-
-        return filteredResults.map(result => ({
-            url: result.url,
-            title: result.title,
-            thumbnail: result.image_url || undefined,
-        }));
+        return results;
     } catch (error) {
         console.error('Error in searchBehance:', error);
         return [];
@@ -198,27 +183,24 @@ async function searchEnvato(
     limit: number = 10
 ): Promise<DesignSearchResult[]> {
     try {
-        const searchQuery = `site:themeforest.net ${query} website template`;
-        const searchResultsStr = await web_search(
-            'design-agent',
-            'anthropic',
-            searchQuery,
-            limit
-        );
+        const url = `https://themeforest.net/search/${encodeURIComponent(query)}`;
+        const html = await fetch(url).then(r => r.text());
+        await SLEEP();
 
-        // Parse the JSON result
-        const searchResults = JSON.parse(searchResultsStr);
+        const dom = new JSDOM(html);
+        const document = dom.window.document;
 
-        if (!Array.isArray(searchResults)) {
-            console.warn('Search results is not an array:', searchResults);
-            return [];
+        const results: DesignSearchResult[] = [];
+        const items = Array.from(document.querySelectorAll('.theme-search-item')).slice(0, limit);
+        for (const item of items) {
+            const link = item.querySelector('a.js-search-result-product-link')?.getAttribute('href');
+            const title = item.querySelector('.js-search-result-title')?.textContent?.trim() ?? undefined;
+            const thumb = item.querySelector('img')?.getAttribute('data-src') || item.querySelector('img')?.getAttribute('src') || undefined;
+            if (link) {
+                results.push({ url: link, title, thumbnail: thumb ?? undefined });
+            }
         }
-
-        return searchResults.map(result => ({
-            url: result.url,
-            title: result.title,
-            thumbnail: result.image_url || undefined,
-        }));
+        return results;
     } catch (error) {
         console.error('Error in searchEnvato:', error);
         return [];
@@ -233,27 +215,22 @@ async function searchPinterest(
     limit: number = 10
 ): Promise<DesignSearchResult[]> {
     try {
-        const searchQuery = `site:pinterest.com ${query} web design`;
-        const searchResultsStr = await web_search(
-            'design-agent',
-            'anthropic',
-            searchQuery,
-            limit
-        );
+        const rssUrl = `https://pinterest.com/search/pins/?q=${encodeURIComponent(query)}&rs=direct&explore=&rss=1`;
+        const xml = await fetch(rssUrl).then(r => r.text());
+        await SLEEP();
 
-        // Parse the JSON result
-        const searchResults = JSON.parse(searchResultsStr);
+        const dom = new JSDOM(xml, { contentType: 'text/xml' });
+        const document = dom.window.document;
 
-        if (!Array.isArray(searchResults)) {
-            console.warn('Search results is not an array:', searchResults);
-            return [];
+        const items = Array.from(document.querySelectorAll('item')).slice(0, limit);
+        const results: DesignSearchResult[] = [];
+        for (const item of items) {
+            const url = item.querySelector('link')?.textContent ?? '';
+            const title = item.querySelector('title')?.textContent ?? undefined;
+            const thumb = item.querySelector('media\\:content')?.getAttribute('url') ?? undefined;
+            results.push({ url, title, thumbnail: thumb });
         }
-
-        return searchResults.map(result => ({
-            url: result.url,
-            title: result.title,
-            thumbnail: result.image_url || undefined,
-        }));
+        return results;
     } catch (error) {
         console.error('Error in searchPinterest:', error);
         return [];
@@ -268,26 +245,14 @@ async function searchLandingfolio(
     limit: number = 10
 ): Promise<DesignSearchResult[]> {
     try {
-        const searchQuery = `site:landingfolio.com ${query}`;
-        const searchResultsStr = await web_search(
-            'design-agent',
-            'anthropic',
-            searchQuery,
-            limit
-        );
+        const api = `https://www.landingfolio.com/api/v1/sites?search=${encodeURIComponent(query)}&page=1`;
+        const json = await fetch(api).then(r => r.json());
+        await SLEEP();
 
-        // Parse the JSON result
-        const searchResults = JSON.parse(searchResultsStr);
-
-        if (!Array.isArray(searchResults)) {
-            console.warn('Search results is not an array:', searchResults);
-            return [];
-        }
-
-        return searchResults.map(result => ({
-            url: result.url,
-            title: result.title,
-            thumbnail: result.image_url || undefined,
+        return (json?.items ?? []).slice(0, limit).map((item: any) => ({
+            url: item.permalink,
+            title: item.title,
+            thumbnail: item.screenshot,
         }));
     } catch (error) {
         console.error('Error in searchLandingfolio:', error);
@@ -303,32 +268,24 @@ async function searchAwwwards(
     limit: number = 10
 ): Promise<DesignSearchResult[]> {
     try {
-        const searchQuery = `site:awwwards.com ${query} website`;
-        const searchResultsStr = await web_search(
-            'design-agent',
-            'anthropic',
-            searchQuery,
-            limit
-        );
+        const searchUrl = `https://www.awwwards.com/search-websites/?text=${encodeURIComponent(query)}`;
+        const html = await fetch(searchUrl).then(r => r.text());
+        await SLEEP();
 
-        // Parse the JSON result
-        const searchResults = JSON.parse(searchResultsStr);
+        const dom = new JSDOM(html);
+        const document = dom.window.document;
 
-        if (!Array.isArray(searchResults)) {
-            console.warn('Search results is not an array:', searchResults);
-            return [];
+        const results: DesignSearchResult[] = [];
+        const figs = Array.from(document.querySelectorAll('figure.grid-item')).slice(0, limit);
+        for (const fig of figs) {
+            const link = fig.querySelector('a')?.getAttribute('href');
+            const img = fig.querySelector('img')?.getAttribute('data-src') || fig.querySelector('img')?.getAttribute('src') || undefined;
+            const title = fig.querySelector('img')?.getAttribute('alt') ?? undefined;
+            if (link && link.includes('/sites/')) {
+                results.push({ url: link, title, thumbnail: img ?? undefined });
+            }
         }
-
-        // Filter to only include websites, not articles
-        const filteredResults = searchResults.filter(
-            result => result && result.url && result.url.includes('/websites/')
-        );
-
-        return filteredResults.map(result => ({
-            url: result.url,
-            title: result.title,
-            thumbnail: result.image_url || undefined,
-        }));
+        return results;
     } catch (error) {
         console.error('Error in searchAwwwards:', error);
         return [];
@@ -343,27 +300,29 @@ async function searchSiteInspire(
     limit: number = 10
 ): Promise<DesignSearchResult[]> {
     try {
-        const searchQuery = `site:siteinspire.com ${query}`;
-        const searchResultsStr = await web_search(
-            'design-agent',
-            'anthropic',
-            searchQuery,
-            limit
-        );
+        const url = `https://www.siteinspire.com/websites?search=${encodeURIComponent(query)}`;
+        const html = await fetch(url).then(r => r.text());
+        await SLEEP();
 
-        // Parse the JSON result
-        const searchResults = JSON.parse(searchResultsStr);
+        const dom = new JSDOM(html);
+        const document = dom.window.document;
 
-        if (!Array.isArray(searchResults)) {
-            console.warn('Search results is not an array:', searchResults);
-            return [];
+        const results: DesignSearchResult[] = [];
+        const figs = Array.from(document.querySelectorAll('figure.item')).slice(0, limit);
+        for (const fig of figs) {
+            const anchor = fig.querySelector('a');
+            const link = anchor?.getAttribute('href');
+            const img = fig.querySelector('img')?.getAttribute('data-src') || fig.querySelector('img')?.getAttribute('src') || undefined;
+            const title = anchor?.getAttribute('title') ?? undefined;
+            if (link) {
+                results.push({
+                    url: link.startsWith('http') ? link : `https://www.siteinspire.com${link}`,
+                    title,
+                    thumbnail: img ?? undefined,
+                });
+            }
         }
-
-        return searchResults.map(result => ({
-            url: result.url,
-            title: result.title,
-            thumbnail: result.image_url || undefined,
-        }));
+        return results;
     } catch (error) {
         console.error('Error in searchSiteInspire:', error);
         return [];
