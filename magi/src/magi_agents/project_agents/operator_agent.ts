@@ -121,12 +121,16 @@ Create a \`project_map.json\` file at the root of each project repository.
           "primary_language": "<e.g., Python/TypeScript/Go>", // Detected primary language
           "frameworks": ["<e.g., FastAPI>", "<e.g., React>"], // Optional: Detected frameworks/major libraries
           "repository_url": "<Git remote URL>", // Optional: Git remote URL if available
-          "directories": [
+          "entry_points": ["src/main.ts", "scripts/run_dev.sh"], // Key files/scripts to start/run the app
+          "tests": ["tests/", "package.json#scripts.test"], // Paths to test dirs or test commands
+          "build_commands": ["npm run build", "docker build ."], // Common build commands
+          "setup_instructions": ["npm install", "cp .env.example .env"] // Key setup steps
+          "directories": [ // 1-6 of the most important directories
             {
               "path": "src/",
               "summary": "Main application source code, including core logic and API handlers.",
               "languages": ["TypeScript"], // Languages detected within this directory
-              "important_files": ["main.ts", "app.module.ts", "config.ts"] // Max ~5 key files
+              "important_files": ["main.ts", "app.module.ts", "config.ts"] // 1-4 key files
             },
             {
               "path": "tests/unit/",
@@ -136,10 +140,6 @@ Create a \`project_map.json\` file at the root of each project repository.
             }
             // ... other important directories
           ],
-          "entry_points": ["src/main.ts", "scripts/run_dev.sh"], // Key files/scripts to start/run the app
-          "tests": ["tests/", "package.json#scripts.test"], // Paths to test dirs or test commands
-          "build_commands": ["npm run build", "docker build ."], // Common build commands
-          "setup_instructions": ["npm install", "cp .env.example .env"] // Key setup steps
         }
         \`\`\`
     - Content: Populate with detected information. Use summaries effectively. Be selective with \`directories\` and \`important_files\`.

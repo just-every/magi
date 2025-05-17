@@ -28,7 +28,7 @@ import { get_working_dir, log_llm_request } from '../utils/file_utils.js';
 import type { Agent } from '../utils/agent.js';
 import { findModel } from '../model_providers/model_data.js';
 import { runPty, PtyRunOptions } from '../utils/run_pty.js';
-import { claudeLimiter } from '../utils/claude_limiter.js';
+import { acquireSlot, releaseSlot } from '../utils/claude_db_limiter.js';
 import { codexProvider } from './codex.js';
 
 /**
@@ -206,9 +206,9 @@ export class ClaudeCodeProvider implements ModelProvider {
         const messageId = uuidv4();
 
         // Try to acquire a Claude slot or fall back to Codex
-        let release: (() => void) | undefined;
+        let slot = undefined;
         try {
-            release = await claudeLimiter.acquire();
+            slot = await acquireSlot(messageId);
         } catch (error) {
             // Concurrency limit reached, fall back to Codex
             console.log(`[ClaudeCodeProvider] Concurrency limit reached, falling back to Codex for message ${messageId}`);
@@ -540,8 +540,8 @@ export class ClaudeCodeProvider implements ModelProvider {
             console.log(`[ClaudeCodeProvider] Finalizing Claude Code provider for message ${messageId}`);
 
             // Always release the Claude slot if we acquired one
-            if (release) {
-                release();
+            if (slot) {
+                await releaseSlot(slot);
             }
         }
     }
