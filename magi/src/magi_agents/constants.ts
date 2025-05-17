@@ -45,7 +45,7 @@ export function getProjectsContext(): string {
 
     return projectIds.length === 0
         ? 'You can read/write to /magi_output which is a virtual volume shared with all MAGI agents.'
-        : `You can read/write to /magi_output which is a virtual volume shared with all MAGI agents. You have access to projects which are git repositories with files you are working on. You will receive a read/write clone of the project git repo at /magi_output/${process.env.PROCESS_ID}/projects/{project} and your default branch is "magi-${process.env.PROCESS_ID}"
+        : `You can read/write to /magi_output which is a virtual volume shared with all MAGI agents. You have access to projects which are git repositories with files you are working on. You will receive a read/write clone of the project git repo at /magi_output/${process.env.PROCESS_ID}/projects/{project} and your default branch is "magi/${process.env.PROCESS_ID}"
 
 When sharing files with other agents or ${YOUR_NAME} please use this directory:
 /magi_output/shared

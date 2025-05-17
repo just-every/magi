@@ -22,6 +22,7 @@ import { createOperatorAgent, startTime } from '../operator_agent.js';
 import { dateFormat, readableTime } from '../../utils/date_tools.js';
 import { runningToolTracker } from '../../utils/running_tool_tracker.js';
 import { getThoughtDelay } from '../../utils/thought_utils.js';
+import { getRunningToolTools } from '../../utils/running_tools.js';
 
 /**
  * Wrapper function for updateProject that accepts individual parameters
@@ -301,6 +302,7 @@ Final Steps:
                     },
                 }
             ),
+            ...getRunningToolTools(),
             ...getCommonTools(),
         ],
         workers: [createCodeAgent, createReasoningAgent],

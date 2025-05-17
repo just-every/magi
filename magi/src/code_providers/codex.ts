@@ -73,7 +73,8 @@ export class CodexProvider implements ModelProvider {
                 cwd,
                 messageId,
                 silenceTimeoutMs: 30000, // Codex can be slower, give it more time
-                emitComplete: false // We'll emit our own message_complete
+                emitComplete: false, // We'll emit our own message_complete
+                exitCommand: 'q', // Exit command for Codex CLI
             };
 
             // Run Codex CLI via run_pty

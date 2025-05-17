@@ -190,7 +190,7 @@ async function prepareGitRepository(
         // Host path will be deterministically derived from projectId
 
         // Create or checkout the branch
-        const branchName = `magi-${processId}`;
+        const branchName = `magi/${processId}`;
 
         // Check if branch exists
         const branchExists = await execPromiseFallback(
@@ -209,7 +209,7 @@ async function prepareGitRepository(
 
         // Set git config for commits
         await execPromise(
-            `git -C "${outputPath}" config user.name "MAGI System"`
+            `git -C "${outputPath}" config user.name "magi"`
         );
         await execPromise(
             `git -C "${outputPath}" config user.email "magi+${processId}@withmagi.com"`
@@ -305,6 +305,14 @@ export async function createNewProject(
         // Initialize git repository
         execSync('git config --global init.defaultBranch main');
         execSync(`git -C "${projectPath}" init`);
+
+        // Set repo-local identity so the initial commit does not fail with
+        // “Author identity unknown”.  We keep this local to the repository
+        // (no --global) to avoid touching any host-level Git configuration.
+        execSync(`git -C "${projectPath}" config user.name "magi"`);
+        execSync(
+            `git -C "${projectPath}" config user.email "magi+${projectId}@withmagi.com"`
+        );
 
         // Copy template files to project
         await copyTemplateToProject(projectPath, project.project_type);

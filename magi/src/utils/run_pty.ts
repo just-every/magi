@@ -23,6 +23,12 @@ const activePtyProcesses = new Set<pty.IPty>();
 // Map to track PTYs by messageId for kill() function
 const ptyMap = new Map<string, pty.IPty>();
 
+// Default exit command that can be overridden by individual PTY processes
+const DEFAULT_EXIT_COMMAND = '/exit';
+
+// Map to store custom exit commands for each PTY
+const ptyExitCommands = new Map<pty.IPty, string>();
+
 /**
  * Register global exit hooks to ensure all PTY processes are terminated
  * when the Node.js process exits.
@@ -36,7 +42,8 @@ function ensureGlobalExitHook() {
         for (const instance of activePtyProcesses) {
             try {
                 // Ask process to terminate gracefully
-                instance.write('/exit\x1b\n\r');
+                const exitCmd = ptyExitCommands.get(instance) || DEFAULT_EXIT_COMMAND;
+                instance.write(`${exitCmd}\x1b\n\r`);
             } catch { /* ignore errors during shutdown */ }
         }
     };
@@ -80,6 +87,8 @@ export interface PtyRunOptions {
     onLine?: (line: string) => void;
     /** Whether to emit a message_complete event (default: true) */
     emitComplete?: boolean;
+    /** What command should we use to exit (default: /exit) */
+    exitCommand?: string;
 }
 
 /**
@@ -127,6 +136,7 @@ export function runPty(
     const onTokenProgress = options.onTokenProgress;
     const onLine = options.onLine;
     const emitComplete = options.emitComplete !== undefined ? options.emitComplete : true;
+    const exitCommand = options.exitCommand || DEFAULT_EXIT_COMMAND;
 
     // Create an async generator to yield StreamingEvent objects
     const stream = (async function* () {
@@ -159,17 +169,17 @@ export function runPty(
         let silenceTimeoutId: NodeJS.Timeout | null = null;
 
         /**
-         * Request graceful exit by sending "/exit".
+         * Request graceful exit by sending "{exitCommand}}".
          * If the PTY is still alive after 10s, hard-kill it.
          */
         const requestExit = () => {
             if (exitRequested || !ptyProcess) return; // only once
             exitRequested = true;
-            console.log(`[runPty] Requesting graceful exit via /exit for message ${messageId}`);
+            console.log(`[runPty] Requesting graceful exit via ${exitCommand} for message ${messageId}`);
             try {
-                ptyProcess.write('/exit\x1b\n\r');
+                ptyProcess.write(`${exitCommand}\x1b\n\r`);
             } catch (e) {
-                console.warn('[runPty] Error sending /exit command:', e);
+                console.warn(`[runPty] Error sending ${exitCommand} command:`, e);
             }
 
             // Fallback: hard kill if the process is still alive after 10s
@@ -313,6 +323,8 @@ export function runPty(
                     // Store in the map for proper kill() lookup
                     if (ptyProcess) {
                         ptyMap.set(messageId, ptyProcess);
+                        // Store custom exit command for this PTY
+                        ptyExitCommands.set(ptyProcess, exitCommand);
                     }
 
                     resetSilenceTimeout();
@@ -474,8 +486,9 @@ export function runPty(
                         );
                         ptyExited = true;
                         activePtyProcesses.delete(ptyProcess);
-                        // Clean up the ptyMap
+                        // Clean up the ptyMap and exit command map
                         ptyMap.delete(messageId);
+                        ptyExitCommands.delete(ptyProcess);
 
                         if (silenceTimeoutId) clearTimeout(silenceTimeoutId);
 
@@ -625,13 +638,14 @@ export function runPty(
 
         if (ptyProcess) {
             try {
-                ptyProcess.write('/exit\x1b\n\r');
+                ptyProcess.write(`${exitCommand}\x1b\n\r`);
                 setTimeout(() => {
                     if (activePtyProcesses.has(ptyProcess)) {
                         try {
                             ptyProcess.kill();
                             activePtyProcesses.delete(ptyProcess);
                             ptyMap.delete(messageId);
+                            ptyExitCommands.delete(ptyProcess);
                         } catch (e) {
                             console.warn('[runPty] Error during kill:', e);
                         }

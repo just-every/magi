@@ -195,7 +195,6 @@ export const MODEL_CLASSES = {
         models: [
             'claude-code', // Anthropic
             'codex', // OpenAI
-            'codex-mini-latest', // OpenAI
         ],
         //random: true,
     },

@@ -31,7 +31,7 @@ export async function planAndCommitChanges(
         console.log(`[commit-planner] Analyzing changes in ${projectId}...`);
 
         // Ensure we're on the correct branch before proceeding
-        const targetBranch = `magi-${processId}`;
+        const targetBranch = `magi/${processId}`;
         try {
             // Get current branch name
             const currentBranch = execSync(
