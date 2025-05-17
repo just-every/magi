@@ -1,0 +1,48 @@
+{
+  "root": "game-2d",
+  "summary": "A 2D game development template built with Phaser 3 and TypeScript, featuring scene management, game objects, and multiplayer capabilities with an Express server.",
+  "primary_language": "TypeScript",
+  "frameworks": ["Phaser 3", "Express"],
+  "entry_points": ["src/index.ts", "server/server.ts"],
+  "tests": ["package.json#scripts.test"],
+  "build_commands": ["npm run build", "npm run build:prod"],
+  "setup_instructions": ["npm install", "npm start"],
+  "directories": [
+    {
+      "path": "src/",
+      "summary": "Main game source code containing scenes, game objects, and game initialization logic.",
+      "languages": ["TypeScript"],
+      "important_files": ["index.ts", "game.ts"]
+    },
+    {
+      "path": "src/scenes/",
+      "summary": "Game scenes that handle different states of the game (boot, menu, gameplay).",
+      "languages": ["TypeScript"],
+      "important_files": ["BootScene.ts", "GameScene.ts", "MenuScene.ts"]
+    },
+    {
+      "path": "src/objects/",
+      "summary": "Game object classes like Player and Enemy with their specific behaviors and properties.",
+      "languages": ["TypeScript"],
+      "important_files": ["Player.ts", "Enemy.ts"]
+    },
+    {
+      "path": "src/assets/",
+      "summary": "Game assets including sprites, audio files, and tilemaps used in the game.",
+      "languages": [],
+      "important_files": ["images/player.png", "images/enemy.png", "tilemaps/"]
+    },
+    {
+      "path": "server/",
+      "summary": "Express server for multiplayer functionality and serving the built game in production.",
+      "languages": ["TypeScript"],
+      "important_files": ["server.ts"]
+    },
+    {
+      "path": "webpack/",
+      "summary": "Webpack configuration for development and production builds.",
+      "languages": ["JavaScript"],
+      "important_files": []
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "root": "mobile-app",
+  "summary": "A production-ready mobile app template built with React Native, TypeScript, and Expo featuring authentication flows, navigation, and a reusable component library.",
+  "primary_language": "TypeScript",
+  "frameworks": ["React Native", "Expo", "Expo Router"],
+  "entry_points": ["App.tsx", "app/index.tsx", "app/_layout.tsx"],
+  "tests": ["package.json#scripts.test"],
+  "build_commands": ["expo build:android", "expo build:ios", "npx expo prebuild"],
+  "setup_instructions": ["npm install", "npx expo start"],
+  "directories": [
+    {
+      "path": "app/",
+      "summary": "Main application screens and navigation structure using Expo Router file-based routing.",
+      "languages": ["TypeScript", "JSX"],
+      "important_files": ["index.tsx", "_layout.tsx"]
+    },
+    {
+      "path": "app/(auth)/",
+      "summary": "Authentication-related screens including login, registration, and password recovery.",
+      "languages": ["TypeScript", "JSX"],
+      "important_files": ["login.tsx", "register.tsx", "forgot-password.tsx"]
+    },
+    {
+      "path": "app/(tabs)/",
+      "summary": "Main application tabs accessible after authentication, including home, profile, and settings screens.",
+      "languages": ["TypeScript", "JSX"],
+      "important_files": ["_layout.tsx", "home.tsx", "profile.tsx", "settings.tsx"]
+    },
+    {
+      "path": "components/",
+      "summary": "Reusable UI components and form elements.",
+      "languages": ["TypeScript", "JSX"],
+      "important_files": ["ui/Button.tsx", "ui/TextInput.tsx"]
+    },
+    {
+      "path": "hooks/",
+      "summary": "Custom React hooks for state management and feature functionality.",
+      "languages": ["TypeScript"],
+      "important_files": ["useAuth.tsx"]
+    },
+    {
+      "path": "services/",
+      "summary": "API and service integrations for data fetching and authentication.",
+      "languages": ["TypeScript"],
+      "important_files": ["api.ts", "auth.ts", "authService.ts"]
+    },
+    {
+      "path": "styles/",
+      "summary": "Global styling and theming configuration.",
+      "languages": ["TypeScript"],
+      "important_files": ["theme.ts"]
+    },
+    {
+      "path": "assets/",
+      "summary": "Application assets including images, fonts, and icons.",
+      "languages": [],
+      "important_files": ["images/icon.png", "images/splash.png", "fonts/SpaceMono-Regular.ttf"]
+    }
+  ]
+}

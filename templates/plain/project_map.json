@@ -1,0 +1,11 @@
+{
+  "root": "plain",
+  "summary": "A minimal empty template for creating projects from scratch without predefined structure.",
+  "primary_language": "",
+  "frameworks": [],
+  "entry_points": [],
+  "tests": [],
+  "build_commands": [],
+  "setup_instructions": [],
+  "directories": []
+}

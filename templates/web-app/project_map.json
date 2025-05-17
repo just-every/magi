@@ -1,0 +1,72 @@
+{
+  "root": "web-app",
+  "summary": "A full-stack web application built with Next.js App Router, React, TypeScript, NextAuth for authentication, and Prisma ORM for database integration.",
+  "primary_language": "TypeScript",
+  "frameworks": ["Next.js", "React", "Prisma", "NextAuth", "Tailwind CSS"],
+  "entry_points": ["src/app/page.tsx", "src/app/layout.tsx", "src/app/api/auth/[...nextauth]/route.ts"],
+  "tests": ["package.json#scripts.test"],
+  "build_commands": ["npm run build", "npm run lint"],
+  "setup_instructions": ["npm install", "npx prisma generate", "npm run dev"],
+  "directories": [
+    {
+      "path": "src/app/",
+      "summary": "Next.js App Router pages and layouts that define the application's routes and UI structure.",
+      "languages": ["TypeScript", "TSX"],
+      "important_files": ["page.tsx", "layout.tsx", "providers.tsx"]
+    },
+    {
+      "path": "src/app/api/",
+      "summary": "API routes for server-side functionality and data access.",
+      "languages": ["TypeScript"],
+      "important_files": ["users/route.ts"]
+    },
+    {
+      "path": "src/app/api/auth/",
+      "summary": "Authentication API routes powered by NextAuth.js for user login and registration.",
+      "languages": ["TypeScript"],
+      "important_files": ["[...nextauth]/route.ts", "register/route.ts"]
+    },
+    {
+      "path": "src/app/login/",
+      "summary": "User login page and components.",
+      "languages": ["TypeScript", "TSX"],
+      "important_files": ["page.tsx", "form.tsx"]
+    },
+    {
+      "path": "src/app/register/",
+      "summary": "User registration page and components.",
+      "languages": ["TypeScript", "TSX"],
+      "important_files": ["page.tsx", "form.tsx"]
+    },
+    {
+      "path": "src/components/",
+      "summary": "Reusable React components used throughout the application.",
+      "languages": ["TypeScript", "TSX"],
+      "important_files": ["Header.tsx", "logout.tsx"]
+    },
+    {
+      "path": "src/components/ui/",
+      "summary": "UI component library for consistent design across the application.",
+      "languages": ["TypeScript", "TSX"],
+      "important_files": ["button.tsx", "form.tsx", "input.tsx", "label.tsx"]
+    },
+    {
+      "path": "src/lib/",
+      "summary": "Utility functions and shared libraries.",
+      "languages": ["TypeScript"],
+      "important_files": ["prisma.ts", "utils.ts"]
+    },
+    {
+      "path": "prisma/",
+      "summary": "Prisma ORM schema and database migrations.",
+      "languages": ["Prisma"],
+      "important_files": ["schema.prisma", "seed.ts"]
+    },
+    {
+      "path": "public/",
+      "summary": "Static assets served by Next.js.",
+      "languages": [],
+      "important_files": ["vercel.svg"]
+    }
+  ]
+}

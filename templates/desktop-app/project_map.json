@@ -1,0 +1,48 @@
+{
+  "root": "desktop-app",
+  "summary": "Cross-platform desktop application built with Electron and React, featuring a native UI experience, IPC communication, and system tray integration.",
+  "primary_language": "TypeScript",
+  "frameworks": ["Electron", "React"],
+  "entry_points": ["src/main/main.ts", "src/renderer/index.tsx"],
+  "tests": ["package.json#scripts.test"],
+  "build_commands": ["npm run package", "npm run make"],
+  "setup_instructions": ["npm install", "npm start"],
+  "directories": [
+    {
+      "path": "src/main/",
+      "summary": "Electron main process code that handles the application lifecycle, IPC communication, and native OS integration.",
+      "languages": ["TypeScript"],
+      "important_files": ["main.ts", "preload.ts"]
+    },
+    {
+      "path": "src/renderer/",
+      "summary": "Frontend React application that runs in the renderer process, includes UI components, hooks, and pages.",
+      "languages": ["TypeScript", "SCSS"],
+      "important_files": ["App.tsx", "index.tsx", "styles/global.scss"]
+    },
+    {
+      "path": "src/main/ipc/",
+      "summary": "IPC (Inter-Process Communication) handlers for secure communication between main and renderer processes.",
+      "languages": ["TypeScript"],
+      "important_files": ["handlers.ts"]
+    },
+    {
+      "path": "src/main/menu/",
+      "summary": "Application menu configuration and customization.",
+      "languages": ["TypeScript"],
+      "important_files": ["appMenu.ts"]
+    },
+    {
+      "path": "src/main/tray/",
+      "summary": "System tray integration for minimized application state.",
+      "languages": ["TypeScript"],
+      "important_files": ["tray.ts"]
+    },
+    {
+      "path": "assets/",
+      "summary": "Application assets including icons and images for different platforms.",
+      "languages": [],
+      "important_files": ["icons/icon.png", "icons/tray-icon.png"]
+    }
+  ]
+}

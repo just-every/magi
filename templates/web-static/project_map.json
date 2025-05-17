@@ -1,0 +1,36 @@
+{
+  "root": "web-static",
+  "summary": "A modern static website template built with Next.js, React, TypeScript, and Tailwind CSS, optimized for fast loading and SEO performance.",
+  "primary_language": "TypeScript",
+  "frameworks": ["Next.js", "React", "Tailwind CSS"],
+  "entry_points": ["src/app/page.tsx", "src/app/layout.tsx"],
+  "tests": ["package.json#scripts.test"],
+  "build_commands": ["npm run build", "npm run lint"],
+  "setup_instructions": ["npm install", "npm run dev"],
+  "directories": [
+    {
+      "path": "src/app/",
+      "summary": "Next.js App Router pages and layouts that define the site's structure.",
+      "languages": ["TypeScript", "TSX"],
+      "important_files": ["page.tsx", "layout.tsx", "not-found.tsx", "globals.css"]
+    },
+    {
+      "path": "src/components/",
+      "summary": "Reusable React components used throughout the site.",
+      "languages": ["TypeScript", "TSX"],
+      "important_files": ["Header.tsx", "Footer.tsx"]
+    },
+    {
+      "path": "public/",
+      "summary": "Static assets served by Next.js.",
+      "languages": [],
+      "important_files": ["logo.svg", "vercel.svg"]
+    },
+    {
+      "path": "/",
+      "summary": "Root configuration files for the project.",
+      "languages": ["TypeScript", "JavaScript"],
+      "important_files": ["next.config.ts", "tailwind.config.js", "postcss.config.mjs", "eslint.config.mjs"]
+    }
+  ]
+}
