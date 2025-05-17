@@ -1,4 +1,6 @@
-# Next.js Full-Stack Web Application Template
+# Next.js Full-Stack Web Application
+
+[detailed_description]
 
 A complete, production-ready template for building full-stack web applications with user authentication, database integration, and modern UI components.
 

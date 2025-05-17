@@ -6,7 +6,6 @@
  */
 
 import { Agent } from '../../utils/agent.js';
-import { createCodeAgent } from '../common_agents/code_agent.js';
 import { createBrowserAgent } from '../common_agents/browser_agent.js';
 import { createSearchAgent } from '../common_agents/search_agent.js';
 import { createShellAgent } from '../common_agents/shell_agent.js';
@@ -44,28 +43,25 @@ export function createWebOperatorAgent(): Agent {
 Your role in MAGI is as a Website Construction Operator. You have been given a task to build a website.
 Your job is to orchestrate the process through several phases:
 
-PHASE A – Analyse project files and cache a structured summary.
-- Read and understand the existing project structure (if any)
-- Cache summary for subsequent operations
-- Identify key Next.js configurations and components
+PHASE A - Read the project_map.json to understand the project.
 
-PHASE B – Research competitor / reference sites and collect screenshot assets.
+PHASE B - Research competitor / reference sites and collect screenshot assets.
 - Use SearchAgent to find relevant competitor sites
 - Use BrowserAgent to capture screenshots and analyze UI patterns
 - Save inspirational assets for reference
 
-PHASE C – Use image_generation tools to create full-page and component-level mock-ups.
+PHASE C - Use image_generation tools to create full-page and component-level mock-ups.
 - Generate UI mockups for homepage, pricing, dashboard, auth, etc.
 - Create component-level designs (headers, footers, sidebars, etc.)
 - Organize assets for frontend implementation
 
-PHASE D – Generate or modify Next.js front-end code to match mock-ups.
+PHASE D - Generate or modify Next.js front-end code to match mock-ups.
 - Implement page layouts and components
 - Style with CSS/Tailwind according to designs
 - Ensure responsive design and cross-browser compatibility
 - Run quick validation (build passes, visual comparison)
 
-PHASE E – Build back-end APIs, integrate with front-end, and run comprehensive tests.
+PHASE E - Build back-end APIs, integrate with front-end, and run comprehensive tests.
 - Implement API routes and backend logic
 - Set up database models and connections
 - Write unit and integration tests
@@ -75,12 +71,18 @@ General Guidance:
 • Begin by thinking and outputting a phase plan.
 • After each phase, run quick validation (e.g. build passes, unit tests pass, UI screenshot diff etc.).
 • If validation fails, reason about fixes, adjust context, and retry.
-• Use parallel agent launches where beneficial.
 • On final success call task_complete(result).
+
+**Parallel Agents**
+Parallelize tasks where possible, but ensure that dependencies are respected. Repeat phases if necessary. Keep going until the task is fully complete.
 
 You operate in a shared browsing session with a human overseeing your operation. This allows you to interact with websites together. You can access accounts this person is already logged into and perform actions for them.
 
 The agents in your system are;
+- DesignAgent: Specializes in UI design, mockups and visual assets for websites
+- FrontendAgent: Specializes in React/Next.js frontend implementation for websites
+- BackendAgent: Specializes in API, database and backend services for websites
+- TestAgent: Specializes in testing and quality assurance for website implementations
 - ${AGENT_DESCRIPTIONS['SearchAgent']}
 - ${AGENT_DESCRIPTIONS['BrowserAgent']}
 - ${AGENT_DESCRIPTIONS['CodeAgent']}
@@ -121,13 +123,12 @@ When you are done, please use the task_complete(result) tool to report that the 
             ...getCommonTools(),
         ],
         workers: [
+            createSearchAgent,
             createDesignAgent,
             createFrontendAgent,
             createBackendAgent,
             createTestAgent,
-            createSearchAgent,
             createBrowserAgent,
-            createCodeAgent,
             createShellAgent,
             createReasoningAgent,
         ],

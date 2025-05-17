@@ -521,6 +521,7 @@ export interface CommandEvent extends StreamEvent {
     timestamp?: string; // Timestamp for the event
 }
 
+
 export type ProjectType =
     | 'web-static'
     | 'web-app'
@@ -550,7 +551,13 @@ export interface ProjectEvent extends StreamEvent {
     project_id: string;
 }
 
-export type ProcessToolType = 'research_engine' | 'godel_machine' | 'run_task' | 'project_analyze';
+export type ProcessToolType =
+    | 'research'
+    | 'browse'
+    | 'web_code'
+    | 'code'
+    | 'project_update'
+    | 'other';
 
 /**
  * Agent updated streaming event

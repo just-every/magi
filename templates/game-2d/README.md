@@ -1,4 +1,6 @@
-# 2D Game Development Template
+# 2D Game
+
+[detailed_description]
 
 A modern, structured template for building 2D games with Phaser 3, TypeScript, and Webpack.
 

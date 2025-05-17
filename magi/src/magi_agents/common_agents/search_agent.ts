@@ -34,7 +34,8 @@ YOUR APPROACH:
 - Understand the search query and its INTENT
 - Formulate effective search terms and run searches
 - If necessary, visit individual websites you find to gather more information
-- Refine searches if initial results are insufficient
+- Collate your findings and look for gaps in the information. Each search may provide new paths to explore
+- Make new searches and collate results until you have enough information to answer the query
 
 PARALLEL SEARCHING:
 - Use multiple search engines to gather diverse results

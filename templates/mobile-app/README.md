@@ -1,4 +1,6 @@
-# React Native Mobile Application Template
+# React Native Mobile Application
+
+[detailed_description]
 
 A complete, production-ready template for building cross-platform mobile applications with React Native, TypeScript, and modern best practices.
 

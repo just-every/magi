@@ -169,17 +169,11 @@ function convertToOpenAITools(requestParams: any): any {
                 }
             }
 
-            // 5. AFTER recursion, process the current object level
-            if (isObject) {
-                // Set additionalProperties: false (required by OpenAI)
-                if (schema.properties) {
-                    // Only add if properties exist
+                // 5. AFTER recursion, process the current object level
+                if (isObject) {
+                    // Always set additionalProperties: false for objects (required by OpenAI in strict mode)
+                    // This is necessary even for objects without properties
                     schema.additionalProperties = false;
-                } else {
-                    // If no properties, OpenAI might still require additionalProperties: false?
-                    // Let's assume it's only needed when properties are defined.
-                    // delete schema.additionalProperties; // Or keep it undefined
-                }
 
                 // Set 'required' array to include all current properties (required by OpenAI for strict mode)
                 if (schema.properties) {

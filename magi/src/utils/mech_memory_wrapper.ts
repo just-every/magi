@@ -222,10 +222,10 @@ async function extractAndStoreMemories(
     embedding: number[] | null,
     memories: MemoryMatch[]
 ): Promise<void> {
-    // Skip MemoryAgent for project_analyze processes
-    if (agent.args?.tool === 'project_analyze') {
+    // Skip MemoryAgent for project_update processes
+    if (agent.args?.tool === 'project_update') {
         console.log(
-            'MemoryAgent disabled for project_analyze; skipping learnings extraction.'
+            'MemoryAgent disabled for project_update; skipping learnings extraction.'
         );
         return;
     }

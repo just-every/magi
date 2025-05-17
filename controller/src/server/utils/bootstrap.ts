@@ -119,7 +119,7 @@ export async function bootstrapProjectsOnce(pm: ProcessManager): Promise<void> {
         processId,
         started: new Date(),
         status: 'running',
-        tool: 'project_analyze',
+        tool: 'project_update',
         command: `Please analyze the following ${unreadyIds.length > 1 ? unreadyIds.length + ' ' : ''}project(s): ${projectPaths}\n\nPlease analyze the files and fill in the project details for each.`,
         name: `Analyzing ${unreadyIds.length > 1 ? `${unreadyIds.length} Projects` : unreadyIds[0]}`,
         projectIds: unreadyIds,

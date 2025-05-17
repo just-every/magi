@@ -18,6 +18,10 @@ import {
     type ResponseOutputMessage,
 } from '../../types/shared-types.js';
 import { MAGI_CONTEXT } from '../constants.js';
+import { createCodeAgent } from '../common_agents/code_agent.js';
+import { createBrowserAgent } from '../common_agents/browser_agent.js';
+import { createShellAgent } from '../common_agents/shell_agent.js';
+import { createReasoningAgent } from '../common_agents/reasoning_agent.js';
 
 /**
  * Create the test agent for specialized validation and QA
@@ -83,6 +87,12 @@ DO NOT:
 Your goal is to validate that the website implementation meets requirements, performs correctly, and provides a good user experience. Report issues clearly with specific actionable feedback.
 `,
         tools: [...getCommonTools()],
+        workers: [
+            createShellAgent,
+            createBrowserAgent,
+            createCodeAgent,
+            createReasoningAgent,
+        ],
         modelClass: 'reasoning_mini',
     });
 

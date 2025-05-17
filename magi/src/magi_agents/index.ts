@@ -63,10 +63,10 @@ export async function createAgent(
 
     if (tool && tool !== 'none') {
         switch (tool) {
-            case 'project_analyze':
+            case 'project_update':
                 agent = await createProjectOperatorAgent();
                 break;
-            case 'web_build':
+            case 'web_code':
                 agent = createWebOperatorAgent();
                 break;
             default:

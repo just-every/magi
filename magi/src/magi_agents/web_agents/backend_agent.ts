@@ -10,13 +10,7 @@
 
 import { Agent } from '../../utils/agent.js';
 import { getCommonTools } from '../../utils/index.js';
-import { addHistory } from '../../utils/history.js';
-import {
-    ResponseInput,
-    ToolCall,
-    ResponseThinkingMessage,
-    type ResponseOutputMessage,
-} from '../../types/shared-types.js';
+import { createCodeAgent } from '../common_agents/code_agent.js';
 import { MAGI_CONTEXT } from '../constants.js';
 
 /**
@@ -90,7 +84,12 @@ DATABASE MANAGEMENT:
 
 The frontend engineer will connect to your API, so ensure endpoints are well-documented and follow a consistent pattern.
 `,
-        tools: [...getCommonTools()],
+        tools: [
+            ...getCommonTools()
+        ],
+        workers: [
+            createCodeAgent,
+        ],
         modelClass: 'reasoning_mini',
     });
 

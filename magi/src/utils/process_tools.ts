@@ -4,6 +4,7 @@ import { processTracker } from './process_tracker.js';
 import { dateFormat } from './date_tools.js';
 import { createToolFunction } from './tool_call.js';
 import { getAllProjectIds, getExternalProjectIds } from './project_utils.js';
+import { TASK_TYPE_DESCRIPTIONS } from '../magi_agents/constants.js';
 
 /**
  * Send a message to a specific process
@@ -128,6 +129,7 @@ function start_task(
     context: string,
     warnings: string,
     goal: string,
+    type?: ProcessToolType,
     project?: string[]
 ): string {
     const command: string[] = [];
@@ -135,7 +137,8 @@ function start_task(
     if (context) command.push(`**Context:** ${context}`);
     if (warnings) command.push(`**Warnings:** ${warnings}`);
     if (goal) command.push(`**Goal:** ${goal}`);
-    return startProcess('run_task', name, command.join('\n\n'), project);
+
+    return startProcess(type, name, command.join('\n\n'), project);
 }
 
 /**
@@ -346,6 +349,11 @@ export function getProcessTools(): ToolFunction[] {
                 warnings:
                     'Are there any warnings or things to be aware of? This could be a list of things to avoid, or things that are not working as expected. This is optional, but can help the task operator avoid problems.',
                 goal: 'What is the final goal of this task? This is the final output or result you expect from the task. It should be a single sentence or two at most',
+                type: {
+                    description: `The type of task to start. Determines which operator that will run the task.\n\n${Object.entries(TASK_TYPE_DESCRIPTIONS).map(([type, description]) => `${type}: ${description}`).join('\n')}`,
+                    type: 'string',
+                    enum: Object.keys(TASK_TYPE_DESCRIPTIONS),
+                },
                 project: {
                     description:
                         'An array of projects to mount for the task giving the task access to a copy of files. The task can modify the files and submit them back as a new git branch.' +

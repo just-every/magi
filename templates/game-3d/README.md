@@ -1,4 +1,6 @@
-# 3D Game Development Template
+# 3D Game
+
+[detailed_description]
 
 A streamlined Three.js and TypeScript starter template for building interactive 3D applications, games, and visualizations.
 

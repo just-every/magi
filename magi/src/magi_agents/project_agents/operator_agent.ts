@@ -33,7 +33,6 @@ async function update_project_details(
     project_type?: (typeof PROJECT_TYPES)[number],
     simple_description?: string,
     detailed_description?: string,
-    repository_url?: string
 ): Promise<string> {
     // First get the existing project
     const existingProject = await getProject(project_id);
@@ -47,7 +46,6 @@ async function update_project_details(
         ...(project_type !== undefined && { project_type }),
         ...(simple_description !== undefined && { simple_description }),
         ...(detailed_description !== undefined && { detailed_description }),
-        ...(repository_url !== undefined && { repository_url }),
     };
 
     await updateProject(updatedProject);
@@ -70,8 +68,6 @@ function formatProjectData(project: Project | null): string {
         fields.push(
             `detailed_description: (${project.detailed_description.length} chars)`
         );
-    if (project.repository_url)
-        fields.push(`repository_url: '${project.repository_url}'`);
 
     return fields.length > 0 ? fields.join('\n') : 'No populated fields';
 }
@@ -104,13 +100,19 @@ You are **ProjectOperatorAgent**.
 You have full local read/write access to the project folder${paths.length > 1 ? 's' : ''}:
 ${paths.map(p => `• \`${p}\``).join('\n')}
 
-Your run involves **three main tasks** resulting in DB updates and file creation.
+Your run involves **two main tasks** resulting in file creation and DB updates.
 
 ---
-### Task 1: Generate Codebase Map (Save as File)
+### Task 1: Generate Codebase Map and Context Files
 
-Create a \`project_map.json\` file at the root of each project repository.
-**IMPORTANT:** Using a CodeAgent is the best choice for this task unless there's only a few files in the project.
+Create a \`project_map.json\`, \`CLAUDE.md\` and \`AGENTS.md\` file at the root of each project repository.
+**IMPORTANT:** Using a CodeAgent is the best choice for this task.
+- Rationale: Provide foundational context for future AI assistants like Claude and Codex, based on report recommendations.
+- First analyze the project structure and files, then generate the \`project_map.json\`.
+- Use the *same core information* for \`CLAUDE.md\` and \`AGENTS.md\` initially, structured according to the template below.
+- Codex Hint: For \`AGENTS.md\`, where natural, try phrasing descriptions or guidelines using comment-style syntax (e.g., \`# Use snake_case\`) alongside the Markdown, as this can be effective for Codex. However, maintain overall Markdown readability.
+- Conciseness: Keep the total content relatively brief (aim for ≤ 150 lines). This file becomes part of the LLM prompt.
+- Flexibility: Include all *relevant* sections from the template. If a standard section (e.g., 'Common Bash Commands') is clearly not applicable or information is unavailable, you may omit it.
 
 \`project_map.json\` (Project Overview Map)
     - Purpose: Offer a detailed summary including key files, languages, and commands.
@@ -121,7 +123,6 @@ Create a \`project_map.json\` file at the root of each project repository.
           "summary": "<Brief project summary, similar to simple_description>",
           "primary_language": "<e.g., Python/TypeScript/Go>", // Detected primary language
           "frameworks": ["<e.g., FastAPI>", "<e.g., React>"], // Optional: Detected frameworks/major libraries
-          "repository_url": "<Git remote URL>", // Optional: Git remote URL if available
           "entry_points": ["src/main.ts", "scripts/run_dev.sh"], // Key files/scripts to start/run the app
           "tests": ["tests/", "package.json#scripts.test"], // Paths to test dirs or test commands
           "build_commands": ["npm run build", "docker build ."], // Common build commands
@@ -146,32 +147,7 @@ Create a \`project_map.json\` file at the root of each project repository.
     - Content: Populate with detected information. Use summaries effectively. Be selective with \`directories\` and \`important_files\`.
     - Constraint: Keep file size manageable (e.g., ≤ 35 KB).
 
-Save the JSON file at the root of the project directory (e.g. \`${get_output_dir('projects')}/${projectIds[0]}/project_map.json\`).
-
----
-### Task 2: Update DB Metadata (Call \`update_project_details\`)
-
-Follow these steps precisely:
-1.  Use the information from the codebase maps to update the database.
-2.  Classify: Determine the most fitting \`project_type\`. Options:
-${PROJECT_TYPES.map(t => `    – **${t}**: ${getProjectTypeDescription(t)}`).join('\n')}
-3.  Describe: Provide concise and informative descriptions:
-    * \`simple_description\`: A brief summary (≤ 120 characters). *Example: "Node.js/React customer portal frontend."*
-    * \`detailed_description\`: 2-4 paragraphs covering the project's purpose, primary technologies (languages, frameworks, DBs), high-level architecture (e.g., microservices, monolith, serverless), main entry points, and key features.
-4.  Detect Git Remote: This may be available in the "repository_url" field in \`project_map.json\`. If not found, omit the field.
-5.  Update DB: Once you have gathered the necessary information, call the **\`update_project_details\`** tool. **IMPORTANT:** Only include fields that are *new* or *different* from the "Current Project Data" provided below (if any).
-
----
-### Task 3: Bootstrap Context Files (Save as Markdown)
-
-Create **BOTH** \`CLAUDE.md\` and \`AGENTS.md\` files at the root of each project repository.
-- Rationale: Provide foundational context for AI assistants like Claude and Codex, based on report recommendations.
-- Content: Use the *same core information* for both files initially, structured according to the template below.
-- Codex Hint: For \`AGENTS.md\`, where natural, try phrasing descriptions or guidelines using comment-style syntax (e.g., \`# Use snake_case\`) alongside the Markdown, as this can be effective for Codex. However, maintain overall Markdown readability.
-- Conciseness: Keep the total content relatively brief (aim for ≤ 150 lines). This file becomes part of the LLM prompt.
-- Flexibility: Include all *relevant* sections from the template. If a standard section (e.g., 'Common Bash Commands') is clearly not applicable or information is unavailable, you may omit it.
-
-Template Structure (EXAMPLE ONLY):
+\`CLAUDE.md\` and \`AGENTS.md\` Structure (EXAMPLE ONLY):
 \`\`\`markdown
 # Project Overview
 <One-paragraph mission statement of the project. What does it do?>
@@ -247,16 +223,26 @@ npm run build         # Build for production
 Save both Markdown files at the root of the project directory (e.g. \`${get_output_dir('projects')}/${projectIds[0]}/CLAUDE.md\`).
 
 ---
+### Task 2: Update DB Metadata (Call \`update_project_details\`)
+
+Follow these steps precisely:
+1.  Use the information from the codebase maps and context files to update the database.
+2.  Classify: Determine the most fitting \`project_type\`. Options:
+${PROJECT_TYPES.map(t => `    – **${t}**: ${getProjectTypeDescription(t)}`).join('\n')}
+3.  Describe: Provide concise and informative descriptions:
+    * \`simple_description\`: A brief summary (≤ 120 characters). *Example: "Node.js/React customer portal frontend."*
+    * \`detailed_description\`: 2-4 paragraphs covering the project's purpose, primary technologies (languages, frameworks, DBs), high-level architecture (e.g., microservices, monolith, serverless), main entry points, and key features.
+4.  Update DB: Once you have gathered the necessary information, call the **\`update_project_details\`** tool. **IMPORTANT:** Only include fields that are *new* or *different* from the "Current Project Data" provided below (if any).
+
+---
 ### Overall Plan
 
-1. Use a CodeAgent to create the \`project_map.json\` file in each project directory. Note you should give the CodeAgent the full Schema Example.
+1. Use a CodeAgent to create the \`project_map.json\`, \`CLAUDE.md\` and \`AGENTS.md\` file in each project directory. Note you should give the CodeAgent the full Schema and Structure Examples.
 2. You can run multiple CodeAgents in parallel to speed up the process - I recommend you one for each project at the same time.
-3. Once the CodeAgents have completed, read the \`project_map.json\` they have generated and use it to update the database with the \`update_project_details\` tool.
-4. Finally create the \`CLAUDE.md\` and \`AGENTS.md\` files in each project directory using this information as well.
+3. Once the CodeAgents have completed, read the files they have generated and use it to update the database with the \`update_project_details\` tool.
 
 Notes:
-- Most CodeAgent will execute their job really well, but if any information is missing, you can use \`list_directory\`, \`read_file\`, \`grep\` for analysis.
-  *Example grep usage:* \`grep -RIn --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist --include="*.{ts,js,tsx}" initDatabase .\`
+- Most CodeAgents will execute their job really well, but if any information is missing, you can use \`list_directory\`, \`read_file\`, \`grep\` for analysis.
   You can also create another CodeAgent, particularly if the first one did not complete their job satisfactorily.
 - If any of the files \`project_map.json\`, \`CLAUDE.md\` or \`AGENTS.md\` already exist, use their content as a starting point, but ensure to update them with the new information. Consider that they may be completely outdated.
 
@@ -293,11 +279,6 @@ Final Steps:
                         type: 'string',
                         description:
                             'Multi-paragraph description of the project with technical details',
-                        optional: true,
-                    },
-                    repository_url: {
-                        type: 'string',
-                        description: 'Git remote URL if any',
                         optional: true,
                     },
                 }

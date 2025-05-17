@@ -134,7 +134,7 @@ export async function create_project(
         await db.query(
             `INSERT INTO projects
             (project_id, project_type, simple_description, detailed_description, is_generated)
-            VALUES ($1, $2, $3, $4)`,
+            VALUES ($1, $2, $3, $4, $5)`,
             [
                 project_id,
                 project_type,
@@ -177,11 +177,10 @@ export function getProjectTools(): ToolFunction[] {
                 project_type: {
                     type: 'string',
                     description:
-                        "What type of files will be in the project. Use 'plain' if no other type matches.",
-                    enum: PROJECT_TYPES,
-                    enumDescriptions: Object.entries(PROJECT_TYPE_DESCRIPTIONS).map(
+                        `What type of files will be in the project. Use 'plain' if no other type matches.\n\n${Object.entries(PROJECT_TYPE_DESCRIPTIONS).map(
                         ([type, description]) => `${type}: ${description}`
-                    ),
+                    ).join('\n')}`,
+                    enum: PROJECT_TYPES,
                 },
             }
         ),

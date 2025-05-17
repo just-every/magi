@@ -675,7 +675,8 @@ export async function pushBranchAndOpenPR(
     //   /magi_output/<processId>/markers/<projectId>/<branch>.pushed
     const markerDir = path.join('/magi_output', processId, 'markers', projectId);
     fs.mkdirSync(markerDir, { recursive: true });
-    const markerPath = path.join(markerDir, `${branchName}.pushed`);
+    const safeBranch = branchName.replace(/[/\\]/g, '_'); // Convert slashes to underscores
+    const markerPath = path.join(markerDir, `${safeBranch}.pushed`);
     if (fs.existsSync(markerPath)) {
         console.log('[git-push] branch already pushed (marker exists)');
         return false;

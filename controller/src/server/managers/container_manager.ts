@@ -449,7 +449,7 @@ export async function runDockerContainer(
 
                 if (
                     tool &&
-                    tool === 'project_analyze'
+                    tool === 'project_update'
                 ) {
                     readyProjects.push(projectId);
                     continue;

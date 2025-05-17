@@ -11,14 +11,8 @@
 import { Agent } from '../../utils/agent.js';
 import { getCommonTools } from '../../utils/index.js';
 import { getImageGenerationTools } from '../../utils/image_generation.js';
-import { addHistory } from '../../utils/history.js';
-import {
-    ResponseInput,
-    ToolCall,
-    ResponseThinkingMessage,
-    type ResponseOutputMessage,
-} from '../../types/shared-types.js';
 import { MAGI_CONTEXT } from '../constants.js';
+import { createReasoningAgent } from '../common_agents/reasoning_agent.js';
 
 /**
  * Create the design agent for specialized UI design tasks
@@ -83,8 +77,14 @@ Save assets in a structured format:
 
 The frontend engineer will use your designs as reference for implementation, so clarity is critical.
 `,
-        tools: [...getImageGenerationTools(), ...getCommonTools()],
-        modelClass: 'reasoning_mini',
+        tools: [
+            ...getImageGenerationTools(),
+            ...getCommonTools()
+        ],
+        workers: [
+            createReasoningAgent,
+        ],
+        modelClass: 'vision',
     });
 
     return agent;

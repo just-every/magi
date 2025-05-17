@@ -1,4 +1,6 @@
-# Next.js Static Site Template
+# Next.js Static Site
+
+[detailed_description]
 
 A lightweight, optimized template for building static websites and landing pages with Next.js, React, and Tailwind CSS.
 

@@ -1,4 +1,6 @@
-# Electron Desktop Application Template
+# Electron Desktop Application
+
+[detailed_description]
 
 A comprehensive template for building cross-platform desktop applications with Electron, React, TypeScript, and modern tooling.
 

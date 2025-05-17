@@ -36,9 +36,9 @@ export function getCodeParams(agentName = 'CodeAgent'): Record<string, any> {
             description: `Optional working directory path where ${agentName} should operate. If provided, the agent will execute commands within this directory.`,
             optional: true,
         },
-        example: {
-            type: 'string',
-            description: `Optional example code or JSON schema (as a string) describing the file(s) ${agentName} should create or update.`,
+        examples: {
+            type: 'array',
+            description: `Optional example code or JSON schemas (as a strings) describing the file(s) ${agentName} should create or update.`,
             optional: true,
         },
     };
@@ -85,13 +85,19 @@ export async function processCodeParams(
 
     // Process example parameter - store in agent.args for reference
     if (
-        params.example &&
-        typeof params.example === 'string' &&
-        params.example.trim()
+        params.examples &&
+        Array.isArray(params.examples) &&
+        params.examples.length > 0
     ) {
-        prompts.push(`\n\n**File example:**\n${params.example}`);
+        params.examples.forEach((example: string) => {
+            if (typeof example === 'string' && example.trim()) {
+                prompts.push(`\n\n**File example:**\n${example}`);
+            }
+        });
     }
-
+    else if (params.examples && typeof params.examples === 'string') {
+        prompts.push(`\n\n**File example:**\n${params.examples}`);
+    }
     // Return the prompt
     return {
         prompt: prompts.join(''),
