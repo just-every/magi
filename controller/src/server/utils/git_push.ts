@@ -399,7 +399,8 @@ function pushBranch(projectPath: string, branch: string, hostPath?: string): voi
 function mergeIntoDefault(
     projectPath: string,
     branch: string,
-    msg: string
+    msg: string,
+    hostPath?: string
 ): boolean {
     const defaultBranch = getDefaultBranch(projectPath);
     console.log(`[git-push] merge into ${defaultBranch}`);
@@ -419,6 +420,11 @@ function mergeIntoDefault(
         // Push the merge commit to origin
         console.log(`[git-push] push ${defaultBranch}`);
         runGit(projectPath, `push origin ${defaultBranch}`);
+
+        if (hostPath) {
+            const mirrorPath = getMirrorPath(projectPath);
+            safeFastForward(hostPath, mirrorPath, defaultBranch);
+        }
 
         // Return to the feature branch
         runGit(projectPath, `checkout ${branch}`);
@@ -504,7 +510,8 @@ export async function retryMerge(
                 const mergeSucceeded = mergeIntoDefault(
                     projectPath,
                     branchName,
-                    commitMsg
+                    commitMsg,
+                    hostPath
                 );
 
                 // Push changes to branch after merge attempt
@@ -669,7 +676,8 @@ export async function pushBranchAndOpenPR(
                     const mergeSucceeded = mergeIntoDefault(
                         projectPath,
                         branchName,
-                        commitMsg
+                        commitMsg,
+                        hostPath
                     );
 
                     if (!mergeSucceeded) {
