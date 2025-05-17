@@ -1,5 +1,7 @@
 # Static Website
 
+[detailed_description]
+
 This is a modern static website template built with Next.js, React, TypeScript, and Tailwind CSS. It's optimized for fast loading, SEO performance, and developer experience. The template provides a minimal yet complete foundation for building static websites with modern web technologies.
 
 ## Core Modules & Files

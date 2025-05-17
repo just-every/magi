@@ -1,5 +1,7 @@
 # Static Website
 
+[detailed_description]
+
 // Next.js + React + TypeScript + Tailwind CSS static site template
 // Optimized for SEO, performance, and developer experience
 

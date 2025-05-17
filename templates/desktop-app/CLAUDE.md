@@ -1,5 +1,7 @@
 # Desktop Application
 
+[detailed_description]
+
 This is a cross-platform desktop application built with Electron and React. It provides a native UI experience across Windows, macOS, and Linux while leveraging web technologies for the interface. The application features system tray integration, custom application menus, and secure IPC communication.
 
 ## Core Modules & Files

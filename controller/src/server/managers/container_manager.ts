@@ -19,7 +19,6 @@ import {
     addProjectHistory,
     getAllProjectIds,
 } from '../utils/db_utils';
-import { ProcessManager } from './process_manager';
 
 export interface DockerBuildOptions {
     tag?: string;
@@ -236,7 +235,8 @@ async function prepareGitRepository(
  */
 async function copyTemplateToProject(
     projectPath: string,
-    projectType: string
+    projectType: string,
+    project: any // Project object containing description information
 ): Promise<boolean> {
     // Template source directory
     const templatePath = `/app/templates/${projectType}`;
@@ -255,6 +255,42 @@ async function copyTemplateToProject(
         await execPromise(
             `cp -r ${sourcePath}/.* ${projectPath}/ 2>/dev/null || true`
         );
+
+        // Replace placeholders in .md files and project_map.json
+        console.log('Replacing placeholders in template files');
+
+        // Get description values (provide defaults if not available)
+        const simpleDescription = project?.simple_description || 'A new project';
+        const detailedDescription = project?.detailed_description || 'A detailed description of the project.';
+
+        // Find all .md files in the project root
+        const files = fs.readdirSync(projectPath);
+        const mdFiles = files.filter(file => file.endsWith('.md'));
+
+        // Add project_map.json if it exists
+        if (files.includes('project_map.json')) {
+            mdFiles.push('project_map.json');
+        }
+
+        // Replace placeholders in each file
+        for (const file of mdFiles) {
+            const filePath = path.join(projectPath, file);
+            try {
+                // Read file content
+                let content = fs.readFileSync(filePath, 'utf8');
+
+                // Replace placeholders
+                content = content.replace(/\[simple_description\]/g, simpleDescription);
+                content = content.replace(/\[detailed_description\]/g, detailedDescription);
+
+                // Write updated content back to file
+                fs.writeFileSync(filePath, content, 'utf8');
+                console.log(`Replaced placeholders in ${file}`);
+            } catch (fileError) {
+                console.error(`Error replacing placeholders in ${file}:`, fileError);
+                // Continue with other files even if one fails
+            }
+        }
 
         return true;
     } catch (error) {
@@ -314,7 +350,7 @@ export async function createNewProject(
         );
 
         // Copy template files to project
-        await copyTemplateToProject(projectPath, project.project_type);
+        await copyTemplateToProject(projectPath, project.project_type, project);
 
         // Stage all files and create initial commit
         execSync(`git -C "${projectPath}" add .`);

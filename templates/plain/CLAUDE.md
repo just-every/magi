@@ -1,5 +1,7 @@
 # Plain Template
 
+[detailed_description]
+
 This is an empty template that serves as a starting point for creating projects from scratch without any predefined structure or opinions. Use this template when you want complete freedom to define your project architecture, dependencies, and structure.
 
 ## Getting Started

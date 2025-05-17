@@ -1,5 +1,7 @@
 # Web Application
 
+[detailed_description]
+
 // Next.js 13+ App Router with TypeScript
 // Features authentication, database integration, and UI components
 

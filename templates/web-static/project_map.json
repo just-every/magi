@@ -1,6 +1,6 @@
 {
   "root": "web-static",
-  "summary": "A modern static website template built with Next.js, React, TypeScript, and Tailwind CSS, optimized for fast loading and SEO performance.",
+  "summary": "[simple_description] A modern static website template built with Next.js, React, TypeScript, and Tailwind CSS.",
   "primary_language": "TypeScript",
   "frameworks": ["Next.js", "React", "Tailwind CSS"],
   "entry_points": ["src/app/page.tsx", "src/app/layout.tsx"],

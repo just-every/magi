@@ -1,5 +1,7 @@
 # Mobile Application
 
+[detailed_description]
+
 This is a production-ready mobile app template built with React Native, TypeScript, and Expo. It features authentication flows, file-based navigation with Expo Router, and a reusable component library. The app is designed for iOS and Android platforms with a focus on maintainability and developer experience.
 
 ## Core Modules & Files

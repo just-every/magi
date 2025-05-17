@@ -1,6 +1,6 @@
 {
   "root": "web-app",
-  "summary": "A full-stack web application built with Next.js App Router, React, TypeScript, NextAuth for authentication, and Prisma ORM for database integration.",
+  "summary": "[simple_description] A full-stack web application built with Next.js App Router, React, TypeScript, NextAuth for authentication, and Prisma ORM for database integration.",
   "primary_language": "TypeScript",
   "frameworks": ["Next.js", "React", "Prisma", "NextAuth", "Tailwind CSS"],
   "entry_points": ["src/app/page.tsx", "src/app/layout.tsx", "src/app/api/auth/[...nextauth]/route.ts"],

@@ -1,5 +1,7 @@
 # Plain Template
 
+[detailed_description]
+
 // Empty template for creating projects from scratch
 // No predefined structure or dependencies
 

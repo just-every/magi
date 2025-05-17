@@ -1,6 +1,6 @@
 {
   "root": "mobile-app",
-  "summary": "A production-ready mobile app template built with React Native, TypeScript, and Expo featuring authentication flows, navigation, and a reusable component library.",
+  "summary": "[simple_description] A production-ready mobile app template built with React Native, TypeScript, and Expo.",
   "primary_language": "TypeScript",
   "frameworks": ["React Native", "Expo", "Expo Router"],
   "entry_points": ["App.tsx", "app/index.tsx", "app/_layout.tsx"],

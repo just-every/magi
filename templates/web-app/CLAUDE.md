@@ -1,5 +1,7 @@
 # Web Application
 
+[detailed_description]
+
 This is a full-stack web application built with Next.js App Router, React, TypeScript, NextAuth for authentication, and Prisma ORM for database integration. It provides a complete foundation for building modern web applications with user authentication, database access, and server-side rendering.
 
 ## Core Modules & Files

@@ -1,5 +1,7 @@
 # 2D Game Project
 
+[detailed_description]
+
 This is a 2D game development template built with Phaser 3 and TypeScript. It provides a foundation for creating browser-based 2D games with scene management, game objects, and optional multiplayer capabilities through an Express server.
 
 ## Core Modules & Files

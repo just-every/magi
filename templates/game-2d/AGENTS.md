@@ -1,5 +1,7 @@
 # 2D Game Project
 
+[detailed_description]
+
 // Phaser 3 + TypeScript 2D game template
 // Features scene management, game objects, and optional multiplayer
 

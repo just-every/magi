@@ -1,5 +1,7 @@
 # Mobile Application
 
+[detailed_description]
+
 // React Native + Expo + TypeScript mobile app template
 // Features auth flows, navigation, and component library
 

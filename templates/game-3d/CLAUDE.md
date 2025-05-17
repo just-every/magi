@@ -1,5 +1,7 @@
 # 3D Multiplayer Game
 
+[detailed_description]
+
 This is a 3D multiplayer game template built with TypeScript, featuring client-server architecture for networked gameplay. It uses WebGL for 3D rendering via Three.js and WebSockets for real-time communication between players.
 
 ## Core Modules & Files

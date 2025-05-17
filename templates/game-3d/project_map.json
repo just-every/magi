@@ -1,6 +1,6 @@
 {
   "root": "game-3d",
-  "summary": "A 3D multiplayer game template built with TypeScript, featuring client-server architecture for networked gameplay using WebGL and WebSockets.",
+  "summary": "[simple_description] A 3D multiplayer game using WebGL and Socket.io for real-time interactions.",
   "primary_language": "TypeScript",
   "frameworks": ["Three.js", "Socket.io"],
   "entry_points": ["src/client/client.ts", "src/server/server.ts"],

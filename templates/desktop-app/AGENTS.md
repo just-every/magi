@@ -1,5 +1,7 @@
 # Desktop Application
 
+[detailed_description]
+
 // Electron-React desktop application providing cross-platform native experience
 // Key features: System tray integration, application menus, and secure IPC communication
 

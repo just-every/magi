@@ -1,6 +1,6 @@
 {
   "root": "game-2d",
-  "summary": "A 2D game development template built with Phaser 3 and TypeScript, featuring scene management, game objects, and multiplayer capabilities with an Express server.",
+  "summary": "[simple_description] A 2D game development template built with Phaser 3 and TypeScript.",
   "primary_language": "TypeScript",
   "frameworks": ["Phaser 3", "Express"],
   "entry_points": ["src/index.ts", "server/server.ts"],

@@ -108,6 +108,7 @@ export async function listActiveProjects(
 export async function create_project(
     project_id: string,
     simple_description: string,
+    detailed_description: string,
     project_type: ProjectType,
 ): Promise<string> {
     // Validate project_id format
@@ -132,12 +133,13 @@ export async function create_project(
         // Insert new project
         await db.query(
             `INSERT INTO projects
-            (project_id, project_type, simple_description, is_generated)
+            (project_id, project_type, simple_description, detailed_description, is_generated)
             VALUES ($1, $2, $3, $4)`,
             [
                 project_id,
                 project_type,
                 simple_description,
+                detailed_description,
                 true,
             ]
         );
@@ -169,7 +171,9 @@ export function getProjectTools(): ToolFunction[] {
                 project_id:
                     'No spaces - letters, numbers, dashes and underscores only.',
                 simple_description:
-                    'A sentence describing the project. This will be used to identify the project in the list.',
+                    'A sentence describing the project. Used to identify the project in the list.',
+                detailed_description:
+                    'Up to two paragraphs covering the project\'s purpose, and key features. Include any relevant details you know that might help the agent understand the project better.',
                 project_type: {
                     type: 'string',
                     description:

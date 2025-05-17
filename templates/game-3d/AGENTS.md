@@ -1,5 +1,7 @@
 # 3D Multiplayer Game
 
+[detailed_description]
+
 // TypeScript-based 3D multiplayer game with client-server architecture
 // Uses Three.js for WebGL rendering and WebSockets for networking
 
