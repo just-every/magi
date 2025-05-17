@@ -19,6 +19,8 @@ import { truncateLargeValues } from './file_utils.js';
 import { readableTime } from './date_tools.js';
 import { runningToolTracker } from './running_tool_tracker.js';
 import type { Agent } from './agent.js';
+import { sendStreamEvent } from './communication.js';
+import { v4 as uuid } from 'uuid';
 
 /**
  * Interrupts any active thought delays and terminates waiting tools
@@ -546,6 +548,11 @@ export async function addSystemMessage(
         },
         thread
     );
+    sendStreamEvent({
+        type: 'system_update',
+        message_id: uuid(),
+        content: `System update: ${content}`,
+    });
     if (interrupt) {
         interruptWaiting(interrupt);
     }

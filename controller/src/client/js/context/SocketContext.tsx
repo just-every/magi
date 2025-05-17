@@ -709,7 +709,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     eventType === 'message_complete' ||
                     eventType === 'talk_start' ||
                     eventType === 'talk_delta' ||
-                    eventType === 'talk_complete'
+                    eventType === 'talk_complete' ||
+                    eventType === 'system_update'
                 ) {
                     // Assistant message
                     if ('message_id' in streamingEvent) {

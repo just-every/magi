@@ -47,7 +47,6 @@ import { deepSeekProvider } from './deepseek.js';
 import { testProvider } from './test_provider.js';
 import { openRouterProvider } from './openrouter.js';
 import { claudeCodeProvider } from '../code_providers/claude_code.js';
-import { clineCliProvider } from '../code_providers/cline_cli.js';
 import { codexProvider } from '../code_providers/codex.js';
 import { MODEL_CLASSES, ModelClassID, ModelProviderID } from './model_data.js';
 
@@ -56,7 +55,6 @@ const MODEL_PROVIDER_MAP: Record<string, ModelProvider> = {
     // Coding models
     codex: codexProvider,
     'claude-code': claudeCodeProvider,
-    'cline-cli': clineCliProvider,
 
     // OpenAI models
     'gpt-': openaiProvider,

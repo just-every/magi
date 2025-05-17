@@ -270,7 +270,7 @@ export async function createNewProject(
     }
 
     const projectPath = path.join(parentDir, projectId);
-    if (!fs.existsSync(projectPath)) {
+    if (fs.existsSync(projectPath)) {
         throw new Error(
             `Sorry the project ${projectId} already exists in the parent directory. Please choose another project_id.`
         );
@@ -405,10 +405,75 @@ export async function runDockerContainer(
         console.log('gitProjectsArray', gitProjectsArray);
 
         // Ensure gitProjects values are unique
-        const gitProjects = [...new Set(gitProjectsArray)];
+        let gitProjects = [...new Set(gitProjectsArray)];
 
         console.log('projects', projects);
-        console.log('gitProjects', gitProjects);
+        console.log('gitProjects (before readiness check)', gitProjects);
+
+        // ------------------------------------------------------------------
+        // Validate readiness of generated projects
+        // ------------------------------------------------------------------
+        if (gitProjects.length > 0) {
+            const readyProjects: string[] = [];
+
+            for (const projectId of gitProjects) {
+                // If this run _is_ the core process, skip waiting and exclude itself
+                if (
+                    coreProcessId &&
+                    coreProcessId === processId &&
+                    projectId === coreProcessId
+                ) {
+                    console.log(
+                        `[container-manager] Skipping project ${projectId} for core process run`
+                    );
+                    continue;
+                }
+
+                const proj = await getProject(projectId);
+                if (!proj) {
+                    console.warn(
+                        `[container-manager] Project ${projectId} not found in DB, skipping`
+                    );
+                    continue;
+                }
+
+                // External projects are always mounted immediately
+                if (!proj.is_generated) {
+                    readyProjects.push(projectId);
+                    continue;
+                }
+
+                // Generated & already ready – include immediately
+                if (proj.is_ready) {
+                    readyProjects.push(projectId);
+                    continue;
+                }
+
+                // ------------------------------------------------------------------
+                // Generated but NOT ready – wait (poll) for up to 10 s
+                // ------------------------------------------------------------------
+                const deadline = Date.now() + 10_000;
+                let isReady = proj.is_ready;
+
+                while (!isReady && Date.now() < deadline) {
+                    await new Promise(resolve => setTimeout(resolve, 1_000));
+                    const refreshed = await getProject(projectId);
+                    isReady = !!refreshed?.is_ready;
+                }
+
+                if (!isReady) {
+                    throw new Error(
+                        `Project ${projectId} is generated but not ready after waiting 10 seconds`
+                    );
+                }
+
+                readyProjects.push(projectId);
+            }
+
+            gitProjects = readyProjects;
+        }
+
+        console.log('gitProjects (after readiness check)', gitProjects);
 
         if (gitProjects.length > 0) {
             // Process each repo

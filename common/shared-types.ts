@@ -400,6 +400,7 @@ export type StreamEventType =
     | 'file_complete'
     | 'cost_update'
     | 'system_status'
+    | 'system_update'
     | 'quota_update'
     | 'screenshot'
     | 'console'
@@ -591,13 +592,20 @@ export interface AgentStatusEvent extends StreamEvent {
 /**
  * Message streaming event
  */
-export interface MessageEvent extends StreamEvent {
-    type: 'message_start' | 'message_delta' | 'message_complete';
+export interface MessageEventBase extends StreamEvent {
+    type: StreamEventType
     content: string;
     message_id: string; // Added message_id for tracking deltas and completes
     order?: number; // Optional order property for message sorting
     thinking_content?: string;
     thinking_signature?: string;
+}
+
+/**
+ * Message streaming event
+ */
+export interface MessageEvent extends MessageEventBase {
+    type: 'message_start' | 'message_delta' | 'message_complete';
 }
 
 /**
@@ -615,13 +623,8 @@ export interface FileEvent extends StreamEvent {
 /**
  * Message streaming event
  */
-export interface TalkEvent extends StreamEvent {
+export interface TalkEvent extends MessageEventBase {
     type: 'talk_start' | 'talk_delta' | 'talk_complete';
-    content: string;
-    message_id: string; // Added message_id for tracking deltas and completes
-    order?: number; // Optional order property for message sorting
-    thinking_content?: string; // Added for compatibility with client code
-    timestamp?: string; // Timestamp for the event
 }
 
 /**
@@ -736,6 +739,13 @@ export interface SystemStatusEvent extends StreamEvent {
 }
 
 /**
+ * Cost update streaming event
+ */
+export interface SystemUpdateEvent extends MessageEventBase {
+    type: 'system_update';
+}
+
+/**
  * Quota update streaming event
  */
 export interface QuotaUpdateEvent extends StreamEvent {
@@ -760,6 +770,7 @@ export type StreamingEvent =
     | ErrorEvent
     | CostUpdateEvent
     | SystemStatusEvent
+    | SystemUpdateEvent
     | QuotaUpdateEvent
     | AudioEvent
     | ScreenshotEvent
@@ -1147,6 +1158,7 @@ export interface ProjectMessage extends ServerMessage {
     type: 'project_update';
     project_id: string;
     message: string;
+    failed?: boolean;
 }
 
 export interface SystemMessage extends ServerMessage {

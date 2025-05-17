@@ -36,6 +36,19 @@ export async function updateProject(project: Project): Promise<void> {
     }
 }
 
+export async function deleteProject(project_id: string): Promise<void> {
+    const db = await getDB();
+    try {
+        await db.query('DELETE FROM projects WHERE project_id = $1', [
+            project_id,
+        ]);
+    } catch (error) {
+        console.error('Error deleting project:', error);
+    } finally {
+        db.release();
+    }
+}
+
 /**
  * Ensure a project stub exists in the database
  * @param project_id The ID of the project to create if it doesn't exist
@@ -68,9 +81,7 @@ export async function ensureProjectStub(
             [
                 project_id,
                 projectType,
-                is_generated
-                    ? '[Creating project...]'
-                    : '[Importing external project...]',
+                '',
                 is_generated,
                 false,
             ]

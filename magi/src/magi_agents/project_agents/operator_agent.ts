@@ -77,12 +77,12 @@ function formatProjectData(project: Project | null): string {
 
 /**
  * Creates an agent responsible for analyzing projects, updating metadata,
- * generating codebase maps, and bootstrapping context files (CLAUDE.md/codex.md).
+ * generating codebase maps, and bootstrapping context files (CLAUDE.md/AGENTS.md).
  *
  * This agent follows a structured multi-step process:
  * 1. Analyze the project to update database metadata (descriptions, type, structure, git remote).
  * 2. Generate two types of codebase maps: a minimal directory-only map and a richer project map.
- * 3. Create initial CLAUDE.md and codex.md files with essential project context.
+ * 3. Create initial CLAUDE.md and AGENTS.md files with essential project context.
  *
  * @returns A promise resolving to the configured Agent instance.
  */
@@ -98,7 +98,7 @@ export async function createProjectOperatorAgent(): Promise<Agent> {
 ---
 You are **ProjectOperatorAgent**.
 
-**Goal:** Analyze the project${paths.length > 1 ? 's' : ''} "${paths.join('", "')}", update the metadata in the database, generate codebase maps (minimal and rich), and bootstrap initial context files (\`CLAUDE.md\` and \`codex.md\`).
+**Goal:** Analyze the project${paths.length > 1 ? 's' : ''} "${paths.join('", "')}", update the metadata in the database, generate codebase maps (minimal and rich), and bootstrap initial context files (\`CLAUDE.md\` for Claude Code and \`AGENTS.md\` for Codex CLI).
 
 You have full local read/write access to the project folder${paths.length > 1 ? 's' : ''}:
 ${paths.map(p => `• \`${p}\``).join('\n')}
@@ -163,10 +163,10 @@ ${PROJECT_TYPES.map(t => `    – **${t}**: ${getProjectTypeDescription(t)}`).jo
 ---
 ### Task 3: Bootstrap Context Files (Save as Markdown)
 
-Create **BOTH** \`CLAUDE.md\` and \`codex.md\` files at the root of each project repository.
+Create **BOTH** \`CLAUDE.md\` and \`AGENTS.md\` files at the root of each project repository.
 - Rationale: Provide foundational context for AI assistants like Claude and Codex, based on report recommendations.
 - Content: Use the *same core information* for both files initially, structured according to the template below.
-- Codex Hint: For \`codex.md\`, where natural, try phrasing descriptions or guidelines using comment-style syntax (e.g., \`# Use snake_case\`) alongside the Markdown, as this can be effective for Codex. However, maintain overall Markdown readability.
+- Codex Hint: For \`AGENTS.md\`, where natural, try phrasing descriptions or guidelines using comment-style syntax (e.g., \`# Use snake_case\`) alongside the Markdown, as this can be effective for Codex. However, maintain overall Markdown readability.
 - Conciseness: Keep the total content relatively brief (aim for ≤ 150 lines). This file becomes part of the LLM prompt.
 - Flexibility: Include all *relevant* sections from the template. If a standard section (e.g., 'Common Bash Commands') is clearly not applicable or information is unavailable, you may omit it.
 
@@ -251,13 +251,13 @@ Save both Markdown files at the root of the project directory (e.g. \`${get_outp
 1. Use a CodeAgent to create the \`project_map.json\` file in each project directory. Note you should give the CodeAgent the full Schema Example.
 2. You can run multiple CodeAgents in parallel to speed up the process - I recommend you one for each project at the same time.
 3. Once the CodeAgents have completed, read the \`project_map.json\` they have generated and use it to update the database with the \`update_project_details\` tool.
-4. Finally create the \`CLAUDE.md\` and \`codex.md\` files in each project directory using this information as well.
+4. Finally create the \`CLAUDE.md\` and \`AGENTS.md\` files in each project directory using this information as well.
 
 Notes:
 - Most CodeAgent will execute their job really well, but if any information is missing, you can use \`list_directory\`, \`read_file\`, \`grep\` for analysis.
   *Example grep usage:* \`grep -RIn --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist --include="*.{ts,js,tsx}" initDatabase .\`
   You can also create another CodeAgent, particularly if the first one did not complete their job satisfactorily.
-- If any of the files \`project_map.json\`, \`CLAUDE.md\` or \`codex.md\` already exist, use their content as a starting point, but ensure to update them with the new information. Consider that they may be completely outdated.
+- If any of the files \`project_map.json\`, \`CLAUDE.md\` or \`AGENTS.md\` already exist, use their content as a starting point, but ensure to update them with the new information. Consider that they may be completely outdated.
 
 Error Handling: If you encounter errors using tools (e.g., permission denied, file not found), note the specific error in your reasoning. Attempt to continue with other tasks if possible, but report significant blockages. If you can't resolve an issue after several attempts, consider using \`task_fatal_error()\` to indicate a critical failure.
 

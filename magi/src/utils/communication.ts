@@ -25,14 +25,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { get_output_dir } from './file_utils.js';
 import { processTracker } from './process_tracker.js';
 import { addSystemMessage } from './history.js';
-// Function to handle project ready messaging
-// Import was previously: import { newProjectReady } from './project_utils.js';
 
-// Simple implementation of newProjectReady since we can't import it
-function newProjectReady(projectId: string): void {
-    console.log(`Project ${projectId} ready notification received`);
-    // The actual implementation would do more, but this is sufficient to fix the compile error
-}
 import { truncateLargeValues } from './file_utils.js';
 
 let lastEventLogged = '';
@@ -172,9 +165,18 @@ export class CommunicationManager {
                         return;
                     } else if (message.type === 'project_update') {
                         const projectMessage = message as ProjectMessage;
-                        newProjectReady(projectMessage.project_id);
+                        if(projectMessage.failed) {
+                            console.log(
+                                `Project ${projectMessage.project_id} failed: ${projectMessage.message}`
+                            );
+                            await addSystemMessage(
+                                `Creating project ${projectMessage.project_id} failed: ${projectMessage.message}`,
+                                'project failed'
+                            );
+                            return;
+                        }
                         await addSystemMessage(
-                            `Update for project ${projectMessage.project_id}: ${projectMessage.message}`,
+                            `Project ${projectMessage.project_id} created: ${projectMessage.message}`,
                             'project created'
                         );
                         return;

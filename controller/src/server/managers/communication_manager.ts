@@ -20,6 +20,7 @@ import {
     StreamingEvent,
     GitPullRequestEvent,
 } from '../../types/index';
+import { deleteProject } from '../utils/db_utils';
 
 // Define message interfaces locally
 interface CommandMessage {
@@ -639,12 +640,14 @@ export class CommunicationManager {
                     })
                 );
             } catch (error) {
+                await deleteProject(event.project_id);
                 this.sendMessage(
                     this.processManager.coreProcessId,
                     JSON.stringify({
                         type: 'project_update',
                         project_id: event.project_id,
                         message: `Error creating project ${event.project_id}: ${error}`,
+                        failed: true,
                     })
                 );
             }

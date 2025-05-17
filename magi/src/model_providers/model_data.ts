@@ -195,9 +195,8 @@ export const MODEL_CLASSES = {
         models: [
             'claude-code', // Anthropic
             'codex', // OpenAI
-            'cline-cli', // Cline
         ],
-        //random: true,
+        random: true,
     },
 
     // Writing models - optimized for conversation and text generation

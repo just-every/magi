@@ -84,7 +84,7 @@ export async function listActiveProjects(
                 .map(row => {
                     const description =
                         row.simple_description || 'No description';
-                    const status = row.is_ready ? '' : ' [Scanning files...]';
+                    const status = row.is_ready ? '' : (row.is_generated ? ' [Creating...]' : ' [Importing external project...]');
                     return `- ${row.project_id}: ${description}${status}`;
                 })
                 .join('\n');
@@ -148,7 +148,7 @@ export async function create_project(
         });
 
         // Return success message
-        return `Project '${project_id}' created successfully.`;
+        return `Creating project '${project_id}'...`;
     } catch (error) {
         console.error('Error creating project:', error);
         return `Error creating project: ${error instanceof Error ? error.message : String(error)}`;
