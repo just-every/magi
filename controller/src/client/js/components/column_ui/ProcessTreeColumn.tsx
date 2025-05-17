@@ -6,24 +6,30 @@ import { getStatusIcon } from '../utils/FormatUtils';
 import { TruncatedStartText } from '../utils/TextFormatComponents';
 import AutoScrollContainer from '../ui/AutoScrollContainer';
 
+import { ProcessStatus } from '../../../../types';
+
 interface ProcessTreeColumnProps {
     selectedItemId: string | null;
     setSelectedItemId: (id: string) => void;
+    statusFilter?: ProcessStatus[];
 }
 
 const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
     selectedItemId,
     setSelectedItemId,
+    statusFilter,
 }) => {
     const { processes, coreProcessId } = useSocket();
 
-    const processList = Array.from(processes.values()).sort((a, b) => {
-        const processA = a as ProcessData;
-        const processB = b as ProcessData;
-        if (processA.id === coreProcessId) return -1; // Core process first
-        if (processB.id === coreProcessId) return 1; // Core process first
-        return processA.id.localeCompare(processB.id);
-    });
+    const processList = Array.from(processes.values())
+        .filter(p => !statusFilter || statusFilter.includes(p.status))
+        .sort((a, b) => {
+            const processA = a as ProcessData;
+            const processB = b as ProcessData;
+            if (processA.id === coreProcessId) return -1; // Core process first
+            if (processB.id === coreProcessId) return 1; // Core process first
+            return processA.id.localeCompare(processB.id);
+        });
 
     // Select a process or agent
     const handleSelect = (itemId: string) => {
