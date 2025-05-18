@@ -356,11 +356,11 @@ export function getProcessTools(): ToolFunction[] {
                 },
                 project: {
                     description:
-                        'An array of projects to mount for the task giving the task access to a copy of files. The task can modify the files and submit them back as a new git branch.' +
+                        'An array of projects to mount for the task giving the task access to a copy of files. For coding tasks, first create a project of the relevant type as this will fill the project with a skeleton template for coding agents to work from. The task can modify the files and submit them back as a new git branch.' +
                         (getExternalProjectIds().includes('magi-system')
                             ? ' Include "magi-system" to provide access to your code.'
                             : '') +
-                        ' The task will have access to these files at /magi_output/{taskId}/projects/{project}. Their default branch will be "magi-{taskId}". If you provide only one project, that will be their working directory when they start (otherwise it will be /magi_output/{taskId}/working)\nNote: ONLY INCLUDE PROJECTS THE TASK NEEDS as an entire copy of the project is made for each task. For large projects this take 10+ seconds.',
+                        ' The task will have access to these files at /magi_output/{taskId}/projects/{project}. Their default branch will be "magi/{taskId}". If you provide only one project, that will be their working directory when they start (otherwise it will be /magi_output/{taskId}/working)\nNote: ONLY INCLUDE PROJECTS THE TASK NEEDS as an entire copy of the project is made for each task. For large projects this take 10+ seconds.',
                     type: 'array',
                     enum: () => getAllProjectIds(),
                 },

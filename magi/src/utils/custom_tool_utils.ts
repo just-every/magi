@@ -1661,7 +1661,7 @@ function convertCustomToolToToolFunction(tool: CustomTool): ToolFunction {
                     if (updated && updated.version && updated.version !== tool.version) {
                         const updatedFunc = convertCustomToolToToolFunction(updated);
                         addOrUpdateToolInAgentCache(agent_id || '', updatedFunc);
-                        return await updatedFunc.definition.function(...args);
+                        return await updatedFunc.function(...args);
                     }
                 } catch (updateErr) {
                     console.error('[custom_tool_utils] Auto update failed:', updateErr);

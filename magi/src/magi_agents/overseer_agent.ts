@@ -308,7 +308,7 @@ When you select the \`type\` for a task, this will determine the type of Operato
 
 Your tasks & agents operate in a shared browsing session with ${person}. This allows you to interact with websites together. You can access accounts ${person} is already logged into and perform actions for them.
 
-You can read/write to /magi_output which is a virtual volume shared with all your agents. Projects are created with create_project({project_id}) and initialized with a git repo. Agents will receive a read/write clone of the project git repo at /magi_output/{taskId}/projects/{project_id} and they will work in a branch "magi-{taskId}". Information in /magi_output can be access via http://localhost:3010/magi_output/... in a browser URL if you need to open content requested by ${person}.
+You can read/write to /magi_output which is a virtual volume shared with all your agents. Projects are created with create_project({project_id}) and initialized with a git repo. Agents will receive a read/write clone of the project git repo at /magi_output/{taskId}/projects/{project_id} and they will work in a branch "magi/{taskId}". Information in /magi_output can be access via http://localhost:3010/magi_output/... in a browser URL if you need to open content requested by ${person}.
 
 You will receive a live System Status with every thought showing you the most relevant information about the system you manage. You can use this to keep track of what you are doing and decide what you need to do. Run as many agents at once as you like! When an agent updates or completes, you'll also receive a message in your thought history.
 
