@@ -16,6 +16,7 @@ import { ModelClassID } from '../model_providers/model_data.js';
 import { createOperatorAgent } from './operator_agent.js';
 import { createProjectOperatorAgent } from './project_agents/operator_agent.js';
 import { createWebOperatorAgent } from './web_agents/operator_agent.js';
+import { createResearchOperatorAgent } from './research_agents/operator_agent.js';
 
 // Export all constants from the constants module
 export * from './constants.js';
@@ -68,6 +69,9 @@ export async function createAgent(
                 break;
             case 'web_code':
                 agent = createWebOperatorAgent();
+                break;
+            case 'research':
+                agent = await createResearchOperatorAgent();
                 break;
             default:
                 agent = createOperatorAgent();
@@ -147,4 +151,5 @@ export {
     createShellAgent,
     createImageAgent,
     createProjectOperatorAgent,
+    createResearchOperatorAgent,
 };

@@ -40,24 +40,25 @@
         "tar-fs": "^2.1.2"
     },
     "devDependencies": {
-        "@eslint/js": "^8.56.0",
+        "@eslint/js": "file:local_packages/eslint-js",
         "@types/node": "^22.14.0",
         "@types/ws": "^8.18.1",
         "@typescript-eslint/eslint-plugin": "^7.0.0",
         "@typescript-eslint/parser": "^7.0.0",
         "@vitest/coverage-v8": "^3.1.1",
         "@vitest/ui": "^3.1.1",
-        "eslint": "^8.56.0",
+        "eslint": "file:local_packages/eslint",
         "eslint-config-prettier": "^10.1.2",
-        "eslint-plugin-prettier": "^5.2.6",
+        "eslint-plugin-prettier": "file:local_packages/eslint-plugin-prettier",
         "jsdom": "^26.0.0",
         "node-pg-migrate": "^7.9.1",
         "prettier": "^3.5.3",
-        "prettier-plugin-sh": "^0.17.2",
+        "prettier-plugin-sh": "file:local_packages/prettier-plugin-sh",
+        "prettier-plugin-tailwindcss": "file:local_packages/prettier-plugin-tailwindcss",
         "ts-node": "^10.9.2",
         "typescript": "^5.8.2",
-        "typescript-eslint": "^7.0.0",
-        "vitest": "^3.1.1"
+        "typescript-eslint": "file:local_packages/typescript-eslint",
+        "vitest": "file:local_packages/vitest"
     },
     "dependencies": {
         "@google/genai": "^0.12.0",

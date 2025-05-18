@@ -1,0 +1,8 @@
+{
+  "name": "vitest",
+  "version": "0.0.0",
+  "bin": {
+    "vitest": "index.cjs"
+  },
+  "main": "index.cjs"
+}

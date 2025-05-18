@@ -1,0 +1,9 @@
+{
+  "name": "typescript-eslint",
+  "version": "0.0.0",
+  "exports": {
+    ".": "./index.cjs"
+  },
+  "type": "module",
+  "main": "index.cjs"
+}

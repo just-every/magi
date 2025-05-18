@@ -1,0 +1,8 @@
+{
+  "name": "eslint",
+  "version": "0.0.0",
+  "bin": {
+    "eslint": "index.cjs"
+  },
+  "main": "index.cjs"
+}
