@@ -29,8 +29,7 @@ The `custom_tools` table has the following schema:
 
 ```sql
 CREATE TABLE custom_tools (
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name          TEXT NOT NULL,
+  name          TEXT PRIMARY KEY,
   description   TEXT NOT NULL,
   parameters_json TEXT NOT NULL,
   implementation TEXT NOT NULL,
@@ -42,7 +41,7 @@ CREATE TABLE custom_tools (
 );
 ```
 
-Tools are versioned, with only the latest version of each tool being shown by default.
+Tool names must be unique and now serve as the table's primary key. Tools are versioned, with only the latest version of each tool being shown by default.
 
 ## Setup Instructions
 
@@ -138,6 +137,7 @@ This script creates a simple "echo" tool and then modifies it.
 5. **Tool Quality**: The quality of generated tools depends on the capabilities of the underlying LLM.
 
 6. **Versioning**: Tools are versioned, with a unique version number for each modification.
+7. **Auto-healing**: If a tool fails when executed, MAGI automatically attempts to modify the tool using the error details.
 
 ## Future Improvements
 

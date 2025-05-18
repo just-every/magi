@@ -36,7 +36,6 @@ export interface MemoryMatch {
 }
 
 export interface CustomTool {
-    id?: string;
     name: string;
     description: string;
     parameters_json: string;
@@ -267,33 +266,29 @@ export function formatMemories(memories: MemoryMatch[]): string {
 /**
  * Add a new custom tool to the database
  * @param tool The custom tool data to add
- * @returns The ID of the newly added tool
+ * @returns The name of the inserted tool
  */
 export async function addCustomTool(tool: CustomTool): Promise<string> {
     const db = await getDB();
 
     try {
-        // If this is an update to an existing tool, mark previous versions as not latest
-        if (tool.version && tool.version > 1) {
-            await db.query(
-                `UPDATE custom_tools
-                 SET is_latest = false
-                 WHERE name = $1 AND is_latest = true`,
-                [tool.name]
-            );
-        }
-
-        // Format the embedding array for PostgreSQL vector type
-        const embeddingStr = tool.embedding
-            ? toPgVectorLiteral(tool.embedding)
-            : null;
+        const embeddingStr = tool.embedding ? toPgVectorLiteral(tool.embedding) : null;
 
         const result = await db.query(
             `INSERT INTO custom_tools
              (name, description, parameters_json, implementation, embedding,
               version, source_task_id, is_latest)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) -- No need for ::vector cast when using literal format
-             RETURNING id`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+             ON CONFLICT (name)
+             DO UPDATE SET
+                description = EXCLUDED.description,
+                parameters_json = EXCLUDED.parameters_json,
+                implementation = EXCLUDED.implementation,
+                embedding = EXCLUDED.embedding,
+                version = EXCLUDED.version,
+                source_task_id = EXCLUDED.source_task_id,
+                is_latest = true
+             RETURNING name`,
             [
                 tool.name,
                 tool.description,
@@ -302,11 +297,10 @@ export async function addCustomTool(tool: CustomTool): Promise<string> {
                 embeddingStr,
                 tool.version || 1,
                 tool.source_task_id || null,
-                tool.is_latest !== undefined ? tool.is_latest : true,
             ]
         );
 
-        return result.rows[0].id;
+        return result.rows[0].name as string;
     } finally {
         db.release();
     }
@@ -396,7 +390,7 @@ export async function searchCustomToolsByEmbedding(
 
     try {
         const result = await db.query(
-            `SELECT id, name, description, parameters_json, implementation,
+            `SELECT name, description, parameters_json, implementation,
                     embedding, version, source_task_id, is_latest, created_at,
                     1 - (embedding <=> $1) AS similarity_score
              FROM custom_tools
@@ -408,7 +402,6 @@ export async function searchCustomToolsByEmbedding(
         );
 
         return result.rows.map(row => ({
-            id: row.id,
             name: row.name,
             description: row.description,
             parameters_json: row.parameters_json,
@@ -436,7 +429,7 @@ export async function getCustomToolByName(
 
     try {
         const result = await db.query(
-            `SELECT id, name, description, parameters_json, implementation,
+            `SELECT name, description, parameters_json, implementation,
                     embedding, version, source_task_id, is_latest, created_at
              FROM custom_tools
              WHERE name = $1 AND is_latest = true`,
@@ -520,7 +513,7 @@ export async function getAllCustomTools(): Promise<CustomTool[]> {
 
     try {
         const result = await db.query(
-            `SELECT id, name, description, parameters_json, implementation,
+            `SELECT name, description, parameters_json, implementation,
                     embedding, version, source_task_id, is_latest, created_at
              FROM custom_tools
              WHERE is_latest = true
