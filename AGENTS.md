@@ -1,75 +1,95 @@
-# MAGI Agent System
+# Project Overview
+MAGI System is a modular, autonomous AI orchestration framework. It coordinates specialized agents (Browser, Code, Search, etc.) through a central Overseer running on Node.js. A React frontend lets users monitor tasks in real-time while Socket.IO keeps the browser, controller, and agents in sync.
 
-MAGI is an ensemble autonomous AI system that orchestrates specialized agents to solve complex tasks with minimal human intervention. The system maintains a persistent chain of thought with a central AI persona (Overseer) for orchestration and task management.
-
-## System Architecture
-
+## Setup
+Run these before you start work
+```bash
+npm install
+npm run build  
 ```
-User Interface (Browser) <-> Controller Service <-> Overseer <-> Specialized Agents
+
+## Quality gate
+Run these before every commit
+```bash
+npm run lint:fix
+npm run test:tools
 ```
 
-### Key Components
+## Core Modules & Files
+- controller/: Gateway between browser UI and Overseer (Node + TypeScript)
+  - src/server/server.ts – Express/Socket.IO server entry
+  - src/client/ – React UI code
+- magi/: Core orchestration logic for agents
+  - src/magi.ts – Main bootstrapping entry for the Overseer
+  - src/magi_agents/ – Specialized agent implementations
+  - src/model_providers/ – LLM providers (Anthropic, OpenAI, Google)
+- common/: Shared TypeScript utilities and types
+- host/: Browser bridge for Chrome automation via CDP
+- db/: PostgreSQL migrations and schema
+- docker-compose.yml – Container orchestration
 
-- **User Interface**: React-based web app for task submission and monitoring
-- **Controller Service**: Manages Docker containers and communication
-- **Overseer Agent**: Central system coordinator with persistent reasoning
-- **Operator Agent**: Task breakdown and agent delegation
-- **Specialized Agents**: Domain-specific task executors
+## `project_map.json`
+High-level machine-readable index of the repository. Use it to quickly locate entry points, key directories, and common commands.
 
-
-## Agents Overview
-- **Overseer** – orchestrates reasoning and delegates tasks
-- **Operator** – decomposes goals and coordinates specialized agents
-- **Common agents** live under `magi/src/magi_agents/common_agents/` (Code, Browser, Search, Shell, etc.)
-- Domain-specific agents are in `magi/src/magi_agents/web_agents/`
-
-Each agent extends the base `Agent` class and registers its own tools.
-
-## Building & Running
-1. Install dependencies with `npm install`.
-2. Copy `.env.example` to `.env` and provide API keys.
-3. Run `npm run setup` to build utilities and configure Chrome.
-4. Start the development stack with `npm run dev` – this builds Docker images, launches Postgres with `docker compose`, and serves the web UI on port 3010.
-
-Key build scripts (`package.json`):
-- `npm run build` – compile TypeScript and Docker images
-- `npm run build:host` – build host utilities
+## Build Process
+The system relies on Docker for reproducible environments. Use `npm run build` to compile TypeScript and build the images.
+- `npm run build:host` – compile host utilities only
 - `npm run build:docker` – build controller and magi images
 
-## Key Files
-- `controller/src/server/server.ts` – Express + Socket.IO server
-- `controller/src/client/` – React UI
-- `magi/src/magi.ts` – Overseer bootstrap
+
+## Common Bash Commands
+```bash
+npm install            # install all workspaces
+npm run setup          # configure Chrome and shared volumes
+npm run dev            # start watchers and Docker services
+npm run build          # compile TypeScript bundles
+npm run build:docker   # build controller and magi images
+npm run build:host     # compile host utilities
+npm run browser:start  # launch Chrome for browser agent
+npm test               # run unit tests (Vitest)
+npm run test:e2e       # run E2E tests (Playwright)
+npm run test:tools     # execute example custom tools
+docker compose up -d   # spin up Postgres & pgvector
+```
+
+## Code Style Guidelines
+- TypeScript strict mode; run `npm run lint` (ESLint)
+- Prettier enforced via Husky pre-commit hooks
+- Commit hooks ensure formatting & tests pass
+
+## Testing Instructions
+- Unit tests with Vitest in `test/`
+- E2E tests with Playwright in `test/playwright/`
+- Example custom tools in `test/tools` (run via `npm run test:tools`)
+- Integration tests for individual agents with `test/magi-docker.sh`
+- See `docs/TESTING.md` for advanced scenarios
+
+## Repository Etiquette
+- Branch names: `feat/<ticket>`, `fix/<issue>`
+- Conventional Commits required
+- PRs must pass CI and require at least one approving review
+
+## Developer Environment Setup
+1. `cp .env.example .env` and fill in API keys
+2. `npm install`
+3. `npm run setup`    # builds host tools and prepares Chrome
+4. `docker compose up -d db`
+5. `npm run dev` – open http://localhost:3010
+
+## Project-Specific Warnings
+- Do NOT commit real API keys. `.env` is git-ignored.
+- Heavy tasks may consume OpenAI/Anthropic quotas quickly.
+- Agent containers require proper configuration in docker-compose.yml.
+
+## Key Utility Functions / APIs
+- `magi/src/utils/runner.js` – Core agent runner
+- `magi/src/utils/history.js` – Conversation history management
+- `magi/src/utils/memory.js` – Memory persistence
 - `magi/src/model_providers/` – LLM API wrappers
-- `host/src/browser/browser-control.ts` – Chrome automation
-- `docker-compose.yml` – service definitions
+- `controller/src/server/docker_interface.ts` – Container management
 
-See `project_map.json` for more paths and commands.
-
-## Testing
-Run unit and integration tests:
-```bash
-npm test
-```
-End-to-end tests with Playwright:
-```bash
-npm run test:e2e
-```
-Custom tool examples live in `test/tools`. Additional notes are in `docs/TESTING.md`.
-
-Linting is enforced via `npm run lint` and formatting via `npm run format`.
-
-## Creating New Agents
-Agents are registered in `magi/src/magi_agents/index.ts`. Create a file under `magi/src/magi_agents/` and extend the base class:
-```typescript
-import { Agent } from '../utils/agent.js';
-import { getCommonTools } from '../utils/index.js';
-
-export class MyNewAgent extends Agent {
-  constructor() {
-    super('my_new_agent');
-    this.systemMessage = 'You are a specialized agent that excels at...';
-    this.tools = getCommonTools(this.agent_id);
-  }
-}
-```
+## Special Features
+- MECH (Meta-cognition Ensemble Chain-of-thought Hierarchy) - Intelligent model selection
+- Custom Tools - Dynamic tool creation by agents at runtime
+- Browser control - CDP-based browser automation
+- Multi-provider support - Works with various LLM providers with automatic fallback
