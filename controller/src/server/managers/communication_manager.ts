@@ -617,12 +617,47 @@ export class CommunicationManager {
                     })
                 );
             } else {
-                this.sendCommand(
+                const commandIsStop =
+                    typeof event.command === 'string' &&
+                    event.command.trim().toLowerCase() === 'stop';
+
+                const sent = this.sendCommand(
                     event.targetProcessId as string,
                     event.command as string,
                     {},
                     processId
                 );
+
+                if (commandIsStop) {
+                    if (!sent) {
+                        console.warn(
+                            `Failed to deliver stop command to ${event.targetProcessId}, force stopping.`
+                        );
+                        await this.processManager.stopProcess(
+                            event.targetProcessId as string
+                        );
+                    } else {
+                        // Fallback: force stop if process doesn't end after 10s
+                        setTimeout(async () => {
+                            const proc = this.processManager.getProcess(
+                                event.targetProcessId as string
+                            );
+                            if (
+                                proc &&
+                                proc.status !== 'terminated' &&
+                                proc.status !== 'completed' &&
+                                proc.status !== 'failed'
+                            ) {
+                                console.warn(
+                                    `Stop command for ${event.targetProcessId} not processed, force stopping.`
+                                );
+                                await this.processManager.stopProcess(
+                                    event.targetProcessId as string
+                                );
+                            }
+                        }, 10000);
+                    }
+                }
             }
         } else if (event.type === 'process_start') {
             await this.processManager.createAgentProcess(
