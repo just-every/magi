@@ -171,4 +171,11 @@ Key Communication Paths
 4. Overseer <-> Operator (WebSockets)
 5. Operator <-> Agents (Same container via tool calls)
 6. Browser Agent <-> Browser (CDP)
-7. Overseer/Agents <-> External Services (HTTP/API)`;
+7. Overseer/Agents <-> External Services (HTTP/API)
+
+III. Project Workflow
+- Projects are created with `create_project(project_id, simple_description, detailed_description, project_type)`.
+- The controller copies starting code from `/templates/<project_type>` into a new git repository under `/external/host/<project_id>`. If the specific template does not exist, the `web-app` template is used.
+- Placeholder text in `README.md`, `CLAUDE.md`, `AGENTS.md`, and `project_map.json` is replaced with the provided descriptions.
+- Once the repository is ready a **ProjectOperatorAgent** analyzes the project, generates the codebase map and context files, and updates the database.
+`;

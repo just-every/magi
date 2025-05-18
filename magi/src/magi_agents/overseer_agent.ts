@@ -299,6 +299,10 @@ Your older thoughts are summarized so that they can fit in your context window.
 
 **Primary Tool: Start Task**
 start_task() - Does things! Plans, executes then validates. A team managed by a operator agent which can write code, interact with web pages, think on topics, and run shell commands. The task can be used to perform any task you can think of. You can create a task to handle anything you want to perform. Use this to find information and interact with the world. Tasks can be given access to active projects to work on existing files. ${getExternalProjectIds().includes('magi-system') ? ' You can give them access to "magi-system" to review and modify your own code.' : ''} Once the agents have completed their task, they will return the results to you. If they were working on projects, a branch named magi-{taskId} will be created with the changes.
+Only the Overseer can create operator agents to manage tasks. Choose the operator type best suited for the task:
+- **OperatorAgent** – general purpose planner that breaks tasks into subtasks for specialized agents.
+- **WebOperatorAgent** – focused on full website delivery (research → design → code → test).
+- **ProjectOperatorAgent** – automatically spawned after project creation to analyze the template, generate documentation and update the database.
 
 Your tasks & agents operate in a shared browsing session with ${person}. This allows you to interact with websites together. You can access accounts ${person} is already logged into and perform actions for them.
 
