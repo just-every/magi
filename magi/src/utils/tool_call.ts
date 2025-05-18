@@ -835,6 +835,12 @@ export function createToolFunction(
         injectAgentId = true;
     }
 
+    // Similarly check for abort_signal if paramMap omitted it but the function
+    // signature includes it so we can inject the abort signal automatically
+    if (!injectAbortSignal && /\(.*abort_signal\b/.test(funcStr)) {
+        injectAbortSignal = true;
+    }
+
     // Create and return tool definition
     return {
         function: func,
