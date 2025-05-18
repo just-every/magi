@@ -57,7 +57,8 @@
       "ui": "npm run test:ui",
       "e2e": "npm run test:e2e",
       "e2e:ui": "npm run test:e2e:ui",
-      "tools": "npm run test:tools"
+      "tools": "npm run test:tools",
+      "js-tools": "npm run test:js-tools"
     },
     "lint": "npm run lint",
     "lint:fix": "npm run lint:fix",
@@ -65,7 +66,9 @@
       "start": "npm run browser:start",
       "kill": "npm run browser:kill",
       "status": "npm run browser:status",
-      "toggle": "npm run browser:toggle"
+      "toggle": "npm run browser:toggle",
+      "clone-profile": "npm run browser:clone-profile",
+      "test-connection": "npm run browser:test-connection"
     }
   },
   "important_directories": {
@@ -134,7 +137,8 @@
       "/POSTGRES.md",
       "/docs/CUSTOM_TOOLS.md",
       "/docs/MECH.md",
-      "/docs/TESTING.md"
+      "/docs/TESTING.md",
+      "/docs/TODO.md"
     ]
   },
   "project_structure": {
@@ -147,5 +151,32 @@
     "templates": "Project templates for new projects",
     "scripts": "Utility scripts for day-to-day operations",
     "docs": "Documentation for various system components"
+  },
+  "agents": {
+    "overseer": "Central coordinator that orchestrates the agent workflow",
+    "operator": "Breaks down tasks and assigns them to specialized agents",
+    "browser": "Interacts with websites using Chrome automation via CDP",
+    "code": "Writes, modifies, and analyzes code across various languages",
+    "search": "Performs web searches to gather information",
+    "shell": "Executes system commands and scripts",
+    "reasoning": "Specializes in complex problem-solving and analysis",
+    "image": "Processes and generates images",
+    "summary": "Creates concise summaries of longer content",
+    "verifier": "Validates outputs and detects potential errors"
+  },
+  "model_providers": [
+    "Claude (Anthropic)",
+    "GPT (OpenAI)",
+    "Gemini (Google)",
+    "Deepseek",
+    "Grok",
+    "OpenRouter"
+  ],
+  "features": {
+    "MECH": "Meta-cognition Ensemble Chain-of-thought Hierarchy for intelligent model selection",
+    "Custom Tools": "Dynamic tool creation and modification by agents at runtime",
+    "Browser Control": "CDP-based browser automation",
+    "Multi-provider": "Support for various LLM providers with automatic fallback",
+    "Project Templates": "Ready-to-use templates for different project types"
   }
 }
