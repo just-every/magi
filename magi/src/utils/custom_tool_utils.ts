@@ -1451,8 +1451,8 @@ This tool is now available in your toolset.`;
             is_latest: true,
         };
 
-        const toolId = await addCustomTool(customTool);
-        console.log(`Added new custom tool with ID: ${toolId}`);
+        const toolName = await addCustomTool(customTool);
+        console.log(`Added new custom tool: ${toolName}`);
 
         // Create a tool function for immediate use
         toolFunction = convertCustomToolToToolFunction(customTool);
@@ -1574,8 +1574,8 @@ export async function modify_tool(
                 is_latest: true,
             };
 
-            const toolId = await addCustomTool(customTool);
-            console.log(`Added modified custom tool with ID: ${toolId}`);
+            const toolName = await addCustomTool(customTool);
+            console.log(`Added modified custom tool: ${toolName}`);
 
             // Convert the tool to a ToolFunction
             const toolFunction = convertCustomToolToToolFunction(customTool);
@@ -1638,18 +1638,37 @@ function convertCustomToolToToolFunction(tool: CustomTool): ToolFunction {
     try {
         // Create a function that will execute the implementation in a VM with agent context
         functionImpl = async (...args: any[]): Promise<string> => {
+            // Extract agent_id from the first argument if present
+            const agent_id = args.length > 0 ? args[0] : undefined;
+            let result: string;
             try {
-                // Extract agent_id from the first argument to pass to context
-                const agent_id = args.length > 0 ? args[0] : undefined;
-                return await executeToolInSandbox({
+                result = await executeToolInSandbox({
                     codeString: tool.implementation,
                     functionName: tool.name,
                     agentId: agent_id || '',
                     args: args,
                 });
             } catch (error) {
-                return `Error executing custom tool: ${error instanceof Error ? error.message : String(error)}`;
+                result = `Error executing custom tool: ${error instanceof Error ? error.message : String(error)}`;
             }
+
+            // Auto-update the tool if execution failed
+            if (typeof result === 'string' && result.trim().toLowerCase().startsWith('error')) {
+                console.log(`[custom_tool_utils] Auto fixing tool ${tool.name} due to runtime failure`);
+                try {
+                    await modify_tool(agent_id || '', tool.name, `Auto fix due to error: ${result.substring(0, 200)}`);
+                    const updated = await getCustomToolByName(tool.name);
+                    if (updated && updated.version && updated.version !== tool.version) {
+                        const updatedFunc = convertCustomToolToToolFunction(updated);
+                        addOrUpdateToolInAgentCache(agent_id || '', updatedFunc);
+                        return await updatedFunc.definition.function(...args);
+                    }
+                } catch (updateErr) {
+                    console.error('[custom_tool_utils] Auto update failed:', updateErr);
+                }
+            }
+
+            return result;
         };
     } catch (error) {
         console.error(
