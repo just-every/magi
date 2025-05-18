@@ -174,12 +174,7 @@ Key Communication Paths
 7. Overseer/Agents <-> External Services (HTTP/API)
 
 III. Project Workflow
-- Projects are created with `create_project(project_id, simple_description, detailed_description, project_type)`.
-- The controller copies starting code from `/templates/<project_type>` into a new git repository at `/external/host/<project_id>`. If a template for that type does not exist, the `web-app` template is used.
-- Placeholder text in `README.md`, `CLAUDE.md`, `AGENTS.md`, and `project_map.json` is filled with the provided descriptions.
-- After the repository is initialized a **ProjectOperatorAgent** analyzes the project, generates the codebase map and context files, and updates the database.
-
-Operator Types (Overseer Reference)
-- **OperatorAgent** – breaks your high level tasks into subtasks for specialized agents.
-- **WebOperatorAgent** – coordinates research, design, code and tests for full websites.
-- **ProjectOperatorAgent** – runs once after project creation to bootstrap documentation and metadata.`;
+- Projects are created with \`create_project(project_id, simple_description, detailed_description, project_type)\`.
+- The project_type parameter initiates the project with a specific framework (e.g., React, Next.js, etc.) which matches the project type.
+- This provides a starting point for any project, so coding agents can start working on the project immediately.
+`;

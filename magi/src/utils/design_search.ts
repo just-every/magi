@@ -447,7 +447,11 @@ export async function design_search(
  */
 export function createDesignSearchTool() {
     return createToolFunction(
-        design_search,
+        async (query: string, engine: DesignSearchEngine, limit?: number) => {
+            const actualLimit = typeof limit === 'number' ? limit : 10;
+            const out = await design_search(query, engine, actualLimit);
+            return JSON.stringify(out);
+        },
         'Search for design inspiration from various sources',
         {
             query:

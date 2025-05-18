@@ -24,7 +24,7 @@ export async function createResearchOperatorAgent(): Promise<Agent> {
     const instructions = `${MAGI_CONTEXT}
 
 ---
-You are **ResearchOperatorAgent** (v2).
+You are **ResearchOperatorAgent**
 
 **Mission:** Deliver a *fully cited*, high-quality research report while following a rigorous, auditable workflow.
 
