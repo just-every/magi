@@ -9,10 +9,8 @@ import {
     AgentDefinition,
     ModelSettings,
     AgentExportDefinition,
-    ToolEvent,
     ToolFunction,
     WorkerFunction,
-    StreamingEvent,
     ResponseInput,
     AgentInterface,
     ToolCall,
@@ -26,7 +24,7 @@ import { v4 as uuid } from 'uuid';
 // Import removed to fix lint error
 import { Runner } from './runner.js';
 import { ModelClassID } from '../model_providers/model_data.js';
-import { truncateLargeValues } from './file_utils.js';
+
 import { getAgentSpecificTools } from './custom_tool_utils.js';
 
 /**
@@ -88,6 +86,8 @@ export class Agent implements AgentInterface {
     intelligence?: 'low' | 'standard' | 'high'; // Used to select the model
     maxToolCalls: number;
     maxToolCallRoundsPerTurn?: number; // Maximum number of tool call rounds per turn
+    verifier?: Agent;
+    maxVerificationAttempts: number;
     args: any;
     jsonSchema?: object; // JSON schema for structured output
     historyThread?: ResponseInput | undefined;
@@ -133,9 +133,15 @@ export class Agent implements AgentInterface {
         this.modelSettings = definition.modelSettings || {};
         this.maxToolCalls = definition.maxToolCalls || 200; // Default to 10 if not specified
         this.maxToolCallRoundsPerTurn = definition.maxToolCallRoundsPerTurn; // No default, undefined means no limit
+        this.maxVerificationAttempts = definition.maxVerificationAttempts ?? 2;
         this.processParams = definition.processParams;
         this.historyThread = definition.historyThread;
         this.cwd = definition.cwd; // Working directory for model providers that need a real shell
+
+        if (definition.verifier) {
+            this.verifier = new Agent({ ...definition.verifier, verifier: undefined });
+            this.verifier.parent_id = this.agent_id;
+        }
 
         this.onToolCall = definition.onToolCall;
         this.onToolResult = definition.onToolResult;
@@ -487,109 +493,13 @@ async function runAgentTool(
     }
 
     const messages: ResponseInput = [];
-    let toolResultsToInclude = '';
-    const toolCalls: any[] = [];
+    const handlers = {
+        onToolCall: agent.onToolCall,
+        onToolResult: agent.onToolResult,
+    };
 
     try {
-        console.log(
-            `runAgentTool using Runner.runStreamedWithTools for ${agent.name}`,
-            prompt
-        );
-
-        // Set up handlers for the unified streaming function
-        const handlers = {
-            onToolCall: (toolCall: ToolCall) => {
-                console.log(`${agent.name} intercepted tool call:`, toolCall);
-                toolCalls.push(toolCall);
-            },
-            onToolResult: (toolCall: ToolCall, result: string) => {
-                try {
-                    console.log(
-                        `${agent.name} intercepted tool result:`,
-                        truncateLargeValues(result)
-                    );
-                    if (result) {
-                        const resultString =
-                            typeof result === 'string'
-                                ? result
-                                : JSON.stringify(result, null, 2);
-
-                        // Store results so we can include them in the response if needed
-                        toolResultsToInclude += resultString + '\n';
-                        console.log(
-                            `${agent.name} captured tool result: ${resultString.substring(0, 100)}...`
-                        );
-                    }
-                } catch (err) {
-                    console.error(
-                        `Error processing intercepted tool result in ${agent.name}:`,
-                        err
-                    );
-                }
-            },
-            onEvent: (event: StreamingEvent) => {
-                // Capture tool results from tool_done events
-                if (event.type === 'tool_done') {
-                    try {
-                        const toolEvent = event as ToolEvent;
-                        const results = toolEvent.results;
-                        if (results) {
-                            const resultString =
-                                typeof results === 'string'
-                                    ? results
-                                    : JSON.stringify(results, null, 2);
-
-                            // Only add to results if it's not already included
-                            if (
-                                !toolResultsToInclude.includes(
-                                    resultString.substring(
-                                        0,
-                                        Math.min(50, resultString.length)
-                                    )
-                                )
-                            ) {
-                                toolResultsToInclude += resultString + '\n';
-                                console.log(
-                                    `${agent.name} captured tool result from stream: ${resultString.substring(0, 100)}...`
-                                );
-                            }
-                        }
-                    } catch (err) {
-                        console.error(
-                            `Error processing tool result in ${agent.name}:`,
-                            err
-                        );
-                    }
-                }
-            },
-        };
-
-        // Run the agent with the unified function
-        let response = await Runner.runStreamedWithTools(
-            agent,
-            prompt,
-            messages,
-            handlers
-        );
-
-        // If we have a response but it doesn't seem to include tool results, append them
-        if (
-            response &&
-            toolResultsToInclude &&
-            !response.includes(
-                toolResultsToInclude.substring(
-                    0,
-                    Math.min(50, toolResultsToInclude.length)
-                )
-            )
-        ) {
-            // Only append if the tool results aren't already reflected in the response
-            console.log(`${agent.name} appending tool results to response`);
-            response += '\n\nTool Results:\n' + toolResultsToInclude;
-        }
-
-        console.log(`${agent.name} final response: ${response}`);
-        return response || `No response from ${agent.name.toLowerCase()}`;
+        return await Runner.runStreamedWithTools(agent, prompt, messages, handlers);
     } catch (error) {
         console.error(`Error in ${agent.name}: ${error}`);
         return `Error in ${agent.name}: ${error}`;

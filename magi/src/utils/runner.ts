@@ -21,6 +21,7 @@ import type {
     StreamEventType,
     ErrorEvent,
     ResponseOutputMessage,
+    VerifierResult,
 } from '../types/shared-types.js';
 import { Agent } from './agent.js';
 import { getModelProvider } from '../model_providers/model_provider.js';
@@ -454,6 +455,38 @@ export class Runner {
     } // End of runStreamed
 
     /**
+     * Run a verifier agent against `output` and return its structured result.
+     * The verifier must return JSON or a plain string that parses into VerifierResult.
+     */
+    static async verifyRun(
+        verifier: Agent,
+        output: string,
+        history: ResponseInput,
+        handlers: ToolCallHandler,
+        allowed: StreamEventType[] | null,
+    ): Promise<VerifierResult> {
+        const verifyPrompt = `\nYou are the verifier for agent "${verifier.parent_id}".\nReturn JSON: {"status":"pass"|"fail","reason":"…optional…"}\nUser output:\n<<<\n${output}\n>>>\n`;
+
+        const raw = await Runner.runStreamedWithTools(
+            verifier,
+            verifyPrompt,
+            history,
+            handlers,
+            allowed,
+            0,
+            undefined,
+            true
+        );
+
+        try {
+            return typeof raw === 'string' ? JSON.parse(raw.trim()) : JSON.parse(String(raw));
+        } catch {
+            const txt = raw.toString().trim().toLowerCase();
+            return txt.startsWith('pass') ? { status: 'pass' } : { status: 'fail', reason: raw as string };
+        }
+    }
+
+    /**
      * Unified function to run an agent with streaming and handle all events including tool calls
      */
     static async runStreamedWithTools(
@@ -463,7 +496,9 @@ export class Runner {
         handlers: ToolCallHandler = {},
         allowedEvents: StreamEventType[] | null = null,
         toolCallCount = 0, // Track the number of tool call iterations across recursive calls
-        communicationManager?: any // Add optional communicationManager parameter
+        communicationManager?: any, // Add optional communicationManager parameter
+        skipVerifier = false,
+        verificationAttempt = 0
     ): Promise<string> {
         let fullResponse = '';
         let collectedToolCalls: ToolCall[] = [];
@@ -902,6 +937,47 @@ export class Runner {
             }
 
             agent.model = undefined; // Allow a new model to be selected for the next run
+
+            // ── post-run verification ──────────────────────────────────────────────
+            if (!skipVerifier && agent.verifier) {
+                const vResult = await Runner.verifyRun(
+                    agent.verifier,
+                    fullResponse,
+                    conversationHistory,
+                    handlers,
+                    allowedEvents
+                );
+
+                if (
+                    vResult.status === 'fail' &&
+                    verificationAttempt < agent.maxVerificationAttempts
+                ) {
+                    console.warn(
+                        `[Runner] verifier failed: ${vResult.reason ?? '(no reason)'}`
+                    );
+                    const retryHistory: ResponseInput = [
+                        ...conversationHistory,
+                        { type: 'message', role: 'assistant', content: fullResponse },
+                        {
+                            type: 'message',
+                            role: 'developer',
+                            content: `Verifier feedback:\n${vResult.reason ?? '(none)'}`,
+                        },
+                    ];
+
+                    return await Runner.runStreamedWithTools(
+                        agent,
+                        '',
+                        retryHistory,
+                        handlers,
+                        allowedEvents,
+                        toolCallCount,
+                        communicationManager,
+                        false,
+                        verificationAttempt + 1
+                    );
+                }
+            }
 
             return fullResponse;
         } catch (error) {

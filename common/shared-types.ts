@@ -41,6 +41,7 @@ export interface AgentInterface {
     modelClass?: string;
     modelSettings?: ModelSettings;
     maxToolCalls?: number;
+    verifier?: AgentInterface; // Optional verifier agent
     onToolCall?: (toolCall: ToolCall) => void;
     onToolResult?: (toolCall: ToolCall, result: string) => void;
     tryDirectExecution?: (messages: ResponseInput) => Promise<ResponseInput | null>; // Added from AgentDefinition
@@ -139,6 +140,11 @@ export type ToolParameterMap = {
         | ToolParameter;
 };
 
+export interface VerifierResult {
+    status: 'pass' | 'fail';
+    reason?: string;
+}
+
 /**
  * Definition of an agent with model and tool settings
  */
@@ -154,6 +160,8 @@ export interface AgentDefinition {
     modelSettings?: ModelSettings;
     maxToolCalls?: number;
     maxToolCallRoundsPerTurn?: number; // Maximum number of tool call rounds per turn
+    verifier?: AgentDefinition;
+    maxVerificationAttempts?: number;
     jsonSchema?: object; // JSON schema definition for structured output
     historyThread?: ResponseInput | undefined;
     cwd?: string; // Working directory for model providers that need a real shell context

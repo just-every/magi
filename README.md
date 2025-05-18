@@ -142,6 +142,7 @@ docker-compose.yml
 - **Tool Integration**: Agents can use tools like web search, code execution, and browser automation
 - **Browser Integration**: Chrome extension allows direct interaction with the web browser
 - **Cost Tracking**: Monitors and reports on API usage costs
+- **Verifier Agents**: Optional verifier agents can call any tools; failures trigger automatic retries (default 2)
 
 ## Command Line Utilities
 
