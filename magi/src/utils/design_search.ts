@@ -21,6 +21,9 @@ import { createToolFunction } from './tool_call.js';
 import { v4 as uuidv4 } from 'uuid';
 import fetch from 'node-fetch';
 import { JSDOM } from 'jsdom';
+import { createCanvas, loadImage } from '@napi-rs/canvas';
+import { quick_llm_call } from './llm_call_utils.js';
+import { ResponseInput } from '../types/shared-types.js';
 
 const USER_AGENT =
     'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; magi-user/1.0; +https://withmagi.com)';
@@ -2014,6 +2017,185 @@ export function getDesignSearchTools() {
                     type: 'number',
                     description:
                         'Maximum number of results to return (default: 9)',
+                    optional: true,
+                },
+            }
+        ),
+    ];
+}
+
+/**
+ * Load an image from a URL or local path as a Canvas Image
+ */
+async function loadImageSafe(src: string) {
+    try {
+        if (src.startsWith('data:image')) {
+            return await loadImage(src);
+        }
+        if (fs.existsSync(src)) {
+            return await loadImage(src);
+        }
+        const res = await fetch(src);
+        const buf = Buffer.from(await res.arrayBuffer());
+        return await loadImage(buf);
+    } catch (e) {
+        console.error('Failed to load image', src, e);
+        throw e;
+    }
+}
+
+/**
+ * Create a numbered grid image from a list of screenshot URLs
+ * Returns a base64 PNG data URL
+ */
+async function createNumberedGrid(images: string[]): Promise<string> {
+    const CELL = 256;
+    const cols = 3;
+    const rows = Math.ceil(images.length / cols);
+    const canvas = createCanvas(cols * CELL, rows * CELL);
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    for (let i = 0; i < images.length; i++) {
+        const row = Math.floor(i / cols);
+        const col = i % cols;
+        try {
+            const img = await loadImageSafe(images[i]);
+            ctx.drawImage(img, col * CELL, row * CELL, CELL, CELL);
+        } catch {
+            ctx.fillStyle = '#ccc';
+            ctx.fillRect(col * CELL, row * CELL, CELL, CELL);
+        }
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(col * CELL, row * CELL, 32, 24);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillText(String(i + 1), col * CELL + 8, row * CELL + 18);
+    }
+
+    const out = canvas.toBuffer('image/png');
+    return `data:image/png;base64,${out.toString('base64')}`;
+}
+
+/**
+ * Select the best 1-2 screenshots from a grid using a vision model
+ */
+async function selectBestFromGrid(
+    gridDataUrl: string,
+    count: number,
+    query: string
+): Promise<number[]> {
+    const messages: ResponseInput = [
+        {
+            type: 'message',
+            role: 'user',
+            content: [
+                {
+                    type: 'input_text',
+                    text: `Choose the best 1-${count} images numbered 1-${count} that match the design query "${query}". Respond with the numbers only.`,
+                } as const,
+                {
+                    type: 'input_image',
+                    image_url: gridDataUrl,
+                    detail: 'low',
+                } as const,
+            ],
+        },
+    ];
+
+    const response = await quick_llm_call(messages, 'vision_mini', {
+        name: 'DesignSelector',
+        description: 'Select best design screenshots',
+        instructions:
+            'Pick the most relevant numbered screenshots and reply with their numbers only.',
+    });
+
+    const nums = (response.match(/\d+/g) || [])
+        .map(n => parseInt(n, 10))
+        .filter(n => n >= 1 && n <= count)
+        .slice(0, 2);
+    return Array.from(new Set(nums));
+}
+
+/**
+ * High level design search with iterative vision-based ranking
+ */
+export async function smart_design(
+    query: string,
+    engine?: DesignSearchEngine,
+    limit: number = 9
+): Promise<string> {
+    const engines =
+        engine !== undefined
+            ? [engine]
+            : ['dribbble', 'behance', 'envato', 'pinterest', 'awwwards'];
+    const screenshots: string[] = [];
+
+    for (const eng of engines) {
+        try {
+            const res = await design_search(
+                eng as DesignSearchEngine,
+                query,
+                limit
+            );
+            const parsed: DesignSearchResult[] = JSON.parse(res);
+            for (const item of parsed) {
+                if (item.screenshotURL) screenshots.push(item.screenshotURL);
+            }
+        } catch (e) {
+            console.error('smart_design search failed for', eng, e);
+        }
+    }
+
+    if (screenshots.length === 0) return '[]';
+
+    let candidates = screenshots;
+    while (candidates.length > 4) {
+        const groups: string[][] = [];
+        for (let i = 0; i < candidates.length; i += 9) {
+            groups.push(candidates.slice(i, i + 9));
+        }
+        const winners: string[] = [];
+        for (const group of groups) {
+            const grid = await createNumberedGrid(group);
+            const picks = await selectBestFromGrid(grid, group.length, query);
+            for (const idx of picks) {
+                winners.push(group[idx - 1]);
+            }
+        }
+        if (winners.length === 0) break;
+        candidates = winners;
+    }
+
+    return JSON.stringify(candidates.slice(0, 4), null, 2);
+}
+
+export function getSmartDesignTools() {
+    return [
+        createToolFunction(
+            smart_design,
+            'Run a multi-engine design search and automatically rank screenshots using a vision model.',
+            {
+                query: { type: 'string', description: 'Design search query' },
+                engine: {
+                    type: 'string',
+                    enum: [
+                        'dribbble',
+                        'behance',
+                        'envato',
+                        'pinterest',
+                        'awwwards',
+                        'siteinspire',
+                        'web_search',
+                    ],
+                    optional: true,
+                    description: 'Optional specific engine to use',
+                },
+                limit: {
+                    type: 'number',
+                    description: 'Results per engine (default 9)',
                     optional: true,
                 },
             }

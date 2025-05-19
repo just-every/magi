@@ -141,6 +141,7 @@ docker-compose.yml
 - **Streaming Responses**: Real-time streaming of LLM outputs and tool usage
 - **Tool Integration**: Agents can use tools like web search, code execution, and browser automation
 - **Browser Integration**: Chrome extension allows direct interaction with the web browser
+- **Smart Design Search**: Aggregates screenshots from multiple design sources and ranks them automatically
 - **Cost Tracking**: Monitors and reports on API usage costs
 - **Verifier Agents**: Optional verifier agents can call any tools; failures trigger automatic retries (default 2)
 
