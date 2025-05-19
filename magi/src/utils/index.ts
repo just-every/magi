@@ -6,7 +6,7 @@ import { getCustomTools } from './custom_tool_utils.js';
 import { getMemoryTools } from './memory_utils.js';
 import { getSearchTools } from './search_utils.js';
 import { getImageGenerationTools } from './image_generation.js';
-import { getDesignSearchTools } from './design_search.js';
+import { getDesignSearchTools, getSmartDesignTools } from './design_search.js';
 import { getBrowserTools } from './browser_utils.js';
 
 /**
@@ -37,6 +37,7 @@ export function getToolsForCustomFunctions(): ToolFunction[] {
         ...getSearchTools(),
         ...getImageGenerationTools(),
         ...getDesignSearchTools(),
+        ...getSmartDesignTools(),
         ...getBrowserTools(),
     ];
 }

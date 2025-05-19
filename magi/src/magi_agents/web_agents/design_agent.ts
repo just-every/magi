@@ -11,7 +11,10 @@
 import { Agent } from '../../utils/agent.js';
 import { getCommonTools } from '../../utils/index.js';
 import { getImageGenerationTools } from '../../utils/image_generation.js';
-import { getDesignSearchTools } from '../../utils/design_search.js';
+import {
+    getDesignSearchTools,
+    getSmartDesignTools,
+} from '../../utils/design_search.js';
 import { MAGI_CONTEXT } from '../constants.js';
 import { createReasoningAgent } from '../common_agents/reasoning_agent.js';
 
@@ -35,6 +38,7 @@ Your primary responsibilities are:
    - Collect reference designs from Dribbble, Behance, Pinterest and other sources
    - Analyze successful websites in the target industry/niche
    - Extract common patterns, color schemes, and layout strategies
+   - Use the smart_design tool to gather screenshots from multiple sources and automatically narrow down the best examples
 
 2. VISUAL DESIGN PLANNING
    - Define a consistent color palette based on client needs and industry standards
@@ -80,6 +84,7 @@ The frontend engineer will use your designs as reference for implementation, so 
 `,
         tools: [
             ...getDesignSearchTools(),
+            ...getSmartDesignTools(),
             ...getImageGenerationTools(),
             ...getCommonTools(),
         ],
