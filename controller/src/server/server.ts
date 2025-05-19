@@ -12,6 +12,7 @@ import express from 'express';
 import { ServerManager } from './managers/server_manager';
 import { initColorManager } from './managers/color_manager';
 import { ensureMigrations } from './utils/db_migrations';
+import { syncLocalCustomTools } from './utils/custom_tool_sync';
 import prEventsRoutes from './routes/pr_events';
 
 /**
@@ -19,12 +20,14 @@ import prEventsRoutes from './routes/pr_events';
  */
 async function main(): Promise<void> {
     // Add CPU usage debug logging
-    const cpuMonitorInterval = setInterval(() => {
+    setInterval(() => {
         const usage = process.cpuUsage();
         const totalUsage = usage.user + usage.system;
-        console.log(`[DEBUG] CPU usage - user: ${usage.user}, system: ${usage.system}, total: ${totalUsage}`);
+        console.log(
+            `[DEBUG] CPU usage - user: ${usage.user}, system: ${usage.system}, total: ${totalUsage}`
+        );
     }, 10000);
-    
+
     // Check OpenAI API key
     if (!process.env.OPENAI_API_KEY) {
         console.warn('\n⚠ OPENAI_API_KEY not set. Voice disabled.\n');
@@ -32,6 +35,9 @@ async function main(): Promise<void> {
 
     // Run database migrations before starting the server
     await ensureMigrations();
+
+    // Sync local custom tools
+    await syncLocalCustomTools();
 
     // Initialize color manager
     initColorManager();

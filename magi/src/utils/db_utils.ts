@@ -7,6 +7,11 @@
 
 import { getDB } from './db.js';
 import { Project } from '../types/shared-types.js';
+import {
+    saveToolFiles,
+    deleteToolFiles,
+    readToolImplementation,
+} from './tool_file_utils.js';
 
 // Define types for our database records
 export interface MechTask {
@@ -39,7 +44,7 @@ export interface CustomTool {
     name: string;
     description: string;
     parameters_json: string;
-    implementation: string;
+    implementation?: string;
     embedding?: number[];
     version?: number;
     source_task_id?: string;
@@ -272,18 +277,19 @@ export async function addCustomTool(tool: CustomTool): Promise<string> {
     const db = await getDB();
 
     try {
-        const embeddingStr = tool.embedding ? toPgVectorLiteral(tool.embedding) : null;
+        const embeddingStr = tool.embedding
+            ? toPgVectorLiteral(tool.embedding)
+            : null;
 
         const result = await db.query(
             `INSERT INTO custom_tools
-             (name, description, parameters_json, implementation, embedding,
+             (name, description, parameters_json, embedding,
               version, source_task_id, is_latest)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+             VALUES ($1, $2, $3, $4, $5, $6, true)
              ON CONFLICT (name)
              DO UPDATE SET
                 description = EXCLUDED.description,
                 parameters_json = EXCLUDED.parameters_json,
-                implementation = EXCLUDED.implementation,
                 embedding = EXCLUDED.embedding,
                 version = EXCLUDED.version,
                 source_task_id = EXCLUDED.source_task_id,
@@ -293,14 +299,21 @@ export async function addCustomTool(tool: CustomTool): Promise<string> {
                 tool.name,
                 tool.description,
                 tool.parameters_json,
-                tool.implementation,
                 embeddingStr,
                 tool.version || 1,
                 tool.source_task_id || null,
             ]
         );
 
-        return result.rows[0].name as string;
+        const name = result.rows[0].name as string;
+
+        try {
+            await saveToolFiles(tool);
+        } catch (err) {
+            console.error('Failed to save custom tool files:', err);
+        }
+
+        return name;
     } finally {
         db.release();
     }
@@ -390,7 +403,7 @@ export async function searchCustomToolsByEmbedding(
 
     try {
         const result = await db.query(
-            `SELECT name, description, parameters_json, implementation,
+            `SELECT name, description, parameters_json,
                     embedding, version, source_task_id, is_latest, created_at,
                     1 - (embedding <=> $1) AS similarity_score
              FROM custom_tools
@@ -401,17 +414,23 @@ export async function searchCustomToolsByEmbedding(
             [embeddingStr, threshold, limit]
         );
 
-        return result.rows.map(row => ({
-            name: row.name,
-            description: row.description,
-            parameters_json: row.parameters_json,
-            implementation: row.implementation,
-            embedding: row.embedding,
-            version: row.version,
-            source_task_id: row.source_task_id,
-            is_latest: row.is_latest,
-            created_at: row.created_at,
-        }));
+        const tools: CustomTool[] = [];
+        for (const row of result.rows) {
+            const implementation = await readToolImplementation(row.name);
+            tools.push({
+                name: row.name,
+                description: row.description,
+                parameters_json: row.parameters_json,
+                implementation: implementation || undefined,
+                embedding: row.embedding,
+                version: row.version,
+                source_task_id: row.source_task_id,
+                is_latest: row.is_latest,
+                created_at: row.created_at,
+            });
+        }
+
+        return tools;
     } finally {
         db.release();
     }
@@ -429,7 +448,7 @@ export async function getCustomToolByName(
 
     try {
         const result = await db.query(
-            `SELECT name, description, parameters_json, implementation,
+            `SELECT name, description, parameters_json,
                     embedding, version, source_task_id, is_latest, created_at
              FROM custom_tools
              WHERE name = $1 AND is_latest = true`,
@@ -440,7 +459,12 @@ export async function getCustomToolByName(
             return null;
         }
 
-        return result.rows[0] as CustomTool;
+        const row = result.rows[0];
+        const implementation = await readToolImplementation(row.name);
+        return {
+            ...row,
+            implementation: implementation || undefined,
+        } as CustomTool;
     } finally {
         db.release();
     }
@@ -513,15 +537,42 @@ export async function getAllCustomTools(): Promise<CustomTool[]> {
 
     try {
         const result = await db.query(
-            `SELECT name, description, parameters_json, implementation,
+            `SELECT name, description, parameters_json,
                     embedding, version, source_task_id, is_latest, created_at
              FROM custom_tools
              WHERE is_latest = true
              ORDER BY name`
         );
 
-        return result.rows as CustomTool[];
+        const tools: CustomTool[] = [];
+        for (const row of result.rows) {
+            const implementation = await readToolImplementation(row.name);
+            tools.push({
+                ...row,
+                implementation: implementation || undefined,
+            } as CustomTool);
+        }
+
+        return tools;
     } finally {
         db.release();
+    }
+}
+
+/**
+ * Delete a custom tool and associated files
+ */
+export async function deleteCustomTool(name: string): Promise<void> {
+    const db = await getDB();
+    try {
+        await db.query('DELETE FROM custom_tools WHERE name = $1', [name]);
+    } finally {
+        db.release();
+    }
+
+    try {
+        await deleteToolFiles(name);
+    } catch (err) {
+        console.error('Failed to delete custom tool files:', err);
     }
 }

@@ -66,6 +66,8 @@ yarn-error.log
 *.js.map
 *.jsx
 #*.css
+# Local custom tools (not versioned)
+.custom_tools/
 
 # Allow specific JS files
 !host/setup.js

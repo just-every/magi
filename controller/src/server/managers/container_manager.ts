@@ -184,7 +184,9 @@ async function prepareGitRepository(
         // 2. Create the working copy with the mirror as its origin
         console.log('Cloning working copy from mirror', mirrorPath, outputPath);
         await execPromise(`git clone "${mirrorPath}" "${outputPath}"`);
-        await execPromise(`git -C "${outputPath}" remote set-url origin "${mirrorPath}"`);
+        await execPromise(
+            `git -C "${outputPath}" remote set-url origin "${mirrorPath}"`
+        );
 
         // Host path will be deterministically derived from projectId
 
@@ -207,9 +209,7 @@ async function prepareGitRepository(
         }
 
         // Set git config for commits
-        await execPromise(
-            `git -C "${outputPath}" config user.name "magi"`
-        );
+        await execPromise(`git -C "${outputPath}" config user.name "magi"`);
         await execPromise(
             `git -C "${outputPath}" config user.email "magi+${processId}@withmagi.com"`
         );
@@ -260,8 +260,11 @@ async function copyTemplateToProject(
         console.log('Replacing placeholders in template files');
 
         // Get description values (provide defaults if not available)
-        const simpleDescription = project?.simple_description || 'A new project';
-        const detailedDescription = project?.detailed_description || 'A detailed description of the project.';
+        const simpleDescription =
+            project?.simple_description || 'A new project';
+        const detailedDescription =
+            project?.detailed_description ||
+            'A detailed description of the project.';
 
         // Find all .md files in the project root
         const files = fs.readdirSync(projectPath);
@@ -280,14 +283,23 @@ async function copyTemplateToProject(
                 let content = fs.readFileSync(filePath, 'utf8');
 
                 // Replace placeholders
-                content = content.replace(/\[simple_description\]/g, simpleDescription);
-                content = content.replace(/\[detailed_description\]/g, detailedDescription);
+                content = content.replace(
+                    /\[simple_description\]/g,
+                    simpleDescription
+                );
+                content = content.replace(
+                    /\[detailed_description\]/g,
+                    detailedDescription
+                );
 
                 // Write updated content back to file
                 fs.writeFileSync(filePath, content, 'utf8');
                 console.log(`Replaced placeholders in ${file}`);
             } catch (fileError) {
-                console.error(`Error replacing placeholders in ${file}:`, fileError);
+                console.error(
+                    `Error replacing placeholders in ${file}:`,
+                    fileError
+                );
                 // Continue with other files even if one fails
             }
         }
@@ -306,9 +318,7 @@ async function copyTemplateToProject(
  * @param processManager Optional ProcessManager instance to create an agent process
  * @returns The project name if successful, null if it fails
  */
-export async function createNewProject(
-    projectId: string,
-): Promise<void> {
+export async function createNewProject(projectId: string): Promise<void> {
     const project = await getProject(projectId);
     if (!project) {
         throw new Error(`Project ${projectId} not found in database`);
@@ -439,18 +449,12 @@ export async function runDockerContainer(
 
             for (const projectId of gitProjects) {
                 // If this run _is_ the core process, skip waiting and exclude itself
-                if (
-                    coreProcessId &&
-                    coreProcessId === processId
-                ) {
+                if (coreProcessId && coreProcessId === processId) {
                     readyProjects.push(projectId);
                     continue;
                 }
 
-                if (
-                    tool &&
-                    tool === 'project_update'
-                ) {
+                if (tool && tool === 'project_update') {
                     readyProjects.push(projectId);
                     continue;
                 }
@@ -526,6 +530,7 @@ export async function runDockerContainer(
       --env-file ${path.resolve(projectRoot, '../.env')} \
       -v claude_credentials:/claude_shared:rw \
       -v magi_output:/magi_output:rw \
+      -v /external/host/magi-system/.custom_tools:/custom_tools:rw \
       -v /etc/timezone:/etc/timezone:ro \
       -v /etc/localtime:/etc/localtime:ro \
       --network magi-system_magi-network \

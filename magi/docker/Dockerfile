@@ -57,7 +57,7 @@ RUN groupadd --gid ${TARGET_GID} ${GROUP_NAME} || true && \
 ########################################################################
 # ---- App directory setup --------------------------------------------
 ########################################################################
-RUN mkdir -p /app /magi_output /claude_shared && \
+RUN mkdir -p /app /magi_output /claude_shared /custom_tools && \
     chown -R ${USER_NAME}:${GROUP_NAME} /app
 
 WORKDIR /app

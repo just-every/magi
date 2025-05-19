@@ -31,6 +31,7 @@ services:
         volumes:
             - claude_credentials:/claude_shared:rw # For Claude auth
             - magi_output:/magi_output:rw # For output storage
+            - ./.custom_tools:/custom_tools:rw # Local custom tools
             - ../:/external/host:rw # Mount parent directory for repo management
             - ./.env:/.env:ro # Mount .env file in parent directory (where server expects it)
             - /var/run/docker.sock:/var/run/docker.sock # Allow Docker-in-Docker
@@ -60,6 +61,7 @@ services:
             - ./magi/src:/app/src:rw # Mount source code for development hot reloading
             - claude_credentials:/claude_shared:rw
             - magi_output:/magi_output:rw
+            - ./.custom_tools:/custom_tools:rw
         env_file:
             - ./.env
         environment:
