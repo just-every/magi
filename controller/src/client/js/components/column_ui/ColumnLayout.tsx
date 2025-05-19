@@ -5,7 +5,6 @@ import ChatColumn from './ChatColumn';
 import ProcessTreeColumn from './ProcessTreeColumn';
 import OutputColumn from './OutputColumn';
 import PullRequestFailures from '../PullRequestFailures';
-import { PRIMARY_RGB } from '../../utils/constants';
 
 interface ColumnLayoutProps {}
 

@@ -15,7 +15,7 @@ export class DeltaBuffer {
         private readonly step = 20,
         private readonly max = 400,
         initial = 20,
-        private readonly timeLimitMs = 10_000 // flush after 20 s of inactivity
+        private readonly timeLimitMs = 10_000 // flush after 20 s of inactivity
     ) {
         this.threshold = initial;
     }
