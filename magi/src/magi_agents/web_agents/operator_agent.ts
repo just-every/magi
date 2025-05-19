@@ -5,29 +5,37 @@
  * Specialized in the full-stack website delivery workflow
  */
 
+import { ResponseInput } from '../../types/shared-types.js';
 import { Agent } from '../../utils/agent.js';
-import { createBrowserAgent } from '../common_agents/browser_agent.js';
+import {
+    addBrowserStatus,
+    getBrowserTools,
+    setupAgentBrowserTools,
+} from '../../utils/browser_utils.js';
+import { dateFormat, readableTime } from '../../utils/date_tools.js';
+import { getCommonTools } from '../../utils/index.js';
+import {
+    getProcessProjectIds,
+    getProcessProjectPorts,
+} from '../../utils/project_utils.js';
+import { runningToolTracker } from '../../utils/running_tool_tracker.js';
+import { getRunningToolTools } from '../../utils/running_tools.js';
+import { getThoughtDelay } from '../../utils/thought_utils.js';
+import { createReasoningAgent } from '../common_agents/reasoning_agent.js';
 import { createSearchAgent } from '../common_agents/search_agent.js';
 import { createShellAgent } from '../common_agents/shell_agent.js';
-import { createReasoningAgent } from '../common_agents/reasoning_agent.js';
-import { createDesignAgent } from './design_agent.js';
-import { createFrontendAgent } from './frontend_agent.js';
-import { createBackendAgent } from './backend_agent.js';
-import { createTestAgent } from './test_agent.js';
 import {
-    CUSTOM_TOOLS_TEXT,
     AGENT_DESCRIPTIONS,
+    CUSTOM_TOOLS_TEXT,
     MAGI_CONTEXT,
     SIMPLE_SELF_SUFFICIENCY_TEXT,
     getDockerEnvText,
 } from '../constants.js';
-import { getCommonTools } from '../../utils/index.js';
-import { getRunningToolTools } from '../../utils/running_tools.js';
-import { ResponseInput } from '../../types/shared-types.js';
-import { dateFormat, readableTime } from '../../utils/date_tools.js';
-import { runningToolTracker } from '../../utils/running_tool_tracker.js';
-import { getThoughtDelay } from '../../utils/thought_utils.js';
 import { createOperatorAgent, startTime } from '../operator_agent.js';
+import { createBackendAgent } from './backend_agent.js';
+import { createDesignAgent } from './design_agent.js';
+import { createFrontendAgent } from './frontend_agent.js';
+import { createTestAgent } from './test_agent.js';
 
 /**
  * Create the website operator agent for specialized website construction
@@ -111,19 +119,22 @@ If you think you're complete, review your work and make sure you have not missed
 
 When you are done, please use the task_complete(result) tool to report that the task has been completed successfully. If you encounter an error that you can not recover from, use the task_fatal_error(error) tool to report that you were not able to complete the task. You should only use task_fatal_error() once you have made many attempts to resolve the issue and you are sure that you can not complete the task.`;
 
-    return createOperatorAgent({
+    const agent = createOperatorAgent({
         name: 'WebOperatorAgent',
         description:
             'Orchestrates research → design → code → test for websites',
         instructions,
-        tools: [...getRunningToolTools(), ...getCommonTools()],
+        tools: [
+            ...getBrowserTools(),
+            ...getRunningToolTools(),
+            ...getCommonTools(),
+        ],
         workers: [
             createSearchAgent,
             createDesignAgent,
             createFrontendAgent,
             createBackendAgent,
             createTestAgent,
-            createBrowserAgent,
             createShellAgent,
             createReasoningAgent,
         ],
@@ -144,8 +155,24 @@ Your Thought Delay: ${getThoughtDelay()} seconds
 Active Tools:
 ${runningToolTracker.listActive()}`,
             });
+            [agent, messages] = await addBrowserStatus(agent, messages);
 
             return [agent, messages];
         },
     });
+
+    const ports = getProcessProjectPorts();
+    const ids = getProcessProjectIds();
+    let startUrl: string | undefined;
+    if (ids.length > 0) {
+        const id = ids[0];
+        if (ports[id]) {
+            startUrl = `http://localhost:${ports[id]}`;
+        }
+    }
+    void setupAgentBrowserTools(agent, startUrl).catch(err =>
+        console.error('Failed to setup browser for WebOperatorAgent', err)
+    );
+
+    return agent;
 }

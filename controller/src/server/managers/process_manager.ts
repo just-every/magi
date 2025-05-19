@@ -28,6 +28,7 @@ import {
     stopDockerContainer,
     monitorContainerLogs,
     getRunningMagiContainers,
+    runProjectContainers,
 } from './container_manager';
 import { CommunicationManager } from './communication_manager';
 
@@ -381,6 +382,18 @@ export class ProcessManager {
                 );
             }
 
+            // If any projects have Dockerfiles, start them and capture ports
+            let projectPorts: Record<string, string> = {};
+            if (
+                agentProcess?.projectIds &&
+                agentProcess.projectIds.length > 0
+            ) {
+                projectPorts = await runProjectContainers(
+                    processId,
+                    agentProcess.projectIds
+                );
+            }
+
             // Get project root directory for volume mounting
 
             // Step 4: Start the Docker container
@@ -390,6 +403,7 @@ export class ProcessManager {
                 tool,
                 coreProcessId: this.coreProcessId,
                 projectIds: agentProcess?.projectIds,
+                projectPorts,
             });
 
             // Handle container start failure

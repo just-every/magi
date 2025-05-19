@@ -24,6 +24,7 @@ declare global {
             PROJECT_REPOSITORIES?: string;
             PROJECT_PARENT_PATH?: string;
             PROCESS_PROJECTS?: string;
+            PROJECT_PORTS?: string;
         }
     }
 }

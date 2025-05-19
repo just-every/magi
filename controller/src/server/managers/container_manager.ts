@@ -32,6 +32,7 @@ export interface DockerRunOptions {
     tool?: ProcessToolType;
     coreProcessId?: string;
     projectIds?: string[]; // Array of git repositories to clone and mount
+    projectPorts?: Record<string, string>; // Mapping of projectId -> port
 }
 
 /**
@@ -388,6 +389,57 @@ export async function createNewProject(projectId: string): Promise<void> {
 }
 
 /**
+ * Build and run Docker containers for projects if they contain a Dockerfile
+ * The container is started with `-P` so Docker chooses the host port.
+ * Returns a mapping of projectId to the exposed host port.
+ */
+export async function runProjectContainers(
+    processId: string,
+    projectIds: string[]
+): Promise<Record<string, string>> {
+    const portMap: Record<string, string> = {};
+
+    for (const projectId of projectIds) {
+        const projectPath = path.join(
+            '/magi_output',
+            processId,
+            'projects',
+            projectId
+        );
+        const dockerfilePath = path.join(projectPath, 'Dockerfile');
+
+        if (!fs.existsSync(dockerfilePath)) {
+            continue;
+        }
+
+        const imageTag = `${projectId}-${processId}`.toLowerCase();
+        await execPromise(`docker build -t ${imageTag} ${projectPath}`);
+
+        const containerName = validateContainerName(
+            `magi-${processId}-${projectId}`
+        );
+        const { stdout: runOut } = await execPromise(
+            `docker run -d --rm -P --name ${containerName} -v ${projectPath}:/app ${imageTag}`
+        );
+        const containerId = runOut.trim();
+
+        try {
+            const { stdout: portOut } = await execPromise(
+                `docker port ${containerId} 3000/tcp`
+            );
+            const match = portOut.trim().match(/:(\d+)/);
+            if (match) {
+                portMap[projectId] = match[1];
+            }
+        } catch (err) {
+            console.error('Failed to get port for project container', err);
+        }
+    }
+
+    return portMap;
+}
+
+/**
  * Run a MAGI System Docker container
  * @param options Run options
  * @returns Promise resolving to container ID if successful, empty string if failed
@@ -527,6 +579,13 @@ export async function runDockerContainer(
       -e CONTROLLER_PORT=${serverPort} \
       -e TZ=${hostTimezone} \
       -e PROCESS_PROJECTS=${gitProjects.join(',')} \
+      ${
+          options.projectPorts
+              ? `-e PROJECT_PORTS=${Object.entries(options.projectPorts)
+                    .map(([id, port]) => `${id}:${port}`)
+                    .join(',')}`
+              : ''
+      } \
       --env-file ${path.resolve(projectRoot, '../.env')} \
       -v claude_credentials:/claude_shared:rw \
       -v magi_output:/magi_output:rw \
@@ -592,6 +651,21 @@ export async function stopDockerContainer(processId: string): Promise<boolean> {
         // Stop the container using docker stop command with a timeout (default is 10 seconds)
         // Use a shorter timeout of 2 seconds to speed up the shutdown process
         await execPromise(`docker stop --time=2 ${containerName}`);
+
+        // Also stop any project containers for this process
+        try {
+            const { stdout } = await execPromise(
+                `docker ps -a --filter 'name=${containerName}-' -q`
+            );
+            if (stdout.trim()) {
+                const ids = stdout.trim().split('\n');
+                for (const id of ids) {
+                    await execPromise(`docker stop --time=2 ${id}`);
+                }
+            }
+        } catch (err) {
+            console.error('Error stopping project containers', err);
+        }
 
         return true;
     } catch (error) {
