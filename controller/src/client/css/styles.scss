@@ -1,14 +1,11 @@
-/* Override Bootstrap variables */
-$primary: #00a2ff;
-$bg-primary: #00a2ff;
-$code-color: #000000;
-
 /* Import Bootstrap and Bootstrap Icons */
-@import '~bootstrap/scss/bootstrap';
+@import 'bootstrap/dist/css/bootstrap.css';
 @import 'bootstrap-icons/font/bootstrap-icons.css';
 
 /* Default theme styling */
 :root {
+    --bs-primary: #00a2ff;
+    --bs-code-color: #000000;
     /* Core colors */
     --bg-primary: #fff;
     --bg-secondary: #f8f9fb;
