@@ -6,6 +6,7 @@
     "scripts": {
         "postinstall": "cd controller && npm install && cd ../magi && npm install",
         "build": "npm run build:host && npm run build:docker",
+        "build:ci": "npm run build:host && cd controller && npm run build && cd ../magi && npm run build",
         "build:docker": "docker compose build controller magi-base",
         "build:host": "npx tsc -p host",
         "dev": "npm run build:host && npm run browser:start && npm run build:docker && docker compose up",

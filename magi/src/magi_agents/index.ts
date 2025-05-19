@@ -10,6 +10,7 @@ import { createCodeAgent } from './common_agents/code_agent.js';
 import { createBrowserAgent } from './common_agents/browser_agent.js';
 import { createSearchAgent } from './common_agents/search_agent.js';
 import { createShellAgent } from './common_agents/shell_agent.js';
+import { createDesignAgent } from './web_agents/design_agent.js';
 import { createOverseerAgent } from './overseer_agent.js';
 import { ModelClassID } from '../model_providers/model_data.js';
 import { createOperatorAgent } from './operator_agent.js';
@@ -101,6 +102,9 @@ export async function createAgent(
                 break;
             case 'shell':
                 agent = createShellAgent();
+                break;
+            case 'design':
+                agent = createDesignAgent();
                 break;
             default:
                 agent = createQuickAgent(type as ModelClassID);

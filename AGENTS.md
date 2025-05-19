@@ -5,16 +5,15 @@ MAGI System is a modular, autonomous AI orchestration framework. It coordinates 
 Run these before you start work
 ```bash
 npm install            # install all dependencies
-npm run build          # build TypeScript bundles
+npm run build:ci       # build in a ci environment to ensure the code compiles
 npm run setup          # set up Chrome and volumes
 ```
 
 ## Quality gate
-Run these before every commit
+Run these once you finish any task and fix any error that show up. Always fix the underlying error, do not add placeholder, mock code or just suppress errors.
 ```bash
-npm run lint:fix       # fix linting issues
-npm run test:tools     # ensure tools are working
-npm test               # run unit tests
+npm run lint:fix    # fix linting issues
+npm run build:ci    # ensure tools are working
 ```
 
 ## Core Modules & Files
