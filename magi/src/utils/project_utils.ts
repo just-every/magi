@@ -32,6 +32,22 @@ export function getProcessProjectIds(): string[] {
     return projectList.filter(project => project !== '');
 }
 
+export function getProcessProjectPorts(): Record<string, string> {
+    const ports = process.env.PROJECT_PORTS || '';
+    const entries = ports
+        .split(',')
+        .map(pair => pair.trim())
+        .filter(pair => pair);
+    const map: Record<string, string> = {};
+    for (const entry of entries) {
+        const [id, port] = entry.split(':');
+        if (id && port) {
+            map[id.toLowerCase()] = port;
+        }
+    }
+    return map;
+}
+
 export async function getAllProjectIds(): Promise<string[]> {
     // Get all project IDs from the database
     const db = await getDB();
