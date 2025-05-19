@@ -33,7 +33,7 @@ interface CitationTracker {
 function createCitationTracker(): CitationTracker {
     return {
         citations: new Map(),
-        lastIndex: 0
+        lastIndex: 0,
     };
 }
 
@@ -42,7 +42,12 @@ function createCitationTracker(): CitationTracker {
  */
 function formatCitation(
     tracker: CitationTracker,
-    citation: { title: string; url: string; cited_text: string; encrypted_index?: string }
+    citation: {
+        title: string;
+        url: string;
+        cited_text: string;
+        encrypted_index?: string;
+    }
 ): string {
     // Use URL as key to deduplicate citations
     const url = citation.url;
@@ -59,7 +64,7 @@ function formatCitation(
         tracker.citations.set(url, {
             title: citation.title,
             url: citation.url,
-            citedText: citation.cited_text
+            citedText: citation.cited_text,
         });
     }
 
@@ -105,7 +110,11 @@ import {
     resizeAndTruncateForClaude,
 } from '../utils/image_utils.js';
 import { convertImageToTextIfNeeded } from '../utils/image_to_text.js';
-import { DeltaBuffer, bufferDelta, flushBufferedDeltas } from '../utils/delta_buffer.js';
+import {
+    DeltaBuffer,
+    bufferDelta,
+    flushBufferedDeltas,
+} from '../utils/delta_buffer.js';
 
 // Convert our tool definition to Claude's format
 function convertToClaudeTools(tools: ToolFunction[]): any[] {
@@ -891,12 +900,18 @@ export class ClaudeProvider implements ModelProvider {
                             event.delta.type === 'text_delta' &&
                             event.delta.text
                         ) {
-                            for (const ev of bufferDelta(deltaBuffers, messageId, event.delta.text, (content) => ({
-                                type: 'message_delta',
-                                content,
-                                message_id: messageId,
-                                order: deltaPosition++,
-                            } as StreamingEvent))) {
+                            for (const ev of bufferDelta(
+                                deltaBuffers,
+                                messageId,
+                                event.delta.text,
+                                content =>
+                                    ({
+                                        type: 'message_delta',
+                                        content,
+                                        message_id: messageId,
+                                        order: deltaPosition++,
+                                    }) as StreamingEvent
+                            )) {
                                 yield ev;
                             }
                             accumulatedContent += event.delta.text;
@@ -943,7 +958,10 @@ export class ClaudeProvider implements ModelProvider {
                             event.delta.citation
                         ) {
                             // Format the citation and append a reference marker
-                            const citationMarker = formatCitation(citationTracker, event.delta.citation);
+                            const citationMarker = formatCitation(
+                                citationTracker,
+                                event.delta.citation
+                            );
 
                             // Yield the citation marker
                             yield {
@@ -961,12 +979,18 @@ export class ClaudeProvider implements ModelProvider {
                         event.content_block?.type === 'text'
                     ) {
                         if (event.content_block.text) {
-                            for (const ev of bufferDelta(deltaBuffers, messageId, event.content_block.text, (content) => ({
-                                type: 'message_delta',
-                                content,
-                                message_id: messageId,
-                                order: deltaPosition++,
-                            } as StreamingEvent))) {
+                            for (const ev of bufferDelta(
+                                deltaBuffers,
+                                messageId,
+                                event.content_block.text,
+                                content =>
+                                    ({
+                                        type: 'message_delta',
+                                        content,
+                                        message_id: messageId,
+                                        order: deltaPosition++,
+                                    }) as StreamingEvent
+                            )) {
                                 yield ev;
                             }
                             accumulatedContent += event.content_block.text;
@@ -987,16 +1011,22 @@ export class ClaudeProvider implements ModelProvider {
                     ) {
                         if (event.content_block.content) {
                             // Format the web search results as a nicely formatted list
-                            const formatted = formatWebSearchResults(event.content_block.content);
+                            const formatted = formatWebSearchResults(
+                                event.content_block.content
+                            );
                             if (formatted) {
                                 // Yield the formatted results
                                 yield {
                                     type: 'message_delta',
-                                    content: '\n\nSearch Results:\n' + formatted + '\n',
+                                    content:
+                                        '\n\nSearch Results:\n' +
+                                        formatted +
+                                        '\n',
                                     message_id: messageId,
                                     order: deltaPosition++,
                                 };
-                                accumulatedContent += '\n\nSearch Results:\n' + formatted + '\n';
+                                accumulatedContent +=
+                                    '\n\nSearch Results:\n' + formatted + '\n';
                             }
                         }
                     }
@@ -1091,19 +1121,24 @@ export class ClaudeProvider implements ModelProvider {
                         }
 
                         // Flush any buffered deltas before final message_complete
-                        for (const ev of flushBufferedDeltas(deltaBuffers, (_id, content) => ({
-                            type: 'message_delta',
-                            content,
-                            message_id: messageId,
-                            order: deltaPosition++,
-                        } as StreamingEvent))) {
+                        for (const ev of flushBufferedDeltas(
+                            deltaBuffers,
+                            (_id, content) =>
+                                ({
+                                    type: 'message_delta',
+                                    content,
+                                    message_id: messageId,
+                                    order: deltaPosition++,
+                                }) as StreamingEvent
+                        )) {
                             yield ev;
                         }
                         // Emit message_complete if there's content
                         if (accumulatedContent || accumulatedThinking) {
                             // Add footnotes if there are citations
                             if (citationTracker.citations.size > 0) {
-                                const footnotes = generateFootnotes(citationTracker);
+                                const footnotes =
+                                    generateFootnotes(citationTracker);
                                 accumulatedContent += footnotes;
                             }
 
@@ -1149,12 +1184,16 @@ export class ClaudeProvider implements ModelProvider {
                         'Stream finished successfully but message_stop might not have triggered message_complete emission. Emitting now.'
                     );
                     // Flush any buffered deltas before final message_complete
-                    for (const ev of flushBufferedDeltas(deltaBuffers, (_id, content) => ({
-                        type: 'message_delta',
-                        content,
-                        message_id: messageId,
-                        order: deltaPosition++,
-                    } as StreamingEvent))) {
+                    for (const ev of flushBufferedDeltas(
+                        deltaBuffers,
+                        (_id, content) =>
+                            ({
+                                type: 'message_delta',
+                                content,
+                                message_id: messageId,
+                                order: deltaPosition++,
+                            }) as StreamingEvent
+                    )) {
                         yield ev;
                     }
                     // Add footnotes if there are citations (same as in message_stop)

@@ -81,11 +81,9 @@ The frontend engineer will use your designs as reference for implementation, so 
         tools: [
             ...getDesignSearchTools(),
             ...getImageGenerationTools(),
-            ...getCommonTools()
+            ...getCommonTools(),
         ],
-        workers: [
-            createReasoningAgent,
-        ],
+        workers: [createReasoningAgent],
         modelClass: 'vision',
     });
 

@@ -139,7 +139,10 @@ export class Agent implements AgentInterface {
         this.cwd = definition.cwd; // Working directory for model providers that need a real shell
 
         if (definition.verifier) {
-            this.verifier = new Agent({ ...definition.verifier, verifier: undefined });
+            this.verifier = new Agent({
+                ...definition.verifier,
+                verifier: undefined,
+            });
             this.verifier.parent_id = this.agent_id;
         }
 
@@ -499,7 +502,12 @@ async function runAgentTool(
     };
 
     try {
-        return await Runner.runStreamedWithTools(agent, prompt, messages, handlers);
+        return await Runner.runStreamedWithTools(
+            agent,
+            prompt,
+            messages,
+            handlers
+        );
     } catch (error) {
         console.error(`Error in ${agent.name}: ${error}`);
         return `Error in ${agent.name}: ${error}`;

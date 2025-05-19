@@ -82,9 +82,7 @@ After implementing key pages, run comparison tests between your implementation a
 The backend engineer will connect your frontend to real data, so ensure your components accept appropriate props and handle loading/error states.
 `,
         tools: [...getCommonTools()],
-        workers: [
-            createCodeAgent,
-        ],
+        workers: [createCodeAgent],
         modelClass: 'reasoning_mini',
     });
 

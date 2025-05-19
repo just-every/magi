@@ -5,13 +5,17 @@
  * and UI notifications.
  */
 import { Server as SocketIOServer } from 'socket.io';
-import { PRResolution, PRStatus, PullRequestEventInput } from '../../types/index';
+import {
+    PRResolution,
+    PRStatus,
+    PullRequestEventInput,
+} from '../../types/index';
 import {
     recordPrEvent,
     recordPrFailure,
     recordMerge,
     updatePrEvent,
-    revertPrEvent
+    revertPrEvent,
 } from '../utils/pr_event_utils';
 
 export class PREventsManager {
@@ -24,7 +28,9 @@ export class PREventsManager {
     /**
      * Record a new PR event and emit socket event
      */
-    async recordEvent(eventData: PullRequestEventInput): Promise<number | null> {
+    async recordEvent(
+        eventData: PullRequestEventInput
+    ): Promise<number | null> {
         try {
             const eventId = await recordPrEvent(eventData);
 
@@ -42,7 +48,9 @@ export class PREventsManager {
                     this.io.emit('pull_request_waiting');
                 }
 
-                console.log(`[PR-Event] Broadcasting ${eventData.status} notification for ID ${eventId}`);
+                console.log(
+                    `[PR-Event] Broadcasting ${eventData.status} notification for ID ${eventId}`
+                );
             }
 
             return eventId;
@@ -55,7 +63,11 @@ export class PREventsManager {
     /**
      * Record a PR failure (convenience method, backward compatible)
      */
-    async recordFailure(failureData: Omit<PullRequestEventInput, 'status'> & { errorMessage: string }): Promise<number | null> {
+    async recordFailure(
+        failureData: Omit<PullRequestEventInput, 'status'> & {
+            errorMessage: string;
+        }
+    ): Promise<number | null> {
         try {
             // Forward to existing recordPrFailure function for now to maintain compatibility
             const failureId = await recordPrFailure(failureData);
@@ -70,7 +82,9 @@ export class PREventsManager {
                     branch: failureData.branchName,
                 });
 
-                console.log(`[PR-Failure] Broadcasting failure notification for ID ${failureId}`);
+                console.log(
+                    `[PR-Failure] Broadcasting failure notification for ID ${failureId}`
+                );
             }
 
             return failureId;
@@ -83,7 +97,11 @@ export class PREventsManager {
     /**
      * Record a PR success (convenience method)
      */
-    async recordMerge(mergeData: Omit<PullRequestEventInput, 'status' | 'errorMessage'> & { mergeCommitSha: string }): Promise<number | null> {
+    async recordMerge(
+        mergeData: Omit<PullRequestEventInput, 'status' | 'errorMessage'> & {
+            mergeCommitSha: string;
+        }
+    ): Promise<number | null> {
         try {
             const eventId = await recordMerge(mergeData);
 
@@ -97,7 +115,9 @@ export class PREventsManager {
                     sha: mergeData.mergeCommitSha,
                 });
 
-                console.log(`[PR-Merge] Broadcasting merge notification for ID ${eventId}`);
+                console.log(
+                    `[PR-Merge] Broadcasting merge notification for ID ${eventId}`
+                );
             }
 
             return eventId;
@@ -118,7 +138,13 @@ export class PREventsManager {
         commitSha?: string
     ): Promise<boolean> {
         try {
-            const result = await updatePrEvent(id, userId, status, resolution, commitSha);
+            const result = await updatePrEvent(
+                id,
+                userId,
+                status,
+                resolution,
+                commitSha
+            );
 
             if (result) {
                 // Notify all clients that a PR event has been updated
@@ -129,7 +155,9 @@ export class PREventsManager {
                     updatedBy: userId,
                 });
 
-                console.log(`[PR-Event] Broadcasting update notification for ID ${id} to ${status}`);
+                console.log(
+                    `[PR-Event] Broadcasting update notification for ID ${id} to ${status}`
+                );
             }
 
             return result;
@@ -159,7 +187,9 @@ export class PREventsManager {
                     revertCommitSha,
                 });
 
-                console.log(`[PR-Event] Broadcasting revert notification for ID ${id}`);
+                console.log(
+                    `[PR-Event] Broadcasting revert notification for ID ${id}`
+                );
             }
 
             return result;

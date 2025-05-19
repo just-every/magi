@@ -78,13 +78,7 @@ export async function ensureProjectStub(
             `INSERT INTO projects
             (project_id, project_type, simple_description, is_generated, is_ready)
             VALUES ($1, $2, $3, $4, $5)`,
-            [
-                project_id,
-                projectType,
-                '',
-                is_generated,
-                false,
-            ]
+            [project_id, projectType, '', is_generated, false]
         );
 
         console.log(

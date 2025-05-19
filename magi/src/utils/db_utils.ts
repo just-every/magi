@@ -272,7 +272,9 @@ export async function addCustomTool(tool: CustomTool): Promise<string> {
     const db = await getDB();
 
     try {
-        const embeddingStr = tool.embedding ? toPgVectorLiteral(tool.embedding) : null;
+        const embeddingStr = tool.embedding
+            ? toPgVectorLiteral(tool.embedding)
+            : null;
 
         const result = await db.query(
             `INSERT INTO custom_tools

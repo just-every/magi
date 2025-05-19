@@ -463,7 +463,7 @@ export class Runner {
         output: string,
         history: ResponseInput,
         handlers: ToolCallHandler,
-        allowed: StreamEventType[] | null,
+        allowed: StreamEventType[] | null
     ): Promise<VerifierResult> {
         const verifyPrompt = `\nYou are the verifier for agent "${verifier.parent_id}".\nReturn JSON: {"status":"pass"|"fail","reason":"…optional…"}\nUser output:\n<<<\n${output}\n>>>\n`;
 
@@ -479,10 +479,14 @@ export class Runner {
         );
 
         try {
-            return typeof raw === 'string' ? JSON.parse(raw.trim()) : JSON.parse(String(raw));
+            return typeof raw === 'string'
+                ? JSON.parse(raw.trim())
+                : JSON.parse(String(raw));
         } catch {
             const txt = raw.toString().trim().toLowerCase();
-            return txt.startsWith('pass') ? { status: 'pass' } : { status: 'fail', reason: raw as string };
+            return txt.startsWith('pass')
+                ? { status: 'pass' }
+                : { status: 'fail', reason: raw as string };
         }
     }
 

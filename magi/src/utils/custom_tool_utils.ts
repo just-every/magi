@@ -1653,18 +1653,38 @@ function convertCustomToolToToolFunction(tool: CustomTool): ToolFunction {
             }
 
             // Auto-update the tool if execution failed
-            if (typeof result === 'string' && result.trim().toLowerCase().startsWith('error')) {
-                console.log(`[custom_tool_utils] Auto fixing tool ${tool.name} due to runtime failure`);
+            if (
+                typeof result === 'string' &&
+                result.trim().toLowerCase().startsWith('error')
+            ) {
+                console.log(
+                    `[custom_tool_utils] Auto fixing tool ${tool.name} due to runtime failure`
+                );
                 try {
-                    await modify_tool(agent_id || '', tool.name, `Auto fix due to error: ${result.substring(0, 200)}`);
+                    await modify_tool(
+                        agent_id || '',
+                        tool.name,
+                        `Auto fix due to error: ${result.substring(0, 200)}`
+                    );
                     const updated = await getCustomToolByName(tool.name);
-                    if (updated && updated.version && updated.version !== tool.version) {
-                        const updatedFunc = convertCustomToolToToolFunction(updated);
-                        addOrUpdateToolInAgentCache(agent_id || '', updatedFunc);
+                    if (
+                        updated &&
+                        updated.version &&
+                        updated.version !== tool.version
+                    ) {
+                        const updatedFunc =
+                            convertCustomToolToToolFunction(updated);
+                        addOrUpdateToolInAgentCache(
+                            agent_id || '',
+                            updatedFunc
+                        );
                         return await updatedFunc.function(...args);
                     }
                 } catch (updateErr) {
-                    console.error('[custom_tool_utils] Auto update failed:', updateErr);
+                    console.error(
+                        '[custom_tool_utils] Auto update failed:',
+                        updateErr
+                    );
                 }
             }
 

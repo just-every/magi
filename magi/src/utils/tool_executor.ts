@@ -129,7 +129,10 @@ export async function executeToolInSandbox({
     const mockCommunicationManager = {
         // Core methods used by tools
         send: (event: any) => {
-            console.log('[Sandbox Comms] Event sent:', JSON.stringify(event).substring(0, 100) + '...');
+            console.log(
+                '[Sandbox Comms] Event sent:',
+                JSON.stringify(event).substring(0, 100) + '...'
+            );
         },
 
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -138,7 +141,10 @@ export async function executeToolInSandbox({
         },
 
         sendMessage: (message: any) => {
-            console.log('[Sandbox Comms] Message sent:', JSON.stringify(message).substring(0, 100) + '...');
+            console.log(
+                '[Sandbox Comms] Message sent:',
+                JSON.stringify(message).substring(0, 100) + '...'
+            );
         },
 
         connect: () => {
@@ -151,10 +157,10 @@ export async function executeToolInSandbox({
 
         isClosed: () => false,
 
-        getMessageHistory: () => []
+        getMessageHistory: () => [],
     } as CommunicationManager;
 
-    if(!hasCommunicationManager()) {
+    if (!hasCommunicationManager()) {
         setTestCommunicationManager(mockCommunicationManager);
     }
 
@@ -162,10 +168,7 @@ export async function executeToolInSandbox({
     console.log(
         `[tool_executor] Building tool context for agent ${agentId}...`
     );
-    const toolsContext = buildToolContext(
-        agentId,
-        getCommunicationManager()
-    );
+    const toolsContext = buildToolContext(agentId, getCommunicationManager());
     console.log(
         `[tool_executor] Tool categories available: ${Object.keys(toolsContext).join(', ')}`
     );

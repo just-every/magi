@@ -41,7 +41,10 @@ export class CodexProvider implements ModelProvider {
                         promptParts.push(msg.content);
                     } else if (Array.isArray(msg.content)) {
                         for (const part of msg.content) {
-                            if ((part as any).type === 'input_text' && 'text' in part) {
+                            if (
+                                (part as any).type === 'input_text' &&
+                                'text' in part
+                            ) {
                                 promptParts.push((part as any).text);
                             }
                         }
@@ -55,9 +58,10 @@ export class CodexProvider implements ModelProvider {
             }
 
             // Log the request
-            const cwd = agent.cwd && agent.cwd.trim()
-                ? agent.cwd
-                : get_working_dir() || process.cwd();
+            const cwd =
+                agent.cwd && agent.cwd.trim()
+                    ? agent.cwd
+                    : get_working_dir() || process.cwd();
 
             log_llm_request(agent.agent_id, 'openai', model, {
                 prompt,
@@ -80,7 +84,11 @@ export class CodexProvider implements ModelProvider {
             // Run Codex CLI via run_pty
             const { stream } = runPty(
                 'codex',
-                ['--full-auto', '--dangerously-auto-approve-everything', prompt],
+                [
+                    '--full-auto',
+                    '--dangerously-auto-approve-everything',
+                    prompt,
+                ],
                 ptyOpts
             );
 
@@ -88,7 +96,11 @@ export class CodexProvider implements ModelProvider {
             let deltaPosition = 0; // Track the highest order value
             for await (const event of stream) {
                 // Track order for sequencing the final complete message
-                if ('order' in event && typeof event.order === 'number' && event.order > deltaPosition) {
+                if (
+                    'order' in event &&
+                    typeof event.order === 'number' &&
+                    event.order > deltaPosition
+                ) {
                     deltaPosition = event.order;
                 }
 
@@ -132,7 +144,9 @@ export class CodexProvider implements ModelProvider {
             }
 
             // Stream finished, emit our own message_complete with the parsed content
-            console.log(`[CodexProvider] Stream completed for message ${messageId}, emitting message_complete`);
+            console.log(
+                `[CodexProvider] Stream completed for message ${messageId}, emitting message_complete`
+            );
 
             // Use the next sequential order number after the last message delta
             yield {
@@ -155,7 +169,9 @@ export class CodexProvider implements ModelProvider {
             };
         } finally {
             // Ensure proper cleanup on both success and error paths
-            console.log(`[CodexProvider] Finalizing Codex provider for message ${messageId}`);
+            console.log(
+                `[CodexProvider] Finalizing Codex provider for message ${messageId}`
+            );
         }
     }
 }

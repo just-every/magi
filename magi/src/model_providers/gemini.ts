@@ -43,7 +43,11 @@ import {
     extractBase64Image,
     resizeAndTruncateForGemini,
 } from '../utils/image_utils.js';
-import { DeltaBuffer, bufferDelta, flushBufferedDeltas } from '../utils/delta_buffer.js';
+import {
+    DeltaBuffer,
+    bufferDelta,
+    flushBufferedDeltas,
+} from '../utils/delta_buffer.js';
 
 // Convert our tool definition to Gemini's updated FunctionDeclaration format
 function convertToGeminiFunctionDeclarations(
@@ -809,20 +813,29 @@ export class GeminiProvider implements ModelProvider {
                 if (chunk.text) {
                     contentBuffer += chunk.text;
 
-                    for (const ev of bufferDelta(deltaBuffers, messageId, chunk.text, (content) => ({
-                        type: 'message_delta',
-                        content,
-                        message_id: messageId,
-                        order: eventOrder++,
-                    } as StreamingEvent))) {
+                    for (const ev of bufferDelta(
+                        deltaBuffers,
+                        messageId,
+                        chunk.text,
+                        content =>
+                            ({
+                                type: 'message_delta',
+                                content,
+                                message_id: messageId,
+                                order: eventOrder++,
+                            }) as StreamingEvent
+                    )) {
                         yield ev;
                     }
                 }
 
                 // Handle search grounding results
-                const gChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
+                const gChunks =
+                    chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
                 if (Array.isArray(gChunks)) {
-                    const newChunks = gChunks.filter(c => c?.web?.uri && !shownGrounding.has(c.web.uri));
+                    const newChunks = gChunks.filter(
+                        c => c?.web?.uri && !shownGrounding.has(c.web.uri)
+                    );
                     if (newChunks.length) {
                         newChunks.forEach(c => shownGrounding.add(c.web.uri));
                         const formatted = formatGroundingChunks(newChunks);
@@ -832,7 +845,8 @@ export class GeminiProvider implements ModelProvider {
                             message_id: messageId,
                             order: eventOrder++,
                         };
-                        contentBuffer += '\n\nSearch Results:\n' + formatted + '\n';
+                        contentBuffer +=
+                            '\n\nSearch Results:\n' + formatted + '\n';
                     }
                 }
 
@@ -860,12 +874,16 @@ export class GeminiProvider implements ModelProvider {
             }
 
             // Flush any buffered deltas that didn't meet the threshold
-            for (const ev of flushBufferedDeltas(deltaBuffers, (_id, content) => ({
-                type: 'message_delta',
-                content,
-                message_id: messageId,
-                order: eventOrder++,
-            } as StreamingEvent))) {
+            for (const ev of flushBufferedDeltas(
+                deltaBuffers,
+                (_id, content) =>
+                    ({
+                        type: 'message_delta',
+                        content,
+                        message_id: messageId,
+                        order: eventOrder++,
+                    }) as StreamingEvent
+            )) {
                 yield ev;
             }
 

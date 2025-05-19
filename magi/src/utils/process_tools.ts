@@ -350,7 +350,11 @@ export function getProcessTools(): ToolFunction[] {
                     'Are there any warnings or things to be aware of? This could be a list of things to avoid, or things that are not working as expected. This is optional, but can help the task operator avoid problems.',
                 goal: 'What is the final goal of this task? This is the final output or result you expect from the task. It should be a single sentence or two at most',
                 type: {
-                    description: `The type of task to start. Determines which operator that will run the task.\n\n${Object.entries(TASK_TYPE_DESCRIPTIONS).map(([type, description]) => `${type}: ${description}`).join('\n')}`,
+                    description: `The type of task to start. Determines which operator that will run the task.\n\n${Object.entries(
+                        TASK_TYPE_DESCRIPTIONS
+                    )
+                        .map(([type, description]) => `${type}: ${description}`)
+                        .join('\n')}`,
                     type: 'string',
                     enum: Object.keys(TASK_TYPE_DESCRIPTIONS),
                 },

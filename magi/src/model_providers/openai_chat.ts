@@ -26,17 +26,22 @@ import { Agent } from '../utils/agent.js'; // Adjust path as needed
 import { ModelProviderID } from './model_data.js'; // Adjust path as needed
 import { extractBase64Image } from '../utils/image_utils.js';
 import { convertImageToTextIfNeeded } from '../utils/image_to_text.js';
-import { DeltaBuffer, bufferDelta, flushBufferedDeltas } from '../utils/delta_buffer.js';
+import {
+    DeltaBuffer,
+    bufferDelta,
+    flushBufferedDeltas,
+} from '../utils/delta_buffer.js';
 
 // Extended types for Perplexity/OpenRouter response formats
-interface ExtendedDelta extends OpenAI.Chat.Completions.ChatCompletionChunk.Choice.Delta {
+interface ExtendedDelta
+    extends OpenAI.Chat.Completions.ChatCompletionChunk.Choice.Delta {
     reasoning?: string;
     annotations?: Array<{
         type: string;
         url_citation?: {
             title: string;
             url: string;
-        }
+        };
     }>;
 }
 
@@ -67,7 +72,7 @@ interface CitationTracker {
 function createCitationTracker(): CitationTracker {
     return {
         citations: new Map(),
-        last: 0
+        last: 0,
     };
 }
 
@@ -745,12 +750,18 @@ export class OpenAIChat implements ModelProvider {
                     if (delta.content) {
                         aggregatedContent += delta.content;
 
-                        for (const ev of bufferDelta(deltaBuffers, messageId, delta.content, (content) => ({
-                            type: 'message_delta',
-                            content,
-                            message_id: messageId,
-                            order: messageIndex++,
-                        } as StreamingEvent))) {
+                        for (const ev of bufferDelta(
+                            deltaBuffers,
+                            messageId,
+                            delta.content,
+                            content =>
+                                ({
+                                    type: 'message_delta',
+                                    content,
+                                    message_id: messageId,
+                                    order: messageIndex++,
+                                }) as StreamingEvent
+                        )) {
                             yield ev;
                         }
                     }
@@ -759,12 +770,18 @@ export class OpenAIChat implements ModelProvider {
                     const extendedDelta = delta as ExtendedDelta;
                     if (extendedDelta.reasoning) {
                         aggregatedContent += extendedDelta.reasoning;
-                        for (const ev of bufferDelta(deltaBuffers, messageId, extendedDelta.reasoning, (content) => ({
-                            type: 'message_delta',
-                            content,
-                            message_id: messageId,
-                            order: messageIndex++,
-                        } as StreamingEvent))) {
+                        for (const ev of bufferDelta(
+                            deltaBuffers,
+                            messageId,
+                            extendedDelta.reasoning,
+                            content =>
+                                ({
+                                    type: 'message_delta',
+                                    content,
+                                    message_id: messageId,
+                                    order: messageIndex++,
+                                }) as StreamingEvent
+                        )) {
                             yield ev;
                         }
                     }
@@ -772,17 +789,22 @@ export class OpenAIChat implements ModelProvider {
                     // Handle annotations (citations in Perplexity/OpenRouter format)
                     if (Array.isArray(extendedDelta.annotations)) {
                         for (const ann of extendedDelta.annotations) {
-                            if (ann.type === 'url_citation' && ann.url_citation?.url) {
+                            if (
+                                ann.type === 'url_citation' &&
+                                ann.url_citation?.url
+                            ) {
                                 const marker = formatCitation(citationTracker, {
-                                    title: ann.url_citation.title || ann.url_citation.url,
-                                    url: ann.url_citation.url
+                                    title:
+                                        ann.url_citation.title ||
+                                        ann.url_citation.url,
+                                    url: ann.url_citation.url,
                                 });
                                 aggregatedContent += marker;
                                 yield {
                                     type: 'message_delta',
                                     content: marker,
                                     message_id: messageId,
-                                    order: messageIndex++
+                                    order: messageIndex++,
                                 };
                             }
                         }
@@ -790,13 +812,19 @@ export class OpenAIChat implements ModelProvider {
 
                     // Handle citations array at chunk level (another format variant)
                     const extendedChunk = chunk as ExtendedChunk;
-                    if (Array.isArray(extendedChunk.citations) && extendedChunk.citations.length > 0) {
+                    if (
+                        Array.isArray(extendedChunk.citations) &&
+                        extendedChunk.citations.length > 0
+                    ) {
                         for (const url of extendedChunk.citations) {
-                            if (typeof url === 'string' && !citationTracker.citations.has(url)) {
+                            if (
+                                typeof url === 'string' &&
+                                !citationTracker.citations.has(url)
+                            ) {
                                 const title = url.split('/').pop() || url;
                                 const marker = formatCitation(citationTracker, {
                                     title,
-                                    url
+                                    url,
                                 });
                                 // Only add the marker if this is a new citation
                                 if (marker) {
@@ -805,7 +833,7 @@ export class OpenAIChat implements ModelProvider {
                                         type: 'message_delta',
                                         content: marker,
                                         message_id: messageId,
-                                        order: messageIndex++
+                                        order: messageIndex++,
                                     };
                                 }
                             }
@@ -895,7 +923,7 @@ export class OpenAIChat implements ModelProvider {
                         type: 'message_delta',
                         content: footnotes,
                         message_id: messageId,
-                        order: messageIndex++
+                        order: messageIndex++,
                     };
                 }
 
@@ -921,12 +949,16 @@ export class OpenAIChat implements ModelProvider {
                 }
 
                 // Flush any remaining buffered deltas and yield them
-                for (const ev of flushBufferedDeltas(deltaBuffers, (id, content) => ({
-                    type: 'message_delta',
-                    content,
-                    message_id: id,
-                    order: messageIndex++,
-                } as StreamingEvent))) {
+                for (const ev of flushBufferedDeltas(
+                    deltaBuffers,
+                    (id, content) =>
+                        ({
+                            type: 'message_delta',
+                            content,
+                            message_id: id,
+                            order: messageIndex++,
+                        }) as StreamingEvent
+                )) {
                     yield ev;
                 }
 

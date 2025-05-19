@@ -30,7 +30,11 @@ import {
     extractBase64Image,
     resizeAndSplitForOpenAI,
 } from '../utils/image_utils.js';
-import { DeltaBuffer, bufferDelta, flushBufferedDeltas } from '../utils/delta_buffer.js';
+import {
+    DeltaBuffer,
+    bufferDelta,
+    flushBufferedDeltas,
+} from '../utils/delta_buffer.js';
 
 /**
  * Citation tracking for footnotes
@@ -44,7 +48,7 @@ interface CitationTracker {
  */
 function createCitationTracker(): CitationTracker {
     return {
-        citations: new Map()
+        citations: new Map(),
     };
 }
 
@@ -170,11 +174,11 @@ function convertToOpenAITools(requestParams: any): any {
                 }
             }
 
-                // 5. AFTER recursion, process the current object level
-                if (isObject) {
-                    // Always set additionalProperties: false for objects (required by OpenAI in strict mode)
-                    // This is necessary even for objects without properties
-                    schema.additionalProperties = false;
+            // 5. AFTER recursion, process the current object level
+            if (isObject) {
+                // Always set additionalProperties: false for objects (required by OpenAI in strict mode)
+                // This is necessary even for objects without properties
+                schema.additionalProperties = false;
 
                 // Set 'required' array to include all current properties (required by OpenAI for strict mode)
                 if (schema.properties) {
@@ -1071,12 +1075,18 @@ export class OpenAIProvider implements ModelProvider {
                         const itemId = event.item_id;
                         let position = messagePositions.get(itemId) ?? 0;
 
-                        for (const ev of bufferDelta(deltaBuffers, itemId, event.delta, (content) => ({
-                            type: 'message_delta',
-                            content,
-                            message_id: itemId,
-                            order: position++,
-                        } as StreamingEvent))) {
+                        for (const ev of bufferDelta(
+                            deltaBuffers,
+                            itemId,
+                            event.delta,
+                            content =>
+                                ({
+                                    type: 'message_delta',
+                                    content,
+                                    message_id: itemId,
+                                    order: position++,
+                                }) as StreamingEvent
+                        )) {
                             yield ev;
                         }
 
@@ -1087,19 +1097,24 @@ export class OpenAIProvider implements ModelProvider {
                         event.annotation
                     ) {
                         // Handle URL citation annotations
-                        if (event.annotation?.type === 'url_citation' &&
-                            event.annotation.url) {
+                        if (
+                            event.annotation?.type === 'url_citation' &&
+                            event.annotation.url
+                        ) {
                             const marker = formatCitation(citationTracker, {
-                                title: event.annotation.title || event.annotation.url,
-                                url: event.annotation.url
+                                title:
+                                    event.annotation.title ||
+                                    event.annotation.url,
+                                url: event.annotation.url,
                             });
                             // Append to aggregate buffer for this item
-                            let position = messagePositions.get(event.item_id) ?? 0;
+                            let position =
+                                messagePositions.get(event.item_id) ?? 0;
                             yield {
                                 type: 'message_delta',
                                 content: marker,
                                 message_id: event.item_id,
-                                order: position++
+                                order: position++,
                             };
                             messagePositions.set(event.item_id, position);
                         } else {
@@ -1117,7 +1132,8 @@ export class OpenAIProvider implements ModelProvider {
                         // Add footnotes if we have citations
                         let finalText = event.text;
                         if (citationTracker.citations.size > 0) {
-                            const footnotes = generateFootnotes(citationTracker);
+                            const footnotes =
+                                generateFootnotes(citationTracker);
                             finalText += footnotes;
                         }
 
@@ -1363,12 +1379,16 @@ export class OpenAIProvider implements ModelProvider {
                     toolCallStates.clear(); // Clear the map
                 }
                 // Flush any buffered d
-                for (const ev of flushBufferedDeltas(deltaBuffers, (id, content) => ({
-                    type: 'message_delta',
-                    content,
-                    message_id: id,
-                    order: messagePositions.get(id) ?? 0,
-                } as StreamingEvent))) {
+                for (const ev of flushBufferedDeltas(
+                    deltaBuffers,
+                    (id, content) =>
+                        ({
+                            type: 'message_delta',
+                            content,
+                            message_id: id,
+                            order: messagePositions.get(id) ?? 0,
+                        }) as StreamingEvent
+                )) {
                     yield ev;
                 }
                 messagePositions.clear(); // Clear positions map

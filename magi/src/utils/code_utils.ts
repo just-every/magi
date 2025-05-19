@@ -94,8 +94,7 @@ export async function processCodeParams(
                 prompts.push(`\n\n**File example:**\n${example}`);
             }
         });
-    }
-    else if (params.examples && typeof params.examples === 'string') {
+    } else if (params.examples && typeof params.examples === 'string') {
         prompts.push(`\n\n**File example:**\n${params.examples}`);
     }
     // Return the prompt

@@ -47,13 +47,14 @@ Depth mode: ${depth}. Save all output files in ${outputDir}.`;
 
     return createOperatorAgent({
         name: 'ResearchOperatorAgent',
-        description: 'Coordinates multi-engine research and produces verified reports.',
+        description:
+            'Coordinates multi-engine research and produces verified reports.',
         instructions,
         tools: [...getSearchTools(), ...getCommonTools()],
         workers: [createSearchAgent, createReasoningAgent, createVerifierAgent],
         onRequest: async (
             agent: Agent,
-            messages: ResponseInput,
+            messages: ResponseInput
         ): Promise<[Agent, ResponseInput]> => {
             messages.push({
                 type: 'message',

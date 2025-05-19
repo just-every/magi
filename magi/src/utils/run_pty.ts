@@ -14,8 +14,17 @@
 import { v4 as uuidv4 } from 'uuid';
 import pty from 'node-pty';
 import stripAnsi from 'strip-ansi';
-import { StreamingEvent, MessageEvent, ConsoleEvent, ErrorEvent } from '../types/shared-types.js';
-import { DeltaBuffer, bufferDelta, flushBufferedDeltas } from './delta_buffer.js';
+import {
+    StreamingEvent,
+    MessageEvent,
+    ConsoleEvent,
+    ErrorEvent,
+} from '../types/shared-types.js';
+import {
+    DeltaBuffer,
+    bufferDelta,
+    flushBufferedDeltas,
+} from './delta_buffer.js';
 
 // --- Global cleanup to ensure PTY processes exit cleanly even if the host process is killed ---
 const activePtyProcesses = new Set<pty.IPty>();
@@ -42,9 +51,12 @@ function ensureGlobalExitHook() {
         for (const instance of activePtyProcesses) {
             try {
                 // Ask process to terminate gracefully
-                const exitCmd = ptyExitCommands.get(instance) || DEFAULT_EXIT_COMMAND;
+                const exitCmd =
+                    ptyExitCommands.get(instance) || DEFAULT_EXIT_COMMAND;
                 instance.write(`${exitCmd}\x1b\n\r`);
-            } catch { /* ignore errors during shutdown */ }
+            } catch {
+                /* ignore errors during shutdown */
+            }
         }
     };
 
@@ -79,7 +91,7 @@ export interface PtyRunOptions {
     onTokenProgress?: (n: number) => void;
     /** Tiered batching configuration for output */
     batch?: {
-        tiers: { chars: number; timeout: number; }[];
+        tiers: { chars: number; timeout: number }[];
     };
     /** Optional message ID to use instead of generating a new one */
     messageId?: string;
@@ -105,10 +117,10 @@ export interface PtyRunResult {
  * Default batching tiers based on Claude's current values.
  */
 const DEFAULT_BATCH_TIERS = [
-    { chars: 10000, timeout: 10 },    // Yield almost immediately for large chunks
-    { chars: 2000, timeout: 100 },    // Yield quickly for medium chunks
-    { chars: 100, timeout: 2000 },    // Standard timeout for smaller chunks
-    { chars: 0, timeout: 4000 },      // Final fallback timeout if buffer has any content
+    { chars: 10000, timeout: 10 }, // Yield almost immediately for large chunks
+    { chars: 2000, timeout: 100 }, // Yield quickly for medium chunks
+    { chars: 100, timeout: 2000 }, // Standard timeout for smaller chunks
+    { chars: 0, timeout: 4000 }, // Final fallback timeout if buffer has any content
 ];
 
 /**
@@ -135,7 +147,8 @@ export function runPty(
     const startSignal = options.startSignal;
     const onTokenProgress = options.onTokenProgress;
     const onLine = options.onLine;
-    const emitComplete = options.emitComplete !== undefined ? options.emitComplete : true;
+    const emitComplete =
+        options.emitComplete !== undefined ? options.emitComplete : true;
     const exitCommand = options.exitCommand || DEFAULT_EXIT_COMMAND;
 
     // Create an async generator to yield StreamingEvent objects
@@ -175,21 +188,31 @@ export function runPty(
         const requestExit = () => {
             if (exitRequested || !ptyProcess) return; // only once
             exitRequested = true;
-            console.log(`[runPty] Requesting graceful exit via ${exitCommand} for message ${messageId}`);
+            console.log(
+                `[runPty] Requesting graceful exit via ${exitCommand} for message ${messageId}`
+            );
             try {
                 ptyProcess.write(`${exitCommand}\x1b\n\r`);
             } catch (e) {
-                console.warn(`[runPty] Error sending ${exitCommand} command:`, e);
+                console.warn(
+                    `[runPty] Error sending ${exitCommand} command:`,
+                    e
+                );
             }
 
             // Fallback: hard kill if the process is still alive after 10s
             setTimeout(() => {
                 if (!ptyExited && ptyProcess) {
-                    console.log(`[runPty] Fallback kill after waiting 10s for graceful exit of message ${messageId}`);
+                    console.log(
+                        `[runPty] Fallback kill after waiting 10s for graceful exit of message ${messageId}`
+                    );
                     try {
                         ptyProcess.kill();
                     } catch (killErr) {
-                        console.warn('[runPty] Error during fallback kill:', killErr);
+                        console.warn(
+                            '[runPty] Error during fallback kill:',
+                            killErr
+                        );
                     }
                 }
             }, 10000);
@@ -264,8 +287,11 @@ export function runPty(
             }
 
             if (applicableTimeout === null) {
-                console.warn('[runPty] No applicable batch timeout found, using fallback.');
-                applicableTimeout = batchTiers[batchTiers.length - 1]?.timeout ?? 4000;
+                console.warn(
+                    '[runPty] No applicable batch timeout found, using fallback.'
+                );
+                applicableTimeout =
+                    batchTiers[batchTiers.length - 1]?.timeout ?? 4000;
             }
 
             // If a timer is already running with the same timeout, don't reset it
@@ -339,13 +365,14 @@ export function runPty(
                                 consoleBuffers,
                                 messageId,
                                 data,
-                                (content): StreamingEvent => ({
-                                    type: 'console',
-                                    data: content,
-                                    timestamp: new Date().toISOString(),
-                                    message_id: messageId,
-                                    agent: undefined, // Required base StreamEvent property
-                                } as ConsoleEvent),
+                                (content): StreamingEvent =>
+                                    ({
+                                        type: 'console',
+                                        data: content,
+                                        timestamp: new Date().toISOString(),
+                                        message_id: messageId,
+                                        agent: undefined, // Required base StreamEvent property
+                                    }) as ConsoleEvent
                             )) {
                                 eventQueue.push(ev);
                                 // Also reset silence timeout when console events are emitted
@@ -381,7 +408,10 @@ export function runPty(
                                 // Check for [complete] signal to initiate graceful exit sequence
                                 if (
                                     processingStarted &&
-                                    !noiseFilter(trimmedLine, onTokenProgress) &&
+                                    !noiseFilter(
+                                        trimmedLine,
+                                        onTokenProgress
+                                    ) &&
                                     trimmedLine === '[complete]'
                                 ) {
                                     console.log(
@@ -393,7 +423,12 @@ export function runPty(
 
                                 // --- Skip until start signal logic ---
                                 if (!processingStarted && startSignal) {
-                                    if (!noiseFilter(trimmedLine, onTokenProgress)) {
+                                    if (
+                                        !noiseFilter(
+                                            trimmedLine,
+                                            onTokenProgress
+                                        )
+                                    ) {
                                         if (startSignal(trimmedLine)) {
                                             processingStarted = true;
                                             console.log(
@@ -422,7 +457,10 @@ export function runPty(
                                         shouldBuffer = false;
                                     }
                                     // Avoid recent duplicates using the sliding window history
-                                    if (shouldBuffer && recentHistorySet.has(trimmedLine)) {
+                                    if (
+                                        shouldBuffer &&
+                                        recentHistorySet.has(trimmedLine)
+                                    ) {
                                         shouldBuffer = false;
                                     }
 
@@ -438,8 +476,11 @@ export function runPty(
                                         recentHistory.push(trimmedLine);
                                         recentHistorySet.add(trimmedLine);
                                         // Maintain history size
-                                        if (recentHistory.length > historySize) {
-                                            const oldestLine = recentHistory.shift()!;
+                                        if (
+                                            recentHistory.length > historySize
+                                        ) {
+                                            const oldestLine =
+                                                recentHistory.shift()!;
                                             recentHistorySet.delete(oldestLine);
                                         }
 
@@ -457,7 +498,8 @@ export function runPty(
                                 `Error processing PTY data: ${processingError.message}`
                             );
                             ptyExited = true;
-                            if (silenceTimeoutId) clearTimeout(silenceTimeoutId);
+                            if (silenceTimeoutId)
+                                clearTimeout(silenceTimeoutId);
                             if (batchTimerId) {
                                 clearTimeout(batchTimerId);
                                 batchTimerId = null;
@@ -533,13 +575,14 @@ export function runPty(
                         // Flush any remaining buffered console output
                         for (const ev of flushBufferedDeltas<StreamingEvent>(
                             consoleBuffers,
-                            (id, content): StreamingEvent => ({
-                                type: 'console',
-                                data: content,
-                                timestamp: new Date().toISOString(),
-                                message_id: id,
-                                agent: undefined, // Required base StreamEvent property
-                            } as ConsoleEvent),
+                            (id, content): StreamingEvent =>
+                                ({
+                                    type: 'console',
+                                    data: content,
+                                    timestamp: new Date().toISOString(),
+                                    message_id: id,
+                                    agent: undefined, // Required base StreamEvent property
+                                }) as ConsoleEvent
                         )) {
                             eventQueue.push(ev);
                         }
@@ -560,7 +603,10 @@ export function runPty(
                         }
                     });
                 } catch (spawnError: any) {
-                    console.error('[runPty] Error spawning PTY process:', spawnError);
+                    console.error(
+                        '[runPty] Error spawning PTY process:',
+                        spawnError
+                    );
                     ptyError = spawnError;
                     ptyExited = true;
                     if (silenceTimeoutId) clearTimeout(silenceTimeoutId);
@@ -602,7 +648,10 @@ export function runPty(
                 } as MessageEvent;
             }
         } catch (error: unknown) {
-            console.error('[runPty] Error during PTY streaming execution:', error);
+            console.error(
+                '[runPty] Error during PTY streaming execution:',
+                error
+            );
             const errorMessage = String(error);
 
             yield {
@@ -618,7 +667,9 @@ export function runPty(
                 currentBatchTimeoutValue = null;
             }
 
-            console.log(`[runPty] Finishing stream processing for message ${messageId}.`);
+            console.log(
+                `[runPty] Finishing stream processing for message ${messageId}.`
+            );
 
             // Final safeguard: if the PTY is still alive and we never asked for /exit, do it now
             if (ptyProcess && !exitRequested) {

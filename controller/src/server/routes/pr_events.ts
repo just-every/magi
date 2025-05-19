@@ -9,7 +9,7 @@ import path from 'path';
 import {
     getPrEvents,
     getPrEventById,
-    revertPrEvent
+    revertPrEvent,
 } from '../utils/pr_event_utils';
 
 const router = Router();
@@ -72,7 +72,7 @@ router.post('/:id/revert', async (req, res) => {
         // Check if this is a merged PR that can be reverted
         if (event.status !== 'merged' || !event.merge_commit_sha) {
             return res.status(400).json({
-                error: 'Only merged PRs with a commit SHA can be reverted'
+                error: 'Only merged PRs with a commit SHA can be reverted',
             });
         }
 
@@ -92,11 +92,14 @@ router.post('/:id/revert', async (req, res) => {
         let revertCommitSha;
         try {
             // Check out default branch and pull latest
-            execSync(`cd "${projectPath}" && git checkout main || git checkout master`, {
-                stdio: 'pipe'
-            });
+            execSync(
+                `cd "${projectPath}" && git checkout main || git checkout master`,
+                {
+                    stdio: 'pipe',
+                }
+            );
             execSync(`cd "${projectPath}" && git pull`, {
-                stdio: 'pipe'
+                stdio: 'pipe',
             });
 
             // Do the revert
@@ -107,16 +110,21 @@ router.post('/:id/revert', async (req, res) => {
 
             // Push the revert
             execSync(`cd "${projectPath}" && git push`, {
-                stdio: 'pipe'
+                stdio: 'pipe',
             });
 
             // Get the SHA of the revert commit
-            revertCommitSha = execSync(`cd "${projectPath}" && git rev-parse HEAD`, {
-                encoding: 'utf8',
-                stdio: 'pipe',
-            }).trim();
+            revertCommitSha = execSync(
+                `cd "${projectPath}" && git rev-parse HEAD`,
+                {
+                    encoding: 'utf8',
+                    stdio: 'pipe',
+                }
+            ).trim();
 
-            console.log(`[PR-Revert] Reverted PR ${id} with commit ${revertCommitSha}`);
+            console.log(
+                `[PR-Revert] Reverted PR ${id} with commit ${revertCommitSha}`
+            );
         } catch (gitError) {
             console.error('Git error during revert:', gitError);
             return res.status(500).json({

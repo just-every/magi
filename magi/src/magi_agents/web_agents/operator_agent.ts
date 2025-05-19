@@ -23,9 +23,7 @@ import {
 } from '../constants.js';
 import { getCommonTools } from '../../utils/index.js';
 import { getRunningToolTools } from '../../utils/running_tools.js';
-import {
-    ResponseInput,
-} from '../../types/shared-types.js';
+import { ResponseInput } from '../../types/shared-types.js';
 import { dateFormat, readableTime } from '../../utils/date_tools.js';
 import { runningToolTracker } from '../../utils/running_tool_tracker.js';
 import { getThoughtDelay } from '../../utils/thought_utils.js';
@@ -118,10 +116,7 @@ When you are done, please use the task_complete(result) tool to report that the 
         description:
             'Orchestrates research → design → code → test for websites',
         instructions,
-        tools: [
-            ...getRunningToolTools(),
-            ...getCommonTools(),
-        ],
+        tools: [...getRunningToolTools(), ...getCommonTools()],
         workers: [
             createSearchAgent,
             createDesignAgent,
@@ -136,7 +131,6 @@ When you are done, please use the task_complete(result) tool to report that the 
             agent: Agent,
             messages: ResponseInput
         ): Promise<[Agent, ResponseInput]> => {
-
             // Add the system status to the messages
             messages.push({
                 type: 'message',

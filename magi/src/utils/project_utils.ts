@@ -5,7 +5,10 @@ import { ToolFunction, ProjectType } from '../types/shared-types.js';
 import { sendStreamEvent } from './communication.js';
 import { getDB } from './db.js';
 import { createToolFunction } from './tool_call.js';
-import { PROJECT_TYPES, PROJECT_TYPE_DESCRIPTIONS } from '../constants/project_types.js';
+import {
+    PROJECT_TYPES,
+    PROJECT_TYPE_DESCRIPTIONS,
+} from '../constants/project_types.js';
 
 export function getExternalProjectIds(): string[] {
     // Get the list of projects from the environment variable
@@ -84,7 +87,11 @@ export async function listActiveProjects(
                 .map(row => {
                     const description =
                         row.simple_description || 'No description';
-                    const status = row.is_ready ? '' : (row.is_generated ? ' [Creating...]' : ' [Importing external project...]');
+                    const status = row.is_ready
+                        ? ''
+                        : row.is_generated
+                          ? ' [Creating...]'
+                          : ' [Importing external project...]';
                     return `- ${row.project_id}: ${description}${status}`;
                 })
                 .join('\n');
@@ -109,7 +116,7 @@ export async function create_project(
     project_id: string,
     simple_description: string,
     detailed_description: string,
-    project_type: ProjectType,
+    project_type: ProjectType
 ): Promise<string> {
     // Validate project_id format
     const idRegex = /^[a-zA-Z0-9_-]+$/;
@@ -173,13 +180,14 @@ export function getProjectTools(): ToolFunction[] {
                 simple_description:
                     'A sentence describing the project. Used to identify the project in the list.',
                 detailed_description:
-                    'Up to two paragraphs covering the project\'s purpose, and key features. Include any relevant details you know that might help the agent understand the project better.',
+                    "Up to two paragraphs covering the project's purpose, and key features. Include any relevant details you know that might help the agent understand the project better.",
                 project_type: {
                     type: 'string',
-                    description:
-                        `What type of files will be in the project. Use 'plain' if no other type matches.\n\n${Object.entries(PROJECT_TYPE_DESCRIPTIONS).map(
-                        ([type, description]) => `${type}: ${description}`
-                    ).join('\n')}`,
+                    description: `What type of files will be in the project. Use 'plain' if no other type matches.\n\n${Object.entries(
+                        PROJECT_TYPE_DESCRIPTIONS
+                    )
+                        .map(([type, description]) => `${type}: ${description}`)
+                        .join('\n')}`,
                     enum: PROJECT_TYPES,
                 },
             }

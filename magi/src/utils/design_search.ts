@@ -22,7 +22,8 @@ import { v4 as uuidv4 } from 'uuid';
 import fetch from 'node-fetch';
 import { JSDOM } from 'jsdom';
 
-const USER_AGENT = 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; magi-user/1.0; +https://withmagi.com)';
+const USER_AGENT =
+    'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; magi-user/1.0; +https://withmagi.com)';
 
 // Type definitions
 export interface DesignSearchResult {
@@ -41,7 +42,6 @@ export type DesignSearchEngine =
     | 'awwwards'
     | 'siteinspire'
     | 'web_search';
-
 
 // Base directory for storing screenshots
 const DESIGN_ASSETS_DIR = '/magi_output/shared/design_assets';
@@ -63,8 +63,10 @@ function ensureDesignAssetsDir() {
  * @param url URL to screenshot
  * @returns Path to the screenshot file
  */
-async function runJavaScript(url: string, code: string): Promise<string | null> {
-
+async function runJavaScript(
+    url: string,
+    code: string
+): Promise<string | null> {
     // Use a throwaway session per capture to avoid interference with other tabs
     const sessionId = `design-search-${uuidv4()}`;
     const session = getAgentBrowserSession(sessionId, url);
@@ -94,7 +96,10 @@ async function runJavaScript(url: string, code: string): Promise<string | null> 
  * @param title Optional title to use in the filename
  * @returns Path to the screenshot file
  */
-async function takeScreenshot(url: string, title?: string): Promise<string | null> {
+async function takeScreenshot(
+    url: string,
+    title?: string
+): Promise<string | null> {
     ensureDesignAssetsDir();
 
     // Use a throwaway session per capture to avoid interference with other tabs
@@ -108,16 +113,20 @@ async function takeScreenshot(url: string, title?: string): Promise<string | nul
         let cleanTitle = '';
         if (title) {
             // Replace spaces and special characters with underscores, limit length
-            cleanTitle = title.trim()
-                .replace(/[^a-zA-Z0-9]/g, '_')  // Replace non-alphanumeric with underscore
-                .replace(/_+/g, '_')            // Replace multiple underscores with single one
-                .substring(0, 50);              // Limit length
+            cleanTitle = title
+                .trim()
+                .replace(/[^a-zA-Z0-9]/g, '_') // Replace non-alphanumeric with underscore
+                .replace(/_+/g, '_') // Replace multiple underscores with single one
+                .substring(0, 50); // Limit length
         } else {
             // Try to get the page title if no title was provided
             try {
-                const pageTitle = await session.js_evaluate(`document.title || ""`);
+                const pageTitle = await session.js_evaluate(
+                    'document.title || ""'
+                );
                 if (typeof pageTitle === 'string' && pageTitle.trim()) {
-                    cleanTitle = pageTitle.trim()
+                    cleanTitle = pageTitle
+                        .trim()
                         .replace(/[^a-zA-Z0-9]/g, '_')
                         .replace(/_+/g, '_')
                         .substring(0, 50);
@@ -130,10 +139,10 @@ async function takeScreenshot(url: string, title?: string): Promise<string | nul
         // Generate a unique filename including the title and timestamp
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const uniqueId = uuidv4().substring(0, 8);
-        const filename = cleanTitle 
-            ? `${cleanTitle}_${timestamp}_${uniqueId}.png` 
+        const filename = cleanTitle
+            ? `${cleanTitle}_${timestamp}_${uniqueId}.png`
             : `screenshot_${timestamp}_${uniqueId}.png`;
-            
+
         const filePath = path.join(DESIGN_ASSETS_DIR, 'screenshots', filename);
 
         // Capture a lightweight screenshot of the viewport
@@ -170,14 +179,18 @@ async function searchDribbble(
 ): Promise<DesignSearchResult[]> {
     try {
         const url = `https://dribbble.com/search/${encodeURIComponent(query)}`;
-        const html = await fetch(url, { headers: { 'User-Agent': USER_AGENT } }).then(r => r.text());
+        const html = await fetch(url, {
+            headers: { 'User-Agent': USER_AGENT },
+        }).then(r => r.text());
         await SLEEP();
 
         const dom = new JSDOM(html);
         const document = dom.window.document;
 
         const results: DesignSearchResult[] = [];
-        const shotItems = Array.from(document.querySelectorAll('li.shot-thumbnail')).slice(0, limit);
+        const shotItems = Array.from(
+            document.querySelectorAll('li.shot-thumbnail')
+        ).slice(0, limit);
 
         for (const item of shotItems) {
             // Find the link element with shot URL
@@ -234,19 +247,19 @@ async function searchDribbble(
  * all the search results even before JavaScript renders the page.
  */
 export async function searchBehance(
-  query: string,
-  limit = 9,
+    query: string,
+    limit = 9
 ): Promise<DesignSearchResult[]> {
-  try {
-    const url = `https://www.behance.net/search/projects?search=${encodeURIComponent(
-      query,
-    )}`;
+    try {
+        const url = `https://www.behance.net/search/projects?search=${encodeURIComponent(
+            query
+        )}`;
 
-    console.log(`[searchBehance] Loading URL in browser: ${url}`);
+        console.log(`[searchBehance] Loading URL in browser: ${url}`);
 
-    const jsResult = await runJavaScript(
-        url,
-        `async function waitForElements() {
+        const jsResult = await runJavaScript(
+            url,
+            `async function waitForElements() {
           function extractBehanceData() {
             const items = document.querySelectorAll(".qa-search-project-item");
             const results = [];
@@ -325,24 +338,24 @@ export async function searchBehance(
         }
 
         return await waitForElements();`
-    );
+        );
 
-    console.log('[searchBehance] jsResult:', jsResult);
+        console.log('[searchBehance] jsResult:', jsResult);
 
-    /* ------------------------------------------------------------------ *\
+        /* ------------------------------------------------------------------ *\
       1. Process extracted data directly
          ───────────────────────────────
          The JavaScript extraction already handled all the DOM operations
     \* ------------------------------------------------------------------ */
-    // Parse the JSON result and use it directly
-    const results: DesignSearchResult[] = JSON.parse(jsResult).value;
+        // Parse the JSON result and use it directly
+        const results: DesignSearchResult[] = JSON.parse(jsResult).value;
 
-    // Apply the limit parameter to restrict the number of results
-    return results.slice(0, limit);
-  } catch (err) {
-    console.error('[searchBehance]', err);
-    return [];
-  }
+        // Apply the limit parameter to restrict the number of results
+        return results.slice(0, limit);
+    } catch (err) {
+        console.error('[searchBehance]', err);
+        return [];
+    }
 }
 
 /**
@@ -852,7 +865,9 @@ async function searchEnvato(
             const parsed = JSON.parse(jsResult);
             if (parsed && parsed.value && Array.isArray(parsed.value)) {
                 results = parsed.value;
-                console.log(`[searchEnvato] Successfully parsed ${results.length} results`);
+                console.log(
+                    `[searchEnvato] Successfully parsed ${results.length} results`
+                );
             }
         } catch (err) {
             console.error('Error parsing Envato results:', err);
@@ -860,11 +875,13 @@ async function searchEnvato(
 
         // If no results from Elements, try ThemeForest as fallback
         if (results.length === 0) {
-            console.log('[searchEnvato] No results from Envato Elements, trying ThemeForest...');
-            
+            console.log(
+                '[searchEnvato] No results from Envato Elements, trying ThemeForest...'
+            );
+
             // Try ThemeForest as a fallback
             const themeforestUrl = `https://themeforest.net/search/${encodeURIComponent(query)}`;
-            
+
             // Similar JS script but for ThemeForest
             const themeforestResult = await runJavaScript(
                 themeforestUrl,
@@ -952,12 +969,18 @@ async function searchEnvato(
                 
                 return await extractThemeForest();`
             );
-            
+
             try {
                 const themeForestParsed = JSON.parse(themeforestResult);
-                if (themeForestParsed && themeForestParsed.value && Array.isArray(themeForestParsed.value)) {
+                if (
+                    themeForestParsed &&
+                    themeForestParsed.value &&
+                    Array.isArray(themeForestParsed.value)
+                ) {
                     results = themeForestParsed.value;
-                    console.log(`[searchEnvato] Found ${results.length} results from ThemeForest`);
+                    console.log(
+                        `[searchEnvato] Found ${results.length} results from ThemeForest`
+                    );
                 }
             } catch (err) {
                 console.error('Error parsing ThemeForest results:', err);
@@ -966,7 +989,9 @@ async function searchEnvato(
 
         // If we still didn't find any results, log it
         if (results.length === 0) {
-            console.log('[searchEnvato] No results found from either Envato Elements or ThemeForest');
+            console.log(
+                '[searchEnvato] No results found from either Envato Elements or ThemeForest'
+            );
         }
 
         // Apply the limit and return
@@ -987,7 +1012,9 @@ async function searchPinterest(
     try {
         // Pinterest now requires JavaScript, so we'll use the browser approach
         const pinterestUrl = `https://pinterest.com/search/pins/?q=${encodeURIComponent(query)}`;
-        console.log(`[searchPinterest] Loading URL in browser: ${pinterestUrl}`);
+        console.log(
+            `[searchPinterest] Loading URL in browser: ${pinterestUrl}`
+        );
 
         const jsResult = await runJavaScript(
             pinterestUrl,
@@ -1393,7 +1420,9 @@ async function searchSiteInspire(
     try {
         // Use browser approach since SiteInspire may have JS-based rendering
         const siteInspireUrl = `https://www.siteinspire.com/websites?search=${encodeURIComponent(query)}`;
-        console.log(`[searchSiteInspire] Loading URL in browser: ${siteInspireUrl}`);
+        console.log(
+            `[searchSiteInspire] Loading URL in browser: ${siteInspireUrl}`
+        );
 
         const jsResult = await runJavaScript(
             siteInspireUrl,
@@ -1709,16 +1738,28 @@ async function genericWebSearch(
             const searchQuery = `Please provide a list of up to ${limit} URLs for the most popular sites matching "${query}". Please return the results in JSON format [{url: 'https://...', title: 'Example Site'}, ...]. Only respond with the JSON, and not other text of comments.`;
 
             // Use web_search with the selected engine
-            let result = await web_search(random_agent_id, engine, searchQuery, limit);
+            let result = await web_search(
+                random_agent_id,
+                engine,
+                searchQuery,
+                limit
+            );
 
             // If the first engine fails, try the other one
             if (result.startsWith('Error:')) {
-                console.log(`[genericWebSearch] ${engine} search failed, trying alternative engine`);
+                console.log(
+                    `[genericWebSearch] ${engine} search failed, trying alternative engine`
+                );
                 engine = engine === 'openai' ? 'google' : 'openai';
-                result = await web_search(random_agent_id, engine, searchQuery, limit);
+                result = await web_search(
+                    random_agent_id,
+                    engine,
+                    searchQuery,
+                    limit
+                );
             }
 
-            console.log(`[genericWebSearch] Raw search result:`, result);
+            console.log('[genericWebSearch] Raw search result:', result);
 
             // Try to extract JSON from the result
             let jsonData = [];
@@ -1727,15 +1768,22 @@ async function genericWebSearch(
                 // First attempt: try parsing the entire response as JSON
                 jsonData = JSON.parse(result);
             } catch (e) {
-                console.log('[genericWebSearch] Could not parse entire result as JSON, trying to extract JSON array');
+                console.log(
+                    '[genericWebSearch] Could not parse entire result as JSON, trying to extract JSON array'
+                );
 
                 // Second attempt: look for array pattern using regex
-                const jsonArrayMatch = result.match(/\[\s*{(?:.|[\r\n])*?}\s*\]/);
+                const jsonArrayMatch = result.match(
+                    /\[\s*{(?:.|[\r\n])*?}\s*\]/
+                );
                 if (jsonArrayMatch) {
                     try {
                         jsonData = JSON.parse(jsonArrayMatch[0]);
                     } catch (innerError) {
-                        console.error('[genericWebSearch] Failed to parse extracted JSON array:', innerError);
+                        console.error(
+                            '[genericWebSearch] Failed to parse extracted JSON array:',
+                            innerError
+                        );
                     }
                 }
             }
@@ -1760,19 +1808,25 @@ async function genericWebSearch(
                         url: item.url,
                         title: item.title || `${query} Website`,
                         thumbnailURL: undefined,
-                        screenshotURL: undefined
+                        screenshotURL: undefined,
                     }));
 
-                    console.log(`[genericWebSearch] Successfully parsed ${results.length} results from ${engine}`);
+                    console.log(
+                        `[genericWebSearch] Successfully parsed ${results.length} results from ${engine}`
+                    );
                     return results.slice(0, limit);
                 }
             }
 
-            console.log('[genericWebSearch] No valid results extracted from search response');
+            console.log(
+                '[genericWebSearch] No valid results extracted from search response'
+            );
             return [];
-
         } catch (searchError) {
-            console.error('[genericWebSearch] Error performing search:', searchError);
+            console.error(
+                '[genericWebSearch] Error performing search:',
+                searchError
+            );
             return [];
         }
     } catch (error) {
@@ -1789,7 +1843,6 @@ export async function design_search(
     query: string,
     limit: number = 9
 ): Promise<string> {
-
     // Select the appropriate search function based on the engine
     let results: DesignSearchResult[];
 
@@ -1803,30 +1856,49 @@ export async function design_search(
             break;
         case 'envato':
             results = await searchEnvato(query, limit);
-            
+
             // Find and fix any Envato URLs that need to be upgraded to higher resolution
             results.forEach((item, i) => {
                 // For Envato URLs we need to make sure thumbnails and screenshots have different resolutions
-                if (item.thumbnailURL && item.screenshotURL && item.thumbnailURL === item.screenshotURL) {
+                if (
+                    item.thumbnailURL &&
+                    item.screenshotURL &&
+                    item.thumbnailURL === item.screenshotURL
+                ) {
                     // Only process URLs from Envato content delivery
-                    if (item.thumbnailURL.includes('envatousercontent.com') || item.thumbnailURL.includes('elements-cover-images')) {
-                        console.log(`[design_search] Enhancing screenshot quality for ${item.title}`);
-                        
+                    if (
+                        item.thumbnailURL.includes('envatousercontent.com') ||
+                        item.thumbnailURL.includes('elements-cover-images')
+                    ) {
+                        console.log(
+                            `[design_search] Enhancing screenshot quality for ${item.title}`
+                        );
+
                         // Get the original URL
                         const originalUrl = item.thumbnailURL;
-                        
+
                         // Check for width parameter pattern (most common case)
                         if (originalUrl.includes('w=433')) {
                             // Change to higher resolution (710 or 1200 depending on what's available)
-                            item.screenshotURL = originalUrl.replace('w=433', 'w=710');
-                            console.log(`[design_search] Set screenshotURL to higher resolution: ${item.screenshotURL.substring(0, 80) + '...'}`);
-                        } 
+                            item.screenshotURL = originalUrl.replace(
+                                'w=433',
+                                'w=710'
+                            );
+                            console.log(
+                                `[design_search] Set screenshotURL to higher resolution: ${item.screenshotURL.substring(0, 80) + '...'}`
+                            );
+                        }
                         // Alternative resolution patterns
                         else if (originalUrl.includes('w=316')) {
-                            item.screenshotURL = originalUrl.replace('w=316', 'w=710');
-                        }
-                        else if (originalUrl.includes('w=356')) {
-                            item.screenshotURL = originalUrl.replace('w=356', 'w=710');
+                            item.screenshotURL = originalUrl.replace(
+                                'w=316',
+                                'w=710'
+                            );
+                        } else if (originalUrl.includes('w=356')) {
+                            item.screenshotURL = originalUrl.replace(
+                                'w=356',
+                                'w=710'
+                            );
                         }
                         // If no width parameter is found but quality parameter exists
                         else if (originalUrl.includes('q=')) {
@@ -1839,13 +1911,16 @@ export async function design_search(
                                 item.screenshotURL = `${beforeQ}w=710&${afterQ}`;
                             } else {
                                 // Increase quality only
-                                item.screenshotURL = originalUrl.replace('q=85', 'q=95');
+                                item.screenshotURL = originalUrl.replace(
+                                    'q=85',
+                                    'q=95'
+                                );
                             }
                         }
                     }
                 }
             });
-            
+
             break;
         case 'pinterest':
             results = await searchPinterest(query, limit);
@@ -1871,16 +1946,19 @@ export async function design_search(
         if (result.screenshotURL) {
             return result;
         }
-        
+
         // If we have a thumbnailURL but no screenshotURL, use thumbnailURL as screenshotURL
         if (result.thumbnailURL && !result.screenshotURL) {
             result.screenshotURL = result.thumbnailURL;
             return result;
         }
-        
+
         // If we don't have any image URLs, take a screenshot
         if (!result.screenshotURL) {
-            const screenshotPath = await takeScreenshot(result.url, result.title);
+            const screenshotPath = await takeScreenshot(
+                result.url,
+                result.title
+            );
             if (screenshotPath) {
                 result.screenshotURL = screenshotPath;
             }
@@ -1917,7 +1995,6 @@ export function getDesignSearchTools() {
         '- web_search: broad web crawl; use when you need raw screenshots beyond the curated sources (lower signal, but widest net)',
     ];
 
-
     return [
         createToolFunction(
             design_search,
@@ -1930,11 +2007,13 @@ export function getDesignSearchTools() {
                 },
                 query: {
                     type: 'string',
-                    description: 'Plain-language design query, e.g. "AI SaaS dashboard hero" or "e-commerce checkout flow".',
+                    description:
+                        'Plain-language design query, e.g. "AI SaaS dashboard hero" or "e-commerce checkout flow".',
                 },
                 limit: {
                     type: 'number',
-                    description: 'Maximum number of results to return (default: 9)',
+                    description:
+                        'Maximum number of results to return (default: 9)',
                     optional: true,
                 },
             }

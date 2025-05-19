@@ -246,27 +246,39 @@ export class AgentBrowserSessionCDP {
                     // Store original targetId for comparison
                     const ourTabId = targetId;
 
-                    this.cdpClient.Target.on('targetCreated', async (params) => {
+                    this.cdpClient.Target.on('targetCreated', async params => {
                         const newTarget = params.targetInfo;
 
                         // If a new page-type target was created and it was initiated by our tab
-                        if (newTarget.type === 'page' && newTarget.openerTabId === ourTabId) {
+                        if (
+                            newTarget.type === 'page' &&
+                            newTarget.openerTabId === ourTabId
+                        ) {
                             console.log(
                                 `[browser_session_cdp] Intercepted new tab creation from tab ${this.tabId}. ` +
-                                `Closing new tab ${newTarget.targetId} and redirecting to: ${newTarget.url || '(unknown)'}`
+                                    `Closing new tab ${newTarget.targetId} and redirecting to: ${newTarget.url || '(unknown)'}`
                             );
 
                             // 1. Try to close the new tab immediately
                             try {
-                                await this.cdpClient.Target.closeTarget({ targetId: newTarget.targetId });
-                                console.log(`[browser_session_cdp] Successfully closed intercepted tab ${newTarget.targetId}`);
+                                await this.cdpClient.Target.closeTarget({
+                                    targetId: newTarget.targetId,
+                                });
+                                console.log(
+                                    `[browser_session_cdp] Successfully closed intercepted tab ${newTarget.targetId}`
+                                );
 
                                 // 2. If there's a URL, redirect our current tab to it to maintain navigation
-                                if (newTarget.url && newTarget.url !== 'about:blank') {
-                                    console.log(`[browser_session_cdp] Redirecting current tab to: ${newTarget.url}`);
+                                if (
+                                    newTarget.url &&
+                                    newTarget.url !== 'about:blank'
+                                ) {
+                                    console.log(
+                                        `[browser_session_cdp] Redirecting current tab to: ${newTarget.url}`
+                                    );
                                     await this.cdpClient.Runtime.evaluate({
                                         expression: `location.href = ${JSON.stringify(newTarget.url)}`,
-                                        userGesture: true
+                                        userGesture: true,
                                     });
                                 }
                             } catch (err) {
@@ -278,7 +290,9 @@ export class AgentBrowserSessionCDP {
                         }
                     });
 
-                    console.log(`[browser_session_cdp] CDP Target.targetCreated guard installed for tab ${this.tabId}`);
+                    console.log(
+                        `[browser_session_cdp] CDP Target.targetCreated guard installed for tab ${this.tabId}`
+                    );
                 } catch (guardError) {
                     console.error(
                         `[browser_session_cdp] Failed to set up Target.targetCreated guard for tab ${this.tabId}:`,

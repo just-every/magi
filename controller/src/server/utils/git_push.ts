@@ -18,7 +18,11 @@ import { computeMetrics } from './../managers/commit_metrics';
 import { getProject } from './db_utils';
 import { PREventsManager } from '../managers/pr_events_manager';
 import { getDefaultBranch } from './git_utils';
-import { recordFailure, classifyRisk, decideMergeAction } from './git_push_helpers';
+import {
+    recordFailure,
+    classifyRisk,
+    decideMergeAction,
+} from './git_push_helpers';
 import { recordMerge } from './pr_event_utils';
 
 interface GitCmdOpts extends ExecSyncOptions {
@@ -82,10 +86,14 @@ function ensureLocksDir(projectId: string): string {
         try {
             // Set sticky bit + rwxrwxrwx permissions so all containers can create locks
             fs.chmodSync(parentLocksDir, 0o1777);
-            console.log(`[git-push] Set shared permissions on locks directory: ${parentLocksDir}`);
+            console.log(
+                `[git-push] Set shared permissions on locks directory: ${parentLocksDir}`
+            );
         } catch (err) {
             // Non-fatal - containers with same UID will still work
-            console.warn(`[git-push] Failed to set permissions on locks directory: ${err}`);
+            console.warn(
+                `[git-push] Failed to set permissions on locks directory: ${err}`
+            );
         }
     }
 
@@ -115,7 +123,10 @@ async function withBranchLock<T>(
     const locksDir = ensureLocksDir(projectId);
 
     // Create a lockfile path that's safe for filesystem
-    const lockPath = path.join(locksDir, `${branch.replace(/[^a-zA-Z0-9-_]/g, '_')}.lock`);
+    const lockPath = path.join(
+        locksDir,
+        `${branch.replace(/[^a-zA-Z0-9-_]/g, '_')}.lock`
+    );
 
     console.log(`[git-push] Acquiring filesystem lock at ${lockPath}`);
 
@@ -127,10 +138,10 @@ async function withBranchLock<T>(
     try {
         // Acquire the lock - this will wait if another process holds it
         release = await lockfile.lock(lockPath, {
-            retries: 120,         // Try for up to 2 minutes
-            retryWait: 1000,      // Wait 1 second between retries
-            stale: staleTimeout,  // Consider lock stale after timeout
-            realpath: false       // Don't follow symlinks
+            retries: 120, // Try for up to 2 minutes
+            retryWait: 1000, // Wait 1 second between retries
+            stale: staleTimeout, // Consider lock stale after timeout
+            realpath: false, // Don't follow symlinks
         });
 
         console.log(`[git-push] Lock acquired for ${projectId}:${branch}`);
@@ -142,7 +153,9 @@ async function withBranchLock<T>(
         if (release) {
             try {
                 await release();
-                console.log(`[git-push] Lock released for ${projectId}:${branch}`);
+                console.log(
+                    `[git-push] Lock released for ${projectId}:${branch}`
+                );
             } catch (err) {
                 console.warn(`[git-push] Failed to release lock: ${err}`);
             }
@@ -169,8 +182,10 @@ function mergeInProgress(repo: string): boolean {
  * @returns Boolean indicating if a rebase is in progress
  */
 function rebaseInProgress(repo: string): boolean {
-    return fs.existsSync(path.join(repo, '.git', 'rebase-merge')) ||
-           fs.existsSync(path.join(repo, '.git', 'rebase-apply'));
+    return (
+        fs.existsSync(path.join(repo, '.git', 'rebase-merge')) ||
+        fs.existsSync(path.join(repo, '.git', 'rebase-apply'))
+    );
 }
 
 /**
@@ -194,7 +209,11 @@ function hostRepoPath(projectPath: string): string {
  * @param mirrorPath Path to the mirror repository
  * @param branch Branch to fetch
  */
-function safeFastForward(hostPath: string, mirrorPath: string, branch: string): void {
+function safeFastForward(
+    hostPath: string,
+    mirrorPath: string,
+    branch: string
+): void {
     console.log(`[git-push] Safely fast-forwarding host repo at ${hostPath}`);
 
     // Step 1: Fetch the branch from the mirror
@@ -209,30 +228,48 @@ function safeFastForward(hostPath: string, mirrorPath: string, branch: string): 
     // Step 2: Smart handling of uncommitted changes
     try {
         // Get the current status of the work tree
-        const dirtyCheck = execSync(`git -C "${hostPath}" status --porcelain -z`, {
-            encoding: 'utf8',
-        });
+        const dirtyCheck = execSync(
+            `git -C "${hostPath}" status --porcelain -z`,
+            {
+                encoding: 'utf8',
+            }
+        );
 
         // If clean, proceed directly to fast-forward
         if (!dirtyCheck) {
             // Fast path: work tree is clean
             try {
-                runGit(hostPath, 'merge-base --is-ancestor HEAD FETCH_HEAD', { quiet: true });
+                runGit(hostPath, 'merge-base --is-ancestor HEAD FETCH_HEAD', {
+                    quiet: true,
+                });
                 runGit(hostPath, 'reset --hard FETCH_HEAD');
-                console.log('[git-push] Successfully fast-forwarded clean host work-tree');
+                console.log(
+                    '[git-push] Successfully fast-forwarded clean host work-tree'
+                );
                 return; // Done - fast-forwarded clean work tree
             } catch (ancestorErr) {
                 // Not an ancestor - local and remote have diverged
-                console.warn('[git-push] Local and MAGI commits have diverged, cannot fast-forward');
-                console.warn('[git-push] Creating branch magi/incoming instead');
+                console.warn(
+                    '[git-push] Local and MAGI commits have diverged, cannot fast-forward'
+                );
+                console.warn(
+                    '[git-push] Creating branch magi/incoming instead'
+                );
                 const timestamp = Date.now();
-                runGit(hostPath, `branch magi/incoming-${timestamp} FETCH_HEAD`);
-                console.log(`[git-push] Created branch magi/incoming-${timestamp} pointing to FETCH_HEAD`);
+                runGit(
+                    hostPath,
+                    `branch magi/incoming-${timestamp} FETCH_HEAD`
+                );
+                console.log(
+                    `[git-push] Created branch magi/incoming-${timestamp} pointing to FETCH_HEAD`
+                );
                 return;
             }
         }
 
-        console.log('[git-push] Host work-tree has local changes, checking merge safety');
+        console.log(
+            '[git-push] Host work-tree has local changes, checking merge safety'
+        );
 
         // Parse status to determine which files have local modifications
         const modifiedFiles = new Set<string>();
@@ -254,14 +291,20 @@ function safeFastForward(hostPath: string, mirrorPath: string, branch: string): 
         const upstreamChanged = execSync(
             `git -C "${hostPath}" diff --name-only -z HEAD FETCH_HEAD`,
             { encoding: 'utf8' }
-        ).split('\0').filter(Boolean);
+        )
+            .split('\0')
+            .filter(Boolean);
 
         // Find potential conflict: files modified both locally and upstream
-        const conflictRisk = upstreamChanged.filter(file => modifiedFiles.has(file));
+        const conflictRisk = upstreamChanged.filter(file =>
+            modifiedFiles.has(file)
+        );
 
         if (conflictRisk.length === 0) {
             // SAFE to stash-FF-pop - no overlapping files modified
-            console.log('[git-push] No conflict risk detected, attempting stash-FF-pop');
+            console.log(
+                '[git-push] No conflict risk detected, attempting stash-FF-pop'
+            );
 
             try {
                 // Stash (including untracked)
@@ -269,57 +312,98 @@ function safeFastForward(hostPath: string, mirrorPath: string, branch: string): 
 
                 // Check if fast-forward is possible (HEAD is ancestor of FETCH_HEAD)
                 try {
-                    runGit(hostPath, 'merge-base --is-ancestor HEAD FETCH_HEAD', { quiet: true });
+                    runGit(
+                        hostPath,
+                        'merge-base --is-ancestor HEAD FETCH_HEAD',
+                        { quiet: true }
+                    );
 
                     // Fast-forward
                     runGit(hostPath, 'reset --hard FETCH_HEAD');
-                    console.log('[git-push] Successfully fast-forwarded host work-tree');
+                    console.log(
+                        '[git-push] Successfully fast-forwarded host work-tree'
+                    );
 
                     // Try to restore changes - very unlikely to conflict since we checked
                     try {
                         runGit(hostPath, 'stash pop');
-                        console.log('[git-push] Successfully restored local changes after fast-forward');
+                        console.log(
+                            '[git-push] Successfully restored local changes after fast-forward'
+                        );
                     } catch (popErr) {
-                        console.warn('[git-push] Unexpected conflict when restoring stash, keeping stashed changes for manual review');
+                        console.warn(
+                            '[git-push] Unexpected conflict when restoring stash, keeping stashed changes for manual review'
+                        );
                         // Run stash store to make sure the stash entry remains accessible
                         try {
-                            runGit(hostPath, 'stash store -m "MAGI merge conflict stash"', { quiet: true });
+                            runGit(
+                                hostPath,
+                                'stash store -m "MAGI merge conflict stash"',
+                                { quiet: true }
+                            );
                         } catch (storeErr) {
-                            console.warn('[git-push] Failed to store stash, changes might be in .git/refs/stash');
+                            console.warn(
+                                '[git-push] Failed to store stash, changes might be in .git/refs/stash'
+                            );
                         }
                     }
                 } catch (ancestorErr) {
                     // Not an ancestor - local and remote have diverged
-                    console.warn('[git-push] Local and MAGI commits have diverged, cannot fast-forward');
-                    console.warn('[git-push] Restoring stashed changes and creating magi/incoming instead');
+                    console.warn(
+                        '[git-push] Local and MAGI commits have diverged, cannot fast-forward'
+                    );
+                    console.warn(
+                        '[git-push] Restoring stashed changes and creating magi/incoming instead'
+                    );
 
                     // Restore the stash since we're not fast-forwarding
                     try {
                         runGit(hostPath, 'stash pop');
                     } catch (popErr) {
-                        console.warn('[git-push] Failed to restore stash after FF abort, changes remain in stash');
+                        console.warn(
+                            '[git-push] Failed to restore stash after FF abort, changes remain in stash'
+                        );
                     }
 
                     // Create the branch
                     const timestamp = Date.now();
-                    runGit(hostPath, `branch magi/incoming-${timestamp} FETCH_HEAD`);
-                    console.log(`[git-push] Created branch magi/incoming-${timestamp} pointing to FETCH_HEAD`);
+                    runGit(
+                        hostPath,
+                        `branch magi/incoming-${timestamp} FETCH_HEAD`
+                    );
+                    console.log(
+                        `[git-push] Created branch magi/incoming-${timestamp} pointing to FETCH_HEAD`
+                    );
                 }
             } catch (stashErr) {
-                console.warn('[git-push] Failed to stash changes, falling back to magi/incoming', stashErr);
+                console.warn(
+                    '[git-push] Failed to stash changes, falling back to magi/incoming',
+                    stashErr
+                );
                 const timestamp = Date.now();
-                runGit(hostPath, `branch magi/incoming-${timestamp} FETCH_HEAD`);
-                console.log(`[git-push] Created branch magi/incoming-${timestamp} pointing to FETCH_HEAD`);
+                runGit(
+                    hostPath,
+                    `branch magi/incoming-${timestamp} FETCH_HEAD`
+                );
+                console.log(
+                    `[git-push] Created branch magi/incoming-${timestamp} pointing to FETCH_HEAD`
+                );
             }
             return;
         } else {
             // UNSAFE - conflict risk detected
-            console.warn(`[git-push] Host repo has ${conflictRisk.length} files with conflict risk:`);
-            console.warn(`  ${conflictRisk.slice(0, 5).join(', ')}${conflictRisk.length > 5 ? '...' : ''}`);
+            console.warn(
+                `[git-push] Host repo has ${conflictRisk.length} files with conflict risk:`
+            );
+            console.warn(
+                `  ${conflictRisk.slice(0, 5).join(', ')}${conflictRisk.length > 5 ? '...' : ''}`
+            );
             console.warn('[git-push] Creating branch magi/incoming instead');
             const timestamp = Date.now();
             runGit(hostPath, `branch magi/incoming-${timestamp} FETCH_HEAD`);
-            console.log(`[git-push] Created branch magi/incoming-${timestamp} pointing to FETCH_HEAD`);
+            console.log(
+                `[git-push] Created branch magi/incoming-${timestamp} pointing to FETCH_HEAD`
+            );
             return;
         }
     } catch (err) {
@@ -328,27 +412,37 @@ function safeFastForward(hostPath: string, mirrorPath: string, branch: string): 
         try {
             const timestamp = Date.now();
             runGit(hostPath, `branch magi/incoming-${timestamp} FETCH_HEAD`);
-            console.log(`[git-push] Created fallback branch magi/incoming-${timestamp} pointing to FETCH_HEAD`);
+            console.log(
+                `[git-push] Created fallback branch magi/incoming-${timestamp} pointing to FETCH_HEAD`
+            );
         } catch (branchErr) {
-            console.error(`[git-push] Also failed to create magi/incoming branch: ${branchErr}`);
+            console.error(
+                `[git-push] Also failed to create magi/incoming branch: ${branchErr}`
+            );
         }
         throw err;
     }
 
     // Step 3: Check if fast-forward is possible (HEAD is ancestor of FETCH_HEAD)
     try {
-        runGit(hostPath, 'merge-base --is-ancestor HEAD FETCH_HEAD', { quiet: true });
+        runGit(hostPath, 'merge-base --is-ancestor HEAD FETCH_HEAD', {
+            quiet: true,
+        });
 
         // Fast-forward is possible, do it
         runGit(hostPath, 'reset --hard FETCH_HEAD');
         console.log('[git-push] Successfully fast-forwarded host work-tree');
     } catch (err) {
         // Not an ancestor - local and remote have diverged
-        console.warn('[git-push] Local and MAGI commits have diverged, cannot fast-forward');
+        console.warn(
+            '[git-push] Local and MAGI commits have diverged, cannot fast-forward'
+        );
         console.warn('[git-push] Creating branch magi/incoming instead');
         const timestamp = Date.now();
         runGit(hostPath, `branch magi/incoming-${timestamp} FETCH_HEAD`);
-        console.log(`[git-push] Created branch magi/incoming-${timestamp} pointing to FETCH_HEAD`);
+        console.log(
+            `[git-push] Created branch magi/incoming-${timestamp} pointing to FETCH_HEAD`
+        );
     }
 }
 
@@ -455,17 +549,28 @@ function getMirrorPath(projectPath: string): string {
         const projectId = pathParts[projectsIndex + 1];
 
         // Mirror path format: /magi_output/<processId>/projects/<projectId>.mirror.git
-        return path.join('/magi_output', processId, 'projects', `${projectId}.mirror.git`);
+        return path.join(
+            '/magi_output',
+            processId,
+            'projects',
+            `${projectId}.mirror.git`
+        );
     } catch (error) {
         // Fallback: assume the mirror is alongside the working copy with a .mirror.git suffix
-        console.warn(`[git-push] Failed to parse project path (${error}), using fallback mirror path calculation`);
+        console.warn(
+            `[git-push] Failed to parse project path (${error}), using fallback mirror path calculation`
+        );
         const projectDir = path.dirname(projectPath);
         const projectName = path.basename(projectPath);
         return path.join(projectDir, `${projectName}.mirror.git`);
     }
 }
 
-function pushBranch(projectPath: string, branch: string, hostPath?: string): void {
+function pushBranch(
+    projectPath: string,
+    branch: string,
+    hostPath?: string
+): void {
     console.log(`[git-push] push ${branch}`);
     try {
         runGit(projectPath, `push -u origin ${branch}`);
@@ -491,12 +596,17 @@ function pushBranch(projectPath: string, branch: string, hostPath?: string): voi
                     // Get the mirror path for fetch operation
                     const mirrorPath = getMirrorPath(projectPath);
 
-                    console.log('[git-push] Safe fast-forward host work-tree after force push');
+                    console.log(
+                        '[git-push] Safe fast-forward host work-tree after force push'
+                    );
 
                     // Use safe fast-forward that protects local changes
                     safeFastForward(hostPath, mirrorPath, branch);
                 } catch (hostErr) {
-                    console.error('[git-push] failed to update host repo:', hostErr);
+                    console.error(
+                        '[git-push] failed to update host repo:',
+                        hostErr
+                    );
                     // Continue without throwing as the primary push succeeded
                 }
             }
@@ -610,7 +720,9 @@ export async function retryMerge(
         const hostPath = hostRepoPath(projectPath);
 
         // Execute merge with a lock on the default branch to prevent concurrent merges
-        console.log(`[git-push] Acquiring lock on ${projectId}:${defaultBranch} before merge retry operation`);
+        console.log(
+            `[git-push] Acquiring lock on ${projectId}:${defaultBranch} before merge retry operation`
+        );
         return await withBranchLock(projectId, defaultBranch, async () => {
             // Safely stash any local changes before merge
             const hadStash = stashSave(projectPath);
@@ -673,7 +785,12 @@ export async function pushBranchAndOpenPR(
 
     // Store push markers outside the git work-tree so they never dirty a clone
     //   /magi_output/<processId>/markers/<projectId>/<branch>.pushed
-    const markerDir = path.join('/magi_output', processId, 'markers', projectId);
+    const markerDir = path.join(
+        '/magi_output',
+        processId,
+        'markers',
+        projectId
+    );
     fs.mkdirSync(markerDir, { recursive: true });
     const safeBranch = branchName.replace(/[/\\]/g, '_'); // Convert slashes to underscores
     const markerPath = path.join(markerDir, `${safeBranch}.pushed`);
@@ -779,7 +896,9 @@ export async function pushBranchAndOpenPR(
         if (action === 'merge') {
             // Get the default branch to use for locking
             const defaultBranch = getDefaultBranch(projectPath);
-            console.log(`[git-push] Acquiring lock on ${projectId}:${defaultBranch} before merge operation`);
+            console.log(
+                `[git-push] Acquiring lock on ${projectId}:${defaultBranch} before merge operation`
+            );
 
             // Execute merge with a lock on the default branch to prevent concurrent merges
             return await withBranchLock(projectId, defaultBranch, async () => {
@@ -816,11 +935,16 @@ export async function pushBranchAndOpenPR(
                     } else {
                         // Record successful merge in the database
                         try {
-                            const mergeCommitSha = execSync(`git -C "${projectPath}" rev-parse HEAD`, {
-                                encoding: 'utf8',
-                            }).trim();
+                            const mergeCommitSha = execSync(
+                                `git -C "${projectPath}" rev-parse HEAD`,
+                                {
+                                    encoding: 'utf8',
+                                }
+                            ).trim();
 
-                            console.log(`[git-push] Successful merge with commit ${mergeCommitSha}`);
+                            console.log(
+                                `[git-push] Successful merge with commit ${mergeCommitSha}`
+                            );
 
                             // Record merge event
                             await recordMerge({
@@ -832,7 +956,10 @@ export async function pushBranchAndOpenPR(
                                 mergeCommitSha,
                             });
                         } catch (logErr) {
-                            console.warn('[git-push] Failed to record merge event:', logErr);
+                            console.warn(
+                                '[git-push] Failed to record merge event:',
+                                logErr
+                            );
                             // Don't throw here - we still want to return success even if logging fails
                         }
                     }

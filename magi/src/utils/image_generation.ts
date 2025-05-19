@@ -50,13 +50,13 @@ async function generate_image(
         if (!targetPath) {
             // Use the default location in the output directory
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            targetPath = path.join('/magi_output/shared/generate_image', `image_${timestamp}.png`);
+            targetPath = path.join(
+                '/magi_output/shared/generate_image',
+                `image_${timestamp}.png`
+            );
         }
 
-        write_file(
-            targetPath,
-            imageBuffer.buffer,
-        );
+        write_file(targetPath, imageBuffer.buffer);
 
         // Return the path where the image was saved
         return targetPath;
@@ -88,13 +88,15 @@ export function getImageGenerationTools(): ToolFunction[] {
                     default: 'auto',
                 },
                 source_image: {
-                    description: 'A URL or base64 encoded string containing an image that should be edited or used as reference',
-                    optional: true
+                    description:
+                        'A URL or base64 encoded string containing an image that should be edited or used as reference',
+                    optional: true,
                 },
                 output_path: {
-                    description: 'Destination file path for the generated PNG. If omitted, the file is saved to /magi_output/shared/generate_image/ with a timestamp.',
-                    optional: true
-                }
+                    description:
+                        'Destination file path for the generated PNG. If omitted, the file is saved to /magi_output/shared/generate_image/ with a timestamp.',
+                    optional: true,
+                },
             }
         ),
     ];

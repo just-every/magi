@@ -460,8 +460,11 @@ export class ProcessManager {
         let checkCount = 0;
         const checkInterval = setInterval(async () => {
             checkCount++;
-            if (checkCount % 12 === 0) { // Log every minute (12 * 5000ms)
-                console.log(`[DEBUG] Container status check #${checkCount} for ${processId}`);
+            if (checkCount % 12 === 0) {
+                // Log every minute (12 * 5000ms)
+                console.log(
+                    `[DEBUG] Container status check #${checkCount} for ${processId}`
+                );
             }
             try {
                 // Query container status using Docker inspect
@@ -511,7 +514,10 @@ export class ProcessManager {
                     }
                 }
             } catch (err) {
-                console.log(`[DEBUG] Status check error for ${processId}:`, err);
+                console.log(
+                    `[DEBUG] Status check error for ${processId}:`,
+                    err
+                );
                 if (this.processes[processId]) {
                     // Mark as completed if we can't determine actual status
                     this.processes[processId].status = 'completed';

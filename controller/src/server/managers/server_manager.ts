@@ -387,8 +387,11 @@ export class ServerManager {
                         fileCache.set(cleanPath, true);
                     }
                     const duration = Date.now() - startTime;
-                    if (duration > 500) { // Log only slow requests
-                        console.log(`[DEBUG] File access slow (${duration}ms): ${cleanPath}`);
+                    if (duration > 500) {
+                        // Log only slow requests
+                        console.log(
+                            `[DEBUG] File access slow (${duration}ms): ${cleanPath}`
+                        );
                     }
                     return; // Response has already been sent
                 }
@@ -473,8 +476,11 @@ export class ServerManager {
 
                         res.send(fileContent);
                         const duration = Date.now() - startTime;
-                        if (duration > 500) { // Log only slow requests
-                            console.log(`[DEBUG] File access slow (${duration}ms): ${cleanPath}, size: ${fileContent.length} bytes`);
+                        if (duration > 500) {
+                            // Log only slow requests
+                            console.log(
+                                `[DEBUG] File access slow (${duration}ms): ${cleanPath}, size: ${fileContent.length} bytes`
+                            );
                         }
                         resolve(true);
                     } catch (err) {

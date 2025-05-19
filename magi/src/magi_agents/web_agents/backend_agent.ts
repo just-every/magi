@@ -84,12 +84,8 @@ DATABASE MANAGEMENT:
 
 The frontend engineer will connect to your API, so ensure endpoints are well-documented and follow a consistent pattern.
 `,
-        tools: [
-            ...getCommonTools()
-        ],
-        workers: [
-            createCodeAgent,
-        ],
+        tools: [...getCommonTools()],
+        workers: [createCodeAgent],
         modelClass: 'reasoning_mini',
     });
 

@@ -32,7 +32,7 @@ async function update_project_details(
     project_id: string,
     project_type?: (typeof PROJECT_TYPES)[number],
     simple_description?: string,
-    detailed_description?: string,
+    detailed_description?: string
 ): Promise<string> {
     // First get the existing project
     const existingProject = await getProject(project_id);

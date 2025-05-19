@@ -22,7 +22,11 @@ const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
     const { processes, coreProcessId } = useSocket();
 
     const processList = Array.from(processes.values())
-        .filter(p => !statusFilter || statusFilter.includes((p as ProcessData).status))
+        .filter(
+            p =>
+                !statusFilter ||
+                statusFilter.includes((p as ProcessData).status)
+        )
         .sort((a, b) => {
             const processA = a as ProcessData;
             const processB = b as ProcessData;

@@ -6,12 +6,12 @@ import { get_output_dir } from '../utils/file_utils.js';
 import { getProcessProjectIds } from '../utils/project_utils.js';
 
 export const TASK_TYPE_DESCRIPTIONS: Record<ProcessToolType, string> = {
-    'research': 'Perform deep research on a specific topic',
-    'browse': 'Browse the web and interact with web pages',
-    'web_code': 'Write code for web applications',
-    'code': 'Write any other type of code',
-    'project_update': 'Analyze a project and update documentation',
-    'other': 'Perform any other task',
+    research: 'Perform deep research on a specific topic',
+    browse: 'Browse the web and interact with web pages',
+    web_code: 'Write code for web applications',
+    code: 'Write any other type of code',
+    project_update: 'Analyze a project and update documentation',
+    other: 'Perform any other task',
 };
 
 export const YOUR_NAME = process.env.YOUR_NAME || 'User';

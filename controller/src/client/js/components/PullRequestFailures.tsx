@@ -27,13 +27,13 @@ interface PullRequestFailure {
  * @param onSelectFailure Optional callback when a failure is selected in compact mode
  */
 interface PullRequestFailuresProps {
-  compact?: boolean;
-  onSelectFailure?: (failure: PullRequestFailure) => void;
+    compact?: boolean;
+    onSelectFailure?: (failure: PullRequestFailure) => void;
 }
 
 const PullRequestFailures: React.FC<PullRequestFailuresProps> = ({
-  compact = false,
-  onSelectFailure
+    compact = false,
+    onSelectFailure,
 }) => {
     // State for PR failures
     const [failures, setFailures] = useState<PullRequestFailure[]>([]);
@@ -320,7 +320,9 @@ const PullRequestFailures: React.FC<PullRequestFailuresProps> = ({
         // Return early if no failures or they're all resolved
         const pendingFailures = failures.filter(f => f.resolution === null);
         if (loading && pendingFailures.length === 0) {
-            return <div className="compact-pr-failures loading">Loading...</div>;
+            return (
+                <div className="compact-pr-failures loading">Loading...</div>
+            );
         }
 
         if (pendingFailures.length === 0) {
@@ -337,9 +339,15 @@ const PullRequestFailures: React.FC<PullRequestFailuresProps> = ({
                             onClick={() => fetchFailureDetails(failure.id)}
                             className="compact-failure-item"
                         >
-                            <div className="compact-failure-project">{failure.project_id}</div>
-                            <div className="compact-failure-branch">{failure.branch_name}</div>
-                            <div className="compact-failure-date">{formatDate(failure.created_at)}</div>
+                            <div className="compact-failure-project">
+                                {failure.project_id}
+                            </div>
+                            <div className="compact-failure-branch">
+                                {failure.branch_name}
+                            </div>
+                            <div className="compact-failure-date">
+                                {formatDate(failure.created_at)}
+                            </div>
                         </li>
                     ))}
                 </ul>

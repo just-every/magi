@@ -649,13 +649,15 @@ function promptForMissingKeys(): void {
             key: 'AUTO_MERGE_MAGI_PROJECTS',
             prompt: 'Auto-merge level for NEW Magi-created projects (none | low_risk | moderate_risk | all) [default all]: ',
             defaultValue: 'all',
-            description: 'Controls how aggressively Magi merges its own PRs without human review.',
+            description:
+                'Controls how aggressively Magi merges its own PRs without human review.',
         },
         {
             key: 'AUTO_MERGE_EXISTING_PROJECTS',
             prompt: 'Auto-merge level for EXISTING repositories (none | low_risk | moderate_risk | all) [default low_risk]: ',
             defaultValue: 'low_risk',
-            description: 'Controls auto-merge of PRs to repositories listed in PROJECT_REPOSITORIES.',
+            description:
+                'Controls auto-merge of PRs to repositories listed in PROJECT_REPOSITORIES.',
         },
     ];
 
@@ -734,12 +736,21 @@ function promptForMissingKeys(): void {
             }
 
             // Validate auto-merge settings
-            if ((nextPrompt.key === 'AUTO_MERGE_MAGI_PROJECTS' ||
-                 nextPrompt.key === 'AUTO_MERGE_EXISTING_PROJECTS') &&
-                 keyValue && keyValue.trim() !== '' &&
-                 !isValidMergeLevel(keyValue.trim())) {
-                console.log('\x1b[31m%s\x1b[0m', `Error: "${keyValue}" is not a valid merge level.`);
-                console.log('\x1b[33m%s\x1b[0m', 'Valid options are: none, low_risk, moderate_risk, all');
+            if (
+                (nextPrompt.key === 'AUTO_MERGE_MAGI_PROJECTS' ||
+                    nextPrompt.key === 'AUTO_MERGE_EXISTING_PROJECTS') &&
+                keyValue &&
+                keyValue.trim() !== '' &&
+                !isValidMergeLevel(keyValue.trim())
+            ) {
+                console.log(
+                    '\x1b[31m%s\x1b[0m',
+                    `Error: "${keyValue}" is not a valid merge level.`
+                );
+                console.log(
+                    '\x1b[33m%s\x1b[0m',
+                    'Valid options are: none, low_risk, moderate_risk, all'
+                );
 
                 // Re-ask for this value by re-marking it for editing
                 envVars[`_edit_${nextPrompt.key}`] = 'true';

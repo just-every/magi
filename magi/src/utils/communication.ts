@@ -165,7 +165,7 @@ export class CommunicationManager {
                         return;
                     } else if (message.type === 'project_update') {
                         const projectMessage = message as ProjectMessage;
-                        if(projectMessage.failed) {
+                        if (projectMessage.failed) {
                             console.log(
                                 `Project ${projectMessage.project_id} failed: ${projectMessage.message}`
                             );
@@ -493,7 +493,9 @@ export function getCommunicationManager(): CommunicationManager {
     return communicationManager;
 }
 
-export function setTestCommunicationManager(testCommunicationManager: CommunicationManager): CommunicationManager {
+export function setTestCommunicationManager(
+    testCommunicationManager: CommunicationManager
+): CommunicationManager {
     communicationManager = testCommunicationManager;
     return communicationManager;
 }

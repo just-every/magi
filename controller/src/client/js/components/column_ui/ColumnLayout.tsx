@@ -13,8 +13,9 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
     const { processes, coreProcessId, costData, isPaused, togglePauseState } =
         useSocket();
     const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-    const [middleTab, setMiddleTab] =
-        useState<'tasks' | 'code' | 'complete'>('tasks');
+    const [middleTab, setMiddleTab] = useState<'tasks' | 'code' | 'complete'>(
+        'tasks'
+    );
 
     useEffect(() => {
         // Focus input when visible
@@ -91,7 +92,12 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                             <ProcessTreeColumn
                                 selectedItemId={selectedItemId}
                                 setSelectedItemId={setSelectedItemId}
-                                statusFilter={['running', 'failed', 'terminated', 'ending']}
+                                statusFilter={[
+                                    'running',
+                                    'failed',
+                                    'terminated',
+                                    'ending',
+                                ]}
                             />
                         ) : middleTab === 'code' ? (
                             <PullRequestFailures />

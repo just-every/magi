@@ -15,7 +15,7 @@ export class DeltaBuffer {
         private readonly step = 20,
         private readonly max = 400,
         initial = 20,
-        private readonly timeLimitMs = 10_000, // flush after 20 s of inactivity
+        private readonly timeLimitMs = 10_000 // flush after 20 s of inactivity
     ) {
         this.threshold = initial;
     }
@@ -61,7 +61,7 @@ export function bufferDelta<T>(
     store: Map<string, DeltaBuffer>,
     messageId: string,
     chunk: string,
-    makeEvent: (content: string) => T,
+    makeEvent: (content: string) => T
 ): T[] {
     let buf = store.get(messageId);
     if (!buf) {
@@ -78,7 +78,7 @@ export function bufferDelta<T>(
  */
 export function flushBufferedDeltas<T>(
     store: Map<string, DeltaBuffer>,
-    makeEvent: (id: string, content: string) => T,
+    makeEvent: (id: string, content: string) => T
 ): T[] {
     const events: T[] = [];
     for (const [id, buf] of store) {

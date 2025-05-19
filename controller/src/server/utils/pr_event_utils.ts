@@ -31,9 +31,7 @@ export async function recordPrEvent(
                 eventData.projectId,
                 eventData.branchName,
                 eventData.commitMsg,
-                eventData.metrics
-                    ? JSON.stringify(eventData.metrics)
-                    : null,
+                eventData.metrics ? JSON.stringify(eventData.metrics) : null,
                 eventData.errorMessage || null,
                 eventData.mergeCommitSha || null,
                 eventData.status,
@@ -62,8 +60,8 @@ export async function recordPrEvent(
             branch: eventData.branchName,
             status: eventData.status,
             message: eventData.errorMessage
-                ? (eventData.errorMessage.substring(0, 100) +
-                   (eventData.errorMessage.length > 100 ? '...' : ''))
+                ? eventData.errorMessage.substring(0, 100) +
+                  (eventData.errorMessage.length > 100 ? '...' : '')
                 : `Branch '${eventData.branchName}' ${eventData.status}`,
             eventId: rows[0].id,
         });
@@ -81,7 +79,9 @@ export async function recordPrEvent(
  * Convenience function to record a successful merge
  */
 export async function recordMerge(
-    data: Omit<PullRequestEventInput, 'status' | 'errorMessage'> & { mergeCommitSha: string }
+    data: Omit<PullRequestEventInput, 'status' | 'errorMessage'> & {
+        mergeCommitSha: string;
+    }
 ): Promise<number | null> {
     return recordPrEvent({
         ...data,
@@ -93,7 +93,9 @@ export async function recordMerge(
  * Convenience function to record a PR failure, for backward compatibility
  */
 export async function recordPrFailure(
-    data: Omit<PullRequestEventInput, 'status' | 'mergeCommitSha'> & { errorMessage: string }
+    data: Omit<PullRequestEventInput, 'status' | 'mergeCommitSha'> & {
+        errorMessage: string;
+    }
 ): Promise<number | null> {
     return recordPrEvent({
         ...data,
@@ -190,7 +192,11 @@ export async function updatePrEvent(
 ): Promise<boolean> {
     const db = await getDB();
     try {
-        const updates: string[] = ['status = $1', 'resolved_at = NOW()', 'resolved_by = $2'];
+        const updates: string[] = [
+            'status = $1',
+            'resolved_at = NOW()',
+            'resolved_by = $2',
+        ];
         const params: any[] = [status, userId];
 
         let paramIndex = 3;
@@ -258,7 +264,7 @@ export async function revertPrEvent(
         id,
         userId,
         'reverted',
-        null,  // No resolution needed
+        null, // No resolution needed
         revertCommitSha
     );
 }

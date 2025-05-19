@@ -211,10 +211,16 @@ export class ClaudeCodeProvider implements ModelProvider {
             slot = await acquireSlot(messageId);
         } catch (error) {
             // Concurrency limit reached, fall back to Codex
-            console.log(`[ClaudeCodeProvider] Concurrency limit reached, falling back to Codex for message ${messageId}`);
+            console.log(
+                `[ClaudeCodeProvider] Concurrency limit reached, falling back to Codex for message ${messageId}`
+            );
 
             // Delegate to Codex provider
-            for await (const event of codexProvider.createResponseStream(model, messages, agent)) {
+            for await (const event of codexProvider.createResponseStream(
+                model,
+                messages,
+                agent
+            )) {
                 yield event;
             }
 
@@ -249,7 +255,9 @@ export class ClaudeCodeProvider implements ModelProvider {
                     // Detect cost summary as soon as it appears
                     if (!costReceived && line.includes('Total cost')) {
                         costReceived = true;
-                        console.log(`[ClaudeCodeProvider] Cost summary detected for message ${messageId}`);
+                        console.log(
+                            `[ClaudeCodeProvider] Cost summary detected for message ${messageId}`
+                        );
                     }
                 }
             };
@@ -274,25 +282,38 @@ export class ClaudeCodeProvider implements ModelProvider {
                     );
 
                     // Extract API and wall duration if available
-                    finalApiDuration = apiDurationMatch && apiDurationMatch[1] ? apiDurationMatch[1] : null;
-                    finalWallDuration = wallDurationMatch && wallDurationMatch[1] ? wallDurationMatch[1] : null;
+                    finalApiDuration =
+                        apiDurationMatch && apiDurationMatch[1]
+                            ? apiDurationMatch[1]
+                            : null;
+                    finalWallDuration =
+                        wallDurationMatch && wallDurationMatch[1]
+                            ? wallDurationMatch[1]
+                            : null;
 
                     if (finalApiDuration) {
-                        console.log(`[ClaudeCodeProvider] Extracted API duration: ${finalApiDuration}`);
+                        console.log(
+                            `[ClaudeCodeProvider] Extracted API duration: ${finalApiDuration}`
+                        );
                     }
                     if (finalWallDuration) {
-                        console.log(`[ClaudeCodeProvider] Extracted wall duration: ${finalWallDuration}`);
+                        console.log(
+                            `[ClaudeCodeProvider] Extracted wall duration: ${finalWallDuration}`
+                        );
                     }
 
                     // Extract tokens from the "Token usage by model" section
-                    const tokenUsageRe = /^\s*(\S+):\s*([\d.,_a-zA-Z]+)\s+input,\s*([\d.,_a-zA-Z]+)\s+output/gim;
+                    const tokenUsageRe =
+                        /^\s*(\S+):\s*([\d.,_a-zA-Z]+)\s+input,\s*([\d.,_a-zA-Z]+)\s+output/gim;
 
                     let parsedInputTokens = 0;
                     let parsedOutputTokens = 0;
                     let totalPreciseCost = 0;
 
                     // Collect all token usages by model and sum them
-                    for (const m of accumulatedCleanOutput.matchAll(tokenUsageRe)) {
+                    for (const m of accumulatedCleanOutput.matchAll(
+                        tokenUsageRe
+                    )) {
                         try {
                             const modelName = m[1].trim();
                             const inTok = humanReadableToInt(m[2]);
@@ -314,14 +335,19 @@ export class ClaudeCodeProvider implements ModelProvider {
                                 modelEntry = findModel(`${modelName}-latest`);
                             }
 
-                            if (modelEntry &&
-                                typeof modelEntry.cost.input_per_million === 'number' &&
-                                typeof modelEntry.cost.output_per_million === 'number') {
-
+                            if (
+                                modelEntry &&
+                                typeof modelEntry.cost.input_per_million ===
+                                    'number' &&
+                                typeof modelEntry.cost.output_per_million ===
+                                    'number'
+                            ) {
                                 // Calculate precise cost using model-specific pricing
                                 const modelCost =
-                                    (inTok / 1_000_000) * modelEntry.cost.input_per_million +
-                                    (outTok / 1_000_000) * modelEntry.cost.output_per_million;
+                                    (inTok / 1_000_000) *
+                                        modelEntry.cost.input_per_million +
+                                    (outTok / 1_000_000) *
+                                        modelEntry.cost.output_per_million;
 
                                 totalPreciseCost += modelCost;
 
@@ -330,7 +356,9 @@ export class ClaudeCodeProvider implements ModelProvider {
                                 );
                             }
                         } catch (e) {
-                            console.warn(`[ClaudeCodeProvider] Failed to parse token usage: ${e}`);
+                            console.warn(
+                                `[ClaudeCodeProvider] Failed to parse token usage: ${e}`
+                            );
                         }
                     }
 
@@ -343,7 +371,9 @@ export class ClaudeCodeProvider implements ModelProvider {
                                     textContent = msg.content;
                                 } else if (Array.isArray(msg.content)) {
                                     textContent = msg.content
-                                        .filter(part => part.type === 'input_text')
+                                        .filter(
+                                            part => part.type === 'input_text'
+                                        )
                                         .map(part => (part as any).text)
                                         .join('\n');
                                 }
@@ -354,9 +384,10 @@ export class ClaudeCodeProvider implements ModelProvider {
                         .join('\n\n---\n');
 
                     // Calculate token counts, using parsed values if available
-                    const input_tokens = parsedInputTokens > 0
-                        ? parsedInputTokens
-                        : Math.ceil((prompt?.length || 0) / 4);
+                    const input_tokens =
+                        parsedInputTokens > 0
+                            ? parsedInputTokens
+                            : Math.ceil((prompt?.length || 0) / 4);
 
                     let output_tokens = 0;
                     let cost = 0;
@@ -369,9 +400,10 @@ export class ClaudeCodeProvider implements ModelProvider {
                         }
 
                         // Set output token count based on parsed value or fallback to estimate
-                        output_tokens = parsedOutputTokens > 0
-                            ? parsedOutputTokens
-                            : Math.ceil(finalContent.length / 4);
+                        output_tokens =
+                            parsedOutputTokens > 0
+                                ? parsedOutputTokens
+                                : Math.ceil(finalContent.length / 4);
                     } else if (totalPreciseCost > 0) {
                         // Use precise model-based cost calculation if available
                         cost = totalPreciseCost;
@@ -382,10 +414,11 @@ export class ClaudeCodeProvider implements ModelProvider {
                         );
                     } else {
                         // Set output token count based on parsed value or fallbacks
-                        output_tokens = parsedOutputTokens > 0
-                            ? parsedOutputTokens
-                            : liveOutputTokens ||
-                            Math.ceil(finalContent.length / 4);
+                        output_tokens =
+                            parsedOutputTokens > 0
+                                ? parsedOutputTokens
+                                : liveOutputTokens ||
+                                  Math.ceil(finalContent.length / 4);
 
                         // Estimate pricing: $3/1M input tokens, $15/1M output tokens
                         const inputCost = (input_tokens * 0.003) / 1000;
@@ -396,7 +429,9 @@ export class ClaudeCodeProvider implements ModelProvider {
                         );
                     }
 
-                    console.log(`[ClaudeCodeProvider] Extracted cost from stream: $${cost.toFixed(6)}`);
+                    console.log(
+                        `[ClaudeCodeProvider] Extracted cost from stream: $${cost.toFixed(6)}`
+                    );
 
                     // Log usage to cost tracker
                     costTracker.addUsage({
@@ -405,8 +440,10 @@ export class ClaudeCodeProvider implements ModelProvider {
                         input_tokens,
                         output_tokens,
                         metadata: {
-                            api_duration: parseFloat(finalApiDuration || '0') || 0,
-                            wall_duration: parseFloat(finalWallDuration || '0') || 0,
+                            api_duration:
+                                parseFloat(finalApiDuration || '0') || 0,
+                            wall_duration:
+                                parseFloat(finalWallDuration || '0') || 0,
                         },
                     });
 
@@ -445,20 +482,25 @@ export class ClaudeCodeProvider implements ModelProvider {
                 .join('\n\n---\n');
 
             if (!prompt) {
-                throw new Error('Cannot run Claude CLI: Constructed prompt is empty.');
+                throw new Error(
+                    'Cannot run Claude CLI: Constructed prompt is empty.'
+                );
             }
 
             // 2. Get working directory and log request
-            const cwd = agent.cwd && agent.cwd.trim()
-                ? agent.cwd
-                : get_working_dir() || process.cwd();
+            const cwd =
+                agent.cwd && agent.cwd.trim()
+                    ? agent.cwd
+                    : get_working_dir() || process.cwd();
 
             console.log(
                 `[ClaudeCodeProvider] Executing streaming Claude CLI for model '${model}' in dir '${cwd}'...`
             );
 
             log_llm_request(agent.agent_id, 'anthropic', model, {
-                prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
+                prompt:
+                    prompt.substring(0, 100) +
+                    (prompt.length > 100 ? '...' : ''),
                 working_directory: cwd,
             });
 
@@ -475,7 +517,7 @@ export class ClaudeCodeProvider implements ModelProvider {
                     ...process.env,
                     DISABLE_AUTOUPDATER: '1',
                 },
-                emitComplete: false // Provider will decide when to emit complete event
+                emitComplete: false, // Provider will decide when to emit complete event
             };
 
             // 4. Run Claude CLI command via run_pty utility
@@ -493,7 +535,11 @@ export class ClaudeCodeProvider implements ModelProvider {
                     finalContent += event.content;
 
                     // Track the highest order value we've seen
-                    if ('order' in event && typeof event.order === 'number' && event.order > deltaPosition) {
+                    if (
+                        'order' in event &&
+                        typeof event.order === 'number' &&
+                        event.order > deltaPosition
+                    ) {
                         deltaPosition = event.order;
                     }
                 }
@@ -506,7 +552,9 @@ export class ClaudeCodeProvider implements ModelProvider {
             const metadata = processFinalMetadata();
 
             // Use the next sequential order number after the last delta
-            const completeEvent: MessageEvent & { metadata?: Record<string, any> } = {
+            const completeEvent: MessageEvent & {
+                metadata?: Record<string, any>;
+            } = {
                 type: 'message_complete',
                 message_id: messageId,
                 content: finalContent,
@@ -519,7 +567,9 @@ export class ClaudeCodeProvider implements ModelProvider {
             }
 
             // Log final status
-            console.log(`[ClaudeCodeProvider] Stream completed successfully for message ${messageId}.`);
+            console.log(
+                `[ClaudeCodeProvider] Stream completed successfully for message ${messageId}.`
+            );
 
             // Yield final complete event
             yield completeEvent;
@@ -537,7 +587,9 @@ export class ClaudeCodeProvider implements ModelProvider {
             };
         } finally {
             // Ensure proper cleanup on both success and error paths
-            console.log(`[ClaudeCodeProvider] Finalizing Claude Code provider for message ${messageId}`);
+            console.log(
+                `[ClaudeCodeProvider] Finalizing Claude Code provider for message ${messageId}`
+            );
 
             // Always release the Claude slot if we acquired one
             if (slot) {
