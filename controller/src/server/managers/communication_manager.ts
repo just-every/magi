@@ -68,6 +68,16 @@ export class CommunicationManager {
             process.cwd(),
             'dist/.server/magi_messages'
         );
+        
+        // Add debug logging
+        console.log(`[DEBUG] CommunicationManager initialized`);
+        
+        // Set up a debug interval
+        setInterval(() => {
+            const connectionCount = this.connections.size;
+            const containerDataCount = this.containerData.size;
+            console.log(`[DEBUG] WebSocket connections: ${connectionCount}, Container data records: ${containerDataCount}`);
+        }, 30000); // Log every 30 seconds
 
         // Ensure storage directory exists
         if (!fs.existsSync(this.storageDir)) {

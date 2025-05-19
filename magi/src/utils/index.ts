@@ -1,11 +1,13 @@
 import type { ToolFunction } from '../types/shared-types.js';
-import { getFileTools } from '../utils/file_utils.js';
-import { getShellTools } from '../utils/shell_utils.js';
-import { getSummaryTools } from '../utils/summary_utils.js';
-import { getCustomTools } from '../utils/custom_tool_utils.js';
-import { getMemoryTools } from '../utils/memory_utils.js';
-import { getSearchTools } from '../utils/search_utils.js';
-import { getBrowserTools } from '../utils/browser_utils.js';
+import { getFileTools } from './file_utils.js';
+import { getShellTools } from './shell_utils.js';
+import { getSummaryTools } from './summary_utils.js';
+import { getCustomTools } from './custom_tool_utils.js';
+import { getMemoryTools } from './memory_utils.js';
+import { getSearchTools } from './search_utils.js';
+import { getImageGenerationTools } from './image_generation.js';
+import { getDesignSearchTools } from './design_search.js';
+import { getBrowserTools } from './browser_utils.js';
 
 /**
  * Get all common tools as an array of tool definitions
@@ -33,6 +35,8 @@ export function getToolsForCustomFunctions(): ToolFunction[] {
         ...getSummaryTools(),
         ...getMemoryTools(),
         ...getSearchTools(),
+        ...getImageGenerationTools(),
+        ...getDesignSearchTools(),
         ...getBrowserTools(),
     ];
 }

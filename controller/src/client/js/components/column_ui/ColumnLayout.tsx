@@ -33,7 +33,7 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                 <div
                     className="col-md-3 h-100"
                     style={{
-                        backgroundColor: `rgba(${PRIMARY_RGB} / 0.2)`,
+                        backgroundColor: `rgb(209 238 255)`,
                         padding: '0.5rem',
                         paddingTop: '4.5rem',
                     }}

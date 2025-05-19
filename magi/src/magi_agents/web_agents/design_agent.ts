@@ -11,7 +11,7 @@
 import { Agent } from '../../utils/agent.js';
 import { getCommonTools } from '../../utils/index.js';
 import { getImageGenerationTools } from '../../utils/image_generation.js';
-import { createDesignSearchTool } from '../../utils/design_search.js';
+import { getDesignSearchTools } from '../../utils/design_search.js';
 import { MAGI_CONTEXT } from '../constants.js';
 import { createReasoningAgent } from '../common_agents/reasoning_agent.js';
 
@@ -79,7 +79,7 @@ Save assets in a structured format:
 The frontend engineer will use your designs as reference for implementation, so clarity is critical.
 `,
         tools: [
-            createDesignSearchTool(),
+            ...getDesignSearchTools(),
             ...getImageGenerationTools(),
             ...getCommonTools()
         ],

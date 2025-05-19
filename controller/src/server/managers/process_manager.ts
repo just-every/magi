@@ -457,7 +457,12 @@ export class ProcessManager {
 
         // Set up periodic container status checking
         const statusCheckIntervalMs = 5000; // Check every 5 seconds
+        let checkCount = 0;
         const checkInterval = setInterval(async () => {
+            checkCount++;
+            if (checkCount % 12 === 0) { // Log every minute (12 * 5000ms)
+                console.log(`[DEBUG] Container status check #${checkCount} for ${processId}`);
+            }
             try {
                 // Query container status using Docker inspect
                 const { stdout } = await execPromise(
@@ -505,7 +510,8 @@ export class ProcessManager {
                         this.processes[processId].monitorProcess.kill();
                     }
                 }
-            } catch (_) {
+            } catch (err) {
+                console.log(`[DEBUG] Status check error for ${processId}:`, err);
                 if (this.processes[processId]) {
                     // Mark as completed if we can't determine actual status
                     this.processes[processId].status = 'completed';
@@ -526,7 +532,7 @@ export class ProcessManager {
                 }
 
                 // Error usually means container doesn't exist anymore
-                throw _;
+                throw err;
             }
         }, statusCheckIntervalMs);
 

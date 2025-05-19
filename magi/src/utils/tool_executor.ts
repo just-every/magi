@@ -50,9 +50,12 @@ const BUILTIN_MODULES = [
     'inspector',
 ];
 import {
+    CommunicationManager,
     hasCommunicationManager,
     getCommunicationManager,
+    setTestCommunicationManager,
 } from './communication.js';
+// Remove unused import
 
 /**
  * Execute TypeScript code in a sandboxed environment with access to Magi tools
@@ -122,17 +125,38 @@ export async function executeToolInSandbox({
     }
 
     // Create a mock communication manager for the sandbox environment
+    // Only implement the public methods that would be used by tools
     const mockCommunicationManager = {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        // Core methods used by tools
         send: (event: any) => {
-            // In the sandbox, we might just log the event or do nothing
-            // console.log('[Sandbox Comms] Event sent:', event);
+            console.log('[Sandbox Comms] Event sent:', JSON.stringify(event).substring(0, 100) + '...');
         },
-        // Add other methods if needed by tools, e.g., on, off, once
-        on: () => {},
-        off: () => {},
-        once: () => {},
-    };
+
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        onCommand: (listener: (command: any) => Promise<void>) => {
+            console.log('[Sandbox Comms] Command listener registered');
+        },
+
+        sendMessage: (message: any) => {
+            console.log('[Sandbox Comms] Message sent:', JSON.stringify(message).substring(0, 100) + '...');
+        },
+
+        connect: () => {
+            console.log('[Sandbox Comms] Mock connection established');
+        },
+
+        close: () => {
+            console.log('[Sandbox Comms] Mock connection closed');
+        },
+
+        isClosed: () => false,
+
+        getMessageHistory: () => []
+    } as CommunicationManager;
+
+    if(!hasCommunicationManager()) {
+        setTestCommunicationManager(mockCommunicationManager);
+    }
 
     // Create the tool context with all helper functions, passing the mock communication manager
     console.log(
@@ -140,9 +164,7 @@ export async function executeToolInSandbox({
     );
     const toolsContext = buildToolContext(
         agentId,
-        hasCommunicationManager()
-            ? getCommunicationManager()
-            : mockCommunicationManager
+        getCommunicationManager()
     );
     console.log(
         `[tool_executor] Tool categories available: ${Object.keys(toolsContext).join(', ')}`

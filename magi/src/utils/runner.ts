@@ -957,7 +957,12 @@ export class Runner {
                     );
                     const retryHistory: ResponseInput = [
                         ...conversationHistory,
-                        { type: 'message', role: 'assistant', content: fullResponse },
+                        {
+                            type: 'message',
+                            role: 'assistant',
+                            content: fullResponse,
+                            status: 'completed',
+                        },
                         {
                             type: 'message',
                             role: 'developer',

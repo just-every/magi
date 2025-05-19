@@ -493,6 +493,11 @@ export function getCommunicationManager(): CommunicationManager {
     return communicationManager;
 }
 
+export function setTestCommunicationManager(testCommunicationManager: CommunicationManager): CommunicationManager {
+    communicationManager = testCommunicationManager;
+    return communicationManager;
+}
+
 export function hasCommunicationManager(): boolean {
     return !!communicationManager;
 }

@@ -129,6 +129,7 @@ function convertToOpenAITools(requestParams: any): any {
                 'minContains',
                 'maxContains',
                 'uniqueItems',
+                'default', // Remove default values as OpenAI doesn't support them
             ];
             unsupportedKeywords.forEach(keyword => {
                 if (schema[keyword] !== undefined) {

@@ -359,6 +359,8 @@ export class ServerManager {
             req: express.Request,
             res: express.Response
         ): Promise<void> => {
+            // Debug logging for file requests
+            const startTime = Date.now();
             try {
                 const filePath = req.path || '';
                 const cleanPath = filePath.replace(/^\/+/, '');
@@ -377,18 +379,23 @@ export class ServerManager {
                     const fileServed = await getAndServeFile(
                         container,
                         cleanPath,
-                        res
+                        res,
+                        startTime
                     );
 
                     if (fileServed) {
                         fileCache.set(cleanPath, true);
+                    }
+                    const duration = Date.now() - startTime;
+                    if (duration > 500) { // Log only slow requests
+                        console.log(`[DEBUG] File access slow (${duration}ms): ${cleanPath}`);
                     }
                     return; // Response has already been sent
                 }
 
                 // File is in cache, serve it directly
                 const container = docker.getContainer(HELPER_CONTAINER_NAME);
-                await getAndServeFile(container, cleanPath, res);
+                await getAndServeFile(container, cleanPath, res, startTime);
             } catch (error) {
                 console.error('Error serving file from Docker volume:', error);
                 if (!res.headersSent) {
@@ -414,7 +421,8 @@ export class ServerManager {
         const getAndServeFile = async (
             container: Docker.Container,
             cleanPath: string,
-            res: express.Response
+            res: express.Response,
+            startTime: number
         ): Promise<boolean> => {
             const exec = await container.exec({
                 Cmd: ['cat', `/magi_output/${cleanPath}`],
@@ -464,6 +472,10 @@ export class ServerManager {
                         setContentTypeHeader(res, cleanPath);
 
                         res.send(fileContent);
+                        const duration = Date.now() - startTime;
+                        if (duration > 500) { // Log only slow requests
+                            console.log(`[DEBUG] File access slow (${duration}ms): ${cleanPath}, size: ${fileContent.length} bytes`);
+                        }
                         resolve(true);
                     } catch (err) {
                         console.error('Error processing file content:', err);

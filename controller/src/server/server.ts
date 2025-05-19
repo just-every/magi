@@ -18,6 +18,13 @@ import prEventsRoutes from './routes/pr_events';
  * Initialize and start the MAGI System server
  */
 async function main(): Promise<void> {
+    // Add CPU usage debug logging
+    const cpuMonitorInterval = setInterval(() => {
+        const usage = process.cpuUsage();
+        const totalUsage = usage.user + usage.system;
+        console.log(`[DEBUG] CPU usage - user: ${usage.user}, system: ${usage.system}, total: ${totalUsage}`);
+    }, 10000);
+    
     // Check OpenAI API key
     if (!process.env.OPENAI_API_KEY) {
         console.warn('\n⚠ OPENAI_API_KEY not set. Voice disabled.\n');
