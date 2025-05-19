@@ -19,7 +19,7 @@ import prEventsRoutes from './routes/pr_events';
  */
 async function main(): Promise<void> {
     // Add CPU usage debug logging
-    const cpuMonitorInterval = setInterval(() => {
+    setInterval(() => {
         const usage = process.cpuUsage();
         const totalUsage = usage.user + usage.system;
         console.log(

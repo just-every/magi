@@ -12,10 +12,10 @@
  * Each source has specific capabilities and limitations as noted
  */
 
+/* eslint-disable no-useless-escape */
 import fs from 'fs';
 import path from 'path';
 import { getAgentBrowserSession } from './browser_session.js';
-import { quick_llm_call } from './llm_call_utils.js';
 import { web_search } from './search_utils.js';
 import { createToolFunction } from './tool_call.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -284,7 +284,7 @@ export async function searchBehance(
               if (srcset) {
                 const srcsetEntries = srcset.split(',').map(t => t.trim());
                 for (const entry of srcsetEntries) {
-                  const [candidate, size] = entry.split(/\\s+/);
+                  const [candidate, size] = entry.split(/\s+/);
 
                   if (/^(404|400)w$/.test(size)) thumbnailURL = candidate;
                   if (/^(808|1400|1600)w$/.test(size) || /max_/.test(candidate)) {
@@ -1288,7 +1288,7 @@ async function searchAwwwards(
                                 // For thumbnail, use the 1x version if available
                                 // For screenshot, use the 2x version or highest resolution available
                                 for (const part of srcsetParts) {
-                                    const [url, descriptor] = part.trim().split(/\\s+/);
+                                    const [url, descriptor] = part.trim().split(/\s+/);
 
                                     if (descriptor === '1x' && !thumbnailURL) {
                                         thumbnailURL = url;
@@ -1312,7 +1312,7 @@ async function searchAwwwards(
                                     // Try to find the real source from data-srcset
                                     const dataSrcset = img.getAttribute('data-srcset');
                                     if (dataSrcset) {
-                                        const firstSrc = dataSrcset.split(',')[0].trim().split(/\\s+/)[0];
+                                        const firstSrc = dataSrcset.split(',')[0].trim().split(/\s+/)[0];
                                         thumbnailURL = firstSrc;
                                     }
                                 }
@@ -1550,7 +1550,7 @@ async function searchSiteInspire(
                                 // Look for specific sizes
                                 for (const entry of srcsetEntries) {
                                     if (!entry) continue;
-                                    const parts = entry.split(/\\s+/);
+                                    const parts = entry.split(/\s+/);
                                     if (parts.length < 2) continue;
 
                                     const [url, size] = parts;
@@ -1858,7 +1858,7 @@ export async function design_search(
             results = await searchEnvato(query, limit);
 
             // Find and fix any Envato URLs that need to be upgraded to higher resolution
-            results.forEach((item, i) => {
+            results.forEach(item => {
                 // For Envato URLs we need to make sure thumbnails and screenshots have different resolutions
                 if (
                     item.thumbnailURL &&

@@ -10,13 +10,6 @@
 
 import { Agent } from '../../utils/agent.js';
 import { getCommonTools } from '../../utils/index.js';
-import { addHistory } from '../../utils/history.js';
-import {
-    ResponseInput,
-    ToolCall,
-    ResponseThinkingMessage,
-    type ResponseOutputMessage,
-} from '../../types/shared-types.js';
 import { MAGI_CONTEXT } from '../constants.js';
 import { createCodeAgent } from '../common_agents/code_agent.js';
 import { createBrowserAgent } from '../common_agents/browser_agent.js';

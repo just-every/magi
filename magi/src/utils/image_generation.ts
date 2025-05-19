@@ -1,9 +1,8 @@
 import { openaiProvider } from '../model_providers/openai.js';
 import { createToolFunction } from './tool_call.js';
 import { ToolFunction } from '../types/shared-types.js';
-import fs from 'fs';
 import path from 'path';
-import { get_output_dir, write_file } from './file_utils.js';
+import { write_file } from './file_utils.js';
 
 /**
  * Generate an image based on a text prompt and save it to a file
