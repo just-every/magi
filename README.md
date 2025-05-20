@@ -17,7 +17,7 @@ Think of Magi like a co-worker. She might make some mistakes, but she learns fro
 
 ## Architecture Overview
 
-Magí consists of four core components:
+Magi consists of four core components:
 
 • **Controller Service** (`controller/`)
   - Node.js (TypeScript) Express backend + Socket.IO
