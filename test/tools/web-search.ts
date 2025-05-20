@@ -30,6 +30,8 @@ const engines = [
   'sonar-deep-research'
 ];
 
+import { web_search } from '../../magi/src/utils/search_utils.js';
+
 export default async function webSearchTest(options: ToolsOptions = {}): Promise<ToolResult> {
   const { verbose = false, engine } = options;
   const query = "Please provide a list of up to 9 URLs for the most popular sites matching \"customer support homepage\". Please return the results in JSON format [{url: 'https://...', title: 'Example Site'}, ...]. Only respond with the JSON, and not other text of comments.";
@@ -37,7 +39,7 @@ export default async function webSearchTest(options: ToolsOptions = {}): Promise
 
   let overallSuccess = true;
   let overallError = '';
-  const results: Array<string> = [];
+  const results: Array<any> = [];
 
   if (verbose) {
     console.log('Testing web_search function...');

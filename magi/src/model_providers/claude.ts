@@ -747,6 +747,14 @@ export class ClaudeProvider implements ModelProvider {
                     max_tokens = Math.min(max_tokens, 4096); // Lower limit for other classes
             }
 
+            if(settings?.json_schema) {
+                messages.push({
+                    type: 'message',
+                    role: 'system',
+                    content: `Your response MUST be a valid JSON object that conforms to this schema:\n${JSON.stringify(settings.json_schema, null, 2)}`,
+                });
+            }
+
             // Preprocess *and* convert messages for Claude in one pass
             const claudeMessages = await this.prepareClaudeMessages(
                 messages,

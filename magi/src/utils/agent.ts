@@ -17,6 +17,7 @@ import {
     ResponseThinkingMessage,
     ToolParameterMap,
     ResponseOutputMessage,
+    type ResponseJSONSchema,
 } from '../types/shared-types.js';
 import { createToolFunction } from './tool_call.js';
 
@@ -89,7 +90,7 @@ export class Agent implements AgentInterface {
     verifier?: Agent;
     maxVerificationAttempts: number;
     args: any;
-    jsonSchema?: object; // JSON schema for structured output
+    jsonSchema?: ResponseJSONSchema; // JSON schema for structured output
     historyThread?: ResponseInput | undefined;
     cwd?: string; // Working directory for the agent (used by model providers that need a real shell)
 

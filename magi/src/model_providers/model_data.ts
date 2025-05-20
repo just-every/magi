@@ -147,7 +147,7 @@ export const MODEL_CLASSES = {
             'o4-mini-high', // OpenAI
             'o3-high', // OpenAI
             'claude-3-7-sonnet-latest', // Anthropic
-            'grok-3-mini-fast', // X.AI
+            //'grok-3-mini-fast', // X.AI
         ],
         random: true,
     },
@@ -239,7 +239,6 @@ export const MODEL_CLASSES = {
     vision_mini: {
         models: [
             'gpt-4.1-mini', // OpenAI
-            'gemini-2.0-flash-lite', // Google
             'gemini-2.5-flash-preview-04-17-low', // Google
         ],
         random: true,

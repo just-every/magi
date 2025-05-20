@@ -20,6 +20,8 @@ import {
     GenerateContentResponseUsageMetadata,
     GenerateContentResponse,
     Part,
+    type GenerateContentConfig,
+    type GenerateContentParameters,
 } from '@google/genai';
 import { EmbedOpts } from '../model_providers/model_provider.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -635,28 +637,33 @@ export class GeminiProvider implements ModelProvider {
             }
 
             // Handle model suffixes for thinking budget
-            let thinkingConfig: { thinkingBudget: number } | null = null;
+            let thinkingBudget: number | null = null;
 
             // Check if model has any of the defined suffixes
             for (const [suffix, budget] of Object.entries(
                 THINKING_BUDGET_CONFIGS
             )) {
                 if (model.endsWith(suffix)) {
-                    thinkingConfig = { thinkingBudget: budget };
+                    thinkingBudget = budget;
                     model = model.slice(0, -suffix.length);
                     break;
                 }
             }
 
             // Prepare generation config
-            const config: any = {};
+            const config: GenerateContentConfig = {
+                thinkingConfig: {
+                    includeThoughts: true,
+                }
+            };
 
             // Add thinking configuration if suffix was detected
-            if (thinkingConfig) {
-                config.thinkingConfig = thinkingConfig;
+            if (thinkingBudget) {
+                // @ts-expect-error - thinkingBudget exists in the runtime API but not in TypeScript definitions
+                config.thinkingConfig.thinkingBudget = thinkingBudget;
             }
             if (settings?.stop_sequence) {
-                config.stopSequences = settings.stop_sequence;
+                config.stopSequences = [settings.stop_sequence];
             }
             if (settings?.temperature) {
                 config.temperature = settings.temperature;
@@ -669,6 +676,47 @@ export class GeminiProvider implements ModelProvider {
             }
             if (settings?.top_k) {
                 config.topK = settings.top_k;
+            }
+            if (settings?.json_schema) {
+                config.responseMimeType = 'application/json';
+                config.responseSchema = settings.json_schema.schema;
+
+                // Remove additionalProperties from schema as Gemini doesn't support it
+                if (config.responseSchema) {
+                    const removeAdditionalProperties = (obj: any): void => {
+                        if (!obj || typeof obj !== 'object') {
+                            return;
+                        }
+
+                        // Delete additionalProperties at current level
+                        if ('additionalProperties' in obj) {
+                            delete obj.additionalProperties;
+                        }
+
+                        // Process nested objects in properties
+                        if (obj.properties && typeof obj.properties === 'object') {
+                            Object.values(obj.properties).forEach(prop => {
+                                removeAdditionalProperties(prop);
+                            });
+                        }
+
+                        // Process items in arrays
+                        if (obj.items) {
+                            removeAdditionalProperties(obj.items);
+                        }
+
+                        // Process oneOf, anyOf, allOf schemas
+                        ['oneOf', 'anyOf', 'allOf'].forEach(key => {
+                            if (obj[key] && Array.isArray(obj[key])) {
+                                obj[key].forEach((subSchema: any) => {
+                                    removeAdditionalProperties(subSchema);
+                                });
+                            }
+                        });
+                    };
+
+                    removeAdditionalProperties(config.responseSchema);
+                }
             }
 
             // Check if any tools require special handling
@@ -740,7 +788,7 @@ export class GeminiProvider implements ModelProvider {
                 };
             }
 
-            const requestParams = {
+            const requestParams: GenerateContentParameters = {
                 model,
                 contents,
                 config,
@@ -925,7 +973,7 @@ export class GeminiProvider implements ModelProvider {
             }
         } catch (error) {
             log_llm_error(requestId, error);
-            console.error('Error during Gemini stream processing:', error);
+            //console.error('Error during Gemini stream processing:', error);
             const errorMessage =
                 error instanceof Error
                     ? error.stack || error.message
@@ -936,6 +984,23 @@ export class GeminiProvider implements ModelProvider {
                 console.error(
                     '[Gemini] Stream terminated with incomplete JSON. This may indicate network issues or timeouts.'
                 );
+            }
+
+              // 1️⃣  Dump the object exactly as Node sees it
+            console.error('\n=== Gemini error ===');
+            console.dir(error, { depth: null });           // prints enumerable props
+
+            // 3️⃣  JSON-serialize every own property
+            console.error('\n=== JSON dump of error ===');
+            console.error(
+                JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+            );
+
+
+            // 5️⃣  Fallback: iterate keys manually (helps spot symbols, etc.)
+            console.error('\n=== Manual property walk ===');
+            for (const key of Reflect.ownKeys(error)) {
+                console.error(`${String(key)}:`, error[key]);
             }
 
             yield {

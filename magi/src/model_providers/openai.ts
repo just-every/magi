@@ -13,7 +13,6 @@ import {
     StreamingEvent,
     ToolCall,
     ResponseInput,
-    ResponseInputMessage,
 } from '../types/shared-types.js';
 import OpenAI, { toFile } from 'openai';
 import fetch from 'node-fetch';
@@ -35,6 +34,8 @@ import {
     bufferDelta,
     flushBufferedDeltas,
 } from '../utils/delta_buffer.js';
+import type { ResponseCreateParamsStreaming } from 'openai/resources/responses/responses.js';
+import type { ReasoningEffort } from 'openai/resources/shared.js';
 
 /**
  * Citation tracking for footnotes
@@ -79,8 +80,155 @@ function generateFootnotes(tracker: CitationTracker): string {
 }
 
 // Convert our tool definition to OpenAI's format
-function convertToOpenAITools(requestParams: any): any {
-    requestParams.tools = requestParams.tools.map((tool: ToolFunction) => {
+/**
+ * Process a JSON schema to make it compatible with OpenAI's requirements
+ * This includes adding required fields, setting additionalProperties: false,
+ * and removing unsupported keywords
+ */
+function processSchemaForOpenAI(schema: any, originalProperties?: any): any {
+    // Clone schema to avoid modifying the original
+    const processedSchema = JSON.parse(JSON.stringify(schema));
+
+    // Recursively process the schema for OpenAI compatibility
+    const processSchemaRecursively = (schema: any) => {
+        if (!schema || typeof schema !== 'object') return;
+
+        // 1. Remove 'optional: true' flag
+        if (schema.optional === true) {
+            delete schema.optional;
+        }
+
+        // 2. Convert 'oneOf' to 'anyOf'
+        if (Array.isArray(schema.oneOf)) {
+            schema.anyOf = schema.oneOf;
+            delete schema.oneOf;
+        }
+
+        // 3. Remove OpenAI-incompatible validation keywords
+        const unsupportedKeywords = [
+            'minimum',
+            'maximum',
+            'minItems',
+            'maxItems',
+            'minLength',
+            'maxLength',
+            'pattern',
+            'format',
+            'multipleOf',
+            'patternProperties',
+            'unevaluatedProperties',
+            'propertyNames',
+            'minProperties',
+            'maxProperties',
+            'unevaluatedItems',
+            'contains',
+            'minContains',
+            'maxContains',
+            'uniqueItems',
+            'default', // Remove default values as OpenAI doesn't support them
+        ];
+        unsupportedKeywords.forEach(keyword => {
+            if (schema[keyword] !== undefined) {
+                delete schema[keyword];
+            }
+        });
+
+        // Detect if it's an object-like schema
+        const isObject =
+            schema.type === 'object' ||
+            (schema.type === undefined && schema.properties !== undefined);
+
+        // 4. Recurse into nested structures first
+        // Process variants (anyOf, allOf)
+        for (const key of ['anyOf', 'allOf'] as const) {
+            if (Array.isArray(schema[key])) {
+                schema[key].forEach((variantSchema: any) =>
+                    processSchemaRecursively(variantSchema)
+                );
+            }
+        }
+        // Process properties
+        if (isObject && schema.properties) {
+            for (const propName in schema.properties) {
+                processSchemaRecursively(schema.properties[propName]);
+            }
+        }
+        // Process array items
+        if (schema.type === 'array' && schema.items !== undefined) {
+            if (Array.isArray(schema.items)) {
+                // Tuple validation
+                schema.items.forEach((itemSchema: any) =>
+                    processSchemaRecursively(itemSchema)
+                );
+            } else if (typeof schema.items === 'object') {
+                // Single schema for all items
+                processSchemaRecursively(schema.items);
+            }
+        }
+
+        // 5. AFTER recursion, process the current object level
+        if (isObject) {
+            // Always set additionalProperties: false for objects (required by OpenAI in strict mode)
+            // This is necessary even for objects without properties
+            schema.additionalProperties = false;
+
+            // Set 'required' array to include all current properties (required by OpenAI for strict mode)
+            if (schema.properties) {
+                const currentRequired = Object.keys(schema.properties);
+                // Only add required array if there are properties to require
+                if (currentRequired.length > 0) {
+                    schema.required = currentRequired;
+                } else {
+                    // If properties is an empty object {}, remove required
+                    delete schema.required;
+                }
+            } else {
+                // If no properties field, remove required
+                delete schema.required;
+            }
+        }
+    };
+
+    // Apply the recursive processing to the cloned schema
+    processSchemaRecursively(processedSchema);
+
+    // If original properties were provided (for tools), fix the top-level 'required' array
+    if (originalProperties) {
+        // AFTER recursion, fix the top-level 'required' array based on the ORIGINAL properties.
+        // This ensures top-level optional parameters are correctly handled, overriding the
+        // potentially stricter 'required' array set during recursion for the top-level object.
+        const topLevelRequired: string[] = [];
+        for (const propName in originalProperties) {
+            // Check the *original* property definition for the optional flag
+            if (!originalProperties[propName].optional) {
+                topLevelRequired.push(propName);
+            }
+        }
+        // Set the correct top-level required array on the processed schema
+        if (topLevelRequired.length > 0) {
+            processedSchema.required = topLevelRequired;
+        } else {
+            // Ensure the top-level object has no required array if no properties were originally required
+            delete processedSchema.required;
+        }
+    }
+
+    // Ensure top-level is object with additionalProperties: false if it has properties
+    if (
+        processedSchema.properties &&
+        processedSchema.additionalProperties === undefined
+    ) {
+        processedSchema.additionalProperties = false;
+    }
+
+    return processedSchema;
+}
+
+/**
+ * Convert our tool definition to OpenAI's format
+ */
+function convertToOpenAITools(requestParams: any, tools?: ToolFunction[] | undefined): any {
+    requestParams.tools = tools.map((tool: ToolFunction) => {
         if (tool.definition.function.name === 'openai_web_search') {
             delete requestParams.reasoning;
             return {
@@ -89,144 +237,12 @@ function convertToOpenAITools(requestParams: any): any {
             };
         }
 
-        // Clone parameters to avoid modifying the original
-        const paramSchema = JSON.parse(
-            JSON.stringify(tool.definition.function.parameters)
+        // Process the parameter schema using our utility function
+        const originalToolProperties = tool.definition.function.parameters.properties;
+        const paramSchema = processSchemaForOpenAI(
+            tool.definition.function.parameters,
+            originalToolProperties
         );
-        // Keep a reference to the original properties for top-level required calculation
-        const originalToolProperties =
-            tool.definition.function.parameters.properties;
-
-        // Recursively process the schema for OpenAI compatibility
-        const processSchemaRecursively = (schema: any) => {
-            if (!schema || typeof schema !== 'object') return;
-
-            // 1. Remove 'optional: true' flag
-            if (schema.optional === true) {
-                delete schema.optional;
-            }
-
-            // 2. Convert 'oneOf' to 'anyOf'
-            if (Array.isArray(schema.oneOf)) {
-                schema.anyOf = schema.oneOf;
-                delete schema.oneOf;
-            }
-
-            // 3. Remove OpenAI-incompatible validation keywords
-            const unsupportedKeywords = [
-                'minimum',
-                'maximum',
-                'minItems',
-                'maxItems',
-                'minLength',
-                'maxLength',
-                'pattern',
-                'format',
-                'multipleOf',
-                'patternProperties',
-                'unevaluatedProperties',
-                'propertyNames',
-                'minProperties',
-                'maxProperties',
-                'unevaluatedItems',
-                'contains',
-                'minContains',
-                'maxContains',
-                'uniqueItems',
-                'default', // Remove default values as OpenAI doesn't support them
-            ];
-            unsupportedKeywords.forEach(keyword => {
-                if (schema[keyword] !== undefined) {
-                    delete schema[keyword];
-                }
-            });
-
-            // Detect if it's an object-like schema
-            const isObject =
-                schema.type === 'object' ||
-                (schema.type === undefined && schema.properties !== undefined);
-
-            // 4. Recurse into nested structures first
-            // Process variants (anyOf, allOf)
-            for (const key of ['anyOf', 'allOf'] as const) {
-                if (Array.isArray(schema[key])) {
-                    schema[key].forEach((variantSchema: any) =>
-                        processSchemaRecursively(variantSchema)
-                    );
-                }
-            }
-            // Process properties
-            if (isObject && schema.properties) {
-                for (const propName in schema.properties) {
-                    processSchemaRecursively(schema.properties[propName]);
-                }
-            }
-            // Process array items
-            if (schema.type === 'array' && schema.items !== undefined) {
-                if (Array.isArray(schema.items)) {
-                    // Tuple validation
-                    schema.items.forEach((itemSchema: any) =>
-                        processSchemaRecursively(itemSchema)
-                    );
-                } else if (typeof schema.items === 'object') {
-                    // Single schema for all items
-                    processSchemaRecursively(schema.items);
-                }
-            }
-
-            // 5. AFTER recursion, process the current object level
-            if (isObject) {
-                // Always set additionalProperties: false for objects (required by OpenAI in strict mode)
-                // This is necessary even for objects without properties
-                schema.additionalProperties = false;
-
-                // Set 'required' array to include all current properties (required by OpenAI for strict mode)
-                if (schema.properties) {
-                    const currentRequired = Object.keys(schema.properties);
-                    // Only add required array if there are properties to require
-                    if (currentRequired.length > 0) {
-                        schema.required = currentRequired;
-                    } else {
-                        // If properties is an empty object {}, remove required
-                        delete schema.required;
-                    }
-                } else {
-                    // If no properties field, remove required
-                    delete schema.required;
-                }
-            }
-        };
-
-        // Apply the recursive processing to the cloned schema
-        processSchemaRecursively(paramSchema);
-
-        // AFTER recursion, fix the top-level 'required' array based on the ORIGINAL tool definition.
-        // This ensures top-level optional parameters are correctly handled, overriding the
-        // potentially stricter 'required' array set during recursion for the top-level object.
-        const topLevelRequired: string[] = [];
-        if (originalToolProperties) {
-            for (const propName in originalToolProperties) {
-                // Check the *original* property definition for the optional flag
-                if (!originalToolProperties[propName].optional) {
-                    topLevelRequired.push(propName);
-                }
-            }
-        }
-        // Set the correct top-level required array on the processed schema
-        if (topLevelRequired.length > 0) {
-            paramSchema.required = topLevelRequired;
-        } else {
-            // Ensure the top-level object has no required array if no properties were originally required
-            delete paramSchema.required;
-        }
-
-        // Ensure top-level is object with additionalProperties: false if it has properties
-        if (
-            paramSchema.properties &&
-            paramSchema.additionalProperties === undefined
-        ) {
-            paramSchema.additionalProperties = false;
-        }
 
         return {
             type: 'function',
@@ -414,8 +430,9 @@ export class OpenAIProvider implements ModelProvider {
      * @param model - The model to use (gpt-image-1 by default)
      * @param size - The size of the image to generate
      * @param quality - The quality of the image to generate
-     * @param image - Optional base64 image data to use as input (for image variations)
-     * @returns A promise that resolves to the base64 encoded image data
+     * @param source_images - Optional array of base64 image data or URLs to use as reference or input (for image variations)
+     * @param number_of_images - Number of images to generate (default: 1)
+     * @returns A promise that resolves to an array of base64 encoded image data URLs
      */
     async generateImage(
         prompt: string,
@@ -423,78 +440,82 @@ export class OpenAIProvider implements ModelProvider {
         background: 'transparent' | 'opaque' | 'auto' = 'auto',
         quality: 'low' | 'medium' | 'high' | 'auto' = 'auto',
         size: '1024x1024' | '1536x1024' | '1024x1536' | 'auto' = 'auto',
-        source_image?: string
-    ): Promise<string> {
+        source_images?: string | string[],
+        number_of_images: number = 1
+    ): Promise<string[]> {
         try {
             console.log(
-                `[OpenAI] Generating image with model ${model}, prompt: "${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}"`
+                `[OpenAI] Generating ${number_of_images} image(s) with model ${model}, prompt: "${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}"`
             );
 
             let response;
 
-            if (source_image) {
-                console.log('[OpenAI] Using images.edit with source_image');
+            if (source_images) {
+                console.log('[OpenAI] Using images.edit with source_images');
 
-                let imageFile;
+                // Convert single string to array for consistent processing
+                const imageArray = Array.isArray(source_images)
+                    ? source_images
+                    : [source_images];
+                const imageFiles = [];
 
-                // Check if source_image is a URL or base64 string
-                if (
-                    source_image.startsWith('http://') ||
-                    source_image.startsWith('https://')
-                ) {
-                    // Handle URL case - fetch the image
-                    const imageResponse = await fetch(source_image);
-                    const imageBuffer = await imageResponse.arrayBuffer();
+                // Process each image in the array
+                for (const sourceImg of imageArray) {
+                    let imageFile;
 
-                    // Convert to OpenAI file format
-                    imageFile = await toFile(
-                        new Uint8Array(imageBuffer),
-                        'image.png',
-                        { type: 'image/png' }
-                    );
-                } else {
-                    // Handle base64 string case
-                    // Check if it's a data URL and extract the base64 part if needed
-                    let base64Data = source_image;
-                    if (source_image.startsWith('data:')) {
-                        base64Data = source_image.split(',')[1];
+                    // Check if source_image is a URL or base64 string
+                    if (
+                        sourceImg.startsWith('http://') ||
+                        sourceImg.startsWith('https://')
+                    ) {
+                        // Handle URL case - fetch the image
+                        const imageResponse = await fetch(sourceImg);
+                        const imageBuffer = await imageResponse.arrayBuffer();
+
+                        // Convert to OpenAI file format
+                        imageFile = await toFile(
+                            new Uint8Array(imageBuffer),
+                            `image_${imageFiles.length}.png`,
+                            { type: 'image/png' }
+                        );
+                    } else {
+                        // Handle base64 string case
+                        // Check if it's a data URL and extract the base64 part if needed
+                        let base64Data = sourceImg;
+                        if (sourceImg.startsWith('data:')) {
+                            base64Data = sourceImg.split(',')[1];
+                        }
+
+                        // Convert base64 to binary
+                        const binaryData = Buffer.from(base64Data, 'base64');
+
+                        // Convert to OpenAI file format
+                        imageFile = await toFile(
+                            new Uint8Array(binaryData),
+                            `image_${imageFiles.length}.png`,
+                            { type: 'image/png' }
+                        );
                     }
 
-                    // Convert base64 to binary
-                    const binaryData = Buffer.from(base64Data, 'base64');
-
-                    // Convert to OpenAI file format
-                    imageFile = await toFile(
-                        new Uint8Array(binaryData),
-                        'image.png',
-                        { type: 'image/png' }
-                    );
+                    imageFiles.push(imageFile);
                 }
 
-                // For images.edit, we need to use a size that's compatible with the API
-                // Valid sizes for edit are: '1024x1024' | '256x256' | '512x512'
-                let editSize: '1024x1024' | '256x256' | '512x512' = '1024x1024';
-
-                // If current size is already valid for edit, use it
-                if (size === '1024x1024') {
-                    editSize = size;
-                }
-
-                // Use images.edit API
+                // Use the first image as the primary image and any additional ones as references
+                // OpenAI API currently uses only the first image for edit but may support multiple in the future
                 response = await this.client.images.edit({
                     model,
-                    image: imageFile,
                     prompt,
-                    n: 1,
+                    image: imageFiles,
+                    n: number_of_images,
                     quality,
-                    size: editSize,
+                    size,
                 });
             } else {
                 // Use standard image generation
                 response = await this.client.images.generate({
                     model,
                     prompt,
-                    n: 1,
+                    n: number_of_images,
                     background,
                     quality,
                     size,
@@ -507,19 +528,25 @@ export class OpenAIProvider implements ModelProvider {
             if (response.data && response.data.length > 0) {
                 costTracker.addUsage({
                     model,
-                    image_count: 1,
+                    image_count: response.data.length,
                 });
             }
 
-            // Extract the base64 image data
-            const imageData = response.data[0]?.b64_json;
+            // Extract the base64 image data for all images
+            const imageDataUrls = response.data.map(item => {
+                const imageData = item?.b64_json;
+                if (!imageData) {
+                    throw new Error('No image data returned from OpenAI');
+                }
+                return `data:image/png;base64,${imageData}`;
+            });
 
-            if (!imageData) {
-                throw new Error('No image data returned from OpenAI');
+            if (imageDataUrls.length === 0) {
+                throw new Error('No images returned from OpenAI');
             }
 
-            // Return the base64 image data as a data URL
-            return `data:image/png;base64,${imageData}`;
+            // Return the array of base64 image data URLs
+            return imageDataUrls;
         } catch (error) {
             console.error('[OpenAI] Error generating image:', error);
             throw error;
@@ -772,7 +799,7 @@ export class OpenAIProvider implements ModelProvider {
             }
 
             // Format the request according to the Responses API specification
-            let requestParams: any = {
+            let requestParams: ResponseCreateParamsStreaming = {
                 model,
                 stream: true,
                 user: 'magi',
@@ -792,7 +819,7 @@ export class OpenAIProvider implements ModelProvider {
             }
 
             // Define mapping for OpenAI reasoning effort configurations
-            const REASONING_EFFORT_CONFIGS: Array<string> = [
+            const REASONING_EFFORT_CONFIGS: Array<ReasoningEffort> = [
                 'low',
                 'medium',
                 'high',
@@ -836,7 +863,7 @@ export class OpenAIProvider implements ModelProvider {
                         type: settings.tool_choice.type,
                         name: settings.tool_choice.function.name,
                     };
-                } else {
+                } else if (typeof settings.tool_choice === 'string') {
                     requestParams.tool_choice = settings.tool_choice;
                 }
             }
@@ -844,61 +871,15 @@ export class OpenAIProvider implements ModelProvider {
             // Set JSON response format if a schema is provided
             if (settings?.json_schema) {
                 // For OpenAI, we use text.format to specify JSON output (previously response_format)
-                requestParams.text = { format: 'json_object' };
-
-                // Modify the system message to include the JSON schema
-                // Find the first system or developer message to add schema info
-                const systemMessageIndex = input.findIndex(
-                    msg =>
-                        msg.type === 'message' &&
-                        'role' in msg &&
-                        (msg.role === 'system' || msg.role === 'developer')
-                );
-
-                if (systemMessageIndex !== -1) {
-                    const systemMessage = input[systemMessageIndex];
-                    // Make sure we're dealing with a message that has content
-                    if ('content' in systemMessage) {
-                        let content =
-                            typeof systemMessage.content === 'string'
-                                ? systemMessage.content
-                                : JSON.stringify(systemMessage.content);
-
-                        // Add JSON schema instructions at the end of the system message
-                        content += `\n\nYour response MUST be a valid JSON object that conforms to this schema:\n${JSON.stringify(settings.json_schema, null, 2)}`;
-
-                        // Update the system message with the new content
-                        input[systemMessageIndex] = {
-                            ...systemMessage,
-                            content: content,
-                        };
-
-                        console.log(
-                            `[OpenAI] Added JSON schema to system message for model ${model}`
-                        );
-                    }
-                } else {
-                    // If no system message exists, create one with the schema
-                    const schemaMessage: ResponseInputMessage = {
-                        role: 'system',
-                        type: 'message',
-                        content: `Your response MUST be a valid JSON object that conforms to this schema:\n${JSON.stringify(settings.json_schema, null, 2)}`,
-                        status: 'completed',
-                    };
-
-                    // Insert at the beginning of the input array
-                    input.unshift(schemaMessage);
-                    console.log(
-                        `[OpenAI] Created new system message with JSON schema for model ${model}`
-                    );
-                }
+                // Process the JSON schema to ensure it meets OpenAI's requirements
+                const processedSchema = processSchemaForOpenAI(settings.json_schema);
+                requestParams.text = { format: processedSchema };
             }
 
             // Add tools if provided
             if (tools && tools.length > 0) {
                 // Convert our tools to OpenAI format
-                requestParams.tools = tools;
-                requestParams = convertToOpenAITools(requestParams);
+                requestParams = convertToOpenAITools(requestParams, tools);
             }
 
             // Log the request and save the requestId for later response logging
@@ -925,9 +906,8 @@ export class OpenAIProvider implements ModelProvider {
 
             const events: StreamingEvent[] = [];
             try {
-                // @ts-expect-error - OpenAI's stream might be AsyncIterable but TypeScript definitions might need adjustment
                 for await (const event of stream) {
-                    events.push(event);
+                    events.push(event as any);
 
                     // Check if the system was paused during the stream
                     if (isPaused()) {

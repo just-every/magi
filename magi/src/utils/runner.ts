@@ -928,7 +928,8 @@ export class Runner {
                 } catch (error) {
                     console.error(
                         `[Runner] Error handling JSON response for agent ${agent.name}:`,
-                        error
+                        error,
+                        fullResponse
                     );
 
                     // If force_json is true, we could retry here

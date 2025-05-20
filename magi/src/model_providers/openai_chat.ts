@@ -684,6 +684,12 @@ export class OpenAIChat implements ModelProvider {
             if (settings?.tool_choice)
                 requestParams.tool_choice =
                     settings.tool_choice as OpenAI.Chat.Completions.ChatCompletionToolChoiceOption;
+            if (settings?.json_schema) {
+                requestParams.response_format = {
+                    type: 'json_schema',
+                    json_schema: settings.json_schema
+                };
+            }
             if (tools && tools.length > 0)
                 requestParams.tools = convertToOpenAITools(tools);
 

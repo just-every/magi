@@ -472,35 +472,39 @@ Return ONLY valid JSON containing name, description, parameters_json, and final_
             modelSettings: {
                 force_json: true,
                 json_schema: {
-                    type: 'object',
-                    properties: {
-                        name: {
-                            type: 'string',
-                            description:
-                                'snake_case name of the tool - up to 6 words - be descriptive',
+                    name: 'tool_specification',
+                    type: 'json_schema',
+                    schema: {
+                        type: 'object',
+                        properties: {
+                            name: {
+                                type: 'string',
+                                description:
+                                    'snake_case name of the tool - up to 6 words - be descriptive',
+                            },
+                            description: {
+                                type: 'string',
+                                description:
+                                    'A couple of sentences describing what the tool does. Focus on the input and output. A couple of sentences is enough.',
+                            },
+                            parameters_json: {
+                                type: 'object',
+                                description:
+                                    'The JSON schema for the tool parameters, potentially generalized beyond the original sample input. You may add new parameters or modify existing ones.',
+                            },
+                            final_parameter_values: {
+                                type: 'object',
+                                description:
+                                    'An object mapping the parameter names from parameters_json to specific values derived from the original sample input or modification request.',
+                            },
                         },
-                        description: {
-                            type: 'string',
-                            description:
-                                'A couple of sentences describing what the tool does. Focus on the input and output. A couple of sentences is enough.',
-                        },
-                        parameters_json: {
-                            type: 'object',
-                            description:
-                                'The JSON schema for the tool parameters, potentially generalized beyond the original sample input. You may add new parameters or modify existing ones.',
-                        },
-                        final_parameter_values: {
-                            type: 'object',
-                            description:
-                                'An object mapping the parameter names from parameters_json to specific values derived from the original sample input or modification request.',
-                        },
+                        required: [
+                            'name',
+                            'description',
+                            'parameters_json',
+                            'final_parameter_values',
+                        ],
                     },
-                    required: [
-                        'name',
-                        'description',
-                        'parameters_json',
-                        'final_parameter_values',
-                    ],
                 },
             },
         }

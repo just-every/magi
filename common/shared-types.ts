@@ -163,7 +163,7 @@ export interface AgentDefinition {
     maxToolCallRoundsPerTurn?: number; // Maximum number of tool call rounds per turn
     verifier?: AgentDefinition;
     maxVerificationAttempts?: number;
-    jsonSchema?: object; // JSON schema definition for structured output
+    jsonSchema?: ResponseJSONSchema; // JSON schema definition for structured output
     historyThread?: ResponseInput | undefined;
     cwd?: string; // Working directory for model providers that need a real shell context
 
@@ -201,6 +201,40 @@ export interface AgentExportDefinition {
     cwd?: string; // Working directory for model providers that need a real shell context
 }
 
+export interface ResponseJSONSchema {
+  /**
+   * The name of the response format. Must be a-z, A-Z, 0-9, or contain underscores
+   * and dashes, with a maximum length of 64.
+   */
+  name: string;
+
+  /**
+   * The schema for the response format, described as a JSON Schema object. Learn how
+   * to build JSON schemas [here](https://json-schema.org/).
+   */
+  schema: Record<string, unknown>;
+
+  /**
+   * The type of response format being defined. Always `json_schema`.
+   */
+  type: 'json_schema';
+
+  /**
+   * A description of what the response format is for, used by the model to determine
+   * how to respond in the format.
+   */
+  description?: string;
+
+  /**
+   * Whether to enable strict schema adherence when generating the output. If set to
+   * true, the model will always follow the exact schema defined in the `schema`
+   * field. Only a subset of JSON Schema is supported when `strict` is `true`. To
+   * learn more, read the
+   * [Structured Outputs guide](https://platform.openai.com/docs/guides/structured-outputs).
+   */
+  strict?: boolean | null;
+}
+
 /**
  * Model settings for the OpenAI API
  */
@@ -218,7 +252,7 @@ export interface ModelSettings {
         | 'required'
         | { type: string; function: { name: string } };
     sequential_tools?: boolean; // Run tools sequentially instead of in parallel
-    json_schema?: object; // JSON schema for structured output
+    json_schema?: ResponseJSONSchema; // JSON schema for structured output
     force_json?: boolean; // Force JSON output even if model doesn't natively support it
 }
 

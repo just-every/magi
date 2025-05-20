@@ -293,14 +293,18 @@ ${formatMemories(memories)}`
                 modelSettings: {
                     force_json: true,
                     json_schema: {
-                        type: 'object',
-                        properties: {
-                            learnings: {
-                                type: 'array',
-                                items: { type: 'string' },
+                        name: 'learning_extraction',
+                        type: 'json_schema',
+                        schema: {
+                            type: 'object',
+                            properties: {
+                                learnings: {
+                                    type: 'array',
+                                    items: { type: 'string' },
+                                },
                             },
+                            required: ['learnings'],
                         },
-                        required: ['learnings'],
                     },
                 },
             },

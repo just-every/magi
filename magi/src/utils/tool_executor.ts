@@ -129,10 +129,12 @@ export async function executeToolInSandbox({
     const mockCommunicationManager = {
         // Core methods used by tools
         send: (event: any) => {
-            console.log(
-                '[Sandbox Comms] Event sent:',
-                JSON.stringify(event).substring(0, 100) + '...'
-            );
+            if(event.type !== 'message_delta') {
+                console.log(
+                    '[Sandbox Comms] Event sent:',
+                    JSON.stringify(event).substring(0, 100) + '...'
+                );
+            }
         },
 
         // eslint-disable-next-line @typescript-eslint/no-unused-vars

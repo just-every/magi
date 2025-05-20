@@ -7,7 +7,6 @@
  * - Envato/ThemeForest
  * - Pinterest
  * - Awwwards
- * - SiteInspire
  *
  * Each source has specific capabilities and limitations as noted
  */
@@ -24,27 +23,17 @@ import { JSDOM } from 'jsdom';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { quick_llm_call } from './llm_call_utils.js';
 import { ResponseInput } from '../types/shared-types.js';
+import {
+    DESIGN_ASSET_REFERENCE,
+    DESIGN_SEARCH_DESCRIPTIONS,
+    DESIGN_SEARCH_ENGINES,
+    DesignSearchEngine,
+    DesignSearchResult,
+    type DESIGN_ASSET_TYPES,
+} from './design/constants.js';
 
 const USER_AGENT =
     'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; magi-user/1.0; +https://withmagi.com)';
-
-// Type definitions
-export interface DesignSearchResult {
-    url: string;
-    title?: string;
-    thumbnailURL?: string;
-    screenshotURL?: string;
-    screenshotPath?: string;
-}
-
-export type DesignSearchEngine =
-    | 'dribbble'
-    | 'behance'
-    | 'envato'
-    | 'pinterest'
-    | 'awwwards'
-    | 'siteinspire'
-    | 'web_search';
 
 // Base directory for storing screenshots
 const DESIGN_ASSETS_DIR = '/magi_output/shared/design_assets';
@@ -381,21 +370,21 @@ async function searchEnvato(
                     // These are the primary item cards with class wtigj7JD
                     const envatoCards = document.querySelectorAll('div[class*="wtigj7JD"], div[data-testid="default-card"]');
                     console.log("Found " + envatoCards.length + " Envato template cards");
-                    
+
                     // Secondary approach - look for item-link elements, which are direct links to templates
                     const itemLinks = document.querySelectorAll('a[data-testid="item-link"]');
                     console.log("Found " + itemLinks.length + " item links");
-                    
+
                     // Tertiary approach - general link selection for older versions
                     const templateLinks = document.querySelectorAll('a[href*="/web-templates/"], a[href*="-"]');
                     console.log("Found " + templateLinks.length + " template links");
-                    
+
                     // Specifically look for images with srcset that include larger sizes
                     const srcsetImgs = document.querySelectorAll('img[srcset*="710w"]');
                     console.log("Found " + srcsetImgs.length + " images with 710w in srcset");
-                    
+
                     let results = [];
-                    
+
                     // Try the most specific approach first (primary cards)
                     if (envatoCards && envatoCards.length > 0) {
                         console.log("Processing Envato template cards");
@@ -404,19 +393,19 @@ async function searchEnvato(
                                 // Get the link and image
                                 const link = card.querySelector('a[data-testid="item-link"], a[title], a[href*="-"]');
                                 if (!link) continue;
-                                
+
                                 // Get the URL directly from the href
                                 const href = link.getAttribute('href');
                                 if (!href) continue;
-                                
+
                                 // Make sure it's a full URL
-                                const url = href.startsWith('http') ? 
-                                    href : 
+                                const url = href.startsWith('http') ?
+                                    href :
                                     new URL(href, window.location.origin).href;
-                                
+
                                 // Get title directly from link title attribute or item title
                                 let title = link.getAttribute('title');
-                                
+
                                 // If no title on the link, look for the title element
                                 if (!title) {
                                     const titleEl = card.querySelector('div[class*="hnXAr6Nr"], [data-testid="title-link"], span[class*="_7yoIykb4"], div[class*="hnXAr6Nr"]');
@@ -424,10 +413,10 @@ async function searchEnvato(
                                         title = titleEl.textContent.trim();
                                     }
                                 }
-                                
+
                                 // Find the image element - these have specific classes or data-testid in Envato
                                 const img = card.querySelector('img[data-testid="img-default-card"], img[class*="AFrX7o04"], img[srcset]');
-                                
+
                                 // If still no title, try to extract from URL
                                 if (!title && href) {
                                     // Extract from URL pattern: /template-name-ABC123
@@ -435,11 +424,11 @@ async function searchEnvato(
                                     if (urlParts.length > 0) {
                                         // Get the last part of the URL
                                         const lastPart = urlParts[urlParts.length - 1];
-                                        
+
                                         // Parse template ID format: template-name-ABC123
                                         // First remove any ID at the end (usually alphanumeric code)
                                         const nameWithoutId = lastPart.replace(/-[A-Z0-9]+$/, '');
-                                        
+
                                         // Convert remaining hyphenated text to title case
                                         title = nameWithoutId
                                                 .replace(/-/g, ' ')
@@ -449,27 +438,27 @@ async function searchEnvato(
                                                 .trim();
                                     }
                                 }
-                                
+
                                 // Get image URLs
                                 let thumbnailURL, screenshotURL;
-                                
+
                                 if (img) {
                                     // Default to src as a fallback
                                     thumbnailURL = img.src;
                                     screenshotURL = thumbnailURL;
-                                    
+
                                     // Check for srcset attribute - Envato uses this for responsive images
                                     if (img.hasAttribute('srcset')) {
                                         const srcset = img.getAttribute('srcset');
                                         // Log the complete srcset for debugging
                                         console.log('[searchEnvato] Found image with srcset: ' + srcset.substring(0, 100) + '...');
                                         console.log('[searchEnvato] srcset contains 710w: ' + srcset.includes('710w'));
-                                        
+
                                         // Parse the srcset to find different image sizes
                                         // Format example: "url 316w, url 355w, url 433w, url 632w, url 710w"
                                         const srcParts = srcset.split(',').map(part => part.trim());
                                         console.log('[searchEnvato] Parsed srcset into ' + srcParts.length + ' parts');
-                                        
+
                                         // Find a small image for thumbnail (around 300-400w)
                                         for (const part of srcParts) {
                                             const [url, size] = part.split(/\s+/);
@@ -481,7 +470,7 @@ async function searchEnvato(
                                                 }
                                             }
                                         }
-                                        
+
                                         // Special check for 710w images which are the largest on Envato
                                         if (srcset.includes('710w')) {
                                             // Extract the 710w image URL with regexp to be precise
@@ -495,7 +484,7 @@ async function searchEnvato(
                                                 // Find a larger image for screenshot (prefer 710w or largest available)
                                                 let largestSize = 0;
                                                 let largestUrl = '';
-                                                
+
                                                 // First try to find the 710w image which is typically the largest
                                                 for (const part of srcParts) {
                                                     const [url, size] = part.split(/\s+/);
@@ -505,7 +494,7 @@ async function searchEnvato(
                                                         console.log("[searchEnvato] Found 710w image: " + url);
                                                         break;
                                                     }
-                                                    
+
                                                     // Keep track of the largest image as fallback
                                                     if (size && url) {
                                                         // Extract the numeric width
@@ -519,7 +508,7 @@ async function searchEnvato(
                                                         }
                                                     }
                                                 }
-                                                
+
                                                 // If we didn't find a 710w image, use the largest we found
                                                 if (!screenshotURL && largestUrl) {
                                                     screenshotURL = largestUrl;
@@ -530,7 +519,7 @@ async function searchEnvato(
                                             // No 710w image, find the largest available
                                             let largestSize = 0;
                                             let largestUrl = '';
-                                            
+
                                             for (const part of srcParts) {
                                                 const [url, size] = part.split(/\s+/);
                                                 if (size && url) {
@@ -545,20 +534,20 @@ async function searchEnvato(
                                                     }
                                                 }
                                             }
-                                            
+
                                             if (largestUrl) {
                                                 screenshotURL = largestUrl;
                                                 console.log("[searchEnvato] Using largest image (" + largestSize + "w): " + largestUrl);
                                             }
                                         }
                                     }
-                                    
+
                                     // Try Envato's specific image URL patterns if we have a URL
                                     if (thumbnailURL && thumbnailURL.includes('elements-cover-images')) {
                                         // For thumbnails already containing size parameters
                                         if (thumbnailURL.includes('w=')) {
                                             // Keep thumbnail as-is
-                                            
+
                                             // Create a larger screenshot URL by modifying parameters
                                             screenshotURL = thumbnailURL
                                                 .replace(/w=\d+/, 'w=1200')  // Increase width
@@ -566,7 +555,7 @@ async function searchEnvato(
                                                 .replace(/format=\w+/, 'format=jpeg');  // Use JPEG format
                                         }
                                     }
-                                    
+
                                     // For envatousercontent.com URLs, we need to keep the full URL with signature
                                     // DO NOT modify the URL parameters as they include security signatures
                                     if (screenshotURL && screenshotURL.includes('envatousercontent.com')) {
@@ -578,15 +567,15 @@ async function searchEnvato(
                                     const elements = [card, parent];
                                     for (const el of elements) {
                                         if (!el) continue;
-                                        
+
                                         const computedStyle = window.getComputedStyle(el);
                                         const bgImage = computedStyle.backgroundImage;
-                                        
+
                                         if (bgImage && bgImage !== 'none' && bgImage.includes('url')) {
                                             const urlMatch = bgImage.match(/url\(['"](.+?)['"]?\)/i);
                                             if (urlMatch && urlMatch[1]) {
                                                 thumbnailURL = urlMatch[1];
-                                                
+
                                                 // For background images from Envato, keep original URL with signature
                                                 if (urlMatch[1].includes('envatousercontent.com') || urlMatch[1].includes('elements-cover-images')) {
                                                     // Keep the original URL with its signature
@@ -600,7 +589,7 @@ async function searchEnvato(
                                         }
                                     }
                                 }
-                                
+
                                 // Only add results that have at least a URL
                                 if (url) {
                                     results.push({
@@ -615,7 +604,7 @@ async function searchEnvato(
                             }
                         }
                     }
-                    
+
                     // If the primary approach didn't find results, try using direct item links
                     if (results.length === 0 && itemLinks.length > 0) {
                         console.log("Using direct item links approach");
@@ -624,21 +613,21 @@ async function searchEnvato(
                                 // Get URL from link href
                                 const href = link.getAttribute('href');
                                 if (!href) continue;
-                                
+
                                 // Make sure it's a full URL
-                                const url = href.startsWith('http') ? 
-                                    href : 
+                                const url = href.startsWith('http') ?
+                                    href :
                                     new URL(href, window.location.origin).href;
-                                
+
                                 // Get title
                                 let title = link.getAttribute('title');
-                                
+
                                 // Try to get the image - it's usually a direct child or sibling
-                                const img = link.querySelector('img') || 
-                                            link.parentElement?.querySelector('img') || 
-                                            link.previousElementSibling?.querySelector('img') || 
+                                const img = link.querySelector('img') ||
+                                            link.parentElement?.querySelector('img') ||
+                                            link.previousElementSibling?.querySelector('img') ||
                                             link.nextElementSibling?.querySelector('img');
-                                
+
                                 // If still no title, try to extract from URL
                                 if (!title && href) {
                                     // Extract from URL pattern: /template-name-ABC123
@@ -646,7 +635,7 @@ async function searchEnvato(
                                     if (urlParts.length > 0) {
                                         const lastPart = urlParts[urlParts.length - 1];
                                         const nameWithoutId = lastPart.replace(/-[A-Z0-9]+$/, '');
-                                        
+
                                         title = nameWithoutId
                                                 .replace(/-/g, ' ')
                                                 .split(' ')
@@ -655,19 +644,19 @@ async function searchEnvato(
                                                 .trim();
                                     }
                                 }
-                                
+
                                 // Get image URLs
                                 let thumbnailURL, screenshotURL;
-                                
+
                                 if (img) {
                                     // Use the same image handling code as primary approach
                                     thumbnailURL = img.src;
                                     screenshotURL = thumbnailURL;
-                                    
+
                                     if (img.hasAttribute('srcset')) {
                                         const srcset = img.getAttribute('srcset');
                                         const srcParts = srcset.split(',').map(part => part.trim());
-                                        
+
                                         // Find a small image for thumbnail
                                         for (const part of srcParts) {
                                             const [url, size] = part.split(/\s+/);
@@ -676,7 +665,7 @@ async function searchEnvato(
                                                 break;
                                             }
                                         }
-                                        
+
                                         // Special check for 710w images which are the largest on Envato
                                         if (srcset.includes('710w')) {
                                             // Extract the 710w image URL with regexp to be precise
@@ -690,7 +679,7 @@ async function searchEnvato(
                                                 // Find a larger image for screenshot (prefer 710w or largest available)
                                                 let largestSize = 0;
                                                 let largestUrl = '';
-                                                
+
                                                 // First try to find the 710w image which is typically the largest
                                                 for (const part of srcParts) {
                                                     const [url, size] = part.split(/\s+/);
@@ -700,7 +689,7 @@ async function searchEnvato(
                                                         console.log("[searchEnvato] Found 710w image in item links: " + url);
                                                         break;
                                                     }
-                                                    
+
                                                     // Keep track of the largest image as fallback
                                                     if (size && url) {
                                                         // Extract the numeric width
@@ -714,7 +703,7 @@ async function searchEnvato(
                                                         }
                                                     }
                                                 }
-                                                
+
                                                 // If we didn't find a 710w image, use the largest we found
                                                 if (!screenshotURL && largestUrl) {
                                                     screenshotURL = largestUrl;
@@ -725,7 +714,7 @@ async function searchEnvato(
                                             // No 710w image, find the largest available
                                             let largestSize = 0;
                                             let largestUrl = '';
-                                            
+
                                             for (const part of srcParts) {
                                                 const [url, size] = part.split(/\s+/);
                                                 if (size && url) {
@@ -740,23 +729,23 @@ async function searchEnvato(
                                                     }
                                                 }
                                             }
-                                            
+
                                             if (largestUrl) {
                                                 screenshotURL = largestUrl;
                                                 console.log("[searchEnvato] Using largest image in item links (" + largestSize + "w): " + largestUrl);
                                             }
                                         }
                                     }
-                                    
+
                                     // For Envato URLs, we need to keep the original URL with signature
                                     // DO NOT modify the URL parameters as they include security signatures
-                                    if ((screenshotURL && screenshotURL.includes('elements-cover-images')) || 
+                                    if ((screenshotURL && screenshotURL.includes('elements-cover-images')) ||
                                        (screenshotURL && screenshotURL.includes('envatousercontent.com'))) {
                                         // Keep the original URL with signatures intact
                                         // The larger image URL selection is already handled in srcset parsing
                                     }
                                 }
-                                
+
                                 // Only add results with a URL
                                 if (url) {
                                     results.push({
@@ -771,7 +760,7 @@ async function searchEnvato(
                             }
                         }
                     }
-                    
+
                     // Final fallback - use generic template links if we still have no results
                     if (results.length === 0 && templateLinks.length > 0) {
                         console.log("Using generic template links as last resort");
@@ -779,13 +768,13 @@ async function searchEnvato(
                             try {
                                 const href = link.getAttribute('href');
                                 if (!href || href.includes('properties-') || href.includes('pg-')) continue; // Skip pagination/filter links
-                                
+
                                 const url = href.startsWith('http') ? href : new URL(href, window.location.origin).href;
                                 let title = link.getAttribute('title') || link.textContent.trim();
-                                
+
                                 // Get an img if possible
                                 const img = link.querySelector('img') || link.parentElement?.querySelector('img');
-                                
+
                                 // Only add to results if it's not already there
                                 const isDuplicate = results.some(r => r.url === url);
                                 if (!isDuplicate && url) {
@@ -801,7 +790,7 @@ async function searchEnvato(
                             }
                         }
                     }
-                    
+
                     return results;
                 }
 
@@ -813,27 +802,27 @@ async function searchEnvato(
                     function checkForElements() {
                         // Primary indicators - Envato Elements specific selectors
                         const envatoCards = document.querySelectorAll('div[class*="wtigj7JD"], div[data-testid="default-card"]');
-                        
+
                         // Secondary indicators - item links with data-testid
                         const itemLinks = document.querySelectorAll('a[data-testid="item-link"]');
-                        
+
                         // Tertiary indicators - general template links
                         const templateLinks = document.querySelectorAll('a[href*="/web-templates/"], a[href*="-"]');
-                        
+
                         // Total from all selectors
                         const itemsFound = envatoCards.length || itemLinks.length || templateLinks.length;
-                        
+
                         // Specific check for srcset images (common in Envato templates)
                         const srcsetImgs = document.querySelectorAll('img[srcset*="elements-cover-images"], img[srcset*="envatousercontent.com"]');
-                        
+
                         // Specifically look for high-res images (710w is the largest size in srcset)
                         const largeImgs = document.querySelectorAll('img[srcset*="710w"]');
 
-                        console.log("Checking for elements, found: " + itemsFound + 
-                                   " (envatoCards: " + envatoCards.length + 
-                                   ", itemLinks: " + itemLinks.length + 
-                                   ", templateLinks: " + templateLinks.length + 
-                                   ", srcsetImgs: " + srcsetImgs.length + 
+                        console.log("Checking for elements, found: " + itemsFound +
+                                   " (envatoCards: " + envatoCards.length +
+                                   ", itemLinks: " + itemLinks.length +
+                                   ", templateLinks: " + templateLinks.length +
+                                   ", srcsetImgs: " + srcsetImgs.length +
                                    ", largeImgs: " + largeImgs.length + ")");
 
                         // Wait until we find at least some results or the page has meaningful content
@@ -893,43 +882,43 @@ async function searchEnvato(
                         // Look for item cards on ThemeForest
                         const cards = document.querySelectorAll('.product-grid__item');
                         console.log("Found " + cards.length + " ThemeForest cards");
-                        
+
                         const results = [];
-                        
+
                         for (const card of cards) {
                             try {
                                 // Find the main link
                                 const link = card.querySelector('a.product-grid__image-wrapper');
                                 if (!link) continue;
-                                
+
                                 const url = link.href;
-                                
+
                                 // Find the image
                                 const img = link.querySelector('img');
-                                
+
                                 // Find the title
                                 const titleEl = card.querySelector('.product-grid__title-text');
-                                const title = titleEl ? titleEl.textContent.trim() : 
+                                const title = titleEl ? titleEl.textContent.trim() :
                                              (img ? img.alt : "ThemeForest Template");
-                                
+
                                 // Get image URLs
                                 let thumbnailURL, screenshotURL;
-                                
+
                                 if (img) {
                                     thumbnailURL = img.src;
                                     screenshotURL = thumbnailURL;
-                                    
+
                                     // ThemeForest uses data attributes for image paths
                                     if (img.dataset.src) {
                                         thumbnailURL = img.dataset.src;
                                     }
-                                    
+
                                     // Try to get higher resolution by manipulating URL
                                     if (thumbnailURL && thumbnailURL.includes('preview_')) {
                                         screenshotURL = thumbnailURL.replace('preview_', 'large_preview_');
                                     }
                                 }
-                                
+
                                 // Only add if we have a URL
                                 if (url) {
                                     results.push({
@@ -943,18 +932,18 @@ async function searchEnvato(
                                 console.error("Error processing ThemeForest item:", err);
                             }
                         }
-                        
+
                         return results;
                     }
-                    
+
                     return new Promise((resolve) => {
                         const maxAttempts = 30;
                         let attempts = 0;
-                        
+
                         function checkForItems() {
                             const cards = document.querySelectorAll('.product-grid__item');
                             console.log("Checking ThemeForest items, found: " + cards.length);
-                            
+
                             if (cards.length > 0) {
                                 resolve(getItems());
                             } else if (attempts < maxAttempts) {
@@ -965,11 +954,11 @@ async function searchEnvato(
                                 resolve([]);
                             }
                         }
-                        
+
                         checkForItems();
                     });
                 }
-                
+
                 return await extractThemeForest();`
             );
 
@@ -1280,25 +1269,29 @@ async function searchAwwwards(
                             }
 
                             // Handle image URLs with special processing for Awwwards
-                            let thumbnailURL;
-                            let screenshotURL;
+                            let thumbnailURL = '';
+                            let screenshotURL = '';
 
                             // Check for srcset first (preferred for high-quality images)
                             if (img.getAttribute('srcset')) {
                                 const srcset = img.getAttribute('srcset');
+                                console.log("Image srcset found:", srcset);
                                 const srcsetParts = srcset.split(',');
 
                                 // For thumbnail, use the 1x version if available
                                 // For screenshot, use the 2x version or highest resolution available
                                 for (const part of srcsetParts) {
-                                    const [url, descriptor] = part.trim().split(/\s+/);
+                                    const [srcUrl, descriptor] = part.trim().split(/\s+/);
+                                    console.log("Parsed srcset part:", srcUrl, descriptor);
 
                                     if (descriptor === '1x' && !thumbnailURL) {
-                                        thumbnailURL = url;
+                                        thumbnailURL = srcUrl;
+                                        console.log("Found 1x thumbnail:", srcUrl);
                                     }
 
                                     if (descriptor === '2x' || descriptor === '3x') {
-                                        screenshotURL = url;
+                                        screenshotURL = srcUrl;
+                                        console.log("Found higher-res screenshot:", srcUrl);
                                         // Prefer the highest resolution
                                         if (descriptor === '3x') break;
                                     }
@@ -1307,16 +1300,37 @@ async function searchAwwwards(
 
                             // Fallbacks if srcset parsing didn't yield results
                             if (!thumbnailURL) {
-                                // Try data-src for lazy-loaded images first
-                                thumbnailURL = img.getAttribute('data-src') || img.getAttribute('src');
+                                // Check for data-srcset first, which is common in lazy-loaded images
+                                const dataSrcset = img.getAttribute('data-srcset');
+                                if (dataSrcset) {
+                                    const dataSrcsetParts = dataSrcset.split(',');
+                                    if (dataSrcsetParts.length > 0) {
+                                        const firstSrc = dataSrcsetParts[0].trim().split(/\s+/)[0];
+                                        thumbnailURL = firstSrc;
+                                        console.log("data-srcset-url:", dataSrcset);
+                                    }
+                                } else {
+                                    // Try data-src for lazy-loaded images
+                                    const dataSrc = img.getAttribute('data-src');
+                                    if (dataSrc) {
+                                        thumbnailURL = dataSrc;
+                                        console.log("data-src-url:", dataSrc);
+                                    } else {
+                                        // Fallback to regular src attribute
+                                        thumbnailURL = img.getAttribute('src');
+                                        console.log("src-url:", thumbnailURL);
+                                    }
+                                }
 
                                 // If it's the base64 placeholder image, try to get the real URL
                                 if (thumbnailURL && thumbnailURL.startsWith('data:image/png;base64')) {
+                                    console.log("Found base64 placeholder, looking for real image URL");
                                     // Try to find the real source from data-srcset
                                     const dataSrcset = img.getAttribute('data-srcset');
                                     if (dataSrcset) {
                                         const firstSrc = dataSrcset.split(',')[0].trim().split(/\s+/)[0];
                                         thumbnailURL = firstSrc;
+                                        console.log("base64-replacement-url:", thumbnailURL);
                                     }
                                 }
                             }
@@ -1332,18 +1346,26 @@ async function searchAwwwards(
                                         screenshotURL = thumbnailURL
                                             .replace('cache/thumb_440_330', 'cache/optimize')
                                             .replace('cache/thumb_417_299', 'cache/optimize')
+                                            .replace('cache/thumb_880_660', 'cache/optimize')
                                             .replace('cache/thumb_', 'cache/optimize_');
+                                        console.log("custom-screenshot-url:", screenshotURL);
                                     }
                                 }
                             }
 
+                            // Only add results with full URLs (not partial URLs)
+                            // Store the image URLs in an object to be returned
+                            const imgData = {
+                                thumbnail: thumbnailURL,
+                                screenshot: screenshotURL || thumbnailURL
+                            };
+
                             // Only add if we have valid data
-                            if (url && (thumbnailURL || screenshotURL)) {
+                            if (url) {
                                 results.push({
                                     url,
-                                    title,
-                                    thumbnailURL,
-                                    screenshotURL: screenshotURL || thumbnailURL
+                                    title: title || '',
+                                    imageData: imgData
                                 });
                             }
                         } catch (e) {
@@ -1395,7 +1417,110 @@ async function searchAwwwards(
         let results: DesignSearchResult[] = [];
 
         try {
-            results = JSON.parse(jsResult).value;
+            const parsed = JSON.parse(jsResult);
+            // Process the parsed value to ensure URLs are complete
+            if (parsed && parsed.value && Array.isArray(parsed.value)) {
+                // Get all image URLs from logs
+                const imgUrls: Record<string, string> = {};
+                if (parsed.logs) {
+                    for (const log of parsed.logs) {
+                        // Look for the data-srcset-url: pattern
+                        if (log.includes('data-srcset-url:')) {
+                            const match = log.match(/data-srcset-url: (.+)$/);
+                            if (match && match[1]) {
+                                // Extract the first URL from the srcset
+                                const firstUrl = match[1]
+                                    .split(',')[0]
+                                    .trim()
+                                    .split(/\s+/)[0];
+                                imgUrls[
+                                    `srcset-${Object.keys(imgUrls).length}`
+                                ] = firstUrl;
+                            }
+                        }
+                        // Look for other URL patterns
+                        else if (log.includes('data-src-url:')) {
+                            const match = log.match(/data-src-url: (.+)$/);
+                            if (match && match[1]) {
+                                imgUrls[
+                                    `data-src-${Object.keys(imgUrls).length}`
+                                ] = match[1];
+                            }
+                        } else if (log.includes('src-url:')) {
+                            const match = log.match(/src-url: (.+)$/);
+                            if (match && match[1]) {
+                                imgUrls[`src-${Object.keys(imgUrls).length}`] =
+                                    match[1];
+                            }
+                        } else if (log.includes('base64-replacement-url:')) {
+                            const match = log.match(
+                                /base64-replacement-url: (.+)$/
+                            );
+                            if (match && match[1]) {
+                                imgUrls[
+                                    `base64-${Object.keys(imgUrls).length}`
+                                ] = match[1];
+                            }
+                        } else if (log.includes('custom-screenshot-url:')) {
+                            const match = log.match(
+                                /custom-screenshot-url: (.+)$/
+                            );
+                            if (match && match[1]) {
+                                imgUrls[
+                                    `screenshot-${Object.keys(imgUrls).length}`
+                                ] = match[1];
+                            }
+                        }
+                    }
+                }
+
+                console.log('[searchAwwwards] Extracted image URLs:', imgUrls);
+
+                // Convert extracted data to DesignSearchResult format
+                results = parsed.value.map((item: any, index: number) => {
+                    // Try to get the proper image URLs from the extracted data
+                    let thumbnailURL = '';
+                    let screenshotURL = '';
+
+                    // If we have imageData in the item, use that
+                    if (item.imageData) {
+                        thumbnailURL = item.imageData.thumbnail || '';
+                        screenshotURL =
+                            item.imageData.screenshot || thumbnailURL;
+                    }
+
+                    // If we still don't have valid URLs, use extracted URLs from logs
+                    if (!thumbnailURL || thumbnailURL === 'http') {
+                        // Use the most relevant URL for this index
+                        const urlKeys = Object.keys(imgUrls);
+                        if (urlKeys.length > 0 && urlKeys.length > index) {
+                            thumbnailURL =
+                                imgUrls[urlKeys[index % urlKeys.length]];
+
+                            // For screenshot, prefer higher resolution or just use thumbnail
+                            screenshotURL = thumbnailURL;
+                            if (thumbnailURL.includes('cache/thumb_')) {
+                                screenshotURL = thumbnailURL
+                                    .replace(
+                                        'cache/thumb_440_330',
+                                        'cache/thumb_880_660'
+                                    )
+                                    .replace(
+                                        'cache/thumb_417_299',
+                                        'cache/thumb_880_660'
+                                    );
+                            }
+                        }
+                    }
+
+                    return {
+                        url: item.url,
+                        title: item.title || '',
+                        thumbnailURL,
+                        screenshotURL,
+                    };
+                });
+            }
         } catch (err) {
             console.error('Error parsing Awwwards results:', err);
         }
@@ -1409,314 +1534,6 @@ async function searchAwwwards(
         return results.slice(0, limit);
     } catch (error) {
         console.error('Error in searchAwwwards:', error);
-        return [];
-    }
-}
-
-/**
- * Search for design inspiration on SiteInspire
- */
-async function searchSiteInspire(
-    query: string,
-    limit: number = 9
-): Promise<DesignSearchResult[]> {
-    try {
-        // Use browser approach since SiteInspire may have JS-based rendering
-        const siteInspireUrl = `https://www.siteinspire.com/websites?search=${encodeURIComponent(query)}`;
-        console.log(
-            `[searchSiteInspire] Loading URL in browser: ${siteInspireUrl}`
-        );
-
-        const jsResult = await runJavaScript(
-            siteInspireUrl,
-            `async function waitForElements() {
-                function extractSiteInspireData() {
-                    // Prioritize elements with the website-card data-testid attribute
-                    const primarySelector = 'div[data-testid="website-card"]';
-
-                    // Fallback selectors in case the primary one doesn't work
-                    const fallbackSelectors = [
-                        // Semantic elements
-                        'figure', // Figure elements commonly used for sites
-                        'article', // Semantic article elements
-
-                        // Attribute-based selectors (most stable)
-                        'div[data-website-id]', // Website IDs
-                        'div[data-site-id]', // Site IDs
-                        'div[data-id]', // Generic IDs
-                        'div[role="listitem"]', // Accessibility role
-
-                        // URL pattern detection
-                        'a[href*="/websites/"]', // Links to websites
-                        'a[href*="/sites/"]', // Links to sites
-                        'a[href*="/inspiration/"]', // Links to inspiration
-
-                        // Structure-based selectors
-                        'div:has(img):has(a[href*="/websites/"])', // Container with image and website link
-                        'figure:has(img):has(figcaption)', // Figure with image and caption
-
-                        // Class-based selectors with wildcards
-                        'div[class*="website"], div[class*="site"]', // Website/site classes
-                        'div[class*="card"], div[class*="Card"]', // Card classes
-                        'div[class*="grid-item"], div[class*="gridItem"]', // Grid items
-
-                        // Original selectors as fallbacks
-                        'figure.item',
-                        '.websites .site',
-                        '.website-item',
-                        'article.website',
-                        '.grid-item',
-
-                        // Last resort - generic but likely to match website grid items
-                        'div.grid > div', // Grid child elements
-                        'ul > li:has(img)' // List items with images
-                    ];
-
-                    // First try the primary selector (data-testid="website-card")
-                    let items = document.querySelectorAll(primarySelector);
-                    if (items && items.length > 0) {
-                        console.log("Found items with primary selector: " + primarySelector + ", count: " + items.length);
-                    } else {
-                        // If primary selector doesn't find elements, try fallbacks
-                        for (const selector of fallbackSelectors) {
-                            try {
-                                const elements = document.querySelectorAll(selector);
-                                if (elements && elements.length > 0) {
-                                    items = elements;
-                                    console.log("Found items with fallback selector: " + selector + ", count: " + elements.length);
-                                    break;
-                                }
-                            } catch (e) {
-                                // Skip any problematic selectors
-                                console.log("Selector error: " + e.message);
-                            }
-                        }
-                    }
-
-                    const results = [];
-
-                    for (const item of items) {
-                        // Find the link to the SiteInspire page
-                        const anchor = item.querySelector('a');
-                        if (!anchor) continue;
-
-                        // Get full URL (handling relative URLs)
-                        const href = anchor.getAttribute('href');
-                        let url = href.startsWith('http') ?
-                            href :
-                            new URL(href, window.location.origin).href;
-
-                        // Check if this is a valid website card
-                        const isWebsiteCard = item.getAttribute('data-testid') === 'website-card';
-
-                        // If not a website card with data-testid, filter out ads via URL
-                        if (!isWebsiteCard && url.includes('utm_source=siteinspire')) continue;
-
-                        // Look for external link button which links to the actual site
-                        const externalLinkButton = item.querySelector('a[target="_blank"][rel="noreferrer"][aria-label^="Visit"]');
-                        if (externalLinkButton) {
-                            const originalUrl = externalLinkButton.getAttribute('href');
-                            if (originalUrl) {
-                                // Remove any SiteInspire referral parameters
-                                url = originalUrl.split('?ref=siteinspire')[0];
-                            }
-                        }
-
-                        // Find image
-                        const img = item.querySelector('img');
-                        if (!img) continue;
-
-                        // Try to get title from various sources
-                        let title = anchor.getAttribute('title') || img.getAttribute('alt') || undefined;
-
-                        if (!title) {
-                            // Look for title in other elements
-                            const titleEl = item.querySelector('.title, [data-title], h2, h3, figcaption');
-                            if (titleEl) title = titleEl.textContent.trim();
-                        }
-
-                        // Get image URLs
-                        let thumbnailURL;
-                        let screenshotURL;
-
-                        // First try the src attribute
-                        const src = img.getAttribute('src');
-                        const dataSrc = img.getAttribute('data-src');
-
-                        // Check if we have a srcset attribute with various sizes
-                        const srcset = img.getAttribute('srcset');
-                        if (srcset) {
-                            try {
-                                // Parse the srcset to extract different image sizes
-                                const srcsetEntries = srcset.split(',').map(entry => entry.trim());
-
-                                // Look for specific sizes
-                                for (const entry of srcsetEntries) {
-                                    if (!entry) continue;
-                                    const parts = entry.split(/\s+/);
-                                    if (parts.length < 2) continue;
-
-                                    const [url, size] = parts;
-
-                                    // For thumbnail, use smaller sizes (384px or 640px width)
-                                    if (/384w|640w/.test(size) && !thumbnailURL) {
-                                        thumbnailURL = url;
-                                    }
-
-                                    // For screenshot, prefer the largest size (1920w)
-                                    if (/1920w/.test(size)) {
-                                        screenshotURL = url;
-                                    }
-                                }
-                            } catch (err) {
-                                console.log("Error parsing srcset:", err);
-                            }
-                        }
-
-                        // Fallback to src if no thumbnailURL from srcset
-                        if (!thumbnailURL) {
-                            thumbnailURL = dataSrc || src;
-                        }
-
-                        // Fallback to src if no screenshotURL from srcset
-                        if (!screenshotURL) {
-                            screenshotURL = dataSrc || src;
-                        }
-
-                        // Test for SiteInspire's specific image URL format
-                        if (thumbnailURL && thumbnailURL.includes('/cdn-cgi/image/width=')) {
-                            // Good - we have proper URLs
-                        } else if (thumbnailURL && thumbnailURL.includes('compress=true/')) {
-                            // Handle partial URLs - add the base part
-                            const baseUrl = 'https://r2.siteinspire.com/cdn-cgi/image/width=384,quality=75,format=auto,metadata=none,gravity=top,fit=crop,compress=true/';
-                            const screenshotBaseUrl = 'https://r2.siteinspire.com/cdn-cgi/image/width=1920,quality=75,format=auto,metadata=none,gravity=top,fit=crop,compress=true/';
-
-                            // Extract the filename part
-                            const filenamePart = thumbnailURL.split('compress=true/')[1];
-                            if (filenamePart) {
-                                thumbnailURL = baseUrl + filenamePart;
-                                screenshotURL = screenshotBaseUrl + filenamePart;
-                            }
-                        }
-
-                        if (url && thumbnailURL) {
-                            results.push({
-                                url,
-                                title,
-                                thumbnailURL,
-                                screenshotURL
-                            });
-                        }
-                    }
-
-                    return results;
-                }
-
-                // Wait for site items to load with polling
-                return new Promise((resolve) => {
-                    const maxAttempts = 30; // ~15 seconds total with 500ms intervals
-                    let attempts = 0;
-
-                    function checkForElements() {
-                        // First check for the primary data-testid="website-card" selector
-                        const primaryItemsFound = document.querySelectorAll('div[data-testid="website-card"]').length;
-
-                        // If primary items are found, we can use those directly
-                        if (primaryItemsFound > 0) {
-                            console.log("Found website cards with data-testid: " + primaryItemsFound);
-                            resolve(extractSiteInspireData());
-                            return;
-                        }
-
-                        // Otherwise, check for site items using more robust selectors
-                        let itemsFound = 0;
-                        const checkSelectors = [
-                            // Semantic elements
-                            'figure',
-                            'article',
-
-                            // Attribute-based selectors
-                            'div[data-website-id]',
-                            'div[data-site-id]',
-                            'div[data-id]',
-                            'div[role="listitem"]',
-
-                            // URL pattern detection
-                            'a[href*="/websites/"]',
-                            'a[href*="/sites/"]',
-                            'a[href*="/inspiration/"]',
-
-                            // Class-based selectors
-                            'div[class*="website"], div[class*="site"]',
-                            'div[class*="card"], div[class*="Card"]',
-                            'div[class*="grid-item"], div[class*="gridItem"]',
-
-                            // Original selectors as fallbacks
-                            'figure.item',
-                            '.websites .site',
-                            '.website-item',
-                            'article.website',
-                            '.grid-item',
-
-                            // Generic grid selectors
-                            'div.grid > div'
-
-                            // Note: :has() selectors excluded for compatibility
-                        ];
-
-                        // Try each selector individually
-                        for (const selector of checkSelectors) {
-                            try {
-                                itemsFound += document.querySelectorAll(selector).length;
-                            } catch (e) {
-                                // Skip any problematic selectors
-                            }
-                        }
-
-                        console.log("Checking for site items, found: " + itemsFound);
-
-                        if (itemsFound > 0) {
-                            // Elements found, extract data
-                            resolve(extractSiteInspireData());
-                        } else if (attempts < maxAttempts) {
-                            // Not found yet, try again
-                            attempts++;
-                            setTimeout(checkForElements, 500);
-                        } else {
-                            // Timeout reached, return empty array
-                            console.log("Timeout waiting for site items");
-                            resolve([]);
-                        }
-                    }
-
-                    // Start polling
-                    checkForElements();
-                });
-            }
-
-            return await waitForElements();`
-        );
-
-        console.log('[searchSiteInspire] jsResult:', jsResult);
-
-        // Parse the JSON result
-        let results: DesignSearchResult[] = [];
-
-        try {
-            results = JSON.parse(jsResult).value;
-        } catch (err) {
-            console.error('Error parsing SiteInspire results:', err);
-        }
-
-        // If no results found, log it
-        if (results.length === 0) {
-            console.log('[searchSiteInspire] No results found');
-        }
-
-        // Apply the limit parameter
-        return results.slice(0, limit);
-    } catch (error) {
-        console.error('Error in searchSiteInspire:', error);
         return [];
     }
 }
@@ -1738,7 +1555,7 @@ async function genericWebSearch(
         console.log(`[genericWebSearch] Using ${engine} for search`);
 
         try {
-            const searchQuery = `Please provide a list of up to ${limit} URLs for the most popular sites matching "${query}". Please return the results in JSON format [{url: 'https://...', title: 'Example Site'}, ...]. Only respond with the JSON, and not other text of comments.`;
+            const searchQuery = `Please provide a list of up to ${limit} URLs for the most popular "${query}". Please return the results in JSON format [{url: 'https://...', title: 'Example Site'}, ...]. Only respond with the JSON, and no other text of comments.`;
 
             // Use web_search with the selected engine
             let result = await web_search(
@@ -1931,9 +1748,6 @@ export async function design_search(
         case 'awwwards':
             results = await searchAwwwards(query, limit);
             break;
-        case 'siteinspire':
-            results = await searchSiteInspire(query, limit);
-            break;
         case 'web_search':
         default:
             results = await genericWebSearch(query, limit);
@@ -1978,26 +1792,6 @@ export async function design_search(
  * Create a custom tool for design_search
  */
 export function getDesignSearchTools() {
-    const availableEngines: string[] = [
-        'dribbble',
-        'behance',
-        'envato',
-        'pinterest',
-        'awwwards',
-        'siteinspire',
-        'web_search',
-    ];
-
-    const engineDescriptions: string[] = [
-        '- dribbble: massive designer-driven “shot” gallery focused on UI/UX, branding and motion—great for modern micro-interactions or single-component screenshots',
-        '- behance: Adobe’s portfolio network; long-form project breakdowns and full site/brand presentations—ideal when you need contextual hero + entire flow in one deck',
-        '- envato: ThemeForest marketplace with thousands of production-ready site templates—best for full-page screenshots that already ship with code',
-        '- pinterest: broad, lifestyle-driven inspiration boards—handy for eclectic or non-web visuals and quick style tiles',
-        '- awwwards: daily judged showcase of cutting-edge, interactive web experiences—use this for avant-garde, animation-heavy screenshots',
-        '- siteinspire: hand-picked collection of typography-led, grid-perfect sites—great for minimal or content-heavy page examples',
-        '- web_search: broad web crawl; use when you need raw screenshots beyond the curated sources (lower signal, but widest net)',
-    ];
-
     return [
         createToolFunction(
             design_search,
@@ -2005,8 +1799,8 @@ export function getDesignSearchTools() {
             {
                 engine: {
                     type: 'string',
-                    enum: availableEngines,
-                    description: `Engine to use:\n${engineDescriptions.join('\n')}`,
+                    enum: DESIGN_SEARCH_ENGINES,
+                    description: `Engine to use:\n${DESIGN_SEARCH_DESCRIPTIONS.join('\n')}`,
                 },
                 query: {
                     type: 'string',
@@ -2025,30 +1819,28 @@ export function getDesignSearchTools() {
 }
 
 /**
- * Load an image from a URL or local path as a Canvas Image
+ * Image source types for the createNumberedGrid function
  */
-async function loadImageSafe(src: string) {
-    try {
-        if (src.startsWith('data:image')) {
-            return await loadImage(src);
-        }
-        if (fs.existsSync(src)) {
-            return await loadImage(src);
-        }
-        const res = await fetch(src);
-        const buf = Buffer.from(await res.arrayBuffer());
-        return await loadImage(buf);
-    } catch (e) {
-        console.error('Failed to load image', src, e);
-        throw e;
-    }
+export interface ImageSource {
+    url?: string; // URL or file path to the image
+    dataUrl?: string; // Data URL of the image
+    title?: string; // Optional title for the image
 }
 
 /**
- * Create a numbered grid image from a list of screenshot URLs
+ * Create a numbered grid image from a list of image sources
  * Returns a base64 PNG data URL
  */
-async function createNumberedGrid(images: string[]): Promise<string> {
+export async function createNumberedGrid(
+    images: ImageSource[],
+    gridName: string = 'grid'
+): Promise<string> {
+    // Make sure grid directory exists
+    const gridDir = path.join(DESIGN_ASSETS_DIR, 'grid');
+    if (!fs.existsSync(gridDir)) {
+        fs.mkdirSync(gridDir, { recursive: true });
+    }
+
     const CELL = 256;
     const cols = 3;
     const rows = Math.ceil(images.length / cols);
@@ -2062,12 +1854,97 @@ async function createNumberedGrid(images: string[]): Promise<string> {
         const row = Math.floor(i / cols);
         const col = i % cols;
         try {
-            const img = await loadImageSafe(images[i]);
-            ctx.drawImage(img, col * CELL, row * CELL, CELL, CELL);
-        } catch {
-            ctx.fillStyle = '#ccc';
+            // Load image based on available sources
+            let img;
+            const imageSource = images[i];
+
+            if (imageSource.dataUrl) {
+                // Directly load from data URL if available
+                console.log(`[createNumberedGrid] Loaded image from data URL ${imageSource.dataUrl}`);
+                img = await loadImage(imageSource.dataUrl);
+            }  else if ((imageSource as DesignSearchResult).screenshotURL) {
+                // Handle DesignSearchResult objects for backward compatibility
+                const design = imageSource as DesignSearchResult;
+                const src = design.thumbnailURL || design.screenshotURL;
+                if (src.startsWith('data:image')) {
+                    console.log(`[createNumberedGrid] Loaded image from data:image thumbnailURL/screenshotURL ${src}`);
+                    img = await loadImage(src);
+                } else if (
+                    src.startsWith('/magi_output') &&
+                    fs.existsSync(src)
+                ) {
+                    console.log(`[createNumberedGrid] Loaded image from /magi_output from thumbnailURL/screenshotURL ${src}`);
+                    img = await loadImage(src);
+                } else {
+                    console.log(`[createNumberedGrid] Loaded image from source URL from thumbnailURL/screenshotURL ${src}`);
+                    const res = await fetch(src);
+                    const buf = Buffer.from(await res.arrayBuffer());
+                    img = await loadImage(buf);
+                }
+            } else if (imageSource.url) {
+                // Load from URL or file path
+                if (imageSource.url.startsWith('data:image')) {
+                    console.log(`[createNumberedGrid] Loaded image from data:image URL ${imageSource.url}`);
+                    img = await loadImage(imageSource.url);
+                } else if (
+                    imageSource.url.startsWith('/magi_output') &&
+                    fs.existsSync(imageSource.url)
+                ) {
+                    console.log(`[createNumberedGrid] Loaded image from /magi_output ${imageSource.url}`);
+                    img = await loadImage(imageSource.url);
+                } else {
+                    console.log(`[createNumberedGrid] Loaded image from source URL ${imageSource.url}`);
+                    const res = await fetch(imageSource.url);
+                    const buf = Buffer.from(await res.arrayBuffer());
+                    img = await loadImage(buf);
+                }
+            }
+
+            if (!img) throw new Error('Failed to load image');
+
+            // Calculate scaled dimensions while maintaining aspect ratio
+            const aspectRatio = img.width / img.height;
+            const scaledWidth = CELL;
+            let scaledHeight = scaledWidth / aspectRatio;
+
+            // If height > 256, truncate from top-down
+            // If height < 256, vertically center
+            const sourceX = 0;
+            const sourceY = 0;
+            const sourceWidth = img.width;
+            let sourceHeight = img.height;
+            const destX = col * CELL;
+            let destY = row * CELL;
+
+            if (scaledHeight > CELL) {
+                // Truncate height to 256px (from the top down)
+                // Adjust sourceHeight to keep only the top portion of the image
+                sourceHeight = (CELL / scaledHeight) * img.height;
+                scaledHeight = CELL;
+            } else if (scaledHeight < CELL) {
+                // Vertically center the image in the cell
+                destY = row * CELL + (CELL - scaledHeight) / 2;
+            }
+
+            // Draw the image with the calculated dimensions
+            ctx.drawImage(
+                img,
+                sourceX,
+                sourceY,
+                sourceWidth,
+                sourceHeight, // Source rectangle
+                destX,
+                destY,
+                scaledWidth,
+                scaledHeight // Destination rectangle
+            );
+        } catch (e) {
+            console.error('Error drawing image in grid:', e);
+            ctx.fillStyle = '#eee';
             ctx.fillRect(col * CELL, row * CELL, CELL, CELL);
         }
+
+        // Draw the number label
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
         ctx.fillRect(col * CELL, row * CELL, 32, 24);
         ctx.fillStyle = '#fff';
@@ -2076,126 +1953,435 @@ async function createNumberedGrid(images: string[]): Promise<string> {
     }
 
     const out = canvas.toBuffer('image/png');
+
+    // Save grid image to disk
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const uniqueId = uuidv4().substring(0, 8);
+    const filename = `${gridName}_${timestamp}_${uniqueId}.png`;
+    const filePath = path.join(gridDir, filename);
+
+    fs.writeFileSync(filePath, out);
+    console.log(`[${gridName}] Saved grid image to:`, filePath);
+
     return `data:image/png;base64,${out.toString('base64')}`;
 }
 
 /**
- * Select the best 1-2 screenshots from a grid using a vision model
+ * Select the best items from a grid using a vision model
  */
-async function selectBestFromGrid(
+export async function selectBestFromGrid(
     gridDataUrl: string,
+    prompt: string,
     count: number,
-    query: string
+    limit: number,
+    isDesignSearch: boolean = true,
+    type?: DESIGN_ASSET_TYPES,
+    judge_guide?: string
 ): Promise<number[]> {
+    // Determine appropriate message based on whether this is for design search or image generation
+    let content: string;
+    if (type) {
+        const readableType = type.replace(/_/g, ' ');
+        const reference = DESIGN_ASSET_REFERENCE[type];
+        const readableName = reference.name.toLowerCase();
+
+        if (isDesignSearch) {
+            content = `We are looking for inspiration/reference images for a ${readableName}. We have ${count} images that we want to rank. When you rank the images, you should first choose only the relevant images. Once you have selected the relevant images, rank them by how aesthetically pleasing they are.`;
+        } else {
+            content = `We are designing a new ${readableName}. I've generated ${count} different versions of a ${readableType} and would like you to rank them for me. Please evaluate them and select the best version(s).`;
+        }
+    } else {
+        if (isDesignSearch) {
+            content = `We are trying to create a "${prompt}" and are searching the web for design inspiration. We have ${count} images that we want to rank. When you rank the images, you should first choose only the relevant images. Once you have selected the relevant images, rank them by how aesthetically pleasing they are.`;
+        } else {
+            content = `I've generated ${count} different versions of "${prompt}". Please evaluate them and select the best version(s). Consider overall aesthetics, composition, and how well they match the prompt.`;
+        }
+    }
+
+    if (judge_guide) {
+        content += `\n\n${judge_guide}`;
+    }
+
+    content += `\n\nPlease select the best ${limit} images from the grid below. Respond only with their numbers, separated by commas. If no images are relevant or good quality, make the best_images array empty.`;
+
     const messages: ResponseInput = [
         {
             type: 'message',
+            role: 'developer',
+            content: content,
+        },
+        {
+            type: 'message',
             role: 'user',
-            content: [
-                {
-                    type: 'input_text',
-                    text: `Choose the best 1-${count} images numbered 1-${count} that match the design query "${query}". Respond with the numbers only.`,
-                } as const,
-                {
-                    type: 'input_image',
-                    image_url: gridDataUrl,
-                    detail: 'low',
-                } as const,
-            ],
+            content: gridDataUrl,
         },
     ];
 
     const response = await quick_llm_call(messages, 'vision_mini', {
-        name: 'DesignSelector',
-        description: 'Select best design screenshots',
+        name: 'ImageSelector',
+        description: 'Select best images from grid',
         instructions:
-            'Pick the most relevant numbered screenshots and reply with their numbers only.',
+            'You are a design assistant. Your job is to select the best images from a grid of images.',
+        modelSettings: {
+            force_json: true,
+            json_schema: {
+                name: 'image_selection',
+                type: 'json_schema',
+                schema: {
+                    type: 'object',
+                    properties: {
+                        images: {
+                            type: 'array',
+                            description:
+                                'Please go through every image in the grid and think about how well it fits the requirements.',
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    number: {
+                                        type: 'number',
+                                        description: `The image's number in the grid (1-${count})`,
+                                    },
+                                    evaluation: {
+                                        type: 'string',
+                                        description:
+                                            'How well does this image fit the requirements? Please provide a short evaluation.',
+                                    },
+                                },
+                                additionalProperties: false,
+                                required: ['number', 'evaluation'],
+                            },
+                        },
+                        best_images: {
+                            type: 'array',
+                            description: `Select the best ${limit} images from the grid.`,
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    number: {
+                                        type: 'number',
+                                        description: `The image's number in the grid (1-${count})`,
+                                    },
+                                    reason: {
+                                        type: 'string',
+                                        description:
+                                            'What qualities make this image the best?',
+                                    },
+                                },
+                                additionalProperties: false,
+                                required: ['number', 'reason'],
+                            },
+                        },
+                    },
+                    additionalProperties: false,
+                    required: ['images', 'best_images'],
+                },
+            },
+        },
     });
 
-    const nums = (response.match(/\d+/g) || [])
-        .map(n => parseInt(n, 10))
-        .filter(n => n >= 1 && n <= count)
-        .slice(0, 2);
-    return Array.from(new Set(nums));
+    console.log('[selectBestFromGrid] LLM response:', response);
+
+    const results = JSON.parse(response);
+    if (results && results.best_images) {
+        const selectedImages = results.best_images.map(
+            (img: any) => img.number
+        );
+        console.log(`[selectBestFromGrid] Selected images: ${selectedImages}`);
+        return selectedImages;
+    } else {
+        console.error('[selectBestFromGrid] No valid images selected');
+        return [];
+    }
+}
+
+/**
+ * Generates a unique identifier for a design to prevent duplicate processing
+ */
+export function getDesignId(design: DesignSearchResult): string {
+    return design.url || design.screenshotURL || JSON.stringify(design);
+}
+
+/**
+ * Processes a batch of designs or images in parallel, returning the best selections
+ */
+export async function processBatch<T>(
+    items: T[],
+    prompt: string,
+    limit: number,
+    processedIds: Set<string>,
+    getItemId: (item: T) => string,
+    type?: DESIGN_ASSET_TYPES,
+    judge_guide?: string
+): Promise<T[]> {
+    const gridName = 'smart_design_grid';
+    // Create groups of max 9 items for evaluation
+    const groups: T[][] = [];
+    const shuffledItems = [...items].sort(() => Math.random() - 0.5);
+
+    // Group into batches of up to 9 items
+    for (let i = 0; i < shuffledItems.length; i += 9) {
+        const group = shuffledItems.slice(
+            i,
+            Math.min(i + 9, shuffledItems.length)
+        );
+        if (group.length > 0) {
+            groups.push(group);
+        }
+    }
+
+    if (groups.length === 0) return [];
+    console.log(`[${gridName}] Processing ${groups.length} groups in parallel`);
+
+    // Process all groups in parallel
+    const groupPromises = groups.map(async group => {
+        // Create grid and select best items
+        const grid = await createNumberedGrid(
+            group as unknown as ImageSource[],
+            gridName
+        );
+        const picks = await selectBestFromGrid(
+            grid,
+            prompt,
+            group.length,
+            limit,
+            true,
+            type,
+            judge_guide
+        );
+        console.log(`[${gridName}] Group selections:`, picks);
+
+        // Mark all items in this group as processed
+        group.forEach(item => {
+            processedIds.add(getItemId(item));
+        });
+
+        // Return the picked items
+        return picks.map(idx => group[idx - 1]);
+    });
+
+    // Wait for all groups to complete their selections
+    const results = await Promise.all(groupPromises);
+    return results.flat();
+}
+
+/**
+ * Raw design search configurations with iterative vision-based ranking
+ * Accepts an array of search configurations to run in parallel
+ */
+export async function smart_design_raw(
+    searchConfigs: {
+        engine: DesignSearchEngine;
+        query: string;
+        limit?: number;
+    }[],
+    finalLimit: number = 3,
+    type?: DESIGN_ASSET_TYPES,
+    judge_guide?: string
+): Promise<DesignSearchResult[]> {
+    // Track designs that have been processed
+    const processedIds = new Set<string>();
+
+    // Initialize collections for early and final processing
+    let earlyWinners: DesignSearchResult[] = [];
+    let pendingCandidates: DesignSearchResult[] = [];
+    let completeSearches = 0;
+    const totalSearches = searchConfigs.length;
+
+    // Use the first query as the main query for ranking purposes
+    const mainQuery = searchConfigs.length > 0 ? searchConfigs[0].query : '';
+
+    // Run all search queries in parallel
+    const searchPromises = searchConfigs.map(config =>
+        design_search(config.engine, config.query, config.limit)
+            .then(res => {
+                const parsed: DesignSearchResult[] = JSON.parse(res);
+                return parsed.filter(item => item.screenshotURL);
+            })
+            .catch(e => {
+                console.error(
+                    'smart_design_raw search failed for',
+                    config.engine,
+                    e
+                );
+                return []; // Return empty array on error
+            })
+    );
+
+    // Process results as they come in - don't wait for all to complete
+    const earlyProcessingPromise = new Promise<DesignSearchResult[]>(
+        resolve => {
+            searchPromises.forEach(promise => {
+                promise.then(async engineResults => {
+                    completeSearches++;
+                    console.log(
+                        `[smart_design_raw] Search ${completeSearches}/${totalSearches} complete, got ${engineResults.length} results`
+                    );
+
+                    // Add new results to pending candidates
+                    pendingCandidates = [
+                        ...pendingCandidates,
+                        ...engineResults,
+                    ];
+
+                    // Process complete groups as soon as we have enough designs
+                    // This allows us to start evaluating before all engines complete
+                    if (
+                        pendingCandidates.length >= 9 ||
+                        completeSearches === totalSearches
+                    ) {
+                        // Extract complete groups of 9 (or fewer for the last batch)
+                        const groupsToProcess: DesignSearchResult[][] = [];
+                        const remainder = pendingCandidates.length % 9;
+
+                        // Process all complete groups of 9
+                        if (pendingCandidates.length >= 9) {
+                            for (
+                                let i = 0;
+                                i < pendingCandidates.length - remainder;
+                                i += 9
+                            ) {
+                                groupsToProcess.push(
+                                    pendingCandidates.slice(i, i + 9)
+                                );
+                            }
+
+                            // Keep the remainder for the next batch
+                            pendingCandidates =
+                                remainder > 0
+                                    ? pendingCandidates.slice(
+                                          pendingCandidates.length - remainder
+                                      )
+                                    : [];
+
+                            console.log(
+                                `[smart_design_raw] Early processing ${groupsToProcess.length} complete groups, keeping ${pendingCandidates.length} for later`
+                            );
+
+                            // Process all complete groups
+                            if (groupsToProcess.length > 0) {
+                                const batchWinners = await processBatch(
+                                    groupsToProcess.flat(),
+                                    mainQuery,
+                                    finalLimit,
+                                    processedIds,
+                                    getDesignId,
+                                    type,
+                                    judge_guide
+                                );
+                                earlyWinners = [
+                                    ...earlyWinners,
+                                    ...batchWinners,
+                                ];
+                            }
+                        }
+                    }
+
+                    // If all searches are done, resolve with all winners and remaining candidates
+                    if (completeSearches === totalSearches) {
+                        // Combine early winners with any remaining candidates
+                        if (pendingCandidates.length > 0) {
+                            // Process any remaining candidates
+                            if (pendingCandidates.length < 9) {
+                                console.log(
+                                    `[smart_design_raw] Processing remaining ${pendingCandidates.length} candidates`
+                                );
+                            }
+                            const finalBatchWinners = await processBatch(
+                                pendingCandidates,
+                                mainQuery,
+                                finalLimit,
+                                processedIds,
+                                getDesignId,
+                                type,
+                                judge_guide
+                            );
+                            earlyWinners = [
+                                ...earlyWinners,
+                                ...finalBatchWinners,
+                            ];
+                        }
+
+                        console.log(
+                            `[smart_design_raw] Early processing complete, found ${earlyWinners.length} candidates`
+                        );
+                        resolve(earlyWinners);
+                    }
+                });
+            });
+        }
+    );
+
+    // Wait for early processing to complete
+    let candidates = await earlyProcessingPromise;
+
+    // Main selection loop - continue processing in rounds until we reach the limit
+    let round = 1;
+    while (candidates.length > finalLimit) {
+        console.log(
+            `[smart_design_raw] Round ${round}: Processing ${candidates.length} candidates`
+        );
+
+        // Process the current candidates
+        const roundWinners = await processBatch(
+            candidates,
+            mainQuery,
+            finalLimit,
+            processedIds,
+            getDesignId,
+            type,
+            judge_guide
+        );
+
+        // If no winners in this round, break
+        if (roundWinners.length === 0) break;
+
+        // Update candidates for next round
+        candidates = roundWinners;
+        round++;
+
+        // If we have reached the limit or fewer, we're done
+        if (candidates.length <= finalLimit) break;
+    }
+
+    return candidates;
 }
 
 /**
  * High level design search with iterative vision-based ranking
+ * Uses smart_design_raw with default engines
  */
 export async function smart_design(
     query: string,
-    engine?: DesignSearchEngine,
-    limit: number = 9
+    limit: number = 3
 ): Promise<string> {
-    const engines =
-        engine !== undefined
-            ? [engine]
-            : ['dribbble', 'behance', 'envato', 'pinterest', 'awwwards'];
-    const screenshots: string[] = [];
+    // Build search configurations for all engines using the same query and a limit of 9 per engine
+    const searchConfigs = DESIGN_SEARCH_ENGINES.map(engine => ({
+        engine,
+        query,
+    }));
 
-    for (const eng of engines) {
-        try {
-            const res = await design_search(
-                eng as DesignSearchEngine,
-                query,
-                limit
-            );
-            const parsed: DesignSearchResult[] = JSON.parse(res);
-            for (const item of parsed) {
-                if (item.screenshotURL) screenshots.push(item.screenshotURL);
-            }
-        } catch (e) {
-            console.error('smart_design search failed for', eng, e);
-        }
-    }
-
-    if (screenshots.length === 0) return '[]';
-
-    let candidates = screenshots;
-    while (candidates.length > 4) {
-        const groups: string[][] = [];
-        for (let i = 0; i < candidates.length; i += 9) {
-            groups.push(candidates.slice(i, i + 9));
-        }
-        const winners: string[] = [];
-        for (const group of groups) {
-            const grid = await createNumberedGrid(group);
-            const picks = await selectBestFromGrid(grid, group.length, query);
-            for (const idx of picks) {
-                winners.push(group[idx - 1]);
-            }
-        }
-        if (winners.length === 0) break;
-        candidates = winners;
-    }
-
-    return JSON.stringify(candidates.slice(0, 4), null, 2);
+    // Run the raw design search with these configurations
+    return JSON.stringify(
+        await smart_design_raw(searchConfigs, limit),
+        null,
+        2
+    );
 }
 
 export function getSmartDesignTools() {
     return [
         createToolFunction(
             smart_design,
-            'Run a multi-engine design search and automatically rank screenshots using a vision model.',
+            'An intelligent, multi-engine design search returns the top designs from across the web.',
             {
-                query: { type: 'string', description: 'Design search query' },
-                engine: {
+                query: {
                     type: 'string',
-                    enum: [
-                        'dribbble',
-                        'behance',
-                        'envato',
-                        'pinterest',
-                        'awwwards',
-                        'siteinspire',
-                        'web_search',
-                    ],
-                    optional: true,
-                    description: 'Optional specific engine to use',
+                    description:
+                        'Design search query, e.g. "logo for an ai startup" or "homepage for a customer support tool"',
                 },
                 limit: {
                     type: 'number',
-                    description: 'Results per engine (default 9)',
+                    description: 'Number of results to return (default 3)',
                     optional: true,
                 },
             }
