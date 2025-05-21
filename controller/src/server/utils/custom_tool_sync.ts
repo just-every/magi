@@ -9,7 +9,7 @@ interface CustomTool {
     version?: number;
 }
 
-const TOOLS_DIR = path.resolve('.custom_tools');
+const TOOLS_DIR = path.resolve('/custom_tools');
 
 async function fileExists(p: string): Promise<boolean> {
     try {

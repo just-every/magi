@@ -687,7 +687,7 @@ export class OpenAIChat implements ModelProvider {
             if (settings?.json_schema) {
                 requestParams.response_format = {
                     type: 'json_schema',
-                    json_schema: settings.json_schema
+                    json_schema: settings.json_schema,
                 };
             }
             if (tools && tools.length > 0)

@@ -188,7 +188,6 @@ export class AgentBrowserSessionCDP {
                     url: 'about:blank', // Always start with blank page, we'll navigate after client setup
                     newWindow: false, // Create a tab in the existing window
                     background: true, // Create the tab in the background without stealing focus
-                    hidden: true, // Create a hidden tab to avoid UI flicker
                 };
 
                 // Add browserContextId if we found the UI context
@@ -217,7 +216,6 @@ export class AgentBrowserSessionCDP {
 
                 // Set up CDP guard to catch any tabs that manage to open despite our injected script
                 try {
-
                     // Store original targetId for comparison
                     const ourTabId = targetId;
 
@@ -264,7 +262,6 @@ export class AgentBrowserSessionCDP {
                             }
                         }
                     });
-
                 } catch (guardError) {
                     console.error(
                         `[browser_session_cdp] Failed to set up Target.targetCreated guard for tab ${this.tabId}:`,
@@ -507,7 +504,7 @@ export class AgentBrowserSessionCDP {
      * @returns A promise that resolves when page is loaded or timeout occurs
      */
     private async waitForPageLoad(): Promise<void> {
-        await new Promise(r => setTimeout(r, randomInt(90, 130))); // delay to allow navigation events to settle
+        await new Promise(r => setTimeout(r, randomInt(200, 250))); // delay to allow navigation events to settle
         await this.waitForPageLoadComplete();
     }
 
@@ -535,9 +532,10 @@ export class AgentBrowserSessionCDP {
             }, 30000); // 30-second timeout, same as navigate
 
             // Listen for the load event once
-            client.once('Page.loadEventFired', () => {
+            client.once('Page.loadEventFired', async () => {
                 loadFired = true;
                 clearTimeout(loadTimeout); // Clear timeout if load event fires
+                await new Promise(r => setTimeout(r, randomInt(300, 400))); // allow navigation events to complete
                 resolve();
             });
         });
@@ -578,7 +576,7 @@ export class AgentBrowserSessionCDP {
      * @param url The absolute URL to navigate to.
      * @returns A promise resolving to a success or error message string.
      */
-    async navigate(url: string, timeout:number = 30_000): Promise<string> {
+    async navigate(url: string, timeout: number = 30_000): Promise<string> {
         await this.ensureInitialized(); // Ensure connection is ready
         try {
             const client = this.cdpClient!;
@@ -2186,9 +2184,6 @@ export class AgentBrowserSessionCDP {
         }
 
         const targetIdToClose = this.chromeTabId; // Store ID before resetting state
-        console.log(
-            `[browser_session_cdp] Closing tab ${this.tabId} (CDP target: ${targetIdToClose})`
-        );
 
         try {
             // 1. Try closing the target using its dedicated client first.
@@ -2196,9 +2191,6 @@ export class AgentBrowserSessionCDP {
                 await this.cdpClient.Target.closeTarget({
                     targetId: targetIdToClose,
                 });
-                console.log(
-                    `[browser_session_cdp] Closed target ${targetIdToClose} via specific client.`
-                );
             } catch (closeError: any) {
                 // If specific client fails (e.g., disconnected), try using a temporary root client.
                 console.warn(
@@ -2243,9 +2235,6 @@ export class AgentBrowserSessionCDP {
             this.cdpClient = null; // Release client reference
             this.chromeTabId = null;
 
-            console.log(
-                `[browser_session_cdp] Session resources released for tab ${this.tabId}.`
-            );
             return `Successfully closed tab ${this.tabId}`;
         } catch (error: any) {
             // Catch any other unexpected errors during the closing process.
@@ -2351,17 +2340,12 @@ export function getAgentBrowserSession(
     // Monkey-patch the closeSession method to ensure removal from cache.
     const originalClose = session.closeSession.bind(session); // Store original method
     session.closeSession = async function (): Promise<string> {
-        // Override
-        console.log(
-            `[browser_utils] Session for tab ${tabId} is closing, removing from cache.`
-        );
         activeSessions.delete(tabId); // Remove from cache *first*
         return originalClose(); // Call original close logic
     };
 
     // Add the new session to the cache.
     activeSessions.set(tabId, session);
-    console.log(`[browser_utils] Session for tab ${tabId} added to cache.`);
     return session;
 }
 

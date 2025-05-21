@@ -9,6 +9,15 @@ import CDP from 'chrome-remote-interface';
  * @param url The URL of the controller UI
  */
 export async function openUI(url: string): Promise<void> {
+    // Helper to safely parse URLs
+    function safeParse(urlStr: string): URL | null {
+        try {
+            return new URL(urlStr);
+        } catch {
+            return null;
+        }
+    }
+
     let cdpClient: CDP.Client | null = null; // Use Client type and allow null
     const host = 'host.docker.internal';
     const port = parseInt(process.env.HOST_CDP_PORT || '9001', 10); // Ensure port is a number
@@ -26,17 +35,51 @@ export async function openUI(url: string): Promise<void> {
         );
         console.log(`Found ${pageTargets.length} existing page targets.`);
 
-        // 1. Find a tab with matching URL (ignoring port differences)
-        let targetToActivate = pageTargets.find(target => {
-            try {
-                const targetUrl = new URL(target.url);
-                const requestedUrl = new URL(url);
-                return targetUrl.hostname === requestedUrl.hostname;
-            } catch (e) {
-                // If URL parsing fails, fallback to the original exact check
-                return target.url === url;
+        // 1. Try to find a tab matching host, port, and path; then host & port; then just host
+        let targetToActivate: typeof pageTargets[0] | undefined;
+
+        const requestedUrlObj = safeParse(url);
+
+        if (requestedUrlObj) {
+            // 1. Match host, port, and path
+            targetToActivate = pageTargets.find(target => {
+                const targetUrlObj = safeParse(target.url);
+                return (
+                    targetUrlObj &&
+                    targetUrlObj.hostname === requestedUrlObj.hostname &&
+                    targetUrlObj.port === requestedUrlObj.port &&
+                    targetUrlObj.pathname === requestedUrlObj.pathname
+                );
+            });
+
+            // 2. If not found, match host and port
+            if (!targetToActivate) {
+                targetToActivate = pageTargets.find(target => {
+                    const targetUrlObj = safeParse(target.url);
+                    return (
+                        targetUrlObj &&
+                        targetUrlObj.hostname === requestedUrlObj.hostname &&
+                        targetUrlObj.port === requestedUrlObj.port
+                    );
+                });
             }
-        });
+
+            // 3. If still not found, match just host
+            if (!targetToActivate) {
+                targetToActivate = pageTargets.find(target => {
+                    const targetUrlObj = safeParse(target.url);
+                    return (
+                        targetUrlObj &&
+                        targetUrlObj.hostname === requestedUrlObj.hostname
+                    );
+                });
+            }
+        }
+
+        // 4. Fallback: If URL parsing fails or no match, use original exact check
+        if (!targetToActivate) {
+            targetToActivate = pageTargets.find(target => target.url === url);
+        }
 
         if (targetToActivate) {
             // If exact match exists, activate it

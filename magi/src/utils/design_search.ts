@@ -30,6 +30,7 @@ import {
     DesignSearchEngine,
     DesignSearchResult,
     type DESIGN_ASSET_TYPES,
+    type DesignAssetAspect,
 } from './design/constants.js';
 
 const USER_AGENT =
@@ -247,8 +248,6 @@ export async function searchBehance(
             query
         )}`;
 
-        console.log(`[searchBehance] Loading URL in browser: ${url}`);
-
         const jsResult = await runJavaScript(
             url,
             `async function waitForElements() {
@@ -332,8 +331,6 @@ export async function searchBehance(
         return await waitForElements();`
         );
 
-        console.log('[searchBehance] jsResult:', jsResult);
-
         /* ------------------------------------------------------------------ *\
       1. Process extracted data directly
          ───────────────────────────────
@@ -360,8 +357,6 @@ async function searchEnvato(
     try {
         // Try Envato Elements first - more reliable than ThemeForest
         const envatoUrl = `https://elements.envato.com/web-templates/${encodeURIComponent(query)}`;
-        console.log(`[searchEnvato] Loading Envato Elements URL: ${envatoUrl}`);
-
         const jsResult = await runJavaScript(
             envatoUrl,
             `async function waitForElements() {
@@ -848,8 +843,6 @@ async function searchEnvato(
             return await waitForElements();`
         );
 
-        console.log('[searchEnvato] jsResult:', jsResult);
-
         // Parse the JSON result
         let results: DesignSearchResult[] = [];
 
@@ -1176,8 +1169,6 @@ async function searchPinterest(
             return await waitForElements();`
         );
 
-        console.log('[searchPinterest] jsResult:', jsResult);
-
         // Parse the JSON result
         let results: DesignSearchResult[] = [];
 
@@ -1210,8 +1201,6 @@ async function searchAwwwards(
     try {
         // Use browser approach since Awwwards may block direct fetches or use JS rendering
         const searchUrl = `https://www.awwwards.com/inspiration_search/?text=${encodeURIComponent(query)}`;
-        console.log(`[searchAwwwards] Loading URL in browser: ${searchUrl}`);
-
         const jsResult = await runJavaScript(
             searchUrl,
             `async function waitForElements() {
@@ -1411,8 +1400,6 @@ async function searchAwwwards(
             return await waitForElements();`
         );
 
-        console.log('[searchAwwwards] jsResult:', jsResult);
-
         // Parse the JSON result
         let results: DesignSearchResult[] = [];
 
@@ -1473,8 +1460,6 @@ async function searchAwwwards(
                         }
                     }
                 }
-
-                console.log('[searchAwwwards] Extracted image URLs:', imgUrls);
 
                 // Convert extracted data to DesignSearchResult format
                 results = parsed.value.map((item: any, index: number) => {
@@ -1551,8 +1536,6 @@ async function genericWebSearch(
         // Randomly choose between OpenAI and Google engines
         const engines = ['openai', 'google'];
         let engine = engines[Math.floor(Math.random() * engines.length)];
-
-        console.log(`[genericWebSearch] Using ${engine} for search`);
 
         try {
             const searchQuery = `Please provide a list of up to ${limit} URLs for the most popular "${query}". Please return the results in JSON format [{url: 'https://...', title: 'Example Site'}, ...]. Only respond with the JSON, and no other text of comments.`;
@@ -1666,7 +1649,6 @@ export async function design_search(
     // Select the appropriate search function based on the engine
     let results: DesignSearchResult[];
 
-    console.log(`[design_search] Searching for "${query}" on ${engine}...`);
     switch (engine) {
         case 'dribbble':
             results = await searchDribbble(query, limit);
@@ -1833,7 +1815,8 @@ export interface ImageSource {
  */
 export async function createNumberedGrid(
     images: ImageSource[],
-    gridName: string = 'grid'
+    gridName: string = 'grid',
+    aspect: DesignAssetAspect = 'square'
 ): Promise<string> {
     // Make sure grid directory exists
     const gridDir = path.join(DESIGN_ASSETS_DIR, 'grid');
@@ -1841,14 +1824,71 @@ export async function createNumberedGrid(
         fs.mkdirSync(gridDir, { recursive: true });
     }
 
-    const CELL = 256;
+    const BASE_CELL = 256;
+    let cellWidth = BASE_CELL;
+    let cellHeight = BASE_CELL;
+
+    // Adjust cell dimensions based on aspect ratio
+    if (aspect === 'landscape') {
+        cellWidth = Math.round(BASE_CELL * 1.5); // 1.5x wider for landscape
+    } else if (aspect === 'portrait') {
+        cellHeight = Math.round(BASE_CELL * 1.5); // 1.5x taller for portrait
+    }
+
     const cols = 3;
     const rows = Math.ceil(images.length / cols);
-    const canvas = createCanvas(cols * CELL, rows * CELL);
+    const canvas = createCanvas(cols * cellWidth, rows * cellHeight);
     const ctx = canvas.getContext('2d');
 
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Set highest quality rendering options for sharper image scaling
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    (ctx as any).patternQuality = 'best';
+    (ctx as any).quality = 'best';
+    (ctx as any).antialias = 'subpixel';
+
+    // Helper function for improved progressive downsampling
+    const drawScaled = (
+        srcImg: any, // Use 'any' to bypass TS type checking for napi-rs/canvas compatibility
+        dx: number, dy: number,
+        dw: number, dh: number,
+        srcWidth: number, srcHeight: number
+    ) => {
+        // Fast path for smaller images
+        if (Math.max(srcWidth, srcHeight) < 1024) {
+            ctx.drawImage(srcImg, dx, dy, dw, dh);
+            return;
+        }
+
+        // Progressive down-scaling for large images
+        let tmpCanvas = createCanvas(srcWidth, srcHeight);
+        let tmpCtx = tmpCanvas.getContext('2d');
+        tmpCtx.imageSmoothingEnabled = true;
+        tmpCtx.imageSmoothingQuality = 'high';
+        tmpCtx.drawImage(srcImg, 0, 0);
+
+        let curW = tmpCanvas.width;
+        let curH = tmpCanvas.height;
+
+        // Scale down by halves until we're close to target size
+        while (curW * 0.5 > dw && curH * 0.5 > dh) {
+            curW = Math.round(curW * 0.5);
+            curH = Math.round(curH * 0.5);
+            const next = createCanvas(curW, curH);
+            const nctx = next.getContext('2d');
+            nctx.imageSmoothingEnabled = true;
+            nctx.imageSmoothingQuality = 'high';
+            nctx.drawImage(tmpCanvas, 0, 0, curW, curH);
+            tmpCanvas = next;
+            tmpCtx = nctx;
+        }
+
+        // Final draw to the main canvas
+        ctx.drawImage(tmpCanvas, dx, dy, dw, dh);
+    };
 
     for (let i = 0; i < images.length; i++) {
         const row = Math.floor(i / cols);
@@ -1860,23 +1900,19 @@ export async function createNumberedGrid(
 
             if (imageSource.dataUrl) {
                 // Directly load from data URL if available
-                console.log(`[createNumberedGrid] Loaded image from data URL ${imageSource.dataUrl}`);
                 img = await loadImage(imageSource.dataUrl);
-            }  else if ((imageSource as DesignSearchResult).screenshotURL) {
+            } else if ((imageSource as DesignSearchResult).screenshotURL) {
                 // Handle DesignSearchResult objects for backward compatibility
                 const design = imageSource as DesignSearchResult;
                 const src = design.thumbnailURL || design.screenshotURL;
                 if (src.startsWith('data:image')) {
-                    console.log(`[createNumberedGrid] Loaded image from data:image thumbnailURL/screenshotURL ${src}`);
                     img = await loadImage(src);
                 } else if (
                     src.startsWith('/magi_output') &&
                     fs.existsSync(src)
                 ) {
-                    console.log(`[createNumberedGrid] Loaded image from /magi_output from thumbnailURL/screenshotURL ${src}`);
                     img = await loadImage(src);
                 } else {
-                    console.log(`[createNumberedGrid] Loaded image from source URL from thumbnailURL/screenshotURL ${src}`);
                     const res = await fetch(src);
                     const buf = Buffer.from(await res.arrayBuffer());
                     img = await loadImage(buf);
@@ -1884,16 +1920,13 @@ export async function createNumberedGrid(
             } else if (imageSource.url) {
                 // Load from URL or file path
                 if (imageSource.url.startsWith('data:image')) {
-                    console.log(`[createNumberedGrid] Loaded image from data:image URL ${imageSource.url}`);
                     img = await loadImage(imageSource.url);
                 } else if (
                     imageSource.url.startsWith('/magi_output') &&
                     fs.existsSync(imageSource.url)
                 ) {
-                    console.log(`[createNumberedGrid] Loaded image from /magi_output ${imageSource.url}`);
                     img = await loadImage(imageSource.url);
                 } else {
-                    console.log(`[createNumberedGrid] Loaded image from source URL ${imageSource.url}`);
                     const res = await fetch(imageSource.url);
                     const buf = Buffer.from(await res.arrayBuffer());
                     img = await loadImage(buf);
@@ -1904,52 +1937,49 @@ export async function createNumberedGrid(
 
             // Calculate scaled dimensions while maintaining aspect ratio
             const aspectRatio = img.width / img.height;
-            const scaledWidth = CELL;
+            const scaledWidth = cellWidth;
             let scaledHeight = scaledWidth / aspectRatio;
 
-            // If height > 256, truncate from top-down
-            // If height < 256, vertically center
-            const sourceX = 0;
-            const sourceY = 0;
-            const sourceWidth = img.width;
-            let sourceHeight = img.height;
-            const destX = col * CELL;
-            let destY = row * CELL;
+            // If height > cellHeight, truncate from top-down
+            // If height < cellHeight, vertically center
+            const destX = col * cellWidth;
+            let destY = row * cellHeight;
 
-            if (scaledHeight > CELL) {
-                // Truncate height to 256px (from the top down)
-                // Adjust sourceHeight to keep only the top portion of the image
-                sourceHeight = (CELL / scaledHeight) * img.height;
-                scaledHeight = CELL;
-            } else if (scaledHeight < CELL) {
+            if (scaledHeight > cellHeight) {
+                // Truncate height to cellHeight (from the top down)
+                scaledHeight = cellHeight;
+            } else if (scaledHeight < cellHeight) {
                 // Vertically center the image in the cell
-                destY = row * CELL + (CELL - scaledHeight) / 2;
+                destY = row * cellHeight + (cellHeight - scaledHeight) / 2;
             }
 
-            // Draw the image with the calculated dimensions
-            ctx.drawImage(
+            // Draw the image with progressive downsampling for better quality
+            drawScaled(
                 img,
-                sourceX,
-                sourceY,
-                sourceWidth,
-                sourceHeight, // Source rectangle
                 destX,
                 destY,
                 scaledWidth,
-                scaledHeight // Destination rectangle
+                scaledHeight,
+                img.width,
+                img.height
             );
         } catch (e) {
             console.error('Error drawing image in grid:', e);
             ctx.fillStyle = '#eee';
-            ctx.fillRect(col * CELL, row * CELL, CELL, CELL);
+            ctx.fillRect(
+                col * cellWidth,
+                row * cellHeight,
+                cellWidth,
+                cellHeight
+            );
         }
 
         // Draw the number label
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillRect(col * CELL, row * CELL, 32, 24);
+        ctx.fillRect(col * cellWidth, row * cellHeight, 32, 24);
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 20px sans-serif';
-        ctx.fillText(String(i + 1), col * CELL + 8, row * CELL + 18);
+        ctx.fillText(String(i + 1), col * cellWidth + 8, row * cellHeight + 18);
     }
 
     const out = canvas.toBuffer('image/png');
@@ -2030,27 +2060,6 @@ export async function selectBestFromGrid(
                 schema: {
                     type: 'object',
                     properties: {
-                        images: {
-                            type: 'array',
-                            description:
-                                'Please go through every image in the grid and think about how well it fits the requirements.',
-                            items: {
-                                type: 'object',
-                                properties: {
-                                    number: {
-                                        type: 'number',
-                                        description: `The image's number in the grid (1-${count})`,
-                                    },
-                                    evaluation: {
-                                        type: 'string',
-                                        description:
-                                            'How well does this image fit the requirements? Please provide a short evaluation.',
-                                    },
-                                },
-                                additionalProperties: false,
-                                required: ['number', 'evaluation'],
-                            },
-                        },
                         best_images: {
                             type: 'array',
                             description: `Select the best ${limit} images from the grid.`,
@@ -2073,7 +2082,7 @@ export async function selectBestFromGrid(
                         },
                     },
                     additionalProperties: false,
-                    required: ['images', 'best_images'],
+                    required: ['best_images'],
                 },
             },
         },
@@ -2101,68 +2110,7 @@ export function getDesignId(design: DesignSearchResult): string {
     return design.url || design.screenshotURL || JSON.stringify(design);
 }
 
-/**
- * Processes a batch of designs or images in parallel, returning the best selections
- */
-export async function processBatch<T>(
-    items: T[],
-    prompt: string,
-    limit: number,
-    processedIds: Set<string>,
-    getItemId: (item: T) => string,
-    type?: DESIGN_ASSET_TYPES,
-    judge_guide?: string
-): Promise<T[]> {
-    const gridName = 'smart_design_grid';
-    // Create groups of max 9 items for evaluation
-    const groups: T[][] = [];
-    const shuffledItems = [...items].sort(() => Math.random() - 0.5);
-
-    // Group into batches of up to 9 items
-    for (let i = 0; i < shuffledItems.length; i += 9) {
-        const group = shuffledItems.slice(
-            i,
-            Math.min(i + 9, shuffledItems.length)
-        );
-        if (group.length > 0) {
-            groups.push(group);
-        }
-    }
-
-    if (groups.length === 0) return [];
-    console.log(`[${gridName}] Processing ${groups.length} groups in parallel`);
-
-    // Process all groups in parallel
-    const groupPromises = groups.map(async group => {
-        // Create grid and select best items
-        const grid = await createNumberedGrid(
-            group as unknown as ImageSource[],
-            gridName
-        );
-        const picks = await selectBestFromGrid(
-            grid,
-            prompt,
-            group.length,
-            limit,
-            true,
-            type,
-            judge_guide
-        );
-        console.log(`[${gridName}] Group selections:`, picks);
-
-        // Mark all items in this group as processed
-        group.forEach(item => {
-            processedIds.add(getItemId(item));
-        });
-
-        // Return the picked items
-        return picks.map(idx => group[idx - 1]);
-    });
-
-    // Wait for all groups to complete their selections
-    const results = await Promise.all(groupPromises);
-    return results.flat();
-}
+import { judgeImageSet } from './design/grid_judge.js';
 
 /**
  * Raw design search configurations with iterative vision-based ranking
@@ -2176,16 +2124,11 @@ export async function smart_design_raw(
     }[],
     finalLimit: number = 3,
     type?: DESIGN_ASSET_TYPES,
-    judge_guide?: string
+    judge_guide?: string,
+    prefix: string = 'smart',
 ): Promise<DesignSearchResult[]> {
     // Track designs that have been processed
     const processedIds = new Set<string>();
-
-    // Initialize collections for early and final processing
-    let earlyWinners: DesignSearchResult[] = [];
-    let pendingCandidates: DesignSearchResult[] = [];
-    let completeSearches = 0;
-    const totalSearches = searchConfigs.length;
 
     // Use the first query as the main query for ranking purposes
     const mainQuery = searchConfigs.length > 0 ? searchConfigs[0].query : '';
@@ -2207,112 +2150,15 @@ export async function smart_design_raw(
             })
     );
 
-    // Process results as they come in - don't wait for all to complete
-    const earlyProcessingPromise = new Promise<DesignSearchResult[]>(
-        resolve => {
-            searchPromises.forEach(promise => {
-                promise.then(async engineResults => {
-                    completeSearches++;
-                    console.log(
-                        `[smart_design_raw] Search ${completeSearches}/${totalSearches} complete, got ${engineResults.length} results`
-                    );
-
-                    // Add new results to pending candidates
-                    pendingCandidates = [
-                        ...pendingCandidates,
-                        ...engineResults,
-                    ];
-
-                    // Process complete groups as soon as we have enough designs
-                    // This allows us to start evaluating before all engines complete
-                    if (
-                        pendingCandidates.length >= 9 ||
-                        completeSearches === totalSearches
-                    ) {
-                        // Extract complete groups of 9 (or fewer for the last batch)
-                        const groupsToProcess: DesignSearchResult[][] = [];
-                        const remainder = pendingCandidates.length % 9;
-
-                        // Process all complete groups of 9
-                        if (pendingCandidates.length >= 9) {
-                            for (
-                                let i = 0;
-                                i < pendingCandidates.length - remainder;
-                                i += 9
-                            ) {
-                                groupsToProcess.push(
-                                    pendingCandidates.slice(i, i + 9)
-                                );
-                            }
-
-                            // Keep the remainder for the next batch
-                            pendingCandidates =
-                                remainder > 0
-                                    ? pendingCandidates.slice(
-                                          pendingCandidates.length - remainder
-                                      )
-                                    : [];
-
-                            console.log(
-                                `[smart_design_raw] Early processing ${groupsToProcess.length} complete groups, keeping ${pendingCandidates.length} for later`
-                            );
-
-                            // Process all complete groups
-                            if (groupsToProcess.length > 0) {
-                                const batchWinners = await processBatch(
-                                    groupsToProcess.flat(),
-                                    mainQuery,
-                                    finalLimit,
-                                    processedIds,
-                                    getDesignId,
-                                    type,
-                                    judge_guide
-                                );
-                                earlyWinners = [
-                                    ...earlyWinners,
-                                    ...batchWinners,
-                                ];
-                            }
-                        }
-                    }
-
-                    // If all searches are done, resolve with all winners and remaining candidates
-                    if (completeSearches === totalSearches) {
-                        // Combine early winners with any remaining candidates
-                        if (pendingCandidates.length > 0) {
-                            // Process any remaining candidates
-                            if (pendingCandidates.length < 9) {
-                                console.log(
-                                    `[smart_design_raw] Processing remaining ${pendingCandidates.length} candidates`
-                                );
-                            }
-                            const finalBatchWinners = await processBatch(
-                                pendingCandidates,
-                                mainQuery,
-                                finalLimit,
-                                processedIds,
-                                getDesignId,
-                                type,
-                                judge_guide
-                            );
-                            earlyWinners = [
-                                ...earlyWinners,
-                                ...finalBatchWinners,
-                            ];
-                        }
-
-                        console.log(
-                            `[smart_design_raw] Early processing complete, found ${earlyWinners.length} candidates`
-                        );
-                        resolve(earlyWinners);
-                    }
-                });
-            });
-        }
-    );
-
-    // Wait for early processing to complete
-    let candidates = await earlyProcessingPromise;
+    // Wait for all search promises to complete and flatten results
+    let candidates: DesignSearchResult[] = [];
+    try {
+        const allResults = await Promise.all(searchPromises);
+        candidates = allResults.flat();
+    } catch (e) {
+        console.error('Error awaiting search promises:', e);
+        candidates = [];
+    }
 
     // Main selection loop - continue processing in rounds until we reach the limit
     let round = 1;
@@ -2322,27 +2168,37 @@ export async function smart_design_raw(
         );
 
         // Process the current candidates
-        const roundWinners = await processBatch(
-            candidates,
-            mainQuery,
-            finalLimit,
+        const roundWinners = await judgeImageSet({
+            items: candidates,
+            prompt: mainQuery,
+            selectLimit: finalLimit,
             processedIds,
-            getDesignId,
+            getId: getDesignId,
+            toImageSource: (item: any) => {
+                // For design search, treat as DesignSearchResult
+                const d = item as DesignSearchResult;
+                return {
+                    url: d.screenshotURL || d.thumbnailURL || d.url,
+                    title: d.title,
+                };
+            },
+            gridName: `${prefix}_search_round_${round}`,
+            isDesignSearch: true,
             type,
-            judge_guide
-        );
+            judgeGuide: judge_guide,
+        });
 
-        // If no winners in this round, break
-        if (roundWinners.length === 0) break;
-
-        // Update candidates for next round
+        // Assign before checking for empty
         candidates = roundWinners;
+        if (candidates.length === 0) break;
+
         round++;
 
         // If we have reached the limit or fewer, we're done
         if (candidates.length <= finalLimit) break;
     }
 
+    // Final safety cap
     return candidates;
 }
 
