@@ -144,12 +144,19 @@ docker-compose.yml
 - **Smart Design Search**: Aggregates screenshots from multiple design sources and ranks them automatically
 - **Cost Tracking**: Monitors and reports on API usage costs
 - **Verifier Agents**: Optional verifier agents can call any tools; failures trigger automatic retries (default 2)
+- **Custom Tools API**: Exposes HTTP endpoints for listing and inspecting dynamic tools
+- **Custom Tools Viewer**: View and inspect dynamic tools directly in the web UI
 
 ## Command Line Utilities
 
 - **List Process Output**: `./scripts/list-output.sh`
 - **Clear Process Output**: `./scripts/clear-process-output.sh <process-id>`
 - **Clear All Output**: `./scripts/clear-output.sh`
+
+## API Endpoints
+
+- **GET /api/custom-tools** – List all available custom tools
+- **GET /api/custom-tools/:name** – Retrieve a specific custom tool by name
 
 ## Testing
 
