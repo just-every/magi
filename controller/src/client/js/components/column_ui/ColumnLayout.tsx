@@ -5,6 +5,7 @@ import ChatColumn from './ChatColumn';
 import ProcessTreeColumn from './ProcessTreeColumn';
 import OutputColumn from './OutputColumn';
 import PullRequestFailures from '../PullRequestFailures';
+import CustomToolsViewer from '../CustomToolsViewer';
 
 interface ColumnLayoutProps {}
 
@@ -12,9 +13,9 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
     const { processes, coreProcessId, costData, isPaused, togglePauseState } =
         useSocket();
     const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-    const [middleTab, setMiddleTab] = useState<'tasks' | 'code' | 'complete'>(
-        'tasks'
-    );
+    const [middleTab, setMiddleTab] = useState<
+        'tasks' | 'code' | 'tools' | 'complete'
+    >('tasks');
 
     useEffect(() => {
         // Focus input when visible
@@ -78,6 +79,16 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                         <li className="nav-item">
                             <button
                                 className={`nav-link${
+                                    middleTab === 'tools' ? ' active' : ''
+                                }`}
+                                onClick={() => setMiddleTab('tools')}
+                            >
+                                Tools
+                            </button>
+                        </li>
+                        <li className="nav-item">
+                            <button
+                                className={`nav-link${
                                     middleTab === 'complete' ? ' active' : ''
                                 }`}
                                 onClick={() => setMiddleTab('complete')}
@@ -100,6 +111,8 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                             />
                         ) : middleTab === 'code' ? (
                             <PullRequestFailures />
+                        ) : middleTab === 'tools' ? (
+                            <CustomToolsViewer />
                         ) : (
                             <ProcessTreeColumn
                                 selectedItemId={selectedItemId}

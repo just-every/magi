@@ -13,6 +13,7 @@ import { ServerManager } from './managers/server_manager';
 import { initColorManager } from './managers/color_manager';
 import { ensureMigrations } from './utils/db_migrations';
 import { syncLocalCustomTools } from './utils/custom_tool_sync';
+import customToolsRoutes from './routes/custom_tools';
 import prEventsRoutes from './routes/pr_events';
 
 /**
@@ -48,6 +49,7 @@ async function main(): Promise<void> {
     // Add API routes
     const app = serverManager.getExpressApp();
     app.use(express.json()); // For parsing application/json
+    app.use('/api/custom-tools', customToolsRoutes);
     app.use('/api/pr-events', prEventsRoutes);
 
     // Expose the PR events manager for route handlers to use
