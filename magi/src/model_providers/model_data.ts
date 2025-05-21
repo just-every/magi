@@ -118,7 +118,7 @@ export const MODEL_CLASSES = {
     standard: {
         models: [
             'gpt-4.1', // OpenAI
-            'gemini-2.5-flash-preview-04-17-low', // Google
+            'gemini-2.5-flash-preview-05-20-low', // Google
             'claude-3-5-haiku-latest', // Anthropic
             'grok-3-mini-fast', // X.AI
             'deepseek-chat', // DeepSeek
@@ -143,7 +143,7 @@ export const MODEL_CLASSES = {
     reasoning: {
         models: [
             'gemini-2.5-pro-preview-05-06', // 'gemini-2.5-pro-exp-03-25', // Google
-            'gemini-2.5-flash-preview-04-17-max', // Google
+            'gemini-2.5-flash-preview-05-20-max', // Google
             'o4-mini-high', // OpenAI
             'o3-high', // OpenAI
             'claude-3-7-sonnet-latest', // Anthropic
@@ -155,7 +155,7 @@ export const MODEL_CLASSES = {
     // Fast, cheap reasoning models
     reasoning_mini: {
         models: [
-            'gemini-2.5-flash-preview-04-17-medium', // Google
+            'gemini-2.5-flash-preview-05-20-medium', // Google
             'grok-3-mini-fast', // X.AI
         ],
         random: true,
@@ -165,7 +165,7 @@ export const MODEL_CLASSES = {
     monologue: {
         models: [
             'gemini-2.5-pro-preview-05-06', // 'gemini-2.5-pro-exp-03-25', // Google
-            'gemini-2.5-flash-preview-04-17-medium', // Google
+            'gemini-2.5-flash-preview-05-20-medium', // Google
             'o4-mini-low', // OpenAI
             'o3-low', // OpenAI
             'claude-3-7-sonnet-latest', // Anthropic
@@ -181,7 +181,7 @@ export const MODEL_CLASSES = {
     metacognition: {
         models: [
             'gemini-2.5-pro-preview-05-06', // 'gemini-2.5-pro-exp-03-25', // Google
-            'gemini-2.5-flash-preview-04-17-high', // Google
+            'gemini-2.5-flash-preview-05-20-high', // Google
             //'o4-mini-high', // OpenAI
             'o3-medium', // OpenAI
             'claude-3-7-sonnet-latest', // Anthropic
@@ -202,7 +202,7 @@ export const MODEL_CLASSES = {
     // Writing models - optimized for conversation and text generation
     writing: {
         models: [
-            'gemini-2.5-flash-preview-04-17-low', // Google
+            'gemini-2.5-flash-preview-05-20-low', // Google
             'gpt-4.1-mini', // OpenAI
         ],
         random: true,
@@ -213,7 +213,7 @@ export const MODEL_CLASSES = {
     summary: {
         models: [
             //'meta-llama/llama-4-scout', // Meta/OpenRouter
-            'gemini-2.5-flash-preview-04-17-low', // Google
+            'gemini-2.5-flash-preview-05-20-low', // Google
             'gpt-4.1-mini', // OpenAI
             //'mistral/ministral-8b', // Mistral/OpenRouter
         ],
@@ -226,7 +226,7 @@ export const MODEL_CLASSES = {
             //'computer-use-preview',     // OpenAI
             'o4-mini-medium', // OpenAI
             'o3-low', // OpenAI
-            'gemini-2.5-flash-preview-04-17-max', // Google
+            'gemini-2.5-flash-preview-05-20-max', // Google
             'gemini-2.5-pro-preview-05-06', // 'gemini-2.5-pro-exp-03-25', // Google
             'claude-3-7-sonnet-latest', // Anthropic
             //'grok-2-vision', // X.AI
@@ -239,7 +239,7 @@ export const MODEL_CLASSES = {
     vision_mini: {
         models: [
             'gpt-4.1-mini', // OpenAI
-            'gemini-2.5-flash-preview-04-17-low', // Google
+            'gemini-2.5-flash-preview-05-20-low', // Google
         ],
         random: true,
     },
@@ -250,7 +250,7 @@ export const MODEL_CLASSES = {
             'gpt-4.1', // OpenAI
             //'o4-mini', // OpenAI
             'deepseek-reasoner', // DeepSeek
-            'gemini-2.5-flash-preview-04-17', // Google
+            'gemini-2.5-flash-preview-05-20', // Google
             'perplexity/sonar-deep-research', // Perplexity
         ],
         random: true,
@@ -1047,13 +1047,14 @@ export const MODEL_REGISTRY: ModelEntry[] = [
             'Paid preview of Gemini 2.5 Pro. State-of-the-art multipurpose model.',
     },
     {
-        id: 'gemini-2.5-flash-preview-04-17',
+        id: 'gemini-2.5-flash-preview-05-20',
         aliases: [
             'gemini-2.5-flash',
-            'gemini-2.5-flash-preview-04-17-low',
-            'gemini-2.5-flash-preview-04-17-medium',
-            'gemini-2.5-flash-preview-04-17-high',
-            'gemini-2.5-flash-preview-04-17-max',
+            'gemini-2.5-flash-preview-04-17',
+            'gemini-2.5-flash-preview-05-20-low',
+            'gemini-2.5-flash-preview-05-20-medium',
+            'gemini-2.5-flash-preview-05-20-high',
+            'gemini-2.5-flash-preview-05-20-max',
         ],
         provider: 'google',
         cost: {

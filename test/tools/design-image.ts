@@ -17,7 +17,7 @@ interface ToolResult {
 }
 
 export default async function generateImageTest(options: ToolsOptions = {}): Promise<ToolResult> {
-  const { verbose = false, type = "primary_logo", query = "An AI coding website called pushclear.com. Users can connect up a github repo and it will do the rest of the work to complete the code. We'll use magi as we base.", with_inspiration = true } = options;
+  const { verbose = false, type = "primary_logo", query = "An AI coding website called pushclear.com. Users can connect up a github repo and it will do the rest of the work to complete the code.", with_inspiration = true } = options;
   let overallSuccess = true;
   let overallError = '';
   const finalPaths: Array<string> = [];

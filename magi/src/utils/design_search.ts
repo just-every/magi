@@ -99,7 +99,7 @@ async function takeScreenshot(
     const session = getAgentBrowserSession(sessionId, url);
 
     try {
-        await session.navigate(url);
+        await session.navigate(url, 8_000);
 
         // Clean the title for use in a filename (remove/replace special characters)
         let cleanTitle = '';

@@ -124,9 +124,6 @@ export class AgentBrowserSessionCDP {
         }
         this.tabId = tabId;
         this.startUrl = startUrl;
-        console.log(
-            `[browser_session_cdp] Session created for tab: ${this.tabId} ${this.startUrl ? `with start URL: ${this.startUrl}` : ''}`
-        );
     }
 
     // --- Initialization and Helper Methods ---
@@ -141,20 +138,12 @@ export class AgentBrowserSessionCDP {
             return;
         }
 
-        console.log(
-            `[browser_session_cdp] Initializing browser session for tab: ${this.tabId}...`
-        );
-
         try {
             // Define host and port for the Chrome DevTools Protocol endpoint.
             // Uses 'host.docker.internal' for Docker compatibility, falling back to localhost.
             // Uses HOST_CDP_PORT environment variable, falling back to 9001.
             const host = 'host.docker.internal'; // Specific host for Docker bridge network
             const port = parseInt(process.env.HOST_CDP_PORT || '9001', 10); // Port from env or default
-
-            console.log(
-                `[browser_session_cdp] Connecting to CDP at ${host}:${port}`
-            );
 
             // Connect to the main CDP endpoint to manage targets (tabs).
             const rootClient = await CDP({
@@ -199,23 +188,18 @@ export class AgentBrowserSessionCDP {
                     url: 'about:blank', // Always start with blank page, we'll navigate after client setup
                     newWindow: false, // Create a tab in the existing window
                     background: true, // Create the tab in the background without stealing focus
+                    hidden: true, // Create a hidden tab to avoid UI flicker
                 };
 
                 // Add browserContextId if we found the UI context
                 if (existingCtx) {
                     createParams.browserContextId = existingCtx;
-                    console.log(
-                        `[browser_session_cdp] Reusing UI browserContextId ${existingCtx} for new tab`
-                    );
                 }
 
                 const { targetId } =
                     await rootClient.Target.createTarget(createParams);
 
                 this.chromeTabId = targetId; // Store the CDP ID for our tab
-                console.log(
-                    `[browser_session_cdp] Created new target (tab) with ID: ${targetId} (in background: true)`
-                );
 
                 // Create a dedicated CDP client connected specifically to our new tab.
                 this.cdpClient = await CDP({
@@ -223,9 +207,6 @@ export class AgentBrowserSessionCDP {
                     port,
                     target: targetId, // Scope commands to this tab
                 });
-                console.log(
-                    `[browser_session_cdp] Connected CDP client to target: ${targetId}`
-                );
 
                 // Enable necessary CDP domains for browser interaction and status retrieval.
                 await Promise.all([
@@ -233,15 +214,9 @@ export class AgentBrowserSessionCDP {
                     this.cdpClient.DOM.enable(), // DOM inspection, querying
                     this.cdpClient.Runtime.enable(), // JavaScript execution, getting properties
                 ]);
-                console.log(
-                    `[browser_session_cdp] Enabled required CDP domains for target: ${targetId}`
-                );
 
                 // Set up CDP guard to catch any tabs that manage to open despite our injected script
                 try {
-                    console.log(
-                        `[browser_session_cdp] Setting up CDP Target.targetCreated guard for tab ${this.tabId}`
-                    );
 
                     // Store original targetId for comparison
                     const ourTabId = targetId;
@@ -290,9 +265,6 @@ export class AgentBrowserSessionCDP {
                         }
                     });
 
-                    console.log(
-                        `[browser_session_cdp] CDP Target.targetCreated guard installed for tab ${this.tabId}`
-                    );
                 } catch (guardError) {
                     console.error(
                         `[browser_session_cdp] Failed to set up Target.targetCreated guard for tab ${this.tabId}:`,
@@ -303,9 +275,6 @@ export class AgentBrowserSessionCDP {
 
                 // *** ADD SCRIPT INJECTION HERE ***
                 try {
-                    console.log(
-                        `[browser_session_cdp] Injecting script to handle new tabs for target: ${targetId}`
-                    );
                     await this.cdpClient.Page.addScriptToEvaluateOnNewDocument({
                         source: `(() => {
                             // Hardened window.open override with Proxy to catch all call paths
@@ -430,9 +399,6 @@ export class AgentBrowserSessionCDP {
 
                 // Mark session as fully initialized
                 this.initialized = true;
-                console.log(
-                    `[browser_session_cdp] Tab ${this.tabId} session initialized, CDP target ID: ${targetId}`
-                );
             } catch (error) {
                 // Handle errors during target creation or connection.
                 console.error(
@@ -471,9 +437,6 @@ export class AgentBrowserSessionCDP {
      */
     private async ensureInitialized(): Promise<void> {
         if (!this.initialized || !this.cdpClient) {
-            console.warn(
-                `[browser_session_cdp] Tab ${this.tabId} session not explicitly initialized or client missing. Auto-initializing.`
-            );
             // Initialize will use the correct host/port settings.
             // It will throw an error if it fails.
             await this.initialize();
@@ -492,9 +455,6 @@ export class AgentBrowserSessionCDP {
                 x: Math.floor(BROWSER_WIDTH / 2),
                 y: Math.floor(BROWSER_HEIGHT / 4),
             };
-            console.log(
-                `[browser_session_cdp] Tab ${this.tabId}: Initialized cursor position to ${this.cursorPosition.x},${this.cursorPosition.y}`
-            );
         }
 
         // Set up navigation tracking if not already done
@@ -516,9 +476,6 @@ export class AgentBrowserSessionCDP {
         // Listen for frameRequestedNavigation event (when navigation is requested)
         client.Page.on('frameRequestedNavigation', () => {
             if (!this.navigationRequested) {
-                console.log(
-                    `[browser_session_cdp] Tab ${this.tabId}: Navigation requested`
-                );
                 this.navigationRequested = true;
             }
         });
@@ -526,17 +483,11 @@ export class AgentBrowserSessionCDP {
         // Listen for frameNavigated event (when navigation starts)
         client.Page.on('frameNavigated', () => {
             if (!this.navigationStarted) {
-                console.log(
-                    `[browser_session_cdp] Tab ${this.tabId}: Navigation started`
-                );
                 this.navigationStarted = true;
             }
         });
 
         this.navigationEventHandlersAdded = true;
-        console.log(
-            `[browser_session_cdp] Tab ${this.tabId}: Navigation tracking set up`
-        );
     }
 
     /**
@@ -568,9 +519,6 @@ export class AgentBrowserSessionCDP {
             return; // No navigation detected, return immediately
         }
 
-        console.log(
-            `[browser_session_cdp] Tab ${this.tabId}: Navigation detected, waiting for page load...`
-        );
         const client = this.cdpClient;
         let loadFired = false;
 
@@ -590,9 +538,6 @@ export class AgentBrowserSessionCDP {
             client.once('Page.loadEventFired', () => {
                 loadFired = true;
                 clearTimeout(loadTimeout); // Clear timeout if load event fires
-                console.log(
-                    `[browser_session_cdp] Tab ${this.tabId}: Page load completed`
-                );
                 resolve();
             });
         });
@@ -633,11 +578,8 @@ export class AgentBrowserSessionCDP {
      * @param url The absolute URL to navigate to.
      * @returns A promise resolving to a success or error message string.
      */
-    async navigate(url: string): Promise<string> {
+    async navigate(url: string, timeout:number = 30_000): Promise<string> {
         await this.ensureInitialized(); // Ensure connection is ready
-        console.log(
-            `[browser_session_cdp] Tab ${this.tabId}: Navigating to ${url}`
-        );
         try {
             const client = this.cdpClient!;
             let loadFired = false;
@@ -652,7 +594,7 @@ export class AgentBrowserSessionCDP {
                         );
                         resolve(); // Resolve even on timeout to avoid hanging
                     }
-                }, 30000); // 30-second timeout
+                }, timeout); // 30-second timeout
 
                 // Listen for the load event once.
                 client.once('Page.loadEventFired', () => {
@@ -776,9 +718,6 @@ export class AgentBrowserSessionCDP {
         cursorX: number,
         cursorY: number
     ): Promise<void> {
-        console.log(
-            `[browser_session_cdp] Tab ${this.tabId}: Setting virtual cursor at ${cursorX},${cursorY}`
-        );
         try {
             const cursorWidth = 20; // Width of the cursor in pixels
             await client.Runtime.evaluate({
@@ -886,9 +825,6 @@ export class AgentBrowserSessionCDP {
      */
     async browserStatus(): Promise<BrowserStatusPayload | { error: string }> {
         await this.ensureInitialized();
-        console.log(
-            `[browser_session_cdp] Tab ${this.tabId}: Taking screenshot with browser status (detecting DPR)`
-        );
 
         try {
             const client = this.cdpClient!;
