@@ -80,7 +80,16 @@ This will:
 - Build Docker images (controller & magi-base)
 - Start Postgres and controller (`docker compose up`)
 - Serve the web UI at http://localhost:3010
+### Project Containers
 
+When a task references a project, its `Dockerfile` is launched alongside MAGI. The controller exposes which projects are available via the `PROCESS_PROJECTS` environment variable and publishes their port mappings in `PROJECT_PORTS`.
+
+```
+PROCESS_PROJECTS=foo,bar
+PROJECT_PORTS=foo:3001,bar:3002
+```
+
+Agents call `getProcessProjectPorts()` to open the running app at `http://localhost:<port>` and `getProcessProjectIds()` to know which projects are active.
 
 ### Running Tests
 

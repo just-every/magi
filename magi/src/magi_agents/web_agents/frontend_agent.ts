@@ -12,6 +12,15 @@ import { Agent } from '../../utils/agent.js';
 import { getCommonTools } from '../../utils/index.js';
 import { MAGI_CONTEXT } from '../constants.js';
 import { createCodeAgent } from '../common_agents/code_agent.js';
+import {
+    addBrowserStatus,
+    setupAgentBrowserTools,
+} from '../../utils/browser_utils.js';
+import {
+    getProcessProjectIds,
+    getProcessProjectPorts,
+} from '../../utils/project_utils.js';
+import { ResponseInput } from '../../types/shared-types.js';
 
 /**
  * Create the frontend agent for specialized React/Next.js implementation
@@ -80,11 +89,29 @@ VISUAL TESTING:
 After implementing key pages, run comparison tests between your implementation and the design mockups to ensure fidelity.
 
 The backend engineer will connect your frontend to real data, so ensure your components accept appropriate props and handle loading/error states.
+
+Your browser will open to the running project if available and a screenshot of the current page will be added to your context each run.
 `,
         tools: [...getCommonTools()],
         workers: [createCodeAgent],
         modelClass: 'reasoning_mini',
+        onRequest: async (
+            agent: Agent,
+            messages: ResponseInput
+        ): Promise<[Agent, ResponseInput]> => {
+            return addBrowserStatus(agent, messages);
+        },
     });
+
+    const ports = getProcessProjectPorts();
+    const ids = getProcessProjectIds();
+    let startUrl: string | undefined;
+    if (ids.length > 0 && ports[ids[0]]) {
+        startUrl = `http://localhost:${ports[ids[0]]}`;
+    }
+    void setupAgentBrowserTools(agent, startUrl).catch(err =>
+        console.error('Failed to setup browser for WebFrontendAgent', err)
+    );
 
     return agent;
 }

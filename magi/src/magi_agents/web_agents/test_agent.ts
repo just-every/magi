@@ -15,6 +15,15 @@ import { createCodeAgent } from '../common_agents/code_agent.js';
 import { createBrowserAgent } from '../common_agents/browser_agent.js';
 import { createShellAgent } from '../common_agents/shell_agent.js';
 import { createReasoningAgent } from '../common_agents/reasoning_agent.js';
+import {
+    addBrowserStatus,
+    setupAgentBrowserTools,
+} from '../../utils/browser_utils.js';
+import {
+    getProcessProjectIds,
+    getProcessProjectPorts,
+} from '../../utils/project_utils.js';
+import { ResponseInput } from '../../types/shared-types.js';
 
 /**
  * Create the test agent for specialized validation and QA
@@ -78,6 +87,8 @@ DO NOT:
 • Rely exclusively on E2E tests when unit/integration tests would be more appropriate
 
 Your goal is to validate that the website implementation meets requirements, performs correctly, and provides a good user experience. Report issues clearly with specific actionable feedback.
+
+Your browser will open to the running project if available and a screenshot will be added to your context on each run.
 `,
         tools: [...getCommonTools()],
         workers: [
@@ -87,7 +98,23 @@ Your goal is to validate that the website implementation meets requirements, per
             createReasoningAgent,
         ],
         modelClass: 'reasoning_mini',
+        onRequest: async (
+            agent: Agent,
+            messages: ResponseInput
+        ): Promise<[Agent, ResponseInput]> => {
+            return addBrowserStatus(agent, messages);
+        },
     });
+
+    const ports = getProcessProjectPorts();
+    const ids = getProcessProjectIds();
+    let startUrl: string | undefined;
+    if (ids.length > 0 && ports[ids[0]]) {
+        startUrl = `http://localhost:${ports[ids[0]]}`;
+    }
+    void setupAgentBrowserTools(agent, startUrl).catch(err =>
+        console.error('Failed to setup browser for WebTestAgent', err)
+    );
 
     return agent;
 }

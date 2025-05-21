@@ -12,6 +12,15 @@ import { Agent } from '../../utils/agent.js';
 import { getCommonTools } from '../../utils/index.js';
 import { createCodeAgent } from '../common_agents/code_agent.js';
 import { MAGI_CONTEXT } from '../constants.js';
+import {
+    addBrowserStatus,
+    setupAgentBrowserTools,
+} from '../../utils/browser_utils.js';
+import {
+    getProcessProjectIds,
+    getProcessProjectPorts,
+} from '../../utils/project_utils.js';
+import { ResponseInput } from '../../types/shared-types.js';
 
 /**
  * Create the backend agent for specialized API and database implementation
@@ -83,11 +92,29 @@ DATABASE MANAGEMENT:
 • Add appropriate constraints and relationships
 
 The frontend engineer will connect to your API, so ensure endpoints are well-documented and follow a consistent pattern.
+
+Your browser will automatically open the running project if available and a screenshot is included with each run for context.
 `,
         tools: [...getCommonTools()],
         workers: [createCodeAgent],
         modelClass: 'reasoning_mini',
+        onRequest: async (
+            agent: Agent,
+            messages: ResponseInput
+        ): Promise<[Agent, ResponseInput]> => {
+            return addBrowserStatus(agent, messages);
+        },
     });
+
+    const ports = getProcessProjectPorts();
+    const ids = getProcessProjectIds();
+    let startUrl: string | undefined;
+    if (ids.length > 0 && ports[ids[0]]) {
+        startUrl = `http://localhost:${ports[ids[0]]}`;
+    }
+    void setupAgentBrowserTools(agent, startUrl).catch(err =>
+        console.error('Failed to setup browser for WebBackendAgent', err)
+    );
 
     return agent;
 }
