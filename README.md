@@ -82,14 +82,14 @@ This will:
 - Serve the web UI at http://localhost:3010
 ### Project Containers
 
-When a task references a project, its `Dockerfile` is launched alongside MAGI. The controller exposes which projects are available via the `PROCESS_PROJECTS` environment variable and publishes their port mappings in `PROJECT_PORTS`.
+When a task references a project, its `Dockerfile` is built and started automatically. The controller exposes which projects are available via the `PROCESS_PROJECTS` environment variable and publishes their port mappings in `PROJECT_PORTS`.
 
 ```
 PROCESS_PROJECTS=foo,bar
 PROJECT_PORTS=foo:3001,bar:3002
 ```
 
-Agents call `getProcessProjectPorts()` to open the running app at `http://localhost:<port>` and `getProcessProjectIds()` to know which projects are active.
+Agents can inspect this mapping using `getProcessProjectPorts()` to open the running app at `http://localhost:<port>` and `getProcessProjectIds()` to know which projects are active.
 
 ### Running Tests
 
@@ -151,6 +151,7 @@ docker-compose.yml
 - **Tool Integration**: Agents can use tools like web search, code execution, and browser automation
 - **Browser Integration**: Chrome extension allows direct interaction with the web browser
 - **Smart Design Search**: Aggregates screenshots from multiple design sources and ranks them automatically
+- **Design Asset Collage**: Automatically builds a numbered collage of recent design assets
 - **Cost Tracking**: Monitors and reports on API usage costs
 - **Verifier Agents**: Optional verifier agents can call any tools; failures trigger automatic retries (default 2)
 - **Custom Tools API**: Exposes HTTP endpoints for listing and inspecting dynamic tools

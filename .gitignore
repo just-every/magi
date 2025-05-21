@@ -1,3 +1,9 @@
+# Local state and volume mapping
+.custom_tools
+.magi_output
+.server
+.chrome
+
 # Python bytecode
 __pycache__/
 *.py[cod]
@@ -58,16 +64,11 @@ yarn-debug.log
 yarn-error.log
 
 # Local state storage
-.server
-.chrome
 
 # Ignore compiled files
 *.js
 *.js.map
 *.jsx
-#*.css
-# Local custom tools (not versioned)
-.custom_tools/
 
 # Allow specific JS files
 !host/setup.js

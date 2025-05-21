@@ -747,7 +747,7 @@ export class ClaudeProvider implements ModelProvider {
                     max_tokens = Math.min(max_tokens, 4096); // Lower limit for other classes
             }
 
-            if(settings?.json_schema) {
+            if (settings?.json_schema) {
                 messages.push({
                     type: 'message',
                     role: 'system',
