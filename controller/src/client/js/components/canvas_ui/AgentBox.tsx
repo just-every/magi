@@ -7,10 +7,12 @@ import {
     ProcessStatus,
     ScreenshotEvent,
     type ConsoleEvent,
+    DesignEvent,
 } from '../../../../types/shared-types';
 import AutoScrollContainer from '../ui/AutoScrollContainer';
 import BrowserDisplay from '../ui/BrowserDisplay';
 import ConsoleDisplay from '../ui/ConsoleDisplay';
+import DesignDisplay from '../ui/DesignDisplay';
 
 interface AgentBoxProps {
     id: string;
@@ -25,6 +27,7 @@ interface AgentBoxProps {
     messages: ClientMessage[];
     isTyping: boolean;
     screenshots?: ScreenshotEvent[];
+    designEvents?: DesignEvent[];
     consoleEvents?: ConsoleEvent[];
 }
 
@@ -47,6 +50,7 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
     parentProcessId,
     onFocusAgent,
     screenshots,
+    designEvents,
     consoleEvents,
 }) => {
     const clickTimeout = useRef<number | null>(null);
@@ -127,6 +131,15 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
                     />
                 )}
                 {!(screenshots && screenshots.length > 0) &&
+                    designEvents &&
+                    designEvents.length > 0 && (
+                        <DesignDisplay
+                            designs={designEvents}
+                            collapsible={true}
+                        />
+                    )}
+                {!(screenshots && screenshots.length > 0) &&
+                    !(designEvents && designEvents.length > 0) &&
                     consoleEvents &&
                     consoleEvents.length > 0 && (
                         <ConsoleDisplay

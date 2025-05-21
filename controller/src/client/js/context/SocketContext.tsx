@@ -18,6 +18,7 @@ import {
     AppSettings,
     ScreenshotEvent,
     ConsoleEvent,
+    DesignEvent,
     AgentStatusEvent,
     AudioEvent,
 } from '../../../types/shared-types';
@@ -127,6 +128,7 @@ export interface AgentData {
     isTyping?: boolean; // Indicates if the agent is in "thinking" state
     screenshots?: ScreenshotEvent[]; // Store screenshots for this agent
     consoleEvents?: ConsoleEvent[]; // Store console data for this agent
+    designEvents?: DesignEvent[]; // Store design images for this agent
     statusEvent?: AgentStatusEvent; // Store the last status event for this agent
 }
 
@@ -145,6 +147,7 @@ export interface ProcessData {
     agent?: AgentData;
     pendingScreenshots: Map<string, ScreenshotEvent[]>;
     pendingConsoleEvents: Map<string, ConsoleEvent[]>;
+    pendingDesignEvents: Map<string, DesignEvent[]>;
     pendingMessages: Map<string, PartialClientMessage[]>;
 }
 
@@ -304,6 +307,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     },
                     pendingScreenshots: new Map<string, ScreenshotEvent[]>(),
                     pendingConsoleEvents: new Map<string, ConsoleEvent[]>(),
+                    pendingDesignEvents: new Map<string, DesignEvent[]>(),
                     pendingMessages: new Map<string, PartialClientMessage[]>(),
                 });
 
@@ -524,6 +528,23 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     targetAgent.consoleEvents = updatedConsoleEvents;
                 }
 
+                // Utility to merge design data into an agent
+                function mergeDesignEvent(
+                    targetAgent: AgentData,
+                    designEvent: DesignEvent
+                ): void {
+                    const updated = [
+                        ...(targetAgent.designEvents || []),
+                        designEvent,
+                    ];
+                    const MAX_FRAMES = 25;
+                    if (updated.length > MAX_FRAMES) {
+                        targetAgent.designEvents = updated.slice(-MAX_FRAMES);
+                    } else {
+                        targetAgent.designEvents = updated;
+                    }
+                }
+
                 // Utility to flush pending screenshots for an agent
                 function flushPending(agent_id: string): void {
                     // Find the target agent
@@ -562,6 +583,15 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                                 mergeConsoleEvent(targetAgent, consoleEvent);
                             });
                             process.pendingConsoleEvents.delete(agent_id);
+                        }
+
+                        const pendingDesignEvents =
+                            process.pendingDesignEvents.get(agent_id);
+                        if (pendingDesignEvents?.length > 0) {
+                            pendingDesignEvents.forEach(event => {
+                                mergeDesignEvent(targetAgent, event);
+                            });
+                            process.pendingDesignEvents.delete(agent_id);
                         }
                     }
                 }
@@ -849,7 +879,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     }
                 } else if (
                     eventType === 'screenshot' ||
-                    eventType === 'console'
+                    eventType === 'console' ||
+                    eventType === 'design'
                 ) {
                     // We call this a screenshot if it has the data property (for the base64 image)
                     // Access the screenshot properties using in-operator checks for type safety
@@ -874,6 +905,11 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         } else if (eventType === 'console') {
                             // Use our helper to merge the console data
                             mergeConsoleEvent(targetAgent, streamingEvent);
+                        } else if (eventType === 'design') {
+                            mergeDesignEvent(
+                                targetAgent,
+                                streamingEvent as DesignEvent
+                            );
                         }
                         // Make sure parent references are updated properly
                         if (process.agent.agent_id === targetAgent.agent_id) {
@@ -897,7 +933,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         queuePending(
                             eventType === 'screenshot'
                                 ? process.pendingScreenshots
-                                : process.pendingConsoleEvents,
+                                : eventType === 'console'
+                                  ? process.pendingConsoleEvents
+                                  : process.pendingDesignEvents,
                             agent_id,
                             streamingEvent
                         );

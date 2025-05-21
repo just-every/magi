@@ -3,9 +3,8 @@ import { createToolFunction } from './tool_call.js';
 import { ToolFunction, ResponseInput } from '../types/shared-types.js';
 import path from 'path';
 import { write_file } from './file_utils.js';
-import {
-    smart_design_raw,
-} from './design_search.js';
+import { smart_design_raw } from './design_search.js';
+import { getCommunicationManager } from './communication.js';
 import { judgeImageSet } from './design/grid_judge.js';
 import {
     DESIGN_ASSET_TYPES,
@@ -89,7 +88,7 @@ async function generate_image_raw(
     output_path?: string,
     number_of_images: number = 1,
     quality: 'low' | 'medium' | 'high' | 'auto' = 'medium',
-    prefix: string = 'generate',
+    prefix: string = 'generate'
 ): Promise<string | string[]> {
     try {
         // Process source images if provided
@@ -267,6 +266,14 @@ async function generate_image_raw(
 
             write_file(targetPath, imageBuffer.buffer);
             filePaths.push(targetPath);
+
+            const comm = getCommunicationManager();
+            comm.send({
+                type: 'design',
+                data: imageDataUrl,
+                timestamp: new Date().toISOString(),
+                prompt,
+            });
         }
 
         // Return a single path or array of paths based on number_of_images
@@ -563,8 +570,6 @@ High • Focus on polish
  */
 type JudgePhase = 'draft' | 'medium' | 'high';
 
-
-
 /**
  * Helper to generate images with consistent parameters
  */
@@ -575,7 +580,7 @@ async function genImages(
     references: string | string[] | undefined,
     count: number,
     quality: 'low' | 'medium' | 'high',
-    prefix: string,
+    prefix: string
 ): Promise<string[]> {
     const result = await generate_image_raw(
         prompt,
@@ -585,7 +590,7 @@ async function genImages(
         undefined, // No output path
         count,
         quality,
-        prefix+'_'+quality,
+        prefix + '_' + quality
     );
 
     return Array.isArray(result) ? result : [result];
@@ -601,7 +606,7 @@ async function iterativeSelect(
     prompt: string,
     type: DESIGN_ASSET_TYPES,
     judgeSpec: string,
-    prefix: string,
+    prefix: string
 ): Promise<string[]> {
     console.log(
         `[design_image] Selecting ${targetCount} best ${phase} images from ${candidates.length} candidates`,
@@ -706,7 +711,7 @@ export async function design_image(
                 undefined,
                 3,
                 'low',
-                spec.run_id+'_'+sessionId,
+                spec.run_id + '_' + sessionId
             );
         });
 
@@ -722,7 +727,7 @@ export async function design_image(
                 3,
                 type,
                 spec.context + '\n\n' + spec.inspiration_judge,
-                spec.run_id+'_'+sessionId,
+                spec.run_id + '_' + sessionId
             );
             console.log(
                 `[design_image] Found ${designs.length} reference designs`
@@ -753,7 +758,7 @@ export async function design_image(
                         referenceImages,
                         3,
                         'low',
-                        spec.run_id+'_'+sessionId+'_ref',
+                        spec.run_id + '_' + sessionId + '_ref'
                     );
                 });
             }
@@ -780,7 +785,7 @@ export async function design_image(
             prompt,
             type,
             spec.context + '\n\n' + spec.design_judge.draft,
-            spec.run_id+'_'+sessionId,
+            spec.run_id + '_' + sessionId
         );
 
         console.log(`[design_image] Selected ${bestDraftPaths.length} best drafts for medium phase:
@@ -805,7 +810,7 @@ export async function design_image(
                 draftPath,
                 3, // 3 medium images per draft
                 'medium',
-                spec.run_id+'_'+sessionId,
+                spec.run_id + '_' + sessionId
             );
         });
 

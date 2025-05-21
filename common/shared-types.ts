@@ -446,6 +446,7 @@ export type StreamEventType =
     | 'system_update'
     | 'quota_update'
     | 'screenshot'
+    | 'design'
     | 'console'
     | 'error'
     // New types for waiting on tools
@@ -730,6 +731,19 @@ export interface ScreenshotEvent extends StreamEvent {
 }
 
 /**
+ * Design image streaming event
+ */
+export interface DesignEvent extends StreamEvent {
+    type: 'design';
+    data: string; // Base64 encoded image or grid
+    timestamp: string;
+    prompt: string; // Prompt used to generate or select the image
+    selected_indices?: number[]; // Optional highlighted grid items
+    cols?: number; // Columns in the grid when applicable
+    rows?: number; // Rows in the grid when applicable
+}
+
+/**
  * Console output streaming event
  */
 export interface ConsoleEvent extends StreamEvent {
@@ -824,6 +838,7 @@ export type StreamingEvent =
     | QuotaUpdateEvent
     | AudioEvent
     | ScreenshotEvent
+    | DesignEvent
     | ConsoleEvent
     | GitPullRequestEvent
     // Add new wait events
@@ -1158,6 +1173,7 @@ export type MessagePayloads = {
     system_status: Omit<SystemStatusEvent, 'type'>;
     quota_update: Omit<QuotaUpdateEvent, 'type'>;
     screenshot: Omit<ScreenshotEvent, 'type'>;
+    design: Omit<DesignEvent, 'type'>;
     error: Omit<ErrorEvent, 'type'>;
     // Add new wait events
     tool_wait_start: Omit<ToolWaitStartEvent, 'type'>;
