@@ -37,7 +37,7 @@ const USER_AGENT =
     'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; magi-user/1.0; +https://withmagi.com)';
 
 // Base directory for storing screenshots
-const DESIGN_ASSETS_DIR = '/magi_output/shared/design_assets';
+export const DESIGN_ASSETS_DIR = '/magi_output/shared/design_assets';
 const SLEEP = (ms = 1000) => new Promise(res => setTimeout(res, ms));
 
 /**
@@ -1853,9 +1853,12 @@ export async function createNumberedGrid(
     // Helper function for improved progressive downsampling
     const drawScaled = (
         srcImg: any, // Use 'any' to bypass TS type checking for napi-rs/canvas compatibility
-        dx: number, dy: number,
-        dw: number, dh: number,
-        srcWidth: number, srcHeight: number
+        dx: number,
+        dy: number,
+        dw: number,
+        dh: number,
+        srcWidth: number,
+        srcHeight: number
     ) => {
         // Fast path for smaller images
         if (Math.max(srcWidth, srcHeight) < 1024) {
@@ -2125,7 +2128,7 @@ export async function smart_design_raw(
     finalLimit: number = 3,
     type?: DESIGN_ASSET_TYPES,
     judge_guide?: string,
-    prefix: string = 'smart',
+    prefix: string = 'smart'
 ): Promise<DesignSearchResult[]> {
     // Track designs that have been processed
     const processedIds = new Set<string>();

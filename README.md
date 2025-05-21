@@ -81,6 +81,10 @@ This will:
 - Start Postgres and controller (`docker compose up`)
 - Serve the web UI at http://localhost:3010
 
+### Project Containers
+
+If a task references a project, its Dockerfile is built and started automatically. The controller exposes running service ports via the `PROJECT_PORTS` environment variable. Agents can inspect this mapping using `getProcessProjectPorts()` to open the project at `http://localhost:<port>`.
+
 
 ### Running Tests
 
@@ -142,6 +146,7 @@ docker-compose.yml
 - **Tool Integration**: Agents can use tools like web search, code execution, and browser automation
 - **Browser Integration**: Chrome extension allows direct interaction with the web browser
 - **Smart Design Search**: Aggregates screenshots from multiple design sources and ranks them automatically
+- **Design Asset Collage**: Automatically builds a numbered collage of recent design assets
 - **Cost Tracking**: Monitors and reports on API usage costs
 - **Verifier Agents**: Optional verifier agents can call any tools; failures trigger automatic retries (default 2)
 - **Custom Tools API**: Exposes HTTP endpoints for listing and inspecting dynamic tools
