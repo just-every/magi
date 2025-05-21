@@ -14,9 +14,19 @@ import { getImageGenerationTools } from '../../utils/image_generation.js';
 import {
     getDesignSearchTools,
     getSmartDesignTools,
+    createDesignAssetsOverview,
 } from '../../utils/design_search.js';
+import {
+    addBrowserStatus,
+    setupAgentBrowserTools,
+} from '../../utils/browser_utils.js';
+import {
+    getProcessProjectIds,
+    getProcessProjectPorts,
+} from '../../utils/project_utils.js';
 import { MAGI_CONTEXT } from '../constants.js';
 import { createReasoningAgent } from '../common_agents/reasoning_agent.js';
+import { ResponseInput } from '../../types/shared-types.js';
 
 /**
  * Create the design agent for specialized UI design tasks
@@ -81,6 +91,8 @@ Save assets in a structured format:
   manifest.json    # Asset inventory and metadata
 
 The frontend engineer will use your designs as reference for implementation, so clarity is critical.
+
+Your browser tab will open to the current project if one is running. A screenshot will be captured on each run for reference. All design assets you generate are saved automatically and summarized into a grid image for quick review.
 `,
         tools: [
             ...getDesignSearchTools(),
@@ -90,7 +102,39 @@ The frontend engineer will use your designs as reference for implementation, so 
         ],
         workers: [createReasoningAgent],
         modelClass: 'vision',
+        onRequest: async (
+            agent: Agent,
+            messages: ResponseInput
+        ): Promise<[Agent, ResponseInput]> => {
+            [agent, messages] = await addBrowserStatus(agent, messages);
+            try {
+                const overview = await createDesignAssetsOverview();
+                if (overview) {
+                    messages.push({
+                        type: 'message',
+                        role: 'developer',
+                        content: `### Current Design Assets\n${overview}`,
+                    });
+                }
+            } catch (err) {
+                console.error('Failed to create design assets overview', err);
+            }
+            return [agent, messages];
+        },
     });
+
+    const ports = getProcessProjectPorts();
+    const ids = getProcessProjectIds();
+    let startUrl: string | undefined;
+    for (const id of ids) {
+        if (ports[id]) {
+            startUrl = `http://localhost:${ports[id]}`;
+            break;
+        }
+    }
+    void setupAgentBrowserTools(agent, startUrl).catch(err =>
+        console.error('Failed to setup browser for WebDesignAgent', err)
+    );
 
     return agent;
 }

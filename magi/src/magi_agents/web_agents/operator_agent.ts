@@ -164,10 +164,10 @@ ${runningToolTracker.listActive()}`,
     const ports = getProcessProjectPorts();
     const ids = getProcessProjectIds();
     let startUrl: string | undefined;
-    if (ids.length > 0) {
-        const id = ids[0];
+    for (const id of ids) {
         if (ports[id]) {
             startUrl = `http://localhost:${ports[id]}`;
+            break;
         }
     }
     void setupAgentBrowserTools(agent, startUrl).catch(err =>

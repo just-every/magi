@@ -1860,23 +1860,31 @@ export async function createNumberedGrid(
 
             if (imageSource.dataUrl) {
                 // Directly load from data URL if available
-                console.log(`[createNumberedGrid] Loaded image from data URL ${imageSource.dataUrl}`);
+                console.log(
+                    `[createNumberedGrid] Loaded image from data URL ${imageSource.dataUrl}`
+                );
                 img = await loadImage(imageSource.dataUrl);
-            }  else if ((imageSource as DesignSearchResult).screenshotURL) {
+            } else if ((imageSource as DesignSearchResult).screenshotURL) {
                 // Handle DesignSearchResult objects for backward compatibility
                 const design = imageSource as DesignSearchResult;
                 const src = design.thumbnailURL || design.screenshotURL;
                 if (src.startsWith('data:image')) {
-                    console.log(`[createNumberedGrid] Loaded image from data:image thumbnailURL/screenshotURL ${src}`);
+                    console.log(
+                        `[createNumberedGrid] Loaded image from data:image thumbnailURL/screenshotURL ${src}`
+                    );
                     img = await loadImage(src);
                 } else if (
                     src.startsWith('/magi_output') &&
                     fs.existsSync(src)
                 ) {
-                    console.log(`[createNumberedGrid] Loaded image from /magi_output from thumbnailURL/screenshotURL ${src}`);
+                    console.log(
+                        `[createNumberedGrid] Loaded image from /magi_output from thumbnailURL/screenshotURL ${src}`
+                    );
                     img = await loadImage(src);
                 } else {
-                    console.log(`[createNumberedGrid] Loaded image from source URL from thumbnailURL/screenshotURL ${src}`);
+                    console.log(
+                        `[createNumberedGrid] Loaded image from source URL from thumbnailURL/screenshotURL ${src}`
+                    );
                     const res = await fetch(src);
                     const buf = Buffer.from(await res.arrayBuffer());
                     img = await loadImage(buf);
@@ -1884,16 +1892,22 @@ export async function createNumberedGrid(
             } else if (imageSource.url) {
                 // Load from URL or file path
                 if (imageSource.url.startsWith('data:image')) {
-                    console.log(`[createNumberedGrid] Loaded image from data:image URL ${imageSource.url}`);
+                    console.log(
+                        `[createNumberedGrid] Loaded image from data:image URL ${imageSource.url}`
+                    );
                     img = await loadImage(imageSource.url);
                 } else if (
                     imageSource.url.startsWith('/magi_output') &&
                     fs.existsSync(imageSource.url)
                 ) {
-                    console.log(`[createNumberedGrid] Loaded image from /magi_output ${imageSource.url}`);
+                    console.log(
+                        `[createNumberedGrid] Loaded image from /magi_output ${imageSource.url}`
+                    );
                     img = await loadImage(imageSource.url);
                 } else {
-                    console.log(`[createNumberedGrid] Loaded image from source URL ${imageSource.url}`);
+                    console.log(
+                        `[createNumberedGrid] Loaded image from source URL ${imageSource.url}`
+                    );
                     const res = await fetch(imageSource.url);
                     const buf = Buffer.from(await res.arrayBuffer());
                     img = await loadImage(buf);
@@ -1964,6 +1978,33 @@ export async function createNumberedGrid(
     console.log(`[${gridName}] Saved grid image to:`, filePath);
 
     return `data:image/png;base64,${out.toString('base64')}`;
+}
+
+/**
+ * Generate a grid overview of all design asset screenshots.
+ * Returns a base64 encoded PNG or null if no assets exist.
+ */
+export async function createDesignAssetsOverview(
+    limit = 20
+): Promise<string | null> {
+    const screenshotsDir = path.join(DESIGN_ASSETS_DIR, 'screenshots');
+    if (!fs.existsSync(screenshotsDir)) {
+        return null;
+    }
+
+    const files = fs
+        .readdirSync(screenshotsDir)
+        .filter(f => f.match(/\.(png|jpe?g)$/i))
+        .slice(-limit);
+
+    if (files.length === 0) return null;
+
+    const sources: ImageSource[] = files.map(f => ({
+        url: path.join(screenshotsDir, f),
+        title: f,
+    }));
+
+    return createNumberedGrid(sources, 'design_assets_overview');
 }
 
 /**

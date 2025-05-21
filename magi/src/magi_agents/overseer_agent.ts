@@ -23,13 +23,9 @@ import {
     getMemoryTools,
     listShortTermMemories,
 } from '../utils/memory_utils.js';
-import {
-    listActiveProjects,
-    getProjectTools,
-    getExternalProjectIds,
-} from '../utils/project_utils.js';
+import { listActiveProjects, getProjectTools } from '../utils/project_utils.js';
 import { getProcessTools } from '../utils/process_tools.js';
-import { MAGI_CONTEXT, CUSTOM_TOOLS_TEXT } from './constants.js';
+import { MAGI_CONTEXT } from './constants.js';
 import { sendStreamEvent } from '../utils/communication.js';
 import { getCommonTools } from '../utils/index.js';
 import { getRunningToolTools } from '../utils/running_tools.js';
