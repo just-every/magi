@@ -3,9 +3,7 @@ import { createToolFunction } from './tool_call.js';
 import { ToolFunction, ResponseInput } from '../types/shared-types.js';
 import path from 'path';
 import { write_file } from './file_utils.js';
-import {
-    smart_design_raw,
-} from './design_search.js';
+import { smart_design_raw } from './design_search.js';
 import { judgeImageSet } from './design/grid_judge.js';
 import {
     DESIGN_ASSET_TYPES,
@@ -89,7 +87,7 @@ async function generate_image_raw(
     output_path?: string,
     number_of_images: number = 1,
     quality: 'low' | 'medium' | 'high' | 'auto' = 'medium',
-    prefix: string = 'generate',
+    prefix: string = 'generate'
 ): Promise<string | string[]> {
     try {
         // Process source images if provided
@@ -358,7 +356,8 @@ async function get_design_spec(
     type: DESIGN_ASSET_TYPES,
     userPrompt: string,
     reference: DesignAssetReferenceItem,
-    guide: DesignAssetGuideItem
+    guide: DesignAssetGuideItem,
+    brand_assets: string[] = []
 ): Promise<DesignSpec> {
     console.log(
         `[design_image] Getting design specification for: "${userPrompt}"`
@@ -397,7 +396,14 @@ JUDGING CRITERIA:
         {
             type: 'message',
             role: 'user',
-            content: 'DESIGN REQUEST: ' + userPrompt,
+            content:
+                'DESIGN REQUEST: ' +
+                userPrompt +
+                (brand_assets.length
+                    ? `\n\nExisting brand assets provided for style reference:\n${brand_assets
+                          .map(b => path.basename(b))
+                          .join(', ')}`
+                    : ''),
         },
     ];
 
@@ -563,8 +569,6 @@ High • Focus on polish
  */
 type JudgePhase = 'draft' | 'medium' | 'high';
 
-
-
 /**
  * Helper to generate images with consistent parameters
  */
@@ -575,7 +579,7 @@ async function genImages(
     references: string | string[] | undefined,
     count: number,
     quality: 'low' | 'medium' | 'high',
-    prefix: string,
+    prefix: string
 ): Promise<string[]> {
     const result = await generate_image_raw(
         prompt,
@@ -585,7 +589,7 @@ async function genImages(
         undefined, // No output path
         count,
         quality,
-        prefix+'_'+quality,
+        prefix + '_' + quality
     );
 
     return Array.isArray(result) ? result : [result];
@@ -601,7 +605,7 @@ async function iterativeSelect(
     prompt: string,
     type: DESIGN_ASSET_TYPES,
     judgeSpec: string,
-    prefix: string,
+    prefix: string
 ): Promise<string[]> {
     console.log(
         `[design_image] Selecting ${targetCount} best ${phase} images from ${candidates.length} candidates`,
@@ -664,14 +668,21 @@ async function iterativeSelect(
 export async function design_image(
     type: DESIGN_ASSET_TYPES,
     prompt: string,
-    with_inspiration: boolean = true
+    with_inspiration: boolean = true,
+    brand_assets: string[] = []
 ): Promise<string> {
     const sessionId = uuidv4().substring(0, 8);
     const reference = DESIGN_ASSET_REFERENCE[type];
     const guide = DESIGN_ASSET_GUIDE[type];
 
     // Step 0: Ask the LLM for design specification
-    const spec = await get_design_spec(type, prompt, reference, guide);
+    const spec = await get_design_spec(
+        type,
+        prompt,
+        reference,
+        guide,
+        brand_assets
+    );
     console.log(
         `[design_image] Design spec for "${prompt}":`,
         JSON.stringify(spec, null, 2)
@@ -706,7 +717,7 @@ export async function design_image(
                 undefined,
                 3,
                 'low',
-                spec.run_id+'_'+sessionId,
+                spec.run_id + '_' + sessionId
             );
         });
 
@@ -722,7 +733,7 @@ export async function design_image(
                 3,
                 type,
                 spec.context + '\n\n' + spec.inspiration_judge,
-                spec.run_id+'_'+sessionId,
+                spec.run_id + '_' + sessionId
             );
             console.log(
                 `[design_image] Found ${designs.length} reference designs`
@@ -753,7 +764,7 @@ export async function design_image(
                         referenceImages,
                         3,
                         'low',
-                        spec.run_id+'_'+sessionId+'_ref',
+                        spec.run_id + '_' + sessionId + '_ref'
                     );
                 });
             }
@@ -780,7 +791,7 @@ export async function design_image(
             prompt,
             type,
             spec.context + '\n\n' + spec.design_judge.draft,
-            spec.run_id+'_'+sessionId,
+            spec.run_id + '_' + sessionId
         );
 
         console.log(`[design_image] Selected ${bestDraftPaths.length} best drafts for medium phase:
@@ -805,7 +816,7 @@ export async function design_image(
                 draftPath,
                 3, // 3 medium images per draft
                 'medium',
-                spec.run_id+'_'+sessionId,
+                spec.run_id + '_' + sessionId
             );
         });
 
@@ -1000,6 +1011,12 @@ export function getDesignImageTools() {
                         'The design process will look at reference images from the web to help inspire the design. This will take longer, but the results are usually significantly better.',
                     type: 'boolean',
                     default: 'true',
+                },
+                brand_assets: {
+                    description:
+                        'Optional array of existing brand asset file paths to maintain style consistency',
+                    type: 'array',
+                    optional: true,
                 },
             }
         ),

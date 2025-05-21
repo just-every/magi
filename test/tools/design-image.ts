@@ -28,7 +28,7 @@ export default async function generateImageTest(options: ToolsOptions = {}): Pro
 
     // Test 1: Generate image with no output path (should use default location)
     if (verbose) console.log('\nTest 1: Generate image with default path');
-    const defaultPath = await design_image(type, query, with_inspiration);
+    const defaultPath = await design_image(type, query, with_inspiration, []);
     finalPaths.push(defaultPath);
     if (verbose) console.log(`Image saved to: ${defaultPath}`);
 
