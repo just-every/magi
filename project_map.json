@@ -1,6 +1,6 @@
 {
   "root": "magi-system",
-  "summary": "MAGI System is an ensemble autonomous AI framework designed to solve tasks with minimal human intervention. It uses a persistent chain of thought with a central AI persona (Magi) for orchestration and task management. The system is modular, fault-tolerant, and aims to solve problems in the best way possible by recovering from errors gracefully.",
+  "summary": "MAGI System is a modular, autonomous AI orchestration framework that coordinates specialized agents through a central Overseer running on Node.js. It uses a persistent chain of thought with intelligent model selection to solve complex tasks with minimal human intervention.",
   "primary_language": "TypeScript",
   "frameworks": [
     "Node.js",
@@ -10,6 +10,93 @@
     "Docker",
     "PostgreSQL",
     "Webpack"
+  ],
+  "entry_points": [
+    "controller/src/server/server.ts",
+    "controller/src/client/client.tsx", 
+    "magi/src/magi.ts"
+  ],
+  "tests": [
+    "test/",
+    "test/playwright/",
+    "magi/src/utils/run_pty.test.ts"
+  ],
+  "build_commands": [
+    "npm run build",
+    "npm run build:docker",
+    "npm run build:host"
+  ],
+  "setup_instructions": [
+    "cp .env.example .env",
+    "npm install",
+    "npm run setup",
+    "docker compose up -d db"
+  ],
+  "directories": [
+    {
+      "path": "controller/",
+      "summary": "Gateway between browser UI and Overseer with Express/Socket.IO server and React client",
+      "languages": ["TypeScript", "React", "SCSS"],
+      "important_files": [
+        "src/server/server.ts",
+        "src/client/client.tsx",
+        "src/server/docker_interface.ts"
+      ]
+    },
+    {
+      "path": "magi/",
+      "summary": "Core orchestration logic for agents with specialized implementations and model providers",
+      "languages": ["TypeScript"],
+      "important_files": [
+        "src/magi.ts",
+        "src/magi_agents/overseer_agent.ts",
+        "src/magi_agents/operator_agent.ts"
+      ]
+    },
+    {
+      "path": "host/",
+      "summary": "Browser bridge for Chrome automation via Chrome DevTools Protocol (CDP)",
+      "languages": ["TypeScript"],
+      "important_files": [
+        "src/browser/browser-control.ts",
+        "src/browser/cdp/chrome_cdp_launcher.ts"
+      ]
+    },
+    {
+      "path": "db/",
+      "summary": "PostgreSQL migrations and schema with pgvector support for embeddings",
+      "languages": ["SQL"],
+      "important_files": [
+        "migrations/2025050700001_initial_schema.sql",
+        "migrations/2025051200001_projects_schema.sql"
+      ]
+    },
+    {
+      "path": "common/",
+      "summary": "Shared TypeScript types and interfaces used across the project",
+      "languages": ["TypeScript"],
+      "important_files": ["shared-types.ts"]
+    },
+    {
+      "path": "templates/",
+      "summary": "Project templates for different types (web-app, desktop-app, game, mobile)",
+      "languages": ["TypeScript", "React", "Next.js"],
+      "important_files": [
+        "web-app/project_map.json",
+        "desktop-app/project_map.json",
+        "mobile-app/project_map.json"
+      ]
+    },
+    {
+      "path": "test/",
+      "summary": "Testing utilities including custom tools and Docker test scripts",
+      "languages": ["TypeScript", "Bash"],
+      "important_files": [
+        "magi-docker.sh",
+        "tools/design-search.ts",
+        "tools/web-browser-actions.ts"
+      ]
+    }
   ],
   "dependencies": {
     "frontend": [
@@ -35,11 +122,6 @@
       "@google/genai",
       "chrome-remote-interface"
     ]
-  },
-  "entry_points": {
-    "server": "/controller/src/server/server.ts",
-    "client": "/controller/src/client/client.tsx",
-    "magi": "/magi/src/magi.ts"
   },
   "commands": {
     "setup": "npm run setup",
@@ -160,7 +242,6 @@
     "search": "Performs web searches to gather information",
     "shell": "Executes system commands and scripts",
     "reasoning": "Specializes in complex problem-solving and analysis",
-    "image": "Processes and generates images",
     "summary": "Creates concise summaries of longer content",
     "verifier": "Validates outputs and detects potential errors"
   },

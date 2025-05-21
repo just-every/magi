@@ -79,6 +79,9 @@ docker compose up -d db # spin up Postgres & pgvector
 - Prettier enforced via pre-commit hooks
 - Use path aliases for imports (defined in tsconfig.json)
 - Organize imports alphabetically
+- Use snake_case for variable names
+- Use PascalCase for class names and interfaces
+- Use camelCase for function names and properties
 
 ## Testing Instructions
 // Test first, then code
@@ -93,6 +96,7 @@ docker compose up -d db # spin up Postgres & pgvector
 - Branch names: `feat/<ticket>`, `fix/<issue>`
 - Conventional Commits required
 - PRs must pass CI and require at least one approving review
+- Keep PR descriptions detailed with testing steps
 
 ## Developer Environment Setup
 // Quick start guide
@@ -111,10 +115,10 @@ docker compose up -d db # spin up Postgres & pgvector
 
 ## Key Utility Functions / APIs
 // Most important functions
-- `magi/src/utils/runner.js` – Core agent runner
-- `magi/src/utils/history.js` – Conversation history management
-- `magi/src/utils/memory.js` – Memory persistence
-- `magi/src/utils/custom_tool_utils.js` – Dynamic tool creation
+- `magi/src/utils/runner.ts` – Core agent runner
+- `magi/src/utils/history.ts` – Conversation history management
+- `magi/src/utils/memory.ts` – Memory persistence
+- `magi/src/utils/custom_tool_utils.ts` – Dynamic tool creation
 - `magi/src/model_providers/` – LLM API wrappers
 - `controller/src/server/docker_interface.ts` – Container management
 
@@ -135,3 +139,19 @@ docker compose up -d db # spin up Postgres & pgvector
 - Browser control - CDP-based browser automation
 - Multi-provider support - Works with various LLM providers with automatic fallback
 - Project Templates - Ready-to-use templates for different project types
+
+## Error Handling
+// Handle errors properly
+- Wrap async operations in try/catch blocks
+- Use proper error types and messages
+- Log errors with appropriate context
+- Handle graceful degradation for agent failures
+- Implement fallback strategies for external services
+
+## Debugging
+// Troubleshooting guide
+- Check controller logs: `docker logs magi-controller`
+- Inspect agent logs: `docker logs <agent-container-id>`
+- View browser console for client errors
+- Use `console.log` sparingly, prefer structured logging
+- For Chrome CDP issues, check `npm run browser:status`
