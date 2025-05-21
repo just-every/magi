@@ -232,9 +232,6 @@ export async function launchChrome(
         '--no-default-browser-check',
         '--disable-background-timer-throttling', // Disable background timer throttling
         '--disable-features=ChromeWhatsNewUI,TriggerFirstRunUI',
-        //'--disable-sync', // Don't prompt for sync
-        '--window-name=magi', // Set window name for easier identification
-        //'--no-startup-window', // Don't open a window
     ];
 
     if (headless) {

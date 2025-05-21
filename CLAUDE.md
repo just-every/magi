@@ -57,8 +57,8 @@ docker compose up -d   # spin up Postgres & pgvector
 - See `docs/TESTING.md` for advanced scenarios
 
 ## Repository Etiquette
-- Branch names: `feat/<ticket>`, `fix/<issue>`
-- Conventional Commits required
+- Branch names follow pattern: `feat/<ticket>`, `fix/<issue>`
+- Conventional Commits required (e.g., "feat: add new agent capability")
 - PRs must pass CI and require at least one approving review
 - Keep PR descriptions detailed with testing steps
 
@@ -76,12 +76,21 @@ docker compose up -d   # spin up Postgres & pgvector
 - Browser automation requires Chrome to be installed.
 
 ## Key Utility Functions / APIs
-- `magi/src/utils/runner.js` – Core agent runner
-- `magi/src/utils/history.js` – Conversation history management
-- `magi/src/utils/memory.js` – Memory persistence
-- `magi/src/utils/custom_tool_utils.js` – Dynamic tool creation
+- `magi/src/utils/runner.ts` – Core agent runner
+- `magi/src/utils/history.ts` – Conversation history management
+- `magi/src/utils/memory.ts` – Memory persistence
+- `magi/src/utils/custom_tool_utils.ts` – Dynamic tool creation
 - `magi/src/model_providers/` – LLM API wrappers
 - `controller/src/server/docker_interface.ts` – Container management
+
+## Agent Implementation
+- Overseer: Central coordinator (magi/src/magi_agents/overseer_agent.ts)
+- Operator: Task breakdown and assignment (magi/src/magi_agents/operator_agent.ts)
+- Browser: Web interaction via CDP (magi/src/magi_agents/common_agents/browser_agent.ts)
+- Code: Programming across languages (magi/src/magi_agents/common_agents/code_agent.ts)
+- Search: Information retrieval (magi/src/magi_agents/common_agents/search_agent.ts)
+- Shell: System command execution (magi/src/magi_agents/common_agents/shell_agent.ts)
+- Reasoning: Complex problem solving (magi/src/magi_agents/common_agents/reasoning_agent.ts)
 
 ## Special Features
 - MECH (Meta-cognition Ensemble Chain-of-thought Hierarchy) - Intelligent model selection
@@ -89,6 +98,12 @@ docker compose up -d   # spin up Postgres & pgvector
 - Browser control - CDP-based browser automation
 - Multi-provider support - Works with various LLM providers with automatic fallback
 - Project Templates - Ready-to-use templates for different project types
+
+## Architecture Overview
+- **Controller Service** - Node.js Express backend + Socket.IO + React frontend
+- **Magi Agents** - TypeScript runtime executing chain-of-thought loops in Docker
+- **Browser Bridge** - CLI to launch/kill/toggle Chrome via DevTools Protocol
+- **Shared Database** - PostgreSQL + pgvector for history, memory, and usage tracking
 
 ## Imports & Layered Memory
 @docs/MECH.md

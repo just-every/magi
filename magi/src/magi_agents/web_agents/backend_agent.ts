@@ -101,16 +101,17 @@ Your browser will automatically open the running project if available and a scre
         onRequest: async (
             agent: Agent,
             messages: ResponseInput
-        ): Promise<[Agent, ResponseInput]> => {
-            return addBrowserStatus(agent, messages);
-        },
+        ): Promise<[Agent, ResponseInput]> => addBrowserStatus(agent, messages),
     });
 
     const ports = getProcessProjectPorts();
     const ids = getProcessProjectIds();
     let startUrl: string | undefined;
-    if (ids.length > 0 && ports[ids[0]]) {
-        startUrl = `http://localhost:${ports[ids[0]]}`;
+    for (const id of ids) {
+        if (ports[id]) {
+            startUrl = `http://localhost:${ports[id]}`;
+            break;
+        }
     }
     void setupAgentBrowserTools(agent, startUrl).catch(err =>
         console.error('Failed to setup browser for WebBackendAgent', err)

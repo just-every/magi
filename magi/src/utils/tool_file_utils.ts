@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { CustomTool } from './db_utils.js';
 
-export const TOOLS_DIR = path.resolve('.custom_tools');
+export const TOOLS_DIR = path.resolve('/custom_tools');
 
 async function fileExists(p: string): Promise<boolean> {
     try {

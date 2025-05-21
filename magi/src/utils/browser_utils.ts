@@ -172,6 +172,23 @@ export async function press_keys(
 }
 
 /**
+ * Waits for a given number of seconds. Useful for waiting for a page load to complete if incomplete data is shown.
+ * @param inject_agent_id - The agent ID to use for the browser session (not used, but kept for interface consistency)
+ * @param seconds - Number of seconds to wait (default: 3)
+ * @returns A message indicating the wait is complete.
+ */
+export async function wait(
+    inject_agent_id: string,
+    seconds?: number
+): Promise<string> {
+    const waitSeconds =
+        typeof seconds === 'number' && seconds > 0 ? seconds : 3;
+    console.log(`[browser_utils] Waiting for ${waitSeconds} seconds...`);
+    await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000));
+    return `Waited for ${waitSeconds} second${waitSeconds === 1 ? '' : 's'}.`;
+}
+
+/**
  * Simulates scrolling the page in the agent's tab.
  *
  * @param inject_agent_id - The agent ID to use for the browser session
@@ -485,6 +502,18 @@ export function getBrowserTools(): ToolFunction[] {
             'Simulate pressing a key or key combination (supports Ctrl/Alt/Shift/Meta).',
             {
                 keys: 'Key or combo to press. e.g. "Enter", "a", "Ctrl+C", "Shift+Tab".',
+            }
+        ),
+        createToolFunction(
+            wait,
+            'Wait for a given number of seconds. Useful for waiting for a page load to complete if incomplete data is shown.',
+            {
+                seconds: {
+                    type: 'number',
+                    description:
+                        'Number of seconds to wait. If not sure, wait 3 seconds is usually enough as additional time will have passed since the last action. You can always call wait again if needed.',
+                    optional: true,
+                },
             }
         ),
         createToolFunction(

@@ -86,15 +86,25 @@ export type DesignAssetVariant = 'light' | 'dark';
  * Interface for design specifications returned by the LLM
  */
 export interface DesignSpec {
+    run_id: string;
+    context: string;
     aspect: DesignAssetAspect;
     background: DesignAssetBackground;
     inspiration_search: Array<{
         engine: DesignSearchEngine;
         query: string;
     }>;
-    judge_inspiration: string;
-    design_prompt: string;
-    judge_design: string;
+    inspiration_judge: string;
+    design_prompts: {
+        draft: string[];
+        medium: string;
+        high: string;
+    };
+    design_judge: {
+        draft: string;
+        medium: string;
+        high: string;
+    };
 }
 
 // Type for the spec object

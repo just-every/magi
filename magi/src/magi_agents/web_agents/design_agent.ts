@@ -20,6 +20,7 @@ import {
     addBrowserStatus,
     setupAgentBrowserTools,
 } from '../../utils/browser_utils.js';
+import { addDesignAssetsStatus } from '../../utils/design_assets.js';
 import {
     getProcessProjectIds,
     getProcessProjectPorts,
@@ -107,6 +108,7 @@ Your browser tab will open to the current project if one is running. A screensho
             messages: ResponseInput
         ): Promise<[Agent, ResponseInput]> => {
             [agent, messages] = await addBrowserStatus(agent, messages);
+            [agent, messages] = await addDesignAssetsStatus(agent, messages);
             try {
                 const overview = await createDesignAssetsOverview();
                 if (overview) {
@@ -126,8 +128,11 @@ Your browser tab will open to the current project if one is running. A screensho
     const ports = getProcessProjectPorts();
     const ids = getProcessProjectIds();
     let startUrl: string | undefined;
-    if (ids.length > 0 && ports[ids[0]]) {
-        startUrl = `http://localhost:${ports[ids[0]]}`;
+    for (const id of ids) {
+        if (ports[id]) {
+            startUrl = `http://localhost:${ports[id]}`;
+            break;
+        }
     }
     void setupAgentBrowserTools(agent, startUrl).catch(err =>
         console.error('Failed to setup browser for WebDesignAgent', err)

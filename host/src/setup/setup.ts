@@ -1000,6 +1000,40 @@ function buildDockerImage(): void {
     }
 }
 
+function ensureBindVolume(volumeName: string, hostDir: string) {
+    // Ensure the host directory exists
+    if (!fs.existsSync(hostDir)) {
+        fs.mkdirSync(hostDir, { recursive: true });
+    }
+    // Check if the named volume exists and is a bind mount to hostDir
+    let needsCreate = false;
+    try {
+        const inspect = execSync(`docker volume inspect ${volumeName}`, {
+            stdio: ['pipe', 'pipe', 'ignore'],
+        }).toString();
+        const isBind =
+            inspect.includes(`"Mountpoint": "${hostDir}"`) ||
+            inspect.includes(`"device": "${hostDir}"`);
+        if (!isBind) {
+            needsCreate = true;
+        }
+    } catch {
+        needsCreate = true;
+    }
+    if (needsCreate) {
+        // Remove any existing volume with the same name (if not a bind)
+        try {
+            execSync(`docker volume rm ${volumeName}`, { stdio: 'ignore' });
+        } catch {
+            /* ignore error if volume does not exist */
+        }
+        execSync(
+            `docker volume create --driver local --opt type=none --opt o=bind --opt device="${hostDir}" ${volumeName}`,
+            { stdio: 'inherit' }
+        );
+    }
+}
+
 function setupDockerVolumes(): void {
     console.log('');
     console.log('\x1b[36m%s\x1b[0m', 'Step 4: Setting up Docker volumes');
@@ -1038,14 +1072,29 @@ function setupDockerVolumes(): void {
     const MAGI_GID = 1001;
 
     try {
+        // magi_output as bind-backed named volume
+        const magiOutputHostDir = path.join(rootDir, '.magi_output');
+        ensureBindVolume('magi_output', magiOutputHostDir);
         console.log(
             `Setting permissions for volume 'magi_output' to ${MAGI_UID}:${MAGI_GID}...`
         );
         execSync(
-            `docker run --rm --user root -v magi_output:/magi_output alpine:latest chown "${MAGI_UID}:${MAGI_GID}" /magi_output`,
+            `docker run --rm --user root -v magi_output:/magi_output alpine:latest chown -R "${MAGI_UID}:${MAGI_GID}" /magi_output`,
             { stdio: 'inherit', cwd: rootDir }
         );
 
+        // custom_tools as bind-backed named volume
+        const customToolsHostDir = path.join(rootDir, '.custom_tools');
+        ensureBindVolume('custom_tools', customToolsHostDir);
+        console.log(
+            `Setting permissions for volume 'custom_tools' to ${MAGI_UID}:${MAGI_GID}...`
+        );
+        execSync(
+            `docker run --rm --user root -v custom_tools:/custom_tools alpine:latest chown -R "${MAGI_UID}:${MAGI_GID}" /custom_tools`,
+            { stdio: 'inherit', cwd: rootDir }
+        );
+
+        // claude_credentials (leave as-is)
         console.log(
             `Setting permissions for volume 'claude_credentials' to ${MAGI_UID}:${MAGI_GID}...`
         );

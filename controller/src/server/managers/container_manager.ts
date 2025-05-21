@@ -589,7 +589,7 @@ export async function runDockerContainer(
       --env-file ${path.resolve(projectRoot, '../.env')} \
       -v claude_credentials:/claude_shared:rw \
       -v magi_output:/magi_output:rw \
-      -v /external/host/magi-system/.custom_tools:/custom_tools:rw \
+      -v custom_tools:/custom_tools:rw \
       -v /etc/timezone:/etc/timezone:ro \
       -v /etc/localtime:/etc/localtime:ro \
       --network magi-system_magi-network \

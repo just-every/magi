@@ -36,9 +36,8 @@ export async function quick_llm_call(
     parent_id?: string,
     communicationManager?: any // Add optional communicationManager parameter
 ): Promise<string> {
-
-    if(modelClass && agent) {
-        if(typeof agent === 'string') {
+    if (modelClass && agent) {
+        if (typeof agent === 'string') {
             throw new Error('Cannot specify both agent and modelClass');
         }
         agent.modelClass = modelClass;
@@ -51,8 +50,6 @@ export async function quick_llm_call(
             : typeof agent === 'string'
               ? await createAgent({ agent })
               : new Agent(agent as AgentDefinition);
-
-
 
     // Let the controller know this isn't the root agent
     quickAgent.parent_id = parent_id ?? 'quick';

@@ -654,7 +654,7 @@ export class GeminiProvider implements ModelProvider {
             const config: GenerateContentConfig = {
                 thinkingConfig: {
                     includeThoughts: true,
-                }
+                },
             };
 
             // Add thinking configuration if suffix was detected
@@ -694,7 +694,10 @@ export class GeminiProvider implements ModelProvider {
                         }
 
                         // Process nested objects in properties
-                        if (obj.properties && typeof obj.properties === 'object') {
+                        if (
+                            obj.properties &&
+                            typeof obj.properties === 'object'
+                        ) {
                             Object.values(obj.properties).forEach(prop => {
                                 removeAdditionalProperties(prop);
                             });
@@ -986,16 +989,15 @@ export class GeminiProvider implements ModelProvider {
                 );
             }
 
-              // 1️⃣  Dump the object exactly as Node sees it
+            // 1️⃣  Dump the object exactly as Node sees it
             console.error('\n=== Gemini error ===');
-            console.dir(error, { depth: null });           // prints enumerable props
+            console.dir(error, { depth: null }); // prints enumerable props
 
             // 3️⃣  JSON-serialize every own property
             console.error('\n=== JSON dump of error ===');
             console.error(
                 JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
             );
-
 
             // 5️⃣  Fallback: iterate keys manually (helps spot symbols, etc.)
             console.error('\n=== Manual property walk ===');

@@ -3,11 +3,8 @@ import { createToolFunction } from './tool_call.js';
 import { ToolFunction, ResponseInput } from '../types/shared-types.js';
 import path from 'path';
 import { write_file } from './file_utils.js';
-import {
-    smart_design_raw,
-    createNumberedGrid,
-    selectBestFromGrid,
-} from './design_search.js';
+import { smart_design_raw } from './design_search.js';
+import { judgeImageSet } from './design/grid_judge.js';
 import {
     DESIGN_ASSET_TYPES,
     DESIGN_ASSET_REFERENCE,
@@ -89,7 +86,8 @@ async function generate_image_raw(
     source_images?: string | string[],
     output_path?: string,
     number_of_images: number = 1,
-    quality: 'low' | 'medium' | 'high' | 'auto' = 'medium'
+    quality: 'low' | 'medium' | 'high' | 'auto' = 'medium',
+    prefix: string = 'generate'
 ): Promise<string | string[]> {
     try {
         // Process source images if provided
@@ -152,22 +150,76 @@ async function generate_image_raw(
             );
         }
 
-        // Generate the images using OpenAI API
-        const imageDataUrls = await openaiProvider.generateImage(
-            prompt,
-            'gpt-image-1',
-            background || 'auto',
-            quality,
-            aspect === 'landscape'
-                ? '1536x1024'
-                : aspect === 'portrait'
-                  ? '1024x1536'
-                  : aspect === 'auto'
-                    ? 'auto'
-                    : '1024x1024',
-            processedImages,
-            number_of_images
-        );
+        // Generate the images using OpenAI API with retry logic
+        let imageDataUrls;
+        let retryCount = 0;
+        const maxRetries = 3;
+
+        while (retryCount < maxRetries) {
+            try {
+                // Break down the message to avoid ESLint string quote issues
+                const retryPrefix =
+                    retryCount > 0
+                        ? `Retry ${retryCount}/${maxRetries - 1}: `
+                        : '';
+                console.log(
+                    `[ImageAgent] ${retryPrefix}Generating ${number_of_images} image(s) (${quality})`
+                );
+
+                imageDataUrls = await openaiProvider.generateImage(
+                    prompt,
+                    'gpt-image-1',
+                    background || 'auto',
+                    quality,
+                    aspect === 'landscape'
+                        ? '1536x1024'
+                        : aspect === 'portrait'
+                          ? '1024x1536'
+                          : aspect === 'auto'
+                            ? 'auto'
+                            : '1024x1024',
+                    processedImages,
+                    number_of_images
+                );
+
+                // If we reach here, generation was successful
+                if (retryCount > 0) {
+                    console.log(
+                        `[ImageAgent] Successfully generated images after ${retryCount} retry/retries`
+                    );
+                }
+                break;
+            } catch (generationError) {
+                retryCount++;
+
+                if (retryCount >= maxRetries) {
+                    console.error(
+                        `[ImageAgent] Failed to generate images after ${maxRetries} attempts:`,
+                        generationError
+                    );
+                    throw new Error(
+                        `Failed to generate images after ${maxRetries} attempts: ${generationError.message}`
+                    );
+                }
+
+                // Log the error and retry
+                console.warn(
+                    `[ImageAgent] Error during image generation (attempt ${retryCount}/${maxRetries}):`,
+                    generationError
+                );
+                console.log('[ImageAgent] Retrying in 2 seconds...');
+
+                // Wait for 2 seconds before retrying
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+        }
+
+        // If we got here without imageDataUrls, something went wrong
+        if (!imageDataUrls) {
+            throw new Error(
+                '[ImageAgent] Failed to generate images - no data URLs returned'
+            );
+        }
 
         // Get timestamp once for all images
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -192,8 +244,8 @@ async function generate_image_raw(
                 // Use the default location in the output directory
                 const fileName =
                     number_of_images === 1
-                        ? `image_${timestamp}.png`
-                        : `image_${timestamp}_${i + 1}.png`;
+                        ? `${prefix}_image_${timestamp}.png`
+                        : `${prefix}_image_${timestamp}_${i + 1}.png`;
                 targetPath = path.join(
                     '/magi_output/shared/generate_image',
                     fileName
@@ -304,7 +356,8 @@ async function get_design_spec(
     type: DESIGN_ASSET_TYPES,
     userPrompt: string,
     reference: DesignAssetReferenceItem,
-    guide: DesignAssetGuideItem
+    guide: DesignAssetGuideItem,
+    brand_assets: string[] = []
 ): Promise<DesignSpec> {
     console.log(
         `[design_image] Getting design specification for: "${userPrompt}"`
@@ -343,7 +396,14 @@ JUDGING CRITERIA:
         {
             type: 'message',
             role: 'user',
-            content: 'DESIGN REQUEST: ' + userPrompt,
+            content:
+                'DESIGN REQUEST: ' +
+                userPrompt +
+                (brand_assets.length
+                    ? `\n\nExisting brand assets provided for style reference:\n${brand_assets
+                          .map(b => path.basename(b))
+                          .join(', ')}`
+                    : ''),
         },
     ];
 
@@ -351,19 +411,33 @@ JUDGING CRITERIA:
         const raw = await quick_llm_call(input, 'reasoning', {
             name: 'DesignSpecAgent',
             description: 'Generate design spec parameters',
-            instructions: `You are a design assistant that maps design request to optimal parameters. You are helping to design a **${readableName}** (${reference.description}). It will be used as part of a specialized design process for "${reference.usage_context}".
+            instructions: `You are a **Design Specification Agent**. Your role is to translate a design brief into the optimal JSON specification for an automated, multi-round design pipeline.
 
-The design process involves;
-1. Searching a number of design engines for inspiration/reference images related to the design request.
-2. Narrowing down a large number of inspiration/reference images to a small set of the most relevant ones.
-3. Using the selected images, along with a design_prompt, to generate many draft designs.
-4. Selecting the best designs from the drafts and generating a final high-quality version.
+You are helping to create a **${readableName}** (${reference.description}) that will be used for “${reference.usage_context}”.
 
-### YOUR TASK:
-1. Analyze the design request provided and understand the **INTENT** of the design request.
-2. Work step by step through the JSON fields required and fill them in with the best possible values.
-3. Use both your understanding of the intent of the design request and the research provided.
-            `,
+DESIGN PIPELINE:
+1. **Inspiration Search** - query multiple design-search engines for reference imagery that fits the brief (you will output these queries).
+2. **Inspiration Curation** - we filter down to the best images.
+3. **Round 1 - Drafts**
+    • Engine uses multiple versions of \`design_prompts.draft\` to render MANY low-res concepts.
+    • \`design_judge.draft\` scores them; minor typos & imperfections are acceptable.
+4. **Round 2 - Medium Upscale**
+    • Best draft is recreated with more detail using \`design_prompts.medium\`.
+    • Must FIX spelling/kerning; PRESERVE general layout & palette. Improve detail.
+    • \`design_judge.medium\` verifies: layout locked, no typos for most assets (mockups ok), small artifacts OK.
+5. **Round 3 - High Upscale (Final)**
+    • Medium image is upscaled to final version with \`design_prompts.high\`.
+    • Must achieve pixel-perfect fidelity: exact colors, alignment, WCAG-AA.
+    • \`design_judge.high\` is validates we have a valid outcome; any failure triggers up to 2 re-attempts.
+
+Typos should be fixed in medium and high version of most assets, but not for mockups. Mockups will be converted to HTML and the text will be rendered in the browser, so typos and imperfections in the content which will be replaced by the browser are acceptable.
+
+YOUR TASK:
+1. **Analyze INTENT** - read the DESIGN REQUEST and the preceding RESEARCH (specs, guidelines, ideals, warnings, inspiration, judging criteria).
+2. **Populate every JSON field** in the provided schema *step by step*
+
+Return **valid JSON** that matches the \`design_specification\` schema.
+`,
             modelSettings: {
                 force_json: true,
                 json_schema: {
@@ -372,6 +446,16 @@ The design process involves;
                     schema: {
                         type: 'object',
                         properties: {
+                            run_id: {
+                                type: 'string',
+                                description:
+                                    'A snake_case identifier for this design run based on the prompt.',
+                            },
+                            context: {
+                                type: 'string',
+                                description:
+                                    'Explain what it is we are creating. This will be passed to all agents in the pipeline so they understand the task and goals.',
+                            },
                             aspect: {
                                 description: 'Aspect ratio of the design',
                                 type: 'string',
@@ -386,7 +470,7 @@ The design process involves;
                             inspiration_search: {
                                 type: 'array',
                                 description:
-                                    'Find inspiration images for the design. Create searches tailored to design request and design engine. Each query should be brief (think typed in the search bar on the site). Provide multiple queries for the same engine if very relevant, or leave out an engine if not. But try to balance to get a good variety of results. Aim for around 6-10 searches in total.',
+                                    'Find reference images for the design. Create searches tailored to design request and design engine. Each query should be brief (think typed in the search bar on the site). Provide multiple queries for the same engine if very relevant, or leave out an engine if not. But try to balance to get a good variety of results. Aim for around 6-10 searches in total.',
                                 items: {
                                     type: 'object',
                                     properties: {
@@ -405,26 +489,67 @@ The design process involves;
                                     required: ['engine', 'query'],
                                 },
                             },
-                            judge_inspiration: {
-                                description: 'What should we look for when narrowing down the inspiration images? Use the research provided and the design request to construct a guide for comparing multiple inspiration images as to which is the most relevant. This should be about a paragraph long.',
+                            inspiration_judge: {
+                                description:
+                                    'What should we look for when narrowing down the inspiration images? Use the research provided and the design request to construct a guide for comparing multiple inspiration images as to which is the most relevant. This should be about a paragraph long.',
                                 type: 'string',
                             },
-                            design_prompt: {
-                                description: 'This prompt is VITAL. Once we have collected a number of inspiration images, we will use this prompt to generate a new design based on them. It should be a detailed description of the design you want to create. Focus on providing guidance for the design process, not the final product. However include any specific details from in the original design request. This should be about a paragraph long.',
-                                type: 'string',
+                            design_prompts: {
+                                type: 'object',
+                                description: `
+Once we have collected a number of inspiration images, we will use this prompt to generate a new design based on them. It should condense the research and design request into a prompt for each stage.
+
+• **draft**  - *ARRAY of exactly 3* one-paragraph prompts, each exploring the brief from a different creative angle. Focus on providing guidance for the design process, not exact details of the final product. However include any specific details from in the original design request. Each brief should highlight a specific part of the design process, but all should include everything needed by the agent to produce an amazing design.
+• **medium** - ONE paragraph. Preserve layout & palette of the chosen draft, fix typos (unless mockup), improve detail.
+• **high**   - ONE paragraph. Final fidelity, brand-exact colors/fonts, remove all artifacts, fully pixel-perfect.
+
+Each paragraph must be plain-text, no markdown.`,
+                                properties: {
+                                    draft: {
+                                        type: 'array',
+                                        minItems: 3,
+                                        maxItems: 3,
+                                        items: { type: 'string' },
+                                    },
+                                    medium: { type: 'string' },
+                                    high: { type: 'string' },
+                                },
+                                required: ['draft', 'medium', 'high'],
                             },
-                            judge_design: {
-                                description: 'Finally how should we judge designed image drafts? We will create a number of design drafts before choosing the best one. The prompt should include what to look for, how to compare multiple designs and any warnings to avoid. This should be about a paragraph long.',
-                                type: 'string',
+                            design_judge: {
+                                type: 'object',
+                                description: `
+Each field is ONE paragraph that downstream code parses for Pass/Fail.
+
+Draft • Focus on CONCEPT viability
+- Accept minor text errors or grain
+- Reject off-brand colors, unreadable copy, chaotic layout
+
+Medium • Focus on composition
+- Accept tiny pixel noise
+- Reject any errors, layout shift, brand-color drift
+- For mockups, spelling errors and placeholder text is acceptable
+
+High • Focus on polish
+- Reject on ANY color mismatch, mis-alignment, WCAG-AA failure
+- For mockups, spelling errors and placeholder text is acceptable
+                                `,
+                                properties: {
+                                    draft: { type: 'string' },
+                                    medium: { type: 'string' },
+                                    high: { type: 'string' },
+                                },
+                                required: ['draft', 'medium', 'high'],
                             },
                         },
                         additionalProperties: false,
                         required: [
                             'aspect',
                             'background',
-                            'judge_inspiration',
-                            'design_prompt',
-                            'judge_design',
+                            'inspiration_search',
+                            'inspiration_judge',
+                            'design_prompts',
+                            'design_judge',
                         ],
                     },
                 },
@@ -440,322 +565,308 @@ The design process involves;
 }
 
 /**
+ * Type alias for design phases
+ */
+type JudgePhase = 'draft' | 'medium' | 'high';
+
+/**
+ * Helper to generate images with consistent parameters
+ */
+async function genImages(
+    prompt: string,
+    aspect: string,
+    background: string,
+    references: string | string[] | undefined,
+    count: number,
+    quality: 'low' | 'medium' | 'high',
+    prefix: string
+): Promise<string[]> {
+    const result = await generate_image_raw(
+        prompt,
+        aspect as any,
+        background as any,
+        references,
+        undefined, // No output path
+        count,
+        quality,
+        prefix + '_' + quality
+    );
+
+    return Array.isArray(result) ? result : [result];
+}
+
+/**
+ * Run iterative selection to narrow down candidates
+ */
+async function iterativeSelect(
+    candidates: string[],
+    targetCount: number,
+    phase: JudgePhase,
+    prompt: string,
+    type: DESIGN_ASSET_TYPES,
+    judgeSpec: string,
+    prefix: string
+): Promise<string[]> {
+    console.log(
+        `[design_image] Selecting ${targetCount} best ${phase} images from ${candidates.length} candidates`,
+        judgeSpec
+    );
+
+    let round = 1;
+    let currentCandidates = [...candidates];
+    const processedIds = new Set<string>();
+
+    // Run selection rounds until we reach target count
+    while (currentCandidates.length > targetCount) {
+        console.log(
+            `[design_image] ${phase} selection round ${round}: Processing ${currentCandidates.length} candidates`,
+            judgeSpec
+        );
+
+        // Use judgeImageSet to select best images from all candidates
+        const selected = await judgeImageSet<string>({
+            items: currentCandidates,
+            prompt,
+            selectLimit: targetCount,
+            processedIds,
+            getId: (item: string) => item,
+            toImageSource: (item: string) => ({ url: item }),
+            gridName: `${prefix}_grid_${phase}_${round}`,
+            isDesignSearch: false,
+            type,
+            judgeGuide: judgeSpec,
+        });
+
+        // If no images were selected, break and use first candidate
+        if (selected.length === 0) {
+            if (currentCandidates.length > 0) {
+                currentCandidates = [currentCandidates[0]];
+            }
+            break;
+        }
+
+        // Update candidates for next round
+        currentCandidates = selected;
+        round++;
+
+        // Safety: if we've gone through too many rounds, just pick the best we have
+        if (round > 5) {
+            console.log(
+                `[design_image] Reached maximum ${phase} rounds (5), using best candidates so far`
+            );
+            break;
+        }
+    }
+
+    // Return up to targetCount candidates
+    return currentCandidates.slice(0, targetCount);
+}
+
+/**
  * High level design search with iterative vision-based ranking to generate an enhanced image
  */
 export async function design_image(
     type: DESIGN_ASSET_TYPES,
     prompt: string,
-    with_inspiration: boolean = true
+    with_inspiration: boolean = true,
+    brand_assets: string[] = []
 ): Promise<string> {
     const sessionId = uuidv4().substring(0, 8);
-    const allImagePaths: string[] = [];
-
     const reference = DESIGN_ASSET_REFERENCE[type];
     const guide = DESIGN_ASSET_GUIDE[type];
 
     // Step 0: Ask the LLM for design specification
-    const spec = await get_design_spec(type, prompt, reference, guide);
-
+    const spec = await get_design_spec(
+        type,
+        prompt,
+        reference,
+        guide,
+        brand_assets
+    );
     console.log(
         `[design_image] Design spec for "${prompt}":`,
         JSON.stringify(spec, null, 2)
     );
 
     // Set up parallel generation batches
-    console.log(
-        '[design_image] Starting parallel generation of multiple image batches'
-    );
-    const generationPromises = [];
+    console.log('[design_image] Starting draft phase');
 
-    // Base prompt from the design spec
-    const basePrompt = spec.design_prompt;
-
-    // Batch 1: Generate 9 images without references
-    console.log(
-        '[design_image] Queueing batch 1/3: 9 images without reference images'
-    );
-    generationPromises.push(
-        generate_image_raw(
-            basePrompt,
-            spec.aspect,
-            spec.background,
-            undefined, // No reference images
-            undefined, // No output path
-            9,
-            'low' // Low quality for initial batch
-        )
-    );
-
-    // Step 1: Find reference images if requested
-    let referenceImages: string[] = [];
-    if (with_inspiration) {
-        console.log(
-            '[design_image] Searching for reference designs with query:',
-            spec.inspiration_search
-        );
-        const designs = await smart_design_raw(
-            spec.inspiration_search,
-            3, // @todo would like to increase this, but need to fix up the algorithm to reduce faster in earlier rounds, otherwise we get too many rounds
-            type,
-            spec.judge_inspiration
-        );
-        console.log(`[design_image] Found ${designs.length} reference designs`);
-
-        // Extract image URLs to use as reference
-        referenceImages = designs
-            .filter(design => design.screenshotURL)
-            .map(design => design.screenshotURL as string);
-
-        // Step 2: Generate initial batch of 27 images with low quality
-        console.log(
-            '[design_image] Generating additional images with reference images'
-        );
-
-        // For batches with reference images, add the reference instruction to the prompt
-        let refPrompt = basePrompt;
-        if (referenceImages.length > 0) {
-            refPrompt +=
-                '\n\nPlease use the reference images provided as inspiration only. Do not copy them or use them directly in your design. You are creating a new design based on the style from these images.';
-        }
-
-        // If we have reference images, create two batches
-        if (referenceImages.length > 0) {
-            // Batch 2: First 3 reference images
-            const firstThree = referenceImages.slice(
-                0,
-                Math.min(3, referenceImages.length)
-            );
-
-            console.log(
-                '[design_image] Queueing batch 2/3: 9 images with first 3 reference images'
-            );
-            generationPromises.push(
-                generate_image_raw(
-                    refPrompt,
-                    spec.aspect,
-                    spec.background,
-                    firstThree,
-                    undefined,
-                    9,
-                    'low'
-                )
-            );
-
-            // Batch 3: Use remaining reference images, or reuse first three if none remain
-            const remainingOrReuse =
-                referenceImages.length > 3
-                    ? referenceImages.slice(3)
-                    : firstThree;
-
-            console.log(
-                '[design_image] Queueing batch 3/3: 9 images with ' +
-                    (referenceImages.length > 3
-                        ? 'remaining'
-                        : 'reused first 3') +
-                    ' reference images'
-            );
-            generationPromises.push(
-                generate_image_raw(
-                    refPrompt,
-                    spec.aspect,
-                    spec.background,
-                    remainingOrReuse,
-                    undefined,
-                    9,
-                    'low'
-                )
-            );
-        }
-    } else {
-        // If no reference images are requested, just generate the second batch with the base prompt
-        generationPromises.push(
-            generate_image_raw(
-                basePrompt,
-                spec.aspect,
-                spec.background,
-                undefined, // No reference images
-                undefined, // No output path
-                9,
-                'low' // Low quality for initial batch
-            )
-        );
-    }
-
-    // Wait for all generation promises to complete in parallel
-    console.log(
-        `[design_image] Waiting for ${generationPromises.length} parallel batches to complete...`
-    );
-    const batchResults = await Promise.all(generationPromises);
-
-    // Process all results and add to allImagePaths
-    for (let i = 0; i < batchResults.length; i++) {
-        const result = batchResults[i];
-        if (Array.isArray(result)) {
-            allImagePaths.push(...result);
-            console.log(
-                `[design_image] Batch ${i + 1}/${generationPromises.length} complete: ${result.length} images`
-            );
-        } else if (result) {
-            // In case a single result is returned
-            allImagePaths.push(result);
-            console.log(
-                `[design_image] Batch ${i + 1}/${generationPromises.length} complete: 1 image`
-            );
-        }
-    }
-
-    // Step 3: Use grid selection to narrow down candidates
-    console.log(
-        `[design_image] Generated ${allImagePaths.length} total variations, now selecting the best`
-    );
-
-    let candidates = allImagePaths;
-    let bestImagePath: string | null = null;
+    // Get draft prompts from the design spec
+    const draftPrompts = spec.design_prompts.draft;
+    const referenceInstruction =
+        '\n\nPlease use the reference images provided as inspiration only. Do not copy them or use them directly in your design. You are creating a new design based on the style from these images.';
 
     try {
-        // Run iterative selection process until we have a single best image
-        let round = 1;
-        while (candidates.length > 1) {
+        //
+        // DRAFT PHASE
+        //
+
+        // Generate images without references for each draft prompt (3×3=9)
+        console.log(
+            '[design_image] Generating draft images without references'
+        );
+        const noRefPromises = draftPrompts.map((draftPrompt, i) => {
             console.log(
-                `[design_image] Selection round ${round}: Processing ${candidates.length} candidates`
+                `[design_image] Queueing draft batch ${i + 1}/${draftPrompts.length}: without references`,
+                draftPrompt
+            );
+            return genImages(
+                spec.context + '\n\n' + draftPrompt,
+                spec.aspect,
+                spec.background,
+                undefined,
+                3,
+                'low',
+                spec.run_id + '_' + sessionId
+            );
+        });
+
+        // Collect reference images if requested
+        let withRefPromises: Promise<string[]>[] = [];
+        if (with_inspiration) {
+            console.log(
+                '[design_image] Searching for reference designs',
+                spec.inspiration_search
+            );
+            const designs = await smart_design_raw(
+                spec.inspiration_search,
+                3,
+                type,
+                spec.context + '\n\n' + spec.inspiration_judge,
+                spec.run_id + '_' + sessionId
+            );
+            console.log(
+                `[design_image] Found ${designs.length} reference designs`
             );
 
-            // Split candidates into groups of 9 for processing
-            const groups: string[][] = [];
-            for (let i = 0; i < candidates.length; i += 9) {
-                const group = candidates.slice(
-                    i,
-                    Math.min(i + 9, candidates.length)
-                );
-                if (group.length > 0) {
-                    groups.push(group);
-                }
-            }
+            // Extract image URLs to use as reference
+            const referenceImages = designs
+                .filter(design => design.screenshotURL)
+                .map(design => design.screenshotURL as string);
 
-            console.log(
-                `[design_image] Split into ${groups.length} groups of up to 9 images each`
-            );
-
-            // Process each group to get the best images
-            const selectedCandidates: string[] = [];
-
-            for (let i = 0; i < groups.length; i++) {
-                const group = groups[i];
-
-                // Create array of ImageSource objects for the grid
-                const imageSources = group.map(path => ({
-                    url: path,
-                    title: prompt,
-                }));
-
-                // Generate a grid image of current group
-                const grid = await createNumberedGrid(
-                    imageSources,
-                    `design_image_${sessionId}_round${round}_group${i+1}`
-                );
+            if (referenceImages.length > 0) {
+                // Generate images with references for each draft prompt (3×9=27 more)
                 console.log(
-                    `[design_image] Created grid of ${group.length} images for round ${round}, group ${i+1}`
+                    '[design_image] Generating draft images with references'
                 );
-
-                // Determine how many images to select from this group
-                // Select 3 when we have more than 9 images total, otherwise select only 1
-                const numToSelect = candidates.length > 9 ? 3 : 1;
-
-                // Select best images from this group
-                const bestImageIndices = await selectBestFromGrid(
-                    grid,
-                    prompt,
-                    group.length,
-                    Math.min(numToSelect, group.length - 1), // Ensure we don't ask for more than available minus 1
-                    false, // This is image generation, not design search
-                    type,
-                    spec.judge_design
-                );
-
-                console.log(
-                    `[design_image] Round ${round}, Group ${i+1}: Selected ${bestImageIndices.length} best images: ${bestImageIndices.join(', ')}`
-                );
-
-                // If no images were selected from this group, take the first one
-                if (bestImageIndices.length === 0) {
-                    if (group.length > 0) {
-                        selectedCandidates.push(group[0]);
-                    }
-                } else {
-                    // Add selected images from this group to the overall selection
-                    selectedCandidates.push(
-                        ...bestImageIndices.map(idx => group[idx - 1])
+                withRefPromises = draftPrompts.map((draftPrompt, i) => {
+                    console.log(
+                        `[design_image] Queueing draft batch ${i + 1 + draftPrompts.length}/${draftPrompts.length * 2}: with references`,
+                        draftPrompt + referenceInstruction
                     );
-                }
-            }
-
-            // If no images were selected at all, break
-            if (selectedCandidates.length === 0) {
-                if (candidates.length > 0) {
-                    bestImagePath = candidates[0]; // Just take the first one if nothing was selected
-                }
-                break;
-            }
-
-            // Update candidates for next round
-            candidates = selectedCandidates;
-            round++;
-
-            // If we're down to one image, we're done
-            if (candidates.length === 1) {
-                bestImagePath = candidates[0];
-                break;
-            }
-
-            // Safety: if we've gone through too many rounds, just pick the first candidate
-            if (round > 5) {
-                console.log(
-                    '[design_image] Reached maximum rounds (5), selecting the first remaining candidate'
-                );
-                bestImagePath = candidates[0];
-                break;
+                    return genImages(
+                        spec.context +
+                            '\n\n' +
+                            draftPrompt +
+                            referenceInstruction,
+                        spec.aspect,
+                        spec.background,
+                        referenceImages,
+                        3,
+                        'low',
+                        spec.run_id + '_' + sessionId + '_ref'
+                    );
+                });
             }
         }
-        if (!bestImagePath) {
-            throw new Error('No best image found after selection rounds');
+
+        // Wait for all generation promises to complete in parallel
+        console.log('[design_image] Waiting for draft batches to complete...');
+        const allBatchResults = await Promise.all([
+            ...noRefPromises,
+            ...withRefPromises,
+        ]);
+
+        // Flatten the results into a single array of image paths
+        const allDraftImagePaths = allBatchResults.flat();
+        console.log(
+            `[design_image] Generated ${allDraftImagePaths.length} total draft variations`
+        );
+
+        // STEP 2: Use iterative selection to find top 3 drafts
+        const bestDraftPaths = await iterativeSelect(
+            allDraftImagePaths,
+            3, // Keep top 3 for medium phase
+            'draft',
+            prompt,
+            type,
+            spec.context + '\n\n' + spec.design_judge.draft,
+            spec.run_id + '_' + sessionId
+        );
+
+        console.log(`[design_image] Selected ${bestDraftPaths.length} best drafts for medium phase:
+        ${bestDraftPaths.join('\n        ')}`);
+
+        //
+        // MEDIUM PHASE
+        //
+
+        // STEP 3: Generate medium quality versions of each selected draft
+        console.log('[design_image] Starting medium quality phase');
+
+        // Generate 3 medium images for each of the 3 best drafts (3×3=9)
+        const mediumPromises = bestDraftPaths.map((draftPath, i) => {
+            console.log(
+                `[design_image] Generating medium quality batch ${i + 1}/${bestDraftPaths.length} from draft`
+            );
+            return genImages(
+                spec.context + '\n\n' + spec.design_prompts.medium,
+                spec.aspect,
+                spec.background,
+                draftPath,
+                3, // 3 medium images per draft
+                'medium',
+                spec.run_id + '_' + sessionId
+            );
+        });
+
+        // Wait for all medium generation to complete
+        const mediumBatches = await Promise.all(mediumPromises);
+        const allMediumPaths = mediumBatches.flat();
+
+        console.log(
+            `[design_image] Generated ${allMediumPaths.length} medium-quality images`
+        );
+
+        // STEP 4: Select best medium image using medium judge
+        const mediumProcessedIds = new Set<string>();
+        const bestMediumPaths = await judgeImageSet<string>({
+            items: allMediumPaths,
+            prompt,
+            selectLimit: 1,
+            processedIds: mediumProcessedIds,
+            getId: (item: string) => item,
+            toImageSource: (item: string) => ({ url: item }),
+            gridName: 'medium_all',
+            isDesignSearch: false,
+            type,
+            judgeGuide: spec.context + '\n\n' + spec.design_judge.medium,
+        });
+
+        if (bestMediumPaths.length === 0) {
+            throw new Error('[design_image] No medium images selected');
         }
 
+        const bestMediumPath = bestMediumPaths[0];
         console.log(
-            `[design_image] Design spec for "${prompt}":`,
-            JSON.stringify(spec, null, 2)
-        );
-        console.log(`[design_image] Final selection: ${bestImagePath}`);
-        console.log(
-            '[design_image] Generating high-quality version of the selected image'
+            `[design_image] Selected best medium-quality image: ${bestMediumPath}`
         );
 
-        const highQualityResult = await generate_image_raw(
-            'Create a high quality version of this image',
+        //
+        // HIGH PHASE
+        //
+
+        // STEP 5: Generate high quality version with retry logic
+        console.log(
+            '[design_image] Starting high-quality generation with retry logic'
+        );
+
+        return await upscaleHighWithRetry(
+            bestMediumPath,
+            spec.context + '\n\n' + spec.design_prompts.high,
+            spec.context + '\n\n' + spec.design_judge.high,
             spec.aspect,
-            spec.background,
-            bestImagePath,
-            undefined,
-            1,
-            'high' // High quality for final image
-        );
-
-        if (typeof highQualityResult === 'string') {
-            console.log(
-                `[design_image] Generated high-quality final image: ${highQualityResult}`
-            );
-            return highQualityResult;
-        } else if (
-            Array.isArray(highQualityResult) &&
-            highQualityResult.length > 0
-        ) {
-            console.log(
-                `[design_image] Generated high-quality final image: ${highQualityResult[0]}`
-            );
-            return highQualityResult[0];
-        }
-
-        throw new Error(
-            '[design_image] High-quality generation returned no valid image'
+            spec.background
         );
     } catch (error) {
         console.error(
@@ -765,6 +876,121 @@ export async function design_image(
 
         throw error;
     }
+}
+
+/**
+ * Check if the high quality image passes the specified criteria
+ */
+async function checkHighQualityPass(
+    imagePath: string,
+    criteria: string
+): Promise<boolean> {
+    try {
+        // Query LLM to evaluate the image based on criteria
+        const input: ResponseInput = [
+            {
+                type: 'message',
+                role: 'system',
+                content: `Evaluate if the following image at ${imagePath} meets these criteria:
+${criteria}
+
+Return EXACTLY "PASS" if it meets the criteria or "FAIL" if it doesn't.`,
+            },
+        ];
+
+        const response = await quick_llm_call(input, 'reasoning', {
+            name: 'HighQualityImageJudge',
+            description: 'Evaluate image quality against specified criteria',
+            instructions: `You are a **Quality Assurance Judge** for AI-generated images. Your task is to evaluate if an image meets the specified high-quality criteria.
+
+Examine the image carefully and assess if it meets ALL the criteria provided. Be strict and thorough in your assessment.
+
+Response Rules:
+- Return EXACTLY "PASS" if the image fully meets ALL criteria
+- Return EXACTLY "FAIL" if the image fails to meet ANY of the criteria
+- No explanations, just PASS or FAIL`,
+            modelSettings: {
+                max_tokens: 10, // Just need "PASS" or "FAIL"
+            },
+        });
+
+        const verdict = response.trim().toUpperCase();
+        console.log(`[design_image] High quality check verdict: ${verdict}`);
+        return verdict === 'PASS';
+    } catch (error) {
+        console.error(
+            `[design_image] Error during high quality check: ${error}`
+        );
+        return false; // Assume failure if we couldn't complete the check
+    }
+}
+
+/**
+ * Generate a high-quality version of an image with retry logic
+ */
+async function upscaleHighWithRetry(
+    sourcePath: string,
+    highPrompt: string,
+    highCriteria: string,
+    aspect?: 'square' | 'landscape' | 'portrait' | 'auto',
+    background?: 'transparent' | 'opaque' | 'auto'
+): Promise<string> {
+    let lastImagePath = sourcePath;
+
+    // Try up to 3 times to generate a high-quality image that passes checks
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        console.log(
+            `[design_image] High quality generation attempt ${attempt}/3`
+        );
+
+        const highResult = await generate_image_raw(
+            highPrompt,
+            aspect,
+            background,
+            lastImagePath,
+            undefined,
+            1,
+            'high'
+        );
+
+        let highImagePath: string;
+        if (typeof highResult === 'string') {
+            highImagePath = highResult;
+        } else if (Array.isArray(highResult) && highResult.length > 0) {
+            highImagePath = highResult[0];
+        } else {
+            throw new Error(
+                '[design_image] High-quality generation returned no valid image'
+            );
+        }
+
+        console.log(
+            `[design_image] Generated high-quality image: ${highImagePath}`
+        );
+
+        // Check if the image passes the high quality criteria
+        const passes = await checkHighQualityPass(highImagePath, highCriteria);
+
+        if (passes) {
+            console.log(
+                '[design_image] High quality image PASSED quality check'
+            );
+            return highImagePath;
+        }
+
+        console.log(
+            `[design_image] High quality image FAILED quality check (attempt ${attempt}/3)`
+        );
+
+        // Use this image as the source for the next attempt
+        lastImagePath = highImagePath;
+    }
+
+    // If we've exhausted all retry attempts, return the last generated image
+    console.log(
+        '[design_image] Exhausted retry attempts, returning best effort high quality image'
+    );
+    return lastImagePath;
 }
 
 export function getDesignImageTools() {
@@ -785,6 +1011,12 @@ export function getDesignImageTools() {
                         'The design process will look at reference images from the web to help inspire the design. This will take longer, but the results are usually significantly better.',
                     type: 'boolean',
                     default: 'true',
+                },
+                brand_assets: {
+                    description:
+                        'Optional array of existing brand asset file paths to maintain style consistency',
+                    type: 'array',
+                    optional: true,
                 },
             }
         ),

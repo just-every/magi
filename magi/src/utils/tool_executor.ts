@@ -129,7 +129,10 @@ export async function executeToolInSandbox({
     const mockCommunicationManager = {
         // Core methods used by tools
         send: (event: any) => {
-            if(event.type !== 'message_delta') {
+            if (
+                event.type !== 'message_delta' &&
+                event.type !== 'agent_status'
+            ) {
                 console.log(
                     '[Sandbox Comms] Event sent:',
                     JSON.stringify(event).substring(0, 100) + '...'

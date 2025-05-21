@@ -227,7 +227,10 @@ function processSchemaForOpenAI(schema: any, originalProperties?: any): any {
 /**
  * Convert our tool definition to OpenAI's format
  */
-function convertToOpenAITools(requestParams: any, tools?: ToolFunction[] | undefined): any {
+function convertToOpenAITools(
+    requestParams: any,
+    tools?: ToolFunction[] | undefined
+): any {
     requestParams.tools = tools.map((tool: ToolFunction) => {
         if (tool.definition.function.name === 'openai_web_search') {
             delete requestParams.reasoning;
@@ -238,7 +241,8 @@ function convertToOpenAITools(requestParams: any, tools?: ToolFunction[] | undef
         }
 
         // Process the parameter schema using our utility function
-        const originalToolProperties = tool.definition.function.parameters.properties;
+        const originalToolProperties =
+            tool.definition.function.parameters.properties;
         const paramSchema = processSchemaForOpenAI(
             tool.definition.function.parameters,
             originalToolProperties
@@ -351,7 +355,6 @@ export class OpenAIProvider implements ModelProvider {
     constructor(apiKey?: string) {
         this.client = new OpenAI({
             apiKey: apiKey || process.env.OPENAI_API_KEY,
-            timeout: 60000, // 1 minute timeout
         });
 
         if (!this.client) {
@@ -869,11 +872,16 @@ export class OpenAIProvider implements ModelProvider {
             }
 
             // Set JSON response format if a schema is provided
-            if (settings?.json_schema) {
-                // For OpenAI, we use text.format to specify JSON output (previously response_format)
-                // Process the JSON schema to ensure it meets OpenAI's requirements
-                const processedSchema = processSchemaForOpenAI(settings.json_schema);
-                requestParams.text = { format: processedSchema };
+            if (settings?.json_schema?.schema) {
+                const { schema, ...wrapperWithoutSchema } =
+                    settings.json_schema;
+
+                requestParams.text = {
+                    format: {
+                        ...wrapperWithoutSchema, // name, type:'json_schema', etc.
+                        schema: processSchemaForOpenAI(schema),
+                    },
+                };
             }
 
             // Add tools if provided
