@@ -845,11 +845,8 @@ export type StreamingEvent =
     | QuotaUpdateEvent
     | AudioEvent
     | ScreenshotEvent
-<<<<<<< HEAD
     | DesignEvent
-=======
     | DesignGridEvent
->>>>>>> main
     | ConsoleEvent
     | GitPullRequestEvent
     // Add new wait events
@@ -1184,11 +1181,8 @@ export type MessagePayloads = {
     system_status: Omit<SystemStatusEvent, 'type'>;
     quota_update: Omit<QuotaUpdateEvent, 'type'>;
     screenshot: Omit<ScreenshotEvent, 'type'>;
-<<<<<<< HEAD
     design: Omit<DesignEvent, 'type'>;
-=======
     design_grid: Omit<DesignGridEvent, 'type'>;
->>>>>>> main
     error: Omit<ErrorEvent, 'type'>;
     // Add new wait events
     tool_wait_start: Omit<ToolWaitStartEvent, 'type'>;
