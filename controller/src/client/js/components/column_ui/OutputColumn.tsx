@@ -13,7 +13,12 @@ import LogsViewer from '../ui/LogsViewer';
 import { PRIMARY_RGB } from '../../utils/constants';
 import BrowserDisplay from '../ui/BrowserDisplay';
 import ConsoleDisplay from '../ui/ConsoleDisplay';
-import { ScreenshotEvent, ConsoleEvent } from '../../../../types/shared-types';
+import DesignDisplay from '../ui/DesignDisplay';
+import {
+    ScreenshotEvent,
+    ConsoleEvent,
+    DesignEvent,
+} from '../../../../types/shared-types';
 
 interface OutputColumnProps {
     selectedItemId: string | null;
@@ -35,6 +40,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
     let messages: ClientMessage[];
     let screenshots: ScreenshotEvent[];
     let consoleEvents: ConsoleEvent[];
+    let designEvents: DesignEvent[];
     let logs: string;
 
     if (selectedItem?.type === 'process') {
@@ -45,6 +51,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
             logs = process.logs || '';
             screenshots = process.agent?.screenshots || [];
             consoleEvents = process.agent?.consoleEvents || [];
+            designEvents = process.agent?.designEvents || [];
         }
     } else if (selectedItem?.type === 'agent') {
         const agent = selectedItem ? (selectedItem.data as AgentData) : null;
@@ -53,6 +60,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
             messages = agent.messages || [];
             screenshots = agent.screenshots || [];
             consoleEvents = agent.consoleEvents || [];
+            designEvents = agent.designEvents || [];
         }
     }
 
@@ -71,6 +79,8 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
             if (prevSelectedItemIdRef.current !== selectedItemId) {
                 if (screenshots && screenshots.length > 0) {
                     setTab('browser');
+                } else if (designEvents && designEvents.length > 0) {
+                    setTab('design');
                 } else if (consoleEvents && consoleEvents.length > 0) {
                     setTab('console');
                 } else {
@@ -106,12 +116,19 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
         } else if (
             !isTabManuallySelected &&
             tab === 'output' &&
+            designEvents &&
+            designEvents.length > 0
+        ) {
+            setTab('design');
+        } else if (
+            !isTabManuallySelected &&
+            tab === 'output' &&
             consoleEvents &&
             consoleEvents.length > 0
         ) {
             setTab('console');
         }
-    }, [tab, screenshots, consoleEvents, isTabManuallySelected]);
+    }, [tab, screenshots, consoleEvents, designEvents, isTabManuallySelected]);
 
     // Update selected item whenever selection changes
     useEffect(() => {
@@ -252,6 +269,48 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                             </a>
                         </li>
                     )}
+                    {designEvents && designEvents.length > 0 && (
+                        <li
+                            className="nav-item"
+                            onClick={() => {
+                                setTab('design');
+                                setIsTabManuallySelected(true);
+                            }}
+                        >
+                            <a
+                                className={
+                                    'nav-link border-0 m-0' +
+                                    (tab === 'design' ? ' active' : '')
+                                }
+                                style={{
+                                    backgroundColor: `rgba(${tab === 'design' ? rbg : '255 255 255'} / 0.08)`,
+                                }}
+                            >
+                                Designs
+                            </a>
+                        </li>
+                    )}
+                    {designEvents && designEvents.length > 0 && (
+                        <li
+                            className="nav-item"
+                            onClick={() => {
+                                setTab('design');
+                                setIsTabManuallySelected(true);
+                            }}
+                        >
+                            <a
+                                className={
+                                    'nav-link border-0 m-0' +
+                                    (tab === 'design' ? ' active' : '')
+                                }
+                                style={{
+                                    backgroundColor: `rgba(${tab === 'design' ? rbg : '255 255 255'} / 0.1)`,
+                                }}
+                            >
+                                Designs
+                            </a>
+                        </li>
+                    )}
                     {consoleEvents && consoleEvents.length > 0 && (
                         <li
                             className="nav-item"
@@ -351,6 +410,12 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                         {tab === 'browser' && screenshots && (
                             <BrowserDisplay
                                 screenshots={screenshots}
+                                collapsible={false}
+                            />
+                        )}
+                        {tab === 'design' && designEvents && (
+                            <DesignDisplay
+                                designEvents={designEvents}
                                 collapsible={false}
                             />
                         )}
@@ -558,6 +623,12 @@ const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
                         {tab === 'browser' && screenshots && (
                             <BrowserDisplay
                                 screenshots={screenshots}
+                                collapsible={false}
+                            />
+                        )}
+                        {tab === 'design' && designEvents && (
+                            <DesignDisplay
+                                designEvents={designEvents}
                                 collapsible={false}
                             />
                         )}

@@ -4,6 +4,7 @@ import { ToolFunction, ResponseInput } from '../types/shared-types.js';
 import path from 'path';
 import { write_file } from './file_utils.js';
 import { smart_design_raw } from './design_search.js';
+import { getCommunicationManager } from './communication.js';
 import { judgeImageSet } from './design/grid_judge.js';
 import {
     DESIGN_ASSET_TYPES,
@@ -265,6 +266,14 @@ async function generate_image_raw(
 
             write_file(targetPath, imageBuffer.buffer);
             filePaths.push(targetPath);
+
+            const comm = getCommunicationManager();
+            comm.send({
+                type: 'design',
+                data: imageDataUrl,
+                timestamp: new Date().toISOString(),
+                prompt,
+            });
         }
 
         // Return a single path or array of paths based on number_of_images

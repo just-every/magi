@@ -820,6 +820,7 @@ export class CommunicationManager {
                     ![
                         'screenshot',
                         'console',
+                        'design',
                         'message_delta',
                         'message_complete',
                         'system_status',

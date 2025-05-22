@@ -31,10 +31,14 @@ export interface TimelinePoint {
         y: number;
         button?: 'none' | 'left' | 'middle' | 'right';
     };
+    prompt?: string;
+    selected?: number[];
+    cols?: number;
+    rows?: number;
 }
 
 interface TimelinePlayerProps {
-    mode: 'browser' | 'console'; // new points may be pushed in over time
+    mode: 'browser' | 'console' | 'design'; // new points may be pushed in over time
     points: TimelinePoint[]; // new points may be pushed in over time
     collapsible?: boolean; // whether the player can be collapsed
     model?: string; // optional model name for console mode
@@ -676,22 +680,51 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
                 style={{ overflowY: 'auto' }}
             >
                 {currentPoint && currentPoint.screenshot ? (
-                    <img
-                        key={
-                            currentPoint.time + (currentPoint.screenshot || '')
-                        }
-                        src={currentPoint.screenshot}
-                        className="img-fluid w-100 d-block"
-                        alt={`Screenshot at ${formatTime(currentPoint.time)} for ${currentPoint.url || 'current view'}`}
-                        onError={e => {
-                            console.error(
-                                'Failed to load screenshot:',
-                                currentPoint.screenshot
-                            );
-                            (e.target as HTMLImageElement).src =
-                                `https://placehold.co/600x400/CCCCCC/4F4F4F?text=Error+Loading+Image`;
-                        }}
-                    />
+                    <>
+                        <img
+                            key={
+                                currentPoint.time +
+                                (currentPoint.screenshot || '')
+                            }
+                            src={currentPoint.screenshot}
+                            className="img-fluid w-100 d-block"
+                            alt={`Screenshot at ${formatTime(currentPoint.time)} for ${currentPoint.url || 'current view'}`}
+                            onError={e => {
+                                console.error(
+                                    'Failed to load screenshot:',
+                                    currentPoint.screenshot
+                                );
+                                (e.target as HTMLImageElement).src =
+                                    `https://placehold.co/600x400/CCCCCC/4F4F4F?text=Error+Loading+Image`;
+                            }}
+                        />
+                        {mode === 'design' &&
+                            currentPoint.selected &&
+                            currentPoint.cols &&
+                            currentPoint.rows && (
+                                <>
+                                    {currentPoint.selected.map(i => {
+                                        const row = Math.floor(
+                                            (i - 1) / currentPoint.cols!
+                                        );
+                                        const col =
+                                            (i - 1) % currentPoint.cols!;
+                                        const style: React.CSSProperties = {
+                                            position: 'absolute',
+                                            border: '3px solid red',
+                                            left: `${(col / currentPoint.cols!) * 100}%`,
+                                            top: `${(row / currentPoint.rows!) * 100}%`,
+                                            width: `${100 / currentPoint.cols!}%`,
+                                            height: `${100 / currentPoint.rows!}%`,
+                                            boxSizing: 'border-box',
+                                        };
+                                        return (
+                                            <div key={i} style={style}></div>
+                                        );
+                                    })}
+                                </>
+                            )}
+                    </>
                 ) : (
                     <div
                         className="py-3 text-center text-muted small"
@@ -726,7 +759,7 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
     // --- JSX ---
     return (
         <div
-            className={`timeline-player shadow-sm ${mode === 'browser' ? 'timeline-player-browser' : 'timeline-player-console'} ${className || ''}`}
+            className={`timeline-player shadow-sm ${mode === 'console' ? 'timeline-player-console' : 'timeline-player-browser'} ${className || ''}`}
             style={style}
         >
             <div
@@ -734,12 +767,18 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
                 onClick={toggleCollapse}
                 style={{ cursor: 'pointer' }}
             >
-                {mode === 'browser' && (
+                {(mode === 'browser' || mode === 'design') && (
                     <div
                         className="url-text mx-auto text-truncate small font-monospace text-start flex-grow-1"
-                        title={currentPoint?.url ?? ''}
+                        title={
+                            mode === 'browser'
+                                ? (currentPoint?.url ?? '')
+                                : (currentPoint?.prompt ?? '')
+                        }
                     >
-                        {currentPoint?.url || '…'}
+                        {mode === 'browser'
+                            ? currentPoint?.url || '…'
+                            : currentPoint?.prompt || 'Design'}
                     </div>
                 )}
                 {mode === 'console' && (
@@ -780,7 +819,7 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
 
             {!collapsed && (
                 <>
-                    {mode === 'browser' ? renderScreenshot() : renderConsole()}
+                    {mode === 'console' ? renderConsole() : renderScreenshot()}
                     <div className="control-bar d-flex align-items-center p-2 bg-light border rounded-bottom">
                         {sortedPoints.length > 0 ? (
                             <div className="d-flex flex-column w-100">
