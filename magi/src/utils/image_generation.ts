@@ -365,7 +365,8 @@ async function get_design_spec(
     type: DESIGN_ASSET_TYPES,
     userPrompt: string,
     reference: DesignAssetReferenceItem,
-    guide: DesignAssetGuideItem
+    guide: DesignAssetGuideItem,
+    brand_assets: string[] = []
 ): Promise<DesignSpec> {
     console.log(
         `[design_image] Getting design specification for: "${userPrompt}"`
@@ -404,7 +405,14 @@ JUDGING CRITERIA:
         {
             type: 'message',
             role: 'user',
-            content: 'DESIGN REQUEST: ' + userPrompt,
+            content:
+                'DESIGN REQUEST: ' +
+                userPrompt +
+                (brand_assets.length
+                    ? `\n\nExisting brand assets provided for style reference:\n${brand_assets
+                          .map(b => path.basename(b))
+                          .join(', ')}`
+                    : ''),
         },
     ];
 
@@ -669,14 +677,21 @@ async function iterativeSelect(
 export async function design_image(
     type: DESIGN_ASSET_TYPES,
     prompt: string,
-    with_inspiration: boolean = true
+    with_inspiration: boolean = true,
+    brand_assets: string[] = []
 ): Promise<string> {
     const sessionId = uuidv4().substring(0, 8);
     const reference = DESIGN_ASSET_REFERENCE[type];
     const guide = DESIGN_ASSET_GUIDE[type];
 
     // Step 0: Ask the LLM for design specification
-    const spec = await get_design_spec(type, prompt, reference, guide);
+    const spec = await get_design_spec(
+        type,
+        prompt,
+        reference,
+        guide,
+        brand_assets
+    );
     console.log(
         `[design_image] Design spec for "${prompt}":`,
         JSON.stringify(spec, null, 2)
@@ -1005,6 +1020,12 @@ export function getDesignImageTools() {
                         'The design process will look at reference images from the web to help inspire the design. This will take longer, but the results are usually significantly better.',
                     type: 'boolean',
                     default: 'true',
+                },
+                brand_assets: {
+                    description:
+                        'Optional array of existing brand asset file paths to maintain style consistency',
+                    type: 'array',
+                    optional: true,
                 },
             }
         ),

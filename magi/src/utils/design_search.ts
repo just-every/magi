@@ -38,7 +38,7 @@ const USER_AGENT =
     'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; magi-user/1.0; +https://withmagi.com)';
 
 // Base directory for storing screenshots
-const DESIGN_ASSETS_DIR = '/magi_output/shared/design_assets';
+export const DESIGN_ASSETS_DIR = '/magi_output/shared/design_assets';
 const SLEEP = (ms = 1000) => new Promise(res => setTimeout(res, ms));
 
 /**

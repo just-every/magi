@@ -20,6 +20,7 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const XAI_API_KEY = process.env.XAI_API_KEY;
 
 /**
  * Search using the Brave Search API
@@ -178,6 +179,20 @@ export async function web_search(
                 },
                 inject_agent_id
             );
+        case 'xai':
+            if (!XAI_API_KEY) return 'Error: X.AI API key not configured.';
+            return await quick_llm_call(
+                query,
+                null,
+                {
+                    model: 'grok-3-latest',
+                    name: 'GrokSearch',
+                    description: 'Search the web',
+                    instructions: 'Please search the web for this query.',
+                    tools: [signalToolFunction('grok_web_search')],
+                },
+                inject_agent_id
+            );
     }
     return `Error: Invalid or unsupported search engine ${engine}`;
 }
@@ -212,6 +227,10 @@ export function getSearchTools(): ToolFunction[] {
         engineDescriptions.push(
             '- google: freshest breaking-news facts via Gemini grounding'
         );
+    }
+    if (XAI_API_KEY) {
+        availableEngines.push('xai');
+        engineDescriptions.push('- xai: real-time web search via Grok');
     }
     if (OPENROUTER_API_KEY) {
         availableEngines.push('sonar');

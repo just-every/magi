@@ -15,6 +15,16 @@ import { createCodeAgent } from '../common_agents/code_agent.js';
 import { createBrowserAgent } from '../common_agents/browser_agent.js';
 import { createShellAgent } from '../common_agents/shell_agent.js';
 import { createReasoningAgent } from '../common_agents/reasoning_agent.js';
+import {
+    addBrowserStatus,
+    setupAgentBrowserTools,
+} from '../../utils/browser_utils.js';
+import { addDesignAssetsStatus } from '../../utils/design_assets.js';
+import {
+    getProcessProjectIds,
+    getProcessProjectPorts,
+} from '../../utils/project_utils.js';
+import { ResponseInput } from '../../types/shared-types.js';
 
 /**
  * Create the test agent for specialized validation and QA
@@ -87,7 +97,27 @@ Your goal is to validate that the website implementation meets requirements, per
             createReasoningAgent,
         ],
         modelClass: 'reasoning_mini',
+        onRequest: async (
+            a: Agent,
+            m: ResponseInput
+        ): Promise<[Agent, ResponseInput]> => {
+            [a, m] = await addBrowserStatus(a, m);
+            return addDesignAssetsStatus(a, m);
+        },
     });
+
+    const ports = getProcessProjectPorts();
+    const ids = getProcessProjectIds();
+    let startUrl: string | undefined;
+    for (const id of ids) {
+        if (ports[id]) {
+            startUrl = `http://localhost:${ports[id]}`;
+            break;
+        }
+    }
+    void setupAgentBrowserTools(agent, startUrl).catch(err =>
+        console.error('Failed to setup browser for WebTestAgent', err)
+    );
 
     return agent;
 }

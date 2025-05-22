@@ -3,7 +3,10 @@
  */
 import { ProcessToolType } from '../types/shared-types.js';
 import { get_output_dir } from '../utils/file_utils.js';
-import { getProcessProjectIds } from '../utils/project_utils.js';
+import {
+    getProcessProjectIds,
+    getProcessProjectPorts,
+} from '../utils/project_utils.js';
 
 export const TASK_TYPE_DESCRIPTIONS: Record<ProcessToolType, string> = {
     research: 'Perform deep research on a specific topic',
@@ -50,11 +53,17 @@ export const COMMON_WARNINGS = `IMPORTANT WARNINGS:
  */
 export function getProjectsContext(): string {
     const projectIds = getProcessProjectIds();
+    const projectPorts = getProcessProjectPorts();
     const projectDir = projectIds.length > 0 ? `projects/${projectIds[0]}` : '';
     const startingDir = get_output_dir(projectDir);
+    const portText = Object.keys(projectPorts).length
+        ? `\nProject services currently active:${Object.entries(projectPorts)
+              .map(([id, port]) => `\n- ${id}: http://localhost:${port}`)
+              .join('')}`
+        : '';
 
     return projectIds.length === 0
-        ? 'You can read/write to /magi_output which is a virtual volume shared with all MAGI agents.'
+        ? `You can read/write to /magi_output which is a virtual volume shared with all MAGI agents.${portText}`
         : `You can read/write to /magi_output which is a virtual volume shared with all MAGI agents. You have access to projects which are git repositories with files you are working on. You will receive a read/write clone of the project git repo at /magi_output/${process.env.PROCESS_ID}/projects/{project} and your default branch is "magi/${process.env.PROCESS_ID}"
 
 When sharing files with other agents or ${YOUR_NAME} please use this directory:
@@ -65,7 +74,8 @@ YOUR PROJECTS:
 - ${projectIds.join('\n- ')}
 
 Your starting directory is: ${startingDir}
-Your taskID is: ${process.env.PROCESS_ID}`;
+Your taskID is: ${process.env.PROCESS_ID}${portText}
+Design assets are saved in /magi_output/shared/design_assets and combined into all_design_assets.png for quick reference.`;
 }
 
 /**
@@ -79,6 +89,7 @@ export function getDockerEnvText(): string {
 - You can run programs and modify you environment without fear of permanent damage
 - You have full network access for web searches and browsing
 - Both you and whoever receives your response has read/write access to all files in /magi_output
+- When a task references a project, its Dockerfile may be started automatically and any exposed ports will be listed below.
 
 ${projectsContext}
 `;
@@ -128,7 +139,7 @@ export const FILE_TOOLS_TEXT = `FILE TOOLS:
  * Returns the task context string.
  */
 export function getTaskContext(): string {
-    return `You operate in a shared browsing session with a human overseeing your operation. This allows you to interact with websites together. You can access accounts this person is already logged into and perform actions for them.
+    return `You operate in a shared browsing session with a human overseeing your operation. This allows you to interact with websites together. You can access accounts this person is already logged into and perform actions for them. At the start of each turn you receive an updated browser status message with a screenshot and cursor position to help orient you.
 
 The agents in your system are;
 - ${AGENT_DESCRIPTIONS['SearchAgent']}

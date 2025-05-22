@@ -17,6 +17,16 @@ import {
 } from '../../utils/design_search.js';
 import { MAGI_CONTEXT } from '../constants.js';
 import { createReasoningAgent } from '../common_agents/reasoning_agent.js';
+import {
+    addBrowserStatus,
+    setupAgentBrowserTools,
+} from '../../utils/browser_utils.js';
+import { addDesignAssetsStatus } from '../../utils/design_assets.js';
+import {
+    getProcessProjectIds,
+    getProcessProjectPorts,
+} from '../../utils/project_utils.js';
+import { ResponseInput } from '../../types/shared-types.js';
 
 /**
  * Create the design agent for specialized UI design tasks
@@ -90,7 +100,27 @@ The frontend engineer will use your designs as reference for implementation, so 
         ],
         workers: [createReasoningAgent],
         modelClass: 'vision',
+        onRequest: async (
+            a: Agent,
+            m: ResponseInput
+        ): Promise<[Agent, ResponseInput]> => {
+            [a, m] = await addBrowserStatus(a, m);
+            return addDesignAssetsStatus(a, m);
+        },
     });
+
+    const ports = getProcessProjectPorts();
+    const ids = getProcessProjectIds();
+    let startUrl: string | undefined;
+    for (const id of ids) {
+        if (ports[id]) {
+            startUrl = `http://localhost:${ports[id]}`;
+            break;
+        }
+    }
+    void setupAgentBrowserTools(agent, startUrl).catch(err =>
+        console.error('Failed to setup browser for WebDesignAgent', err)
+    );
 
     return agent;
 }

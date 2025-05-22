@@ -11,6 +11,8 @@ import {
 } from './image_generation.js';
 import { getDesignSearchTools, getSmartDesignTools } from './design_search.js';
 import { getBrowserTools } from './browser_utils.js';
+export * from './site_design.js';
+export * from './design/vibe_doc.js';
 
 /**
  * Get all common tools as an array of tool definitions
