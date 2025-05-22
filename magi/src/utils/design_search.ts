@@ -2023,6 +2023,8 @@ export async function selectBestFromGrid(
     type?: DESIGN_ASSET_TYPES,
     judge_guide?: string
 ): Promise<number[]> {
+    const cols = 3;
+    const rows = Math.ceil(count / cols);
     // Determine appropriate message based on whether this is for design search or image generation
     let content: string;
     if (type) {
@@ -2119,6 +2121,8 @@ export async function selectBestFromGrid(
             timestamp: new Date().toISOString(),
             prompt,
             selected_indices: selectedImages,
+            cols,
+            rows,
         });
 
         return selectedImages;
