@@ -698,6 +698,20 @@ export class CommunicationManager {
                     })
                 );
             }
+        } else if (event.type === 'process_failed') {
+            this.processManager.updateProcessWithError(
+                processId,
+                event.error ?? ''
+            );
+            await this.processManager.runCompletionHandlers(processId);
+            this.sendMessage(
+                this.processManager.coreProcessId,
+                JSON.stringify({
+                    type: 'process_event',
+                    processId,
+                    event,
+                })
+            );
         } else if (
             event.type === 'process_running' ||
             event.type === 'process_updated' ||

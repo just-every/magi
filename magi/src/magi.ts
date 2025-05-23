@@ -355,15 +355,27 @@ async function main(): Promise<void> {
                 args.model
             );
 
-            // We don't need to do anything special with the result here,
-            // as the completion/error signal is already sent to the communication manager
-            // inside the task_complete / task_fatal_error tools
-
             // Log task completion with metrics
             console.log(`Task ${mechResult.status}: ${mechResult.mechOutcome}`);
             console.log(
                 `Duration: ${mechResult.durationSec}s, Cost: $${mechResult.totalCost.toFixed(6)}`
             );
+
+            if (mechResult.status === 'fatal_error') {
+                sendComms({
+                    type: 'agent_status',
+                    agent_id: agent.agent_id,
+                    status: 'process_failed',
+                });
+                return endProcess(1, mechResult.mechOutcome?.error);
+            } else {
+                sendComms({
+                    type: 'agent_status',
+                    agent_id: agent.agent_id,
+                    status: 'process_done',
+                });
+                return endProcess(0);
+            }
         } else {
             // Add initial history
             await addMonologue(
