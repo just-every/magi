@@ -53,6 +53,12 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
     const agentName = process?.agent.name;
     const isTyping = process?.agent.isTyping || false;
 
+    const showLatestOnly = !(
+        agentName?.toLowerCase().includes('browser') ||
+        agentName?.toLowerCase().includes('code') ||
+        agentName?.toLowerCase().includes('design')
+    );
+
     // Effect to handle mount animation
     useEffect(() => {
         setMounted(true);
@@ -129,6 +135,7 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
                         messages={messages}
                         isTyping={isTyping}
                         colors={colors}
+                        latestOnly={showLatestOnly}
                     />
                 </AutoScrollContainer>
             </div>

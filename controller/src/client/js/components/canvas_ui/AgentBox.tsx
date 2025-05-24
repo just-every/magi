@@ -57,6 +57,12 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
     const clickCount = useRef<number>(0);
     const [mounted, setMounted] = useState(false);
 
+    const showLatestOnly = !(
+        agentName?.toLowerCase().includes('browser') ||
+        agentName?.toLowerCase().includes('code') ||
+        agentName?.toLowerCase().includes('design')
+    );
+
     // Effect to handle mount animation
     useEffect(() => {
         setMounted(true);
@@ -153,6 +159,7 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
                         messages={messages}
                         isTyping={isTyping}
                         colors={colors}
+                        latestOnly={showLatestOnly}
                     />
                 </AutoScrollContainer>
             </div>
