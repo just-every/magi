@@ -4,8 +4,10 @@ import { useSocket } from '../../context/SocketContext';
 import ChatColumn from './ChatColumn';
 import ProcessTreeColumn from './ProcessTreeColumn';
 import OutputColumn from './OutputColumn';
-import PullRequestFailures from '../PullRequestFailures';
-import CustomToolsViewer from '../CustomToolsViewer';
+import PullRequestFailures, {
+    PullRequestFailure,
+} from '../PullRequestFailures';
+import CustomToolsViewer, { CustomTool } from '../CustomToolsViewer';
 
 interface ColumnLayoutProps {}
 
@@ -16,6 +18,9 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
     const [middleTab, setMiddleTab] = useState<
         'tasks' | 'code' | 'tools' | 'complete'
     >('tasks');
+    const [selectedTool, setSelectedTool] = useState<CustomTool | null>(null);
+    const [selectedFailure, setSelectedFailure] =
+        useState<PullRequestFailure | null>(null);
 
     useEffect(() => {
         // Focus input when visible
@@ -23,6 +28,15 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
             setSelectedItemId(coreProcessId);
         }
     }, [coreProcessId]);
+
+    useEffect(() => {
+        if (middleTab !== 'tools') {
+            setSelectedTool(null);
+        }
+        if (middleTab !== 'code') {
+            setSelectedFailure(null);
+        }
+    }, [middleTab]);
 
     return (
         <div
@@ -110,9 +124,21 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                                 ]}
                             />
                         ) : middleTab === 'code' ? (
-                            <PullRequestFailures />
+                            <PullRequestFailures
+                                compact
+                                onSelectFailure={failure => {
+                                    setSelectedFailure(failure);
+                                    setSelectedItemId(null);
+                                }}
+                            />
                         ) : middleTab === 'tools' ? (
-                            <CustomToolsViewer />
+                            <CustomToolsViewer
+                                activeTool={selectedTool}
+                                onSelectTool={tool => {
+                                    setSelectedTool(tool);
+                                    setSelectedItemId(null);
+                                }}
+                            />
                         ) : (
                             <ProcessTreeColumn
                                 selectedItemId={selectedItemId}
@@ -131,7 +157,11 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                         paddingBottom: '0',
                     }}
                 >
-                    <OutputColumn selectedItemId={selectedItemId} />
+                    <OutputColumn
+                        selectedItemId={selectedItemId}
+                        selectedTool={selectedTool}
+                        selectedFailure={selectedFailure}
+                    />
                 </div>
             </div>
         </div>

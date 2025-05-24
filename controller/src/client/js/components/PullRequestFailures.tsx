@@ -3,7 +3,7 @@ import type { Metrics } from '../../../types';
 import { useSocket } from '../context/SocketContext';
 
 // Types for PR Failures
-interface PullRequestFailure {
+export interface PullRequestFailure {
     id: number;
     process_id: string;
     project_id: string;
@@ -92,11 +92,11 @@ const PullRequestFailures: React.FC<PullRequestFailuresProps> = ({
 
             if (data.success) {
                 const failure = data.data;
-                setSelectedFailure(failure);
-
-                // If in compact mode and a callback is provided, call it
-                if (compact && onSelectFailure) {
+                if (onSelectFailure) {
                     onSelectFailure(failure);
+                    setSelectedFailure(null);
+                } else if (!compact) {
+                    setSelectedFailure(failure);
                 }
             } else {
                 setError(`Failed to fetch details for PR failure #${id}`);
