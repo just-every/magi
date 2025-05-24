@@ -8,7 +8,7 @@
 import {
     createNumberedGrid,
     selectBestFromGrid,
-    ImageSource
+    ImageSource,
 } from '../design_search.js';
 import { DESIGN_ASSET_TYPES } from './constants.js';
 
@@ -66,11 +66,14 @@ export async function judgeImageSet<T>(opts: JudgeOptions<T>): Promise<T[]> {
         toImageSource,
         gridName = 'grid',
         isDesignSearch = true,
-        type, judgeGuide
+        type,
+        judgeGuide,
     } = opts;
 
     // Filter out items that have already been processed
-    const unprocessedItems = items.filter(item => !processedIds.has(getId(item)));
+    const unprocessedItems = items.filter(
+        item => !processedIds.has(getId(item))
+    );
 
     if (unprocessedItems.length === 0) return [];
 
@@ -89,7 +92,9 @@ export async function judgeImageSet<T>(opts: JudgeOptions<T>): Promise<T[]> {
     }
 
     const groupName = gridName || 'grid';
-    console.log(`[${groupName}] Processing ${groups.length} groups for judging`);
+    console.log(
+        `[${groupName}] Processing ${groups.length} groups for judging`
+    );
 
     // Process all groups and collect results
     const winners: T[] = [];

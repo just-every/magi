@@ -14,6 +14,9 @@ import { PRIMARY_RGB } from '../../utils/constants';
 import BrowserDisplay from '../ui/BrowserDisplay';
 import ConsoleDisplay from '../ui/ConsoleDisplay';
 import DesignDisplay from '../ui/DesignDisplay';
+import type { CustomTool } from '../CustomToolsViewer';
+import PullRequestFailureDetails from '../PullRequestFailureDetails';
+import type { PullRequestFailure } from '../PullRequestFailures';
 import {
     ScreenshotEvent,
     ConsoleEvent,
@@ -22,10 +25,34 @@ import {
 
 interface OutputColumnProps {
     selectedItemId: string | null;
+    selectedTool?: CustomTool | null;
+    selectedFailure?: PullRequestFailure | null;
 }
 
-const OutputColumn: React.FC<OutputColumnProps> = ({ selectedItemId }) => {
+const OutputColumn: React.FC<OutputColumnProps> = ({
+    selectedItemId,
+    selectedTool,
+    selectedFailure,
+}) => {
     const { coreProcessId, processes, terminateProcess } = useSocket();
+    if (selectedTool) {
+        return (
+            <div className="output-column h-100 overflow-auto p-3">
+                <h4>{selectedTool.name}</h4>
+                <pre style={{ whiteSpace: 'pre-wrap' }}>
+                    {selectedTool.implementation || 'No implementation found.'}
+                </pre>
+            </div>
+        );
+    }
+
+    if (selectedFailure) {
+        return (
+            <div className="output-column h-100 overflow-auto p-3">
+                <PullRequestFailureDetails failure={selectedFailure} />
+            </div>
+        );
+    }
     const [selectedItem, setSelectedItem] = useState<{
         id: string;
         type: 'process' | 'agent';

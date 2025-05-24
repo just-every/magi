@@ -1008,8 +1008,12 @@ function ensureBindVolume(volumeName: string, hostDir: string) {
     // Check if the named volume exists and is a bind mount to hostDir
     let needsCreate = false;
     try {
-        const inspect = execSync(`docker volume inspect ${volumeName}`, { stdio: ['pipe', 'pipe', 'ignore'] }).toString();
-        const isBind = inspect.includes(`"Mountpoint": "${hostDir}"`) || inspect.includes(`"device": "${hostDir}"`);
+        const inspect = execSync(`docker volume inspect ${volumeName}`, {
+            stdio: ['pipe', 'pipe', 'ignore'],
+        }).toString();
+        const isBind =
+            inspect.includes(`"Mountpoint": "${hostDir}"`) ||
+            inspect.includes(`"device": "${hostDir}"`);
         if (!isBind) {
             needsCreate = true;
         }
@@ -1018,7 +1022,11 @@ function ensureBindVolume(volumeName: string, hostDir: string) {
     }
     if (needsCreate) {
         // Remove any existing volume with the same name (if not a bind)
-        try { execSync(`docker volume rm ${volumeName}`, { stdio: 'ignore' }); } catch { /* ignore error if volume does not exist */ }
+        try {
+            execSync(`docker volume rm ${volumeName}`, { stdio: 'ignore' });
+        } catch {
+            /* ignore error if volume does not exist */
+        }
         execSync(
             `docker volume create --driver local --opt type=none --opt o=bind --opt device="${hostDir}" ${volumeName}`,
             { stdio: 'inherit' }

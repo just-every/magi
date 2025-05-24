@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-interface CustomTool {
+export interface CustomTool {
     name: string;
     description: string;
     parameters_json: string;
@@ -11,7 +11,15 @@ interface CustomTool {
     implementation?: string | null;
 }
 
-const CustomToolsViewer: React.FC = () => {
+interface CustomToolsViewerProps {
+    activeTool?: CustomTool | null;
+    onSelectTool?: (tool: CustomTool) => void;
+}
+
+const CustomToolsViewer: React.FC<CustomToolsViewerProps> = ({
+    activeTool,
+    onSelectTool,
+}) => {
     const [tools, setTools] = useState<CustomTool[]>([]);
     const [selectedTool, setSelectedTool] = useState<CustomTool | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
@@ -51,8 +59,21 @@ const CustomToolsViewer: React.FC = () => {
                         {tools.map(tool => (
                             <li
                                 key={tool.name}
-                                className="list-group-item list-group-item-action p-2"
-                                onClick={() => setSelectedTool(tool)}
+                                className={`list-group-item list-group-item-action p-2${
+                                    (activeTool &&
+                                        activeTool.name === tool.name) ||
+                                    (!onSelectTool &&
+                                        selectedTool?.name === tool.name)
+                                        ? ' active'
+                                        : ''
+                                }`}
+                                onClick={() => {
+                                    if (onSelectTool) {
+                                        onSelectTool(tool);
+                                    } else {
+                                        setSelectedTool(tool);
+                                    }
+                                }}
                                 style={{ cursor: 'pointer' }}
                             >
                                 <div className="fw-bold">{tool.name}</div>
@@ -62,7 +83,7 @@ const CustomToolsViewer: React.FC = () => {
                             </li>
                         ))}
                     </ul>
-                    {selectedTool && (
+                    {selectedTool && !onSelectTool && (
                         <div className="ms-3 flex-grow-1 overflow-auto">
                             <h4>{selectedTool.name}</h4>
                             <pre style={{ whiteSpace: 'pre-wrap' }}>

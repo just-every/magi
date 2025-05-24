@@ -181,7 +181,8 @@ export async function wait(
     inject_agent_id: string,
     seconds?: number
 ): Promise<string> {
-    const waitSeconds = typeof seconds === 'number' && seconds > 0 ? seconds : 3;
+    const waitSeconds =
+        typeof seconds === 'number' && seconds > 0 ? seconds : 3;
     console.log(`[browser_utils] Waiting for ${waitSeconds} seconds...`);
     await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000));
     return `Waited for ${waitSeconds} second${waitSeconds === 1 ? '' : 's'}.`;
@@ -509,7 +510,8 @@ export function getBrowserTools(): ToolFunction[] {
             {
                 seconds: {
                     type: 'number',
-                    description: 'Number of seconds to wait. If not sure, wait 3 seconds is usually enough as additional time will have passed since the last action. You can always call wait again if needed.',
+                    description:
+                        'Number of seconds to wait. If not sure, wait 3 seconds is usually enough as additional time will have passed since the last action. You can always call wait again if needed.',
                     optional: true,
                 },
             }
