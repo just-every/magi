@@ -169,24 +169,11 @@ async function prepareGitRepository(
             fs.rmSync(outputPath, { recursive: true, force: true });
         }
 
-        // Calculate the paths for the working copy and the mirror
-        const baseDir = path.join('/magi_output', processId, 'projects');
-        const mirrorPath = path.join(baseDir, `${projectId}.mirror.git`);
-
-        // Remove the mirror directory if it exists
-        if (fs.existsSync(mirrorPath)) {
-            fs.rmSync(mirrorPath, { recursive: true, force: true });
-        }
-
-        // 1. Create a bare mirror of the host repo (next to the working directory)
-        console.log('Cloning host repo as bare mirror', hostPath, mirrorPath);
-        await execPromise(`git clone --mirror "${hostPath}" "${mirrorPath}"`);
-
-        // 2. Create the working copy with the mirror as its origin
-        console.log('Cloning working copy from mirror', mirrorPath, outputPath);
-        await execPromise(`git clone "${mirrorPath}" "${outputPath}"`);
+        // Clone the repository directly with a shallow clone for speed
+        console.log('Cloning host repo', hostPath, outputPath);
+        await execPromise(`git clone --depth 1 "${hostPath}" "${outputPath}"`);
         await execPromise(
-            `git -C "${outputPath}" remote set-url origin "${mirrorPath}"`
+            `git -C "${outputPath}" remote set-url origin "${hostPath}"`
         );
 
         // Host path will be deterministically derived from projectId
