@@ -3,6 +3,7 @@
 .magi_output
 .server
 .chrome
+.claude
 
 # Python bytecode
 __pycache__/
