@@ -850,7 +850,12 @@ SAMPLE INPUT:
 ${input}
 
 DESIRED RESULT:
-${result}`;
+${result}
+
+WARNING:
+**Never, ever, ever include mock code or placeholders!**
+Mock code and placeholders are not acceptable. They can cause confusion and lead to tests passing when they should fail. It's important we know when the tool is failing, so if you are not able to handle certain cases, please explain the underlying issue and return an error message instead of mock code.
+Always attempt to solve the problem fully, even if it requires multiple iterations.`;
 
         console.log(`\n\n***Code prompt for CodeAgent:\n${codePrompt}`);
         console.log(`\n\n***Code message for CodeAgent:\n${codeMessage}`);

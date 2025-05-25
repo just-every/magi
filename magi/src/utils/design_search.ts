@@ -15,6 +15,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getAgentBrowserSession } from './browser_session.js';
+import { getCommunicationManager } from './communication.js';
 import { web_search } from './search_utils.js';
 import { createToolFunction } from './tool_call.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -1996,7 +1997,18 @@ export async function createNumberedGrid(
     fs.writeFileSync(filePath, out);
     console.log(`[${gridName}] Saved grid image to:`, filePath);
 
-    return `data:image/png;base64,${out.toString('base64')}`;
+    const dataUrl = `data:image/png;base64,${out.toString('base64')}`;
+    const comm = getCommunicationManager();
+    comm.send({
+        type: 'design',
+        data: dataUrl,
+        timestamp: new Date().toISOString(),
+        prompt: gridName,
+        cols,
+        rows,
+    });
+
+    return dataUrl;
 }
 
 /**
@@ -2011,6 +2023,8 @@ export async function selectBestFromGrid(
     type?: DESIGN_ASSET_TYPES,
     judge_guide?: string
 ): Promise<number[]> {
+    const cols = 3;
+    const rows = Math.ceil(count / cols);
     // Determine appropriate message based on whether this is for design search or image generation
     let content: string;
     if (type) {
@@ -2099,6 +2113,18 @@ export async function selectBestFromGrid(
             (img: any) => img.number
         );
         console.log(`[selectBestFromGrid] Selected images: ${selectedImages}`);
+
+        const comm = getCommunicationManager();
+        comm.send({
+            type: 'design',
+            data: gridDataUrl,
+            timestamp: new Date().toISOString(),
+            prompt,
+            selected_indices: selectedImages,
+            cols,
+            rows,
+        });
+
         return selectedImages;
     } else {
         console.error('[selectBestFromGrid] No valid images selected');

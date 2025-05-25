@@ -36,7 +36,7 @@ export async function openUI(url: string): Promise<void> {
         console.log(`Found ${pageTargets.length} existing page targets.`);
 
         // 1. Try to find a tab matching host, port, and path; then host & port; then just host
-        let targetToActivate: typeof pageTargets[0] | undefined;
+        let targetToActivate: (typeof pageTargets)[0] | undefined;
 
         const requestedUrlObj = safeParse(url);
 

@@ -21,12 +21,24 @@ const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
 }) => {
     const { processes, coreProcessId } = useSocket();
 
-    const processList = Array.from(processes.values())
-        .filter(
-            p =>
-                !statusFilter ||
-                statusFilter.includes((p as ProcessData).status)
-        )
+    const showCompletedOnly =
+        statusFilter &&
+        statusFilter.length === 1 &&
+        statusFilter[0] === 'completed';
+
+    const processList = (Array.from(processes.values()) as ProcessData[])
+        .filter(p => {
+            if (!statusFilter) return true;
+            if (showCompletedOnly) {
+                if (p.status === 'completed') return true;
+                const workers = p.agent?.workers;
+                if (!workers) return false;
+                return Array.from(workers.values()).some(
+                    w => w.statusEvent?.status === 'completed'
+                );
+            }
+            return statusFilter.includes(p.status as ProcessStatus);
+        })
         .sort((a, b) => {
             const processA = a as ProcessData;
             const processB = b as ProcessData;
@@ -193,53 +205,70 @@ const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
                             {/* Process Workers */}
                             {hasWorkers && (
                                 <div className="process-children ms-4">
-                                    {Array.from(
-                                        process.agent.workers.entries()
-                                    ).map(([workerId, worker]) => {
-                                        const agentStatusInfo = getStatusIcon({
-                                            status: process.status,
-                                        } as { status: string });
-                                        const isTyping = worker.isTyping;
-                                        return (
-                                            <div
-                                                key={workerId}
-                                                className={`${processClass} agent-item ${selectedItemId === workerId ? 'selected' : ''}`}
-                                                style={{
-                                                    backgroundColor: `rgba(${process.id === coreProcessId ? PRIMARY_RGB : process.colors.rgb} / ${selectedItemId === workerId ? '0.06' : '0.04'})`,
-                                                    border: `1px solid rgba(${process.id === coreProcessId ? PRIMARY_RGB : process.colors.rgb} / ${selectedItemId === workerId ? '1' : '0.05'})`,
-                                                }}
-                                                onClick={() =>
-                                                    handleSelect(workerId)
-                                                }
-                                            >
-                                                <div className="d-flex align-items-center">
-                                                    <span className="process-name fw-bold">
-                                                        {worker.name ||
-                                                            workerId}
-                                                    </span>
-                                                    <i
-                                                        className={`bi ${agentStatusInfo.icon} ms-2`}
-                                                        style={{
-                                                            color: isTyping
-                                                                ? '#28a745'
-                                                                : agentStatusInfo.color,
-                                                            fontSize: '0.6rem',
-                                                            animation: isTyping
-                                                                ? 'pulsate 1.5s infinite'
-                                                                : 'none',
-                                                        }}
-                                                    ></i>
+                                    {Array.from(process.agent.workers.entries())
+                                        .filter(([, worker]) => {
+                                            const status = (worker.statusEvent
+                                                ?.status ||
+                                                process.status) as ProcessStatus;
+                                            if (showCompletedOnly) {
+                                                return status === 'completed';
+                                            }
+                                            return (
+                                                !statusFilter ||
+                                                statusFilter.includes(status)
+                                            );
+                                        })
+                                        .map(([workerId, worker]) => {
+                                            const agentStatusInfo =
+                                                getStatusIcon({
+                                                    status:
+                                                        worker.statusEvent
+                                                            ?.status ||
+                                                        process.status,
+                                                } as { status: string });
+                                            const isTyping = worker.isTyping;
+                                            return (
+                                                <div
+                                                    key={workerId}
+                                                    className={`${processClass} agent-item ${selectedItemId === workerId ? 'selected' : ''}`}
+                                                    style={{
+                                                        backgroundColor: `rgba(${process.id === coreProcessId ? PRIMARY_RGB : process.colors.rgb} / ${selectedItemId === workerId ? '0.06' : '0.04'})`,
+                                                        border: `1px solid rgba(${process.id === coreProcessId ? PRIMARY_RGB : process.colors.rgb} / ${selectedItemId === workerId ? '1' : '0.05'})`,
+                                                    }}
+                                                    onClick={() =>
+                                                        handleSelect(workerId)
+                                                    }
+                                                >
+                                                    <div className="d-flex align-items-center">
+                                                        <span className="process-name fw-bold">
+                                                            {worker.name ||
+                                                                workerId}
+                                                        </span>
+                                                        <i
+                                                            className={`bi ${agentStatusInfo.icon} ms-2`}
+                                                            style={{
+                                                                color: isTyping
+                                                                    ? '#28a745'
+                                                                    : agentStatusInfo.color,
+                                                                fontSize:
+                                                                    '0.6rem',
+                                                                animation:
+                                                                    isTyping
+                                                                        ? 'pulsate 1.5s infinite'
+                                                                        : 'none',
+                                                            }}
+                                                        ></i>
+                                                    </div>
+                                                    <div className="process-last-text text-muted small mt-1">
+                                                        {getAgentLastText(
+                                                            process,
+                                                            workerId,
+                                                            'Starting...'
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <div className="process-last-text text-muted small mt-1">
-                                                    {getAgentLastText(
-                                                        process,
-                                                        workerId,
-                                                        'Starting...'
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                                            );
+                                        })}
                                 </div>
                             )}
                         </React.Fragment>

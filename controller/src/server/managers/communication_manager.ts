@@ -698,6 +698,24 @@ export class CommunicationManager {
                     })
                 );
             }
+        } else if (event.type === 'process_failed') {
+            // Update process state and notify overseer
+            this.processManager.updateProcessWithError(
+                processId,
+                (event as any).error || 'Unknown error'
+            );
+
+            this.sendMessage(
+                this.processManager.coreProcessId,
+                JSON.stringify({
+                    type: 'process_event',
+                    processId,
+                    event,
+                })
+            );
+
+            // Ensure the container terminates after a failure
+            await this.processManager.stopProcess(processId);
         } else if (
             event.type === 'process_running' ||
             event.type === 'process_updated' ||
@@ -820,6 +838,7 @@ export class CommunicationManager {
                     ![
                         'screenshot',
                         'console',
+                        'design',
                         'message_delta',
                         'message_complete',
                         'system_status',

@@ -5,7 +5,9 @@ import { getDB } from '../utils/db.js';
 
 const router = Router();
 
-const TOOLS_DIR = path.resolve('.custom_tools');
+// Custom tools are stored in a Docker volume mounted at /custom_tools
+// Use an absolute path so the server can locate tools regardless of CWD
+const TOOLS_DIR = path.resolve('/custom_tools');
 
 function sanitizeToolName(name: string): string {
     return path.basename(name).replace(/[^a-zA-Z0-9_-]/g, '');

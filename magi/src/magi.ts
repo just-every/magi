@@ -394,6 +394,10 @@ async function main(): Promise<void> {
             status: 'process_done',
         });
 
+        if (args.tool && args.tool !== 'none') {
+            return endProcess(0, 'Task run completed.');
+        }
+
         if (args.test) {
             // For tests we terminate after the first run
             return endProcess(0, 'Test run completed.');
