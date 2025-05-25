@@ -8,7 +8,7 @@
 import {
     getModelFromClass,
     getModelProvider,
-} from '../../../ensemble/model_providers/model_provider.js';
+} from '@magi-system/ensemble';
 
 // Cache to avoid repeated embedding calls for the same text
 const embeddingCache = new Map<

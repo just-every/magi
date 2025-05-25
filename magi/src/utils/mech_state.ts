@@ -12,7 +12,7 @@ import { spawnMetaThought } from './meta_cognition.js';
 import {
     findModel,
     MODEL_CLASSES,
-} from '../../../ensemble/model_providers/model_data.js';
+} from '@magi-system/ensemble';
 import { Agent } from './agent.js';
 import { getThoughtTools } from './thought_utils.js';
 

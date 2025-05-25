@@ -458,7 +458,9 @@ export type StreamEventType =
     | 'task_waiting'
     | 'task_wait_complete'
     // Git-related events
-    | 'git_pull_request';
+    | 'git_pull_request'
+    // Stream termination event
+    | 'stream_end';
 
 /**
  * Base streaming event interface

@@ -4,9 +4,7 @@
  * This module tracks quota usage across different model providers and their free/paid tiers
  */
 
-import { ModelProviderID } from '../../../ensemble/model_providers/model_data.js';
-import { QuotaUpdateEvent } from '../types/shared-types.js';
-import { sendStreamEvent } from './communication.js';
+import { ModelProviderID } from '../index.js';
 
 // Interface for tracking model-specific quota information
 export interface ModelSpecificQuota {
@@ -65,11 +63,19 @@ interface OpenAIFreeQuota {
 }
 
 /**
- * QuotaManager class to track and manage API quotas across providers and models
+ * Optional callback for quota update events
  */
-export class QuotaManager {
+export type QuotaUpdateCallback = (quotaSummary: Record<string, any>) => void;
+
+/**
+ * QuotaTracker class to track and manage API quotas across providers and models
+ */
+export class QuotaTracker {
     // Main storage structure: provider -> model -> quota
     private quotas: Record<string, ProviderQuota> = {};
+    
+    // Optional callback for quota updates (used for UI integration)
+    private updateCallback?: QuotaUpdateCallback;
 
     // Provider-specific tracking
     private openAIFreeQuota: OpenAIFreeQuota = {
@@ -94,8 +100,16 @@ export class QuotaManager {
         ],
     };
 
-    constructor() {
+    constructor(updateCallback?: QuotaUpdateCallback) {
+        this.updateCallback = updateCallback;
         this.initializeProviderQuotas();
+    }
+
+    /**
+     * Set the callback for quota updates
+     */
+    setUpdateCallback(callback: QuotaUpdateCallback | undefined): void {
+        this.updateCallback = callback;
     }
 
     /**
@@ -281,7 +295,7 @@ export class QuotaManager {
                 const prevUsed = freeQuota.gpt4Family.used;
                 freeQuota.gpt4Family.used += totalTokens;
                 console.log(
-                    `[QuotaManager] OpenAI GPT-4 family usage: ${freeQuota.gpt4Family.used}/${freeQuota.gpt4Family.limit}`
+                    `[QuotaTracker] OpenAI GPT-4 family usage: ${freeQuota.gpt4Family.used}/${freeQuota.gpt4Family.limit}`
                 );
 
                 // Check for significant changes in GPT-4 family usage
@@ -299,7 +313,7 @@ export class QuotaManager {
                 // Check if exceeded limit
                 if (freeQuota.gpt4Family.used >= freeQuota.gpt4Family.limit) {
                     console.log(
-                        `[QuotaManager] OpenAI GPT-4 family daily limit reached: ${freeQuota.gpt4Family.used} > ${freeQuota.gpt4Family.limit}`
+                        `[QuotaTracker] OpenAI GPT-4 family daily limit reached: ${freeQuota.gpt4Family.used} > ${freeQuota.gpt4Family.limit}`
                     );
                     significantChange = true; // Exceeding quota is significant
                     this.sendQuotaUpdate(); // Update immediately when quota is exceeded
@@ -312,7 +326,7 @@ export class QuotaManager {
                 const prevUsed = freeQuota.gptMiniFamily.used;
                 freeQuota.gptMiniFamily.used += totalTokens;
                 console.log(
-                    `[QuotaManager] OpenAI GPT-Mini family usage: ${freeQuota.gptMiniFamily.used}/${freeQuota.gptMiniFamily.limit}`
+                    `[QuotaTracker] OpenAI GPT-Mini family usage: ${freeQuota.gptMiniFamily.used}/${freeQuota.gptMiniFamily.limit}`
                 );
 
                 // Check for significant changes in Mini family usage
@@ -334,7 +348,7 @@ export class QuotaManager {
                     freeQuota.gptMiniFamily.limit
                 ) {
                     console.log(
-                        `[QuotaManager] OpenAI GPT-Mini family daily limit reached: ${freeQuota.gptMiniFamily.used} > ${freeQuota.gptMiniFamily.limit}`
+                        `[QuotaTracker] OpenAI GPT-Mini family daily limit reached: ${freeQuota.gptMiniFamily.used} > ${freeQuota.gptMiniFamily.limit}`
                     );
                     significantChange = true; // Exceeding quota is significant
                     this.sendQuotaUpdate(); // Update immediately when quota is exceeded
@@ -399,7 +413,7 @@ export class QuotaManager {
                 modelQuota.dailyTokensUsed >= modelQuota.dailyTokenLimit
             ) {
                 console.log(
-                    `[QuotaManager] ${provider} model ${model} daily token limit reached: ${modelQuota.dailyTokensUsed} > ${modelQuota.dailyTokenLimit}`
+                    `[QuotaTracker] ${provider} model ${model} daily token limit reached: ${modelQuota.dailyTokensUsed} > ${modelQuota.dailyTokenLimit}`
                 );
                 significantChange = true; // Exceeding quota is significant
                 this.sendQuotaUpdate(); // Update immediately when quota is exceeded
@@ -412,7 +426,7 @@ export class QuotaManager {
                 modelQuota.dailyRequestsUsed >= modelQuota.dailyRequestLimit
             ) {
                 console.log(
-                    `[QuotaManager] ${provider} model ${model} daily request limit reached: ${modelQuota.dailyRequestsUsed} > ${modelQuota.dailyRequestLimit}`
+                    `[QuotaTracker] ${provider} model ${model} daily request limit reached: ${modelQuota.dailyRequestsUsed} > ${modelQuota.dailyRequestLimit}`
                 );
                 significantChange = true; // Exceeding quota is significant
                 this.sendQuotaUpdate(); // Update immediately when quota is exceeded
@@ -573,21 +587,19 @@ export class QuotaManager {
     }
 
     /**
-     * Send the current quota information to the UI
+     * Send the current quota information to the callback (if provided)
      */
     sendQuotaUpdate(): void {
         try {
-            const quotas = this.getSummary();
-            const quotaEvent: QuotaUpdateEvent = {
-                type: 'quota_update',
-                quotas,
-            };
-            sendStreamEvent(quotaEvent);
+            if (this.updateCallback) {
+                const quotas = this.getSummary();
+                this.updateCallback(quotas);
+            }
         } catch (error) {
             console.error('Error sending quota update:', error);
         }
     }
 }
 
-// Export a singleton instance
-export const quotaManager = new QuotaManager();
+// Export the class and a default instance for convenience
+export const quotaTracker = new QuotaTracker();

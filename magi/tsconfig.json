@@ -4,6 +4,7 @@
         "module": "NodeNext",
         "moduleResolution": "NodeNext",
         "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
         "strict": false,
         "baseUrl": "./",
         "outDir": "./dist",
@@ -11,12 +12,16 @@
         "declaration": false,
         "removeComments": true,
         "skipLibCheck": true,
+        "resolveJsonModule": true,
+        "forceConsistentCasingInFileNames": true,
         "typeRoots": ["node_modules/@types", "src/types"],
         "paths": {
             "*": ["node_modules/*"],
-            "@types/*": ["src/types/*"]
+            "@types/*": ["src/types/*"],
+            "@magi-system/ensemble": ["node_modules/@magi-system/ensemble"],
+            "@magi-system/ensemble/*": ["node_modules/@magi-system/ensemble/*"]
         }
     },
-    "include": ["src/**/*", "../ensemble/**/*"],
+    "include": ["src/**/*"],
     "exclude": ["node_modules", "dist"]
 }

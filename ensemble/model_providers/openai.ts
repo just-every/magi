@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * OpenAI model provider for the MAGI system.
  *
@@ -11,7 +10,7 @@ import {
     ModelProvider,
     ToolFunction,
     ModelSettings,
-    StreamingEvent,
+    EnsembleStreamEvent,
     ToolCall,
     ResponseInput,
     EnsembleAgent,
@@ -29,6 +28,7 @@ import {
     extractBase64Image,
     resizeAndSplitForOpenAI,
 } from '../utils/image_utils.js';
+import { CancelHandle } from '../types.js';
 import {
     DeltaBuffer,
     bufferDelta,
@@ -563,7 +563,7 @@ export class OpenAIProvider implements ModelProvider {
         model: string,
         messages: ResponseInput,
         agent: EnsembleAgent
-    ): AsyncGenerator<StreamingEvent> {
+    ): AsyncGenerator<EnsembleStreamEvent> {
         const tools: ToolFunction[] | undefined = agent
             ? await agent.getTools()
             : [];
@@ -912,7 +912,7 @@ export class OpenAIProvider implements ModelProvider {
 
             const toolCallStates = new Map<string, ToolCall>();
 
-            const events: StreamingEvent[] = [];
+            const events: EnsembleStreamEvent[] = [];
             try {
                 for await (const event of stream) {
                     events.push(event as any);
@@ -1073,41 +1073,42 @@ export class OpenAIProvider implements ModelProvider {
                                     content,
                                     message_id: itemId,
                                     order: position++,
-                                }) as StreamingEvent
+                                }) as EnsembleStreamEvent
                         )) {
                             yield ev;
                         }
 
                         messagePositions.set(itemId, position);
                     } else if (
-                        event.type ===
+                        (event as any).type ===
                             'response.output_text.annotation.added' &&
-                        event.annotation
+                        (event as any).annotation
                     ) {
                         // Handle URL citation annotations
+                        const eventData = event as any;
                         if (
-                            event.annotation?.type === 'url_citation' &&
-                            event.annotation.url
+                            eventData.annotation?.type === 'url_citation' &&
+                            eventData.annotation.url
                         ) {
                             const marker = formatCitation(citationTracker, {
                                 title:
-                                    event.annotation.title ||
-                                    event.annotation.url,
-                                url: event.annotation.url,
+                                    eventData.annotation.title ||
+                                    eventData.annotation.url,
+                                url: eventData.annotation.url,
                             });
                             // Append to aggregate buffer for this item
                             let position =
-                                messagePositions.get(event.item_id) ?? 0;
+                                messagePositions.get(eventData.item_id) ?? 0;
                             yield {
                                 type: 'message_delta',
                                 content: marker,
-                                message_id: event.item_id,
+                                message_id: eventData.item_id,
                                 order: position++,
                             };
-                            messagePositions.set(event.item_id, position);
+                            messagePositions.set(eventData.item_id, position);
                         } else {
                             // Log other types of annotations
-                            console.log('Annotation added:', event.annotation);
+                            console.log('Annotation added:', eventData.annotation);
                         }
                     } else if (
                         event.type === 'response.output_text.done' &&
@@ -1375,7 +1376,7 @@ export class OpenAIProvider implements ModelProvider {
                             content,
                             message_id: id,
                             order: messagePositions.get(id) ?? 0,
-                        }) as StreamingEvent
+                        }) as EnsembleStreamEvent
                 )) {
                     yield ev;
                 }
@@ -1395,6 +1396,44 @@ export class OpenAIProvider implements ModelProvider {
                     (error instanceof Error ? error.stack : String(error)),
             };
         }
+    }
+
+    /**
+     * New callback-based response method
+     */
+    createResponse(
+        model: string,
+        messages: ResponseInput,
+        agent: EnsembleAgent,
+        onEvent: (event: EnsembleStreamEvent) => void,
+        onError?: (error: unknown) => void
+    ): CancelHandle {
+        let cancelled = false;
+        
+        // Run the generator and call callbacks
+        (async () => {
+            try {
+                const stream = this.createResponseStream(model, messages, agent);
+                for await (const event of stream) {
+                    if (cancelled) break;
+                    onEvent(event);
+                }
+                // Emit stream_end after successful completion
+                if (!cancelled) {
+                    onEvent({ type: 'stream_end', timestamp: new Date().toISOString() } as EnsembleStreamEvent);
+                }
+            } catch (error) {
+                if (!cancelled && onError) {
+                    onError(error);
+                }
+            }
+        })();
+        
+        return {
+            cancel: () => {
+                cancelled = true;
+            }
+        };
     }
 }
 

@@ -27,13 +27,12 @@
         "magi/**/*",
         "controller/**/*",
         "browser/**/*",
-        "ensemble/**/*",
         "common/**/*",
         "setup/**/*",
         "test/**/*",
         "templates/**/*"
     ],
-    "exclude": ["controller/node_modules", "controller/dist"],
+    "exclude": ["controller/node_modules", "controller/dist", "ensemble"],
     "files": [
         "test/tools/tool-types.d.ts"
     ]

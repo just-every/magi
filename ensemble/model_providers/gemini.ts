@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Gemini model provider for the MAGI system.
  *
@@ -30,10 +29,11 @@ import {
     ModelProvider,
     ToolFunction,
     ModelSettings,
-    StreamingEvent,
+    EnsembleStreamEvent,
     ToolCall, // Internal representation
     ResponseInput,
     EnsembleAgent,
+    CancelHandle,
 } from '../types.js';
 import { costTracker } from '../utils/cost_tracker.js';
 import {
@@ -601,7 +601,7 @@ export class GeminiProvider implements ModelProvider {
         model: string,
         messages: ResponseInput,
         agent: EnsembleAgent
-    ): AsyncGenerator<StreamingEvent> {
+    ): AsyncGenerator<EnsembleStreamEvent> {
         const tools: ToolFunction[] | undefined = agent
             ? await agent.getTools()
             : [];
@@ -875,7 +875,7 @@ export class GeminiProvider implements ModelProvider {
                                 content,
                                 message_id: messageId,
                                 order: eventOrder++,
-                            }) as StreamingEvent
+                            }) as EnsembleStreamEvent
                     )) {
                         yield ev;
                     }
@@ -934,7 +934,7 @@ export class GeminiProvider implements ModelProvider {
                         content,
                         message_id: messageId,
                         order: eventOrder++,
-                    }) as StreamingEvent
+                    }) as EnsembleStreamEvent
             )) {
                 yield ev;
             }
@@ -1022,6 +1022,44 @@ export class GeminiProvider implements ModelProvider {
         } finally {
             log_llm_response(requestId, chunks);
         }
+    }
+    
+    /**
+     * New callback-based response method
+     */
+    createResponse(
+        model: string,
+        messages: ResponseInput,
+        agent: EnsembleAgent,
+        onEvent: (event: EnsembleStreamEvent) => void,
+        onError?: (error: unknown) => void
+    ): CancelHandle {
+        let cancelled = false;
+
+        // Run the generator and call callbacks
+        (async () => {
+            try {
+                const stream = this.createResponseStream(model, messages, agent);
+                for await (const event of stream) {
+                    if (cancelled) break;
+                    onEvent(event);
+                }
+                // Emit stream_end after successful completion
+                if (!cancelled) {
+                    onEvent({ type: 'stream_end', timestamp: new Date().toISOString() } as EnsembleStreamEvent);
+                }
+            } catch (error) {
+                if (!cancelled && onError) {
+                    onError(error);
+                }
+            }
+        })();
+
+        return {
+            cancel: () => {
+                cancelled = true;
+            }
+        };
     }
 }
 

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * model_data.ts
  *
@@ -103,8 +102,8 @@ export type ModelProviderID =
     | 'openrouter'
     | 'test';
 
-// Import from the local symlink which points to the common file
-import { ModelClassID } from '../types.js';
+// Import from the local types file
+import { ModelClassID } from './types.js';
 
 // Re-export for backward compatibility
 export type { ModelClassID };

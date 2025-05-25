@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Test model provider for the MAGI system.
  *
@@ -10,10 +9,11 @@
 import {
     ModelProvider,
     ResponseInput,
-    StreamingEvent,
+    EnsembleStreamEvent,
     ToolCall,
     ResponseInputItem,
     EnsembleAgent,
+    CancelHandle,
 } from '../types.js';
 import { v4 as uuidv4 } from 'uuid';
 // Minimal agent interface is used instead of full Agent class
@@ -35,7 +35,8 @@ export interface TestProviderConfig {
     // Whether to simulate a rate limit error (HTTP 429)
     simulateRateLimit?: boolean;
 
-    // Fixed text to respond with (overrides generated response)
+    // Fixed text to respond with (over
+    // rides generated response)
     fixedResponse?: string | undefined;
 
     // Fixed thinking to respond with (for reasoning agent simulation)
@@ -120,7 +121,7 @@ export class TestProvider implements ModelProvider {
         model: string,
         messages: ResponseInput,
         agent: EnsembleAgent
-    ): AsyncGenerator<StreamingEvent> {
+    ): AsyncGenerator<EnsembleStreamEvent> {
         console.log(
             `[TestProvider] Creating response stream for model: ${model}`
         );
@@ -182,7 +183,6 @@ export class TestProvider implements ModelProvider {
             type: 'message_start',
             message_id: messageId,
             content: '',
-            agent: agent?.export(),
         };
 
         // If there's thinking content, emit it first
@@ -230,7 +230,6 @@ export class TestProvider implements ModelProvider {
                         yield {
                             type: 'tool_start',
                             tool_calls: [toolCall],
-                            agent: agent?.export(),
                         };
 
                         // Let the tool processing happen elsewhere - we don't emit a result
@@ -256,7 +255,6 @@ export class TestProvider implements ModelProvider {
                 message_id: messageId,
                 content: chunk,
                 order: position / chunkSize,
-                agent: agent?.export(),
             };
 
             // Simulate network delay
@@ -268,7 +266,6 @@ export class TestProvider implements ModelProvider {
             type: 'message_complete',
             message_id: messageId,
             content: response,
-            agent: agent?.export(),
         };
 
         // Track token usage for cost calculation
@@ -304,6 +301,44 @@ export class TestProvider implements ModelProvider {
         } else {
             return `I've received your message: "${input.slice(0, 50)}${input.length > 50 ? '...' : ''}". This is a simulated response from the test provider.`;
         }
+    }
+
+    /**
+     * New callback-based response method
+     */
+    createResponse(
+        model: string,
+        messages: ResponseInput,
+        agent: EnsembleAgent,
+        onEvent: (event: EnsembleStreamEvent) => void,
+        onError?: (error: unknown) => void
+    ): CancelHandle {
+        let cancelled = false;
+
+        // Run the generator and call callbacks
+        (async () => {
+            try {
+                const stream = this.createResponseStream(model, messages, agent);
+                for await (const event of stream) {
+                    if (cancelled) break;
+                    onEvent(event);
+                }
+                // Emit stream_end after successful completion
+                if (!cancelled) {
+                    onEvent({ type: 'stream_end', timestamp: new Date().toISOString() } as EnsembleStreamEvent);
+                }
+            } catch (error) {
+                if (!cancelled && onError) {
+                    onError(error);
+                }
+            }
+        })();
+
+        return {
+            cancel: () => {
+                cancelled = true;
+            }
+        };
     }
 }
 

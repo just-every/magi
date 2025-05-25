@@ -37,6 +37,7 @@ import { runMECHWithMemory } from './utils/mech_memory_wrapper.js';
 import { getProcessProjectIds } from './utils/project_utils.js';
 import { initDatabase } from './utils/db.js';
 import { ensureMemoryDirectories } from './utils/memory_utils.js';
+import { initializeEnsembleLogging } from './utils/ensemble_logger_bridge.js';
 
 const person = process.env.YOUR_NAME || 'User';
 const talkToolName = `talk to ${person}`.toLowerCase().replaceAll(' ', '_');
@@ -275,6 +276,7 @@ async function main(): Promise<void> {
 
     // Setup comms early, so we can send back failure messages
     ensureMemoryDirectories();
+    initializeEnsembleLogging();
     const comm = initCommunication(args.test);
     set_file_test_mode(args.test);
 

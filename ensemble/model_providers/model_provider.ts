@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Model provider interface for the MAGI system.
  *
@@ -47,7 +46,7 @@ import { grokProvider } from './grok.js';
 import { deepSeekProvider } from './deepseek.js';
 import { testProvider } from './test_provider.js';
 import { openRouterProvider } from './openrouter.js';
-import { MODEL_CLASSES, ModelClassID, ModelProviderID } from './model_data.js';
+import { MODEL_CLASSES, ModelClassID, ModelProviderID } from '../model_data.js';
 
 // Provider mapping by model prefix
 const MODEL_PROVIDER_MAP: Record<string, ModelProvider> = {
@@ -145,8 +144,8 @@ export function getProviderFromModel(model: string): ModelProviderID {
 export async function getModelFromClass(
     modelClass?: ModelClassID
 ): Promise<string> {
-    // Simple quota manager stub
-    const { quotaManager } = await import('../utils/quota_manager.js');
+    // Simple quota tracker stub
+    const { quotaTracker } = await import('../utils/quota_tracker.js');
 
     // Convert modelClass to a string to avoid TypeScript errors
     const modelClassStr = modelClass as string;
@@ -176,7 +175,7 @@ export async function getModelFromClass(
             // Check if we have a valid API key and available quota
             if (
                 isProviderKeyValid(provider) &&
-                quotaManager.hasQuota(provider, model)
+                quotaTracker.hasQuota(provider, model)
             ) {
                 console.log(
                     `Using model ${model} from class ${modelGroup} (has API key and quota)`
@@ -209,7 +208,7 @@ export async function getModelFromClass(
             const provider = getProviderFromModel(model);
             if (
                 isProviderKeyValid(provider) &&
-                quotaManager.hasQuota(provider, model)
+                quotaTracker.hasQuota(provider, model)
             ) {
                 console.log(
                     `Falling back to standard class model ${model} (has API key and quota)`

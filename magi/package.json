@@ -5,7 +5,7 @@
     "main": "dist/magi.js",
     "type": "module",
     "scripts": {
-        "build": "tsc",
+        "build": "tsc -b",
         "start": "node --no-deprecation --experimental-vm-modules dist/magi.js",
         "dev": "npm run build && npm start",
         "lint": "tsc --noEmit && eslint \"src/**/*.ts\"",
@@ -19,6 +19,7 @@
     "dependencies": {
         "@anthropic-ai/sdk": "^0.17.1",
         "@google/genai": "^0.7.0",
+        "@magi-system/ensemble": "file:../ensemble",
         "@napi-rs/canvas": "^0.1.69",
         "@types/turndown": "^5.0.5",
         "axios": "^1.6.8",

@@ -24,14 +24,16 @@ import type {
     VerifierResult,
 } from '../types/shared-types.js';
 import { Agent } from './agent.js';
-import { request as ensembleRequest } from './ensemble.js';
 import {
+    request as ensembleRequest,
+    AsyncQueue,
     findModel,
     MODEL_CLASSES,
     ModelClassID,
     ModelEntry,
-} from '../../../ensemble/model_providers/model_data.js';
-import { getModelFromClass } from '../../../ensemble/model_providers/model_provider.js';
+    getModelFromClass,
+    EnsembleStreamEvent,
+} from '@magi-system/ensemble';
 import { processToolCall } from './tool_call.js';
 import { capitalize } from './llm_utils.js';
 import { getCommunicationManager, sendComms } from './communication.js';
@@ -269,6 +271,11 @@ export class Runner {
                     : {}),
             };
 
+            // Create AsyncQueue and tracking variables outside try block for proper cleanup
+            const eventQueue = new AsyncQueue<StreamingEvent>();
+            let cancelHandle: any = null;
+            let timeoutId: NodeJS.Timeout | null = null;
+            
             try {
                 // Ensure correct message sequence before sending
                 const sequencedMessages =
@@ -313,8 +320,9 @@ export class Runner {
                     },
                 });
                 agent.model = selectedModel; // Update agent's selected model
-                // Create the original stream using the ensemble request API
-                const originalStream = ensembleRequest(
+                
+                // Start the request with callback API
+                cancelHandle = ensembleRequest(
                     selectedModel,
                     sequencedMessages,
                     {
@@ -322,18 +330,47 @@ export class Runner {
                         tools: await agent.getTools(),
                         modelSettings: agent.modelSettings,
                         modelClass: agent.modelClass,
+                        onEvent: (event: EnsembleStreamEvent) => {
+                            // Convert ensemble event to magi event format by adding agent info
+                            const magiEvent: StreamingEvent = {
+                                ...event,
+                                agent: agent.export(),
+                            } as StreamingEvent;
+                            
+                            eventQueue.push(magiEvent);
+                            // Complete the queue when we receive terminal events
+                            if (event.type === 'stream_end' || event.type === 'error') {
+                                eventQueue.complete();
+                            }
+                        },
+                        onError: (error: unknown) => {
+                            eventQueue.setError(error);
+                        }
                     }
                 );
 
-                // Wrap the stream with our timeout proxy
-                const streamWithTimeout = createTimeoutProxyStream(
-                    originalStream,
-                    EVENT_TIMEOUT_MS, // Use the existing constant
-                    `${agent.name || 'Agent'}:${selectedModel}` // Identifier for logs
-                );
+                // Process events from the queue with timeout tracking
+                let lastEventTime = Date.now();
+                const updateTimeout = () => {
+                    if (timeoutId) clearTimeout(timeoutId);
+                    timeoutId = setTimeout(() => {
+                        const error = new TimeoutError(
+                            `[${agent.name || 'Agent'}:${selectedModel}] Stream timeout: No event received for ${EVENT_TIMEOUT_MS / 1000} seconds`
+                        );
+                        console.error(`[TimeoutProxy] ${error.message}`);
+                        eventQueue.setError(error);
+                        if (cancelHandle) {
+                            cancelHandle.cancel();
+                        }
+                    }, EVENT_TIMEOUT_MS);
+                };
+                
+                updateTimeout(); // Start initial timeout
 
-                // Process events from the proxied stream
-                for await (const event of streamWithTimeout) {
+                // Process events from the queue
+                for await (const event of eventQueue) {
+                    lastEventTime = Date.now();
+                    updateTimeout(); // Reset timeout on each event
                     // Type assertion needed because event comes from AsyncGenerator<unknown>
                     const streamEvent = event as StreamingEvent;
 
@@ -359,6 +396,9 @@ export class Runner {
                     }
                 }
 
+                // Clean up timeout
+                if (timeoutId) clearTimeout(timeoutId);
+                
                 // If the for await loop completes without error, this model succeeded.
                 console.log(
                     `[Runner] Model ${selectedModel} completed successfully.`
@@ -374,11 +414,15 @@ export class Runner {
                 });
                 return; // Success: exit the generator function normally.
             } catch (error) {
+                // Clean up timeout and cancel handle on error
+                if (timeoutId) clearTimeout(timeoutId);
+                if (cancelHandle) cancelHandle.cancel();
+                
                 // --- Catch block for the current model attempt ---
                 // This catches:
-                // 1. TimeoutError thrown by createTimeoutProxyStream
+                // 1. TimeoutError thrown by our timeout logic
                 // 2. Errors thrown explicitly from the stream (e.g., event.type === 'error')
-                // 3. Errors during provider.createResponseStream() or stream iteration itself.
+                // 3. Errors during provider.createResponse() or stream iteration itself.
                 attempt++;
 
                 // Pass the error message to help with detecting rate limits and special cases

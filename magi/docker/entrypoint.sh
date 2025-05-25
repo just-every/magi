@@ -43,7 +43,7 @@ echo "Git safe.directory configuration set"
 # First ensure the root directory is owned by magi_user
 echo "Fixing ownership of /magi_output for files not already owned by magi_user..."
 # Only change objects not already owned by magi_user - more efficient for large volumes
-find /magi_output ! -user magi_user -exec chown magi_user:magi_user {} \; 2>/dev/null || true
+find /magi_output ! -user magi_user -exec chown magi_user:magi_user {} + 2>/dev/null || true
 echo "Permissions fixed for /magi_output"
 
 # Check if PROCESS_ID environment variable is set

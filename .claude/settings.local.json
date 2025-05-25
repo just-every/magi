@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(brew install:*)",
+      "Bash(brew reinstall:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(rg:*)",
+      "Bash(grep:*)",
+      "Bash(npm run build:*)",
+      "Bash(chmod:*)",
+      "Bash(node:*)",
+      "Bash(rm:*)",
+      "Bash(npx tsc:*)",
+      "Bash(find:*)",
+      "Bash(mv:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": []
+  }
+}

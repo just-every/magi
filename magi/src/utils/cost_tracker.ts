@@ -9,11 +9,11 @@ import {
     ModelUsage,
     TieredPrice,
     TimeBasedPrice,
-} from '../../../ensemble/model_providers/model_data.js';
+    getProviderFromModel
+} from '@magi-system/ensemble';
 import { CostUpdateEvent } from '../types/shared-types.js';
 import { sendStreamEvent } from './communication.js';
-import { quotaManager } from './quota_manager.js';
-import { getProviderFromModel } from '../../../ensemble/model_providers/model_provider.js';
+import { quotaTracker } from './quota_tracker.js';
 
 /**
  * Singleton class to track costs across all model providers
@@ -229,7 +229,7 @@ class CostTracker {
                 const outputTokens = usage.output_tokens || 0;
 
                 // Track this usage against provider quotas
-                quotaManager.trackUsage(
+                quotaTracker.trackUsage(
                     provider,
                     usage.model,
                     inputTokens,
@@ -238,11 +238,11 @@ class CostTracker {
 
                 // Track credit usage for paid providers
                 if (usage.cost && usage.cost > 0) {
-                    quotaManager.trackCreditUsage(provider, usage.cost);
+                    quotaTracker.trackCreditUsage(provider, usage.cost);
                 }
 
                 // Include quota information in cost update event
-                const quotaSummary = quotaManager.getSummary();
+                const quotaSummary = quotaTracker.getSummary();
                 if (quotaSummary[provider]) {
                     if (!usage.metadata) {
                         usage.metadata = {};
@@ -325,7 +325,7 @@ class CostTracker {
 
         // Print quota information
         console.log('\nQuota Summary:');
-        const quotaSummary = quotaManager.getSummary();
+        const quotaSummary = quotaTracker.getSummary();
 
         // Google/Gemini
         if (quotaSummary.google) {

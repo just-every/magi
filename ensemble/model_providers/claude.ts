@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Claude model provider for the MAGI system.
  *
@@ -89,7 +88,7 @@ import {
     ModelProvider,
     ToolFunction,
     ModelSettings,
-    StreamingEvent,
+    EnsembleStreamEvent,
     ToolCall,
     ResponseInput,
     ResponseInputItem,
@@ -105,11 +104,12 @@ import {
     log_llm_response,
 } from '../utils/llm_logger.js';
 import { isPaused } from '../utils/communication.js';
-import { ModelClassID } from './model_data.js';
+import { ModelClassID } from '../model_data.js';
 import {
     extractBase64Image,
     resizeAndTruncateForClaude,
 } from '../utils/image_utils.js';
+import { CancelHandle } from '../types.js';
 import { convertImageToTextIfNeeded } from '../utils/image_to_text.js';
 import {
     DeltaBuffer,
@@ -707,7 +707,7 @@ export class ClaudeProvider implements ModelProvider {
         model: string,
         messages: ResponseInput,
         agent: EnsembleAgent
-    ): AsyncGenerator<StreamingEvent> {
+    ): AsyncGenerator<EnsembleStreamEvent> {
         // --- Usage Accumulators ---
         let totalInputTokens = 0;
         let totalOutputTokens = 0;
@@ -837,7 +837,7 @@ export class ClaudeProvider implements ModelProvider {
             // Make the API call
             const stream = await this.client.messages.create(requestParams);
 
-            const events: StreamingEvent[] = [];
+            const events: EnsembleStreamEvent[] = [];
             try {
                 // @ts-expect-error - Claude's stream is AsyncIterable but TypeScript might not recognize it properly
                 for await (const event of stream) {
@@ -919,7 +919,7 @@ export class ClaudeProvider implements ModelProvider {
                                         content,
                                         message_id: messageId,
                                         order: deltaPosition++,
-                                    }) as StreamingEvent
+                                    }) as EnsembleStreamEvent
                             )) {
                                 yield ev;
                             }
@@ -998,7 +998,7 @@ export class ClaudeProvider implements ModelProvider {
                                         content,
                                         message_id: messageId,
                                         order: deltaPosition++,
-                                    }) as StreamingEvent
+                                    }) as EnsembleStreamEvent
                             )) {
                                 yield ev;
                             }
@@ -1138,7 +1138,7 @@ export class ClaudeProvider implements ModelProvider {
                                     content,
                                     message_id: messageId,
                                     order: deltaPosition++,
-                                }) as StreamingEvent
+                                }) as EnsembleStreamEvent
                         )) {
                             yield ev;
                         }
@@ -1201,7 +1201,7 @@ export class ClaudeProvider implements ModelProvider {
                                 content,
                                 message_id: messageId,
                                 order: deltaPosition++,
-                            }) as StreamingEvent
+                            }) as EnsembleStreamEvent
                     )) {
                         yield ev;
                     }
@@ -1256,6 +1256,44 @@ export class ClaudeProvider implements ModelProvider {
                 });
             }
         }
+    }
+
+    /**
+     * New callback-based response method
+     */
+    createResponse(
+        model: string,
+        messages: ResponseInput,
+        agent: EnsembleAgent,
+        onEvent: (event: EnsembleStreamEvent) => void,
+        onError?: (error: unknown) => void
+    ): CancelHandle {
+        let cancelled = false;
+        
+        // Run the generator and call callbacks
+        (async () => {
+            try {
+                const stream = this.createResponseStream(model, messages, agent);
+                for await (const event of stream) {
+                    if (cancelled) break;
+                    onEvent(event);
+                }
+                // Emit stream_end after successful completion
+                if (!cancelled) {
+                    onEvent({ type: 'stream_end', timestamp: new Date().toISOString() } as EnsembleStreamEvent);
+                }
+            } catch (error) {
+                if (!cancelled && onError) {
+                    onError(error);
+                }
+            }
+        })();
+        
+        return {
+            cancel: () => {
+                cancelled = true;
+            }
+        };
     }
 }
 

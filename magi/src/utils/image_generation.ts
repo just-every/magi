@@ -1,4 +1,4 @@
-import { openaiProvider } from '../../../ensemble/model_providers/openai.js';
+import { openaiProvider } from '@magi-system/ensemble';
 import { createToolFunction } from './tool_call.js';
 import { ToolFunction, ResponseInput } from '../types/shared-types.js';
 import path from 'path';

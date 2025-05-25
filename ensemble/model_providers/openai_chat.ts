@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * OpenAI model provider implementation using chat.completions.create API.
  * Handles streaming responses, native tool calls, and simulated tool calls via text parsing.
@@ -11,10 +10,11 @@ import {
     ModelProvider,
     ToolFunction,
     ModelSettings,
-    StreamingEvent,
+    EnsembleStreamEvent,
     ToolCall,
     ResponseInput,
     EnsembleAgent,
+    CancelHandle,
 } from '../types.js';
 import OpenAI, { APIError } from 'openai';
 import { v4 as uuidv4 } from 'uuid';
@@ -24,7 +24,7 @@ import {
     log_llm_request,
     log_llm_response,
 } from '../utils/llm_logger.js';
-import { ModelProviderID } from './model_data.js'; // Adjust path as needed
+import { ModelProviderID } from '../model_data.js'; // Adjust path as needed
 import { extractBase64Image } from '../utils/image_utils.js';
 import { convertImageToTextIfNeeded } from '../utils/image_to_text.js';
 import {
@@ -357,7 +357,7 @@ async function mapMessagesToOpenAI(
 /** Type definition for the result of parsing simulated tool calls. */
 type SimulatedToolCallParseResult = {
     handled: boolean;
-    eventsToYield?: StreamingEvent[];
+    eventsToYield?: EnsembleStreamEvent[];
     cleanedContent?: string; // Used if handled is false
 };
 
@@ -619,7 +619,7 @@ export class OpenAIChat implements ModelProvider {
                         CLEANUP_PLACEHOLDER
                     );
 
-                    const eventsToYield: StreamingEvent[] = [];
+                    const eventsToYield: EnsembleStreamEvent[] = [];
                     if (textBeforeToolCall) {
                         eventsToYield.push({
                             type: 'message_complete', // Or 'message_delta' depending on your streaming logic
@@ -663,7 +663,7 @@ export class OpenAIChat implements ModelProvider {
         model: string,
         messages: ResponseInput,
         agent: EnsembleAgent
-    ): AsyncGenerator<StreamingEvent> {
+    ): AsyncGenerator<EnsembleStreamEvent> {
         // Get tools asynchronously (getTools now returns a Promise)
         const toolsPromise = agent ? agent.getTools() : Promise.resolve([]);
         const tools = await toolsPromise;
@@ -767,7 +767,7 @@ export class OpenAIChat implements ModelProvider {
                                     content,
                                     message_id: messageId,
                                     order: messageIndex++,
-                                }) as StreamingEvent
+                                }) as EnsembleStreamEvent
                         )) {
                             yield ev;
                         }
@@ -787,7 +787,7 @@ export class OpenAIChat implements ModelProvider {
                                     content,
                                     message_id: messageId,
                                     order: messageIndex++,
-                                }) as StreamingEvent
+                                }) as EnsembleStreamEvent
                         )) {
                             yield ev;
                         }
@@ -964,7 +964,7 @@ export class OpenAIChat implements ModelProvider {
                             content,
                             message_id: id,
                             order: messageIndex++,
-                        }) as StreamingEvent
+                        }) as EnsembleStreamEvent
                 )) {
                     yield ev;
                 }
@@ -1133,5 +1133,43 @@ export class OpenAIChat implements ModelProvider {
                           : Object.getPrototypeOf(error) + ' ' + String(error)),
             };
         }
+    }
+    
+    /**
+     * New callback-based response method
+     */
+    createResponse(
+        model: string,
+        messages: ResponseInput,
+        agent: EnsembleAgent,
+        onEvent: (event: EnsembleStreamEvent) => void,
+        onError?: (error: unknown) => void
+    ): CancelHandle {
+        let cancelled = false;
+
+        // Run the generator and call callbacks
+        (async () => {
+            try {
+                const stream = this.createResponseStream(model, messages, agent);
+                for await (const event of stream) {
+                    if (cancelled) break;
+                    onEvent(event);
+                }
+                // Emit stream_end after successful completion
+                if (!cancelled) {
+                    onEvent({ type: 'stream_end', timestamp: new Date().toISOString() } as EnsembleStreamEvent);
+                }
+            } catch (error) {
+                if (!cancelled && onError) {
+                    onError(error);
+                }
+            }
+        })();
+
+        return {
+            cancel: () => {
+                cancelled = true;
+            }
+        };
     }
 }

@@ -8,7 +8,30 @@ RUN set -e; \
     npm view @openai/codex              dist-tags.latest  > /tmp/CODEX_VER
 
 ###############################################################################
-# Stage 1 – Build the application’s dependencies
+# Stage 1 – Build the ensemble package first
+###############################################################################
+FROM node:23-slim AS ensemble-builder
+
+RUN npm install -g npm
+RUN apt-get update && \
+    apt-get install -y python3 make g++ pkg-config \
+                       libpixman-1-dev libcairo2-dev libpango1.0-dev \
+                       libjpeg-dev libgif-dev librsvg2-dev --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Copy ensemble source
+COPY ./ensemble/ ./ensemble/
+COPY ./common/ ./common/
+
+# Build ensemble package (with stream_end support)
+WORKDIR /build/ensemble
+RUN --mount=type=cache,target=/root/.npm \
+    npm install && npm run build
+
+###############################################################################
+# Stage 2 – Build the application's dependencies
 ###############################################################################
 FROM node:23-slim AS builder
 
@@ -21,10 +44,15 @@ RUN apt-get update && \
 
 WORKDIR /build
 
+# Copy built ensemble package to node_modules with all necessary files
+COPY --from=ensemble-builder /build/ensemble ./node_modules/@magi-system/ensemble
+COPY --from=ensemble-builder /build/common ./common
+
 COPY ./magi/package.json ./magi/package-lock.json ./
 
+# Install dependencies (updated for stream_end)
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci
+    npm install --ignore-scripts
 
 ###############################################################################
 # Stage 2 – Final runtime image
@@ -73,6 +101,8 @@ RUN mkdir -p /home/${USER_NAME}/.claude /home/${USER_NAME}/.cache && \
 # ---- Bring in project dependencies ----------------------------------
 ########################################################################
 COPY --from=builder --chown=${USER_NAME}:${GROUP_NAME} /build/node_modules ./node_modules
+# Ensure ensemble package is available
+COPY --from=ensemble-builder --chown=${USER_NAME}:${GROUP_NAME} /build/ensemble ./node_modules/@magi-system/ensemble
 
 ########################################################################
 # ---- 1️⃣  Install exact AI CLI versions (cached until new tags) -----
@@ -92,6 +122,7 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY --chown=${USER_NAME}:${GROUP_NAME} ./magi/ ./
 COPY --chown=${USER_NAME}:${GROUP_NAME} ./common/shared-types.ts ./src/types/shared-types.ts
 
+# Build with stream_end support
 RUN npm run build
 
 ########################################################################
