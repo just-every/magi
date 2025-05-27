@@ -223,7 +223,7 @@ export async function launchChrome(
     // Default flags for Chrome
     const defaultFlags = [
         // Remote debugging port is now handled by chrome-launcher
-        '--disable-extensions',
+        //'--disable-extensions',
         '--disable-component-extensions-with-background-pages',
         '--disable-background-networking',
         '--silent-debugger-extension-api',

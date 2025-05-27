@@ -97,7 +97,7 @@ import {
     ResponseOutputMessage,
     EnsembleAgent,
 } from '../types.js';
-import { costTracker } from '../utils/cost_tracker.js';
+import { costTracker } from '@magi-system/ensemble/cost_tracker';
 import {
     log_llm_error,
     log_llm_request,
@@ -1269,7 +1269,7 @@ export class ClaudeProvider implements ModelProvider {
         onError?: (error: unknown) => void
     ): CancelHandle {
         let cancelled = false;
-        
+
         // Run the generator and call callbacks
         (async () => {
             try {
@@ -1288,7 +1288,7 @@ export class ClaudeProvider implements ModelProvider {
                 }
             }
         })();
-        
+
         return {
             cancel: () => {
                 cancelled = true;

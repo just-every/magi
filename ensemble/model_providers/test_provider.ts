@@ -17,7 +17,7 @@ import {
 } from '../types.js';
 import { v4 as uuidv4 } from 'uuid';
 // Minimal agent interface is used instead of full Agent class
-import { costTracker } from '../utils/cost_tracker.js';
+import { costTracker } from '@magi-system/ensemble/cost_tracker';
 
 /**
  * Configuration for the test provider behavior

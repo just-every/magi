@@ -35,7 +35,7 @@ import {
     EnsembleAgent,
     CancelHandle,
 } from '../types.js';
-import { costTracker } from '../utils/cost_tracker.js';
+import { costTracker } from '@magi-system/ensemble/cost_tracker';
 import {
     log_llm_error,
     log_llm_request,
@@ -1023,7 +1023,7 @@ export class GeminiProvider implements ModelProvider {
             log_llm_response(requestId, chunks);
         }
     }
-    
+
     /**
      * New callback-based response method
      */

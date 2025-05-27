@@ -18,7 +18,7 @@ import {
 } from '../types.js';
 import OpenAI, { APIError } from 'openai';
 import { v4 as uuidv4 } from 'uuid';
-import { costTracker } from '../utils/cost_tracker.js';
+import { costTracker } from '@magi-system/ensemble/cost_tracker';
 import {
     log_llm_error,
     log_llm_request,
@@ -1134,7 +1134,7 @@ export class OpenAIChat implements ModelProvider {
             };
         }
     }
-    
+
     /**
      * New callback-based response method
      */

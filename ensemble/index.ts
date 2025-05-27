@@ -12,10 +12,10 @@ export {
 } from './model_providers/model_provider.js';
 
 // Export all model data (excluding ModelClassID to avoid conflict)
-export { 
-    MODEL_REGISTRY, 
-    MODEL_CLASSES, 
-    findModel, 
+export {
+    MODEL_REGISTRY,
+    MODEL_CLASSES,
+    findModel,
     ModelProviderID,
     ModelUsage,
     TieredPrice,
@@ -43,9 +43,6 @@ export * from './utils/image_to_text.js';
 export * from './utils/image_utils.js';
 export * from './utils/llm_logger.js';
 export * from './utils/quota_tracker.js';
-
-// Export constants
-export * from './constants.js';
 
 import {
     ModelSettings,
@@ -88,23 +85,23 @@ export function request(
 ): CancelHandle {
     const provider = getModelProvider(model);
     const agent = new RequestAgent(params);
-    
+
     // Use the new callback-based method if available, otherwise fall back to generator
     if (provider.createResponse) {
         // Wrap provider's createResponse to ensure stream_end emission
         const originalHandle = provider.createResponse(
-            model, 
-            messages, 
-            agent as any, 
-            params.onEvent, 
+            model,
+            messages,
+            agent as any,
+            params.onEvent,
             params.onError
         );
-        
+
         // Providers should emit stream_end themselves, but this ensures it happens
         // The provider's createResponse method should handle this internally
         return originalHandle;
     }
-    
+
     // Fallback to generator method for providers not yet updated
     let cancelled = false;
     (async () => {
@@ -124,7 +121,7 @@ export function request(
             }
         }
     })();
-    
+
     return {
         cancel: () => {
             cancelled = true;

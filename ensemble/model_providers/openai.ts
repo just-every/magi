@@ -5,7 +5,6 @@
  * for OpenAI's models and handles streaming responses.
  */
 
-import { BROWSER_WIDTH, BROWSER_HEIGHT } from '../constants.js';
 import {
     ModelProvider,
     ToolFunction,
@@ -17,7 +16,7 @@ import {
 } from '../types.js';
 import OpenAI, { toFile } from 'openai';
 // import {v4 as uuidv4} from 'uuid';
-import { costTracker } from '../utils/cost_tracker.js';
+import { costTracker } from '@magi-system/ensemble/cost_tracker';
 import {
     log_llm_request,
     log_llm_response,
@@ -36,6 +35,10 @@ import {
 } from '../utils/delta_buffer.js';
 import type { ResponseCreateParamsStreaming } from 'openai/resources/responses/responses.js';
 import type { ReasoningEffort } from 'openai/resources/shared.js';
+
+const BROWSER_WIDTH = 1024;
+const BROWSER_HEIGHT = 1536;
+
 
 /**
  * Citation tracking for footnotes
@@ -1409,7 +1412,7 @@ export class OpenAIProvider implements ModelProvider {
         onError?: (error: unknown) => void
     ): CancelHandle {
         let cancelled = false;
-        
+
         // Run the generator and call callbacks
         (async () => {
             try {
@@ -1428,7 +1431,7 @@ export class OpenAIProvider implements ModelProvider {
                 }
             }
         })();
-        
+
         return {
             cancel: () => {
                 cancelled = true;

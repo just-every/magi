@@ -10,7 +10,7 @@ import {
     ModelUsage,
     TieredPrice,
     TimeBasedPrice,
-} from '../index.js';
+} from '../model_data.js';
 
 /**
  * Simplified cost tracker for the ensemble package
@@ -18,6 +18,7 @@ import {
 class CostTracker {
     private entries: ModelUsage[] = [];
     private started: Date = new Date();
+    private onAddUsageCallbacks: Array<(usage: ModelUsage) => void> = [];
 
     /**
      * Calculates the cost for a given model usage instance based on registry data.
@@ -60,7 +61,7 @@ class CostTracker {
 
         // Use provided timestamp, or current time if needed for time-based pricing
         const calculationTime = usage.timestamp || new Date();
-        
+
         // Check if any cost component uses time-based pricing
         const usesTimeBasedPricing =
             (typeof model.cost?.input_per_million === 'object' &&
@@ -195,6 +196,15 @@ class CostTracker {
     }
 
     /**
+     * Add a callback that will be called whenever usage is added
+     *
+     * @param callback Function to call with the usage data
+     */
+    onAddUsage(callback: (usage: ModelUsage) => void): void {
+        this.onAddUsageCallbacks.push(callback);
+    }
+
+    /**
      * Record usage details from a model provider
      *
      * @param usage ModelUsage object containing the cost and usage details
@@ -207,6 +217,15 @@ class CostTracker {
 
             // Add to entries list
             this.entries.push(usage);
+
+            // Notify all callbacks
+            for (const callback of this.onAddUsageCallbacks) {
+                try {
+                    callback(usage);
+                } catch (error) {
+                    console.error('Error in cost tracker callback:', error);
+                }
+            }
         } catch (err) {
             console.error('Error recording usage:', err);
         }
@@ -277,8 +296,17 @@ class CostTracker {
     }
 }
 
-// Export a singleton instance
-export const costTracker = new CostTracker();
+// --- Ensure true singleton across multiple copies (src vs dist) ---
+const globalObj = globalThis as typeof globalThis & {
+    __ENSEMBLE_COST_TRACKER__?: CostTracker;
+};
+if (!globalObj.__ENSEMBLE_COST_TRACKER__) {
+    globalObj.__ENSEMBLE_COST_TRACKER__ = new CostTracker();
+}
+export const costTracker: CostTracker = globalObj.__ENSEMBLE_COST_TRACKER__;
+
+// Re-export the class for potential prototype patching by bridges
+export { CostTracker };
 
 // Export the usage interface for compatibility
 export interface UsageEntry {
