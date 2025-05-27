@@ -35,7 +35,7 @@ import {
     TestProvider,
     testProviderConfig,
     resetTestProviderConfig,
-} from './index.js';
+} from '../index.js';
 
 describe('Ensemble Package Exports', () => {
     beforeEach(() => {
@@ -62,9 +62,9 @@ describe('Ensemble Package Exports', () => {
             expect(typeof MODEL_REGISTRY).toBe('object');
         });
 
-        it('should export MODEL_CLASSES as an array', () => {
+        it('should export MODEL_CLASSES as an object', () => {
             expect(MODEL_CLASSES).toBeDefined();
-            expect(Array.isArray(MODEL_CLASSES)).toBe(true);
+            expect(typeof MODEL_CLASSES).toBe('object');
         });
 
         it('should export findModel function', () => {

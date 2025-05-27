@@ -18,16 +18,10 @@ export const CLAUDE_MAX_HEIGHT = 1120;
 export const GEMINI_MAX_WIDTH = 1024;
 export const GEMINI_MAX_HEIGHT = 1536;
 
-/**
- * Result type for extractBase64Image function
- */
-export interface ExtractBase64ImageResult {
-    found: boolean; // Whether at least one image was found
-    originalContent: string; // Original content unchanged
-    replaceContent: string; // Content with images replaced by placeholders
-    image_id: string | null; // ID of the first image found (for backwards compatibility)
-    images: Record<string, string>; // Map of image IDs to their base64 data
-}
+import { ExtractBase64ImageResult } from '../types.js';
+
+// Re-export for backward compatibility
+export type { ExtractBase64ImageResult };
 
 /**
  * Extract base64 images from a string, preserving non-image content

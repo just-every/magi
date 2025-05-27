@@ -5,7 +5,10 @@
  * to get the appropriate provider implementation.
  */
 
-import { ModelProvider as BaseModelProvider } from '../types.js';
+import { ModelProvider as BaseModelProvider, EmbedOpts } from '../types.js';
+
+// Re-export for backward compatibility
+export type { EmbedOpts };
 
 // Extend the base ModelProvider interface to add embedding support
 export interface ModelProvider extends BaseModelProvider {
@@ -21,23 +24,6 @@ export interface ModelProvider extends BaseModelProvider {
         input: string | string[],
         opts?: EmbedOpts
     ): Promise<number[] | number[][]>;
-}
-
-/**
- * Optional parameters for embeddings
- */
-export interface EmbedOpts {
-    /**
-     * A task-specific hint to the model for optimization
-     * For Gemini models: 'SEMANTIC_SIMILARITY', 'CLASSIFICATION', 'CLUSTERING', 'RETRIEVAL_DOCUMENT', etc.
-     */
-    taskType?: string;
-
-    /** Dimension of vector if model supports variable dimensions */
-    dimensions?: number;
-
-    /** Whether to normalize vectors to unit length */
-    normalize?: boolean;
 }
 import { openaiProvider } from './openai.js';
 import { claudeProvider } from './claude.js';

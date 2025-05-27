@@ -3,36 +3,35 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { costTracker } from './cost_tracker.js';
-import { ModelUsage } from '../types.js';
+import { costTracker } from '../utils/cost_tracker.js';
+import { ModelUsage } from '../model_data.js';
 
 describe('Cost Tracker', () => {
     beforeEach(() => {
-        // Clear cost tracker state before each test
-        costTracker.clear();
+        // Reset cost tracker state before each test
+        costTracker.reset();
     });
 
     describe('Usage Tracking', () => {
         it('should add usage entries', () => {
             const usage: ModelUsage = {
-                model: 'gpt-4',
+                model: 'gpt-4.1',
                 input_tokens: 100,
                 output_tokens: 200,
                 timestamp: new Date()
             };
 
+            // CostTracker doesn't expose getEntries, so test via total cost
+            const totalBefore = costTracker.getTotalCost();
             costTracker.addUsage(usage);
-            const entries = costTracker.getEntries();
+            const totalAfter = costTracker.getTotalCost();
             
-            expect(entries).toHaveLength(1);
-            expect(entries[0].model).toBe('gpt-4');
-            expect(entries[0].input_tokens).toBe(100);
-            expect(entries[0].output_tokens).toBe(200);
+            expect(totalAfter).toBeGreaterThan(totalBefore);
         });
 
         it('should calculate costs for known models', () => {
             const usage: ModelUsage = {
-                model: 'gpt-4',
+                model: 'gpt-4.1',
                 input_tokens: 1000,
                 output_tokens: 500,
                 timestamp: new Date()
@@ -46,7 +45,7 @@ describe('Cost Tracker', () => {
 
         it('should handle free tier usage', () => {
             const usage: ModelUsage = {
-                model: 'gpt-4',
+                model: 'gpt-4.1',
                 input_tokens: 100,
                 output_tokens: 50,
                 isFreeTierUsage: true,
@@ -60,7 +59,7 @@ describe('Cost Tracker', () => {
 
         it('should handle already calculated costs', () => {
             const usage: ModelUsage = {
-                model: 'gpt-4',
+                model: 'gpt-4.1',
                 input_tokens: 100,
                 output_tokens: 50,
                 cost: 0.05,
@@ -87,7 +86,7 @@ describe('Cost Tracker', () => {
     describe('Cost Calculation', () => {
         it('should calculate costs with image tokens', () => {
             const usage: ModelUsage = {
-                model: 'gpt-4-vision-preview',
+                model: 'gpt-4.1',
                 input_tokens: 100,
                 output_tokens: 50,
                 image_count: 2,
@@ -102,7 +101,7 @@ describe('Cost Tracker', () => {
 
         it('should handle cached tokens if supported', () => {
             const usage: ModelUsage = {
-                model: 'claude-3-5-sonnet-20241022',
+                model: 'claude-3-7-sonnet-latest',
                 input_tokens: 100,
                 output_tokens: 50,
                 cached_tokens: 50,
@@ -119,14 +118,14 @@ describe('Cost Tracker', () => {
     describe('Aggregation', () => {
         it('should calculate total costs', () => {
             const usage1: ModelUsage = {
-                model: 'gpt-4',
+                model: 'gpt-4.1',
                 input_tokens: 100,
                 output_tokens: 50,
                 timestamp: new Date()
             };
 
             const usage2: ModelUsage = {
-                model: 'gpt-3.5-turbo',
+                model: 'gpt-4.1-mini',
                 input_tokens: 200,
                 output_tokens: 100,
                 timestamp: new Date()
@@ -143,21 +142,21 @@ describe('Cost Tracker', () => {
 
         it('should group costs by model', () => {
             const usage1: ModelUsage = {
-                model: 'gpt-4',
+                model: 'gpt-4.1',
                 input_tokens: 100,
                 output_tokens: 50,
                 timestamp: new Date()
             };
 
             const usage2: ModelUsage = {
-                model: 'gpt-4',
+                model: 'gpt-4.1',
                 input_tokens: 200,
                 output_tokens: 100,
                 timestamp: new Date()
             };
 
             const usage3: ModelUsage = {
-                model: 'gpt-3.5-turbo',
+                model: 'gpt-4.1-mini',
                 input_tokens: 150,
                 output_tokens: 75,
                 timestamp: new Date()
@@ -169,10 +168,12 @@ describe('Cost Tracker', () => {
 
             const costsByModel = costTracker.getCostsByModel();
             
-            expect(costsByModel['gpt-4']).toBeDefined();
-            expect(costsByModel['gpt-3.5-turbo']).toBeDefined();
-            expect(typeof costsByModel['gpt-4']).toBe('number');
-            expect(typeof costsByModel['gpt-3.5-turbo']).toBe('number');
+            expect(costsByModel['gpt-4.1']).toBeDefined();
+            expect(costsByModel['gpt-4.1-mini']).toBeDefined();
+            expect(typeof costsByModel['gpt-4.1'].cost).toBe('number');
+            expect(typeof costsByModel['gpt-4.1-mini'].cost).toBe('number');
+            expect(costsByModel['gpt-4.1'].calls).toBe(2);
+            expect(costsByModel['gpt-4.1-mini'].calls).toBe(1);
         });
     });
 
@@ -182,7 +183,7 @@ describe('Cost Tracker', () => {
             costTracker.onAddUsage(callback);
 
             const usage: ModelUsage = {
-                model: 'gpt-4',
+                model: 'gpt-4.1',
                 input_tokens: 100,
                 output_tokens: 50,
                 timestamp: new Date()
@@ -192,7 +193,7 @@ describe('Cost Tracker', () => {
             
             expect(callback).toHaveBeenCalledTimes(1);
             expect(callback).toHaveBeenCalledWith(expect.objectContaining({
-                model: 'gpt-4',
+                model: 'gpt-4.1',
                 input_tokens: 100,
                 output_tokens: 50
             }));
@@ -206,7 +207,7 @@ describe('Cost Tracker', () => {
             costTracker.onAddUsage(callback2);
 
             const usage: ModelUsage = {
-                model: 'gpt-4',
+                model: 'gpt-4.1',
                 input_tokens: 100,
                 output_tokens: 50,
                 timestamp: new Date()
@@ -222,22 +223,43 @@ describe('Cost Tracker', () => {
     describe('State Management', () => {
         it('should clear all entries', () => {
             const usage: ModelUsage = {
-                model: 'gpt-4',
+                model: 'gpt-4.1',
                 input_tokens: 100,
                 output_tokens: 50,
                 timestamp: new Date()
             };
 
             costTracker.addUsage(usage);
-            expect(costTracker.getEntries()).toHaveLength(1);
+            const totalBefore = costTracker.getTotalCost();
+            expect(totalBefore).toBeGreaterThan(0);
 
-            costTracker.clear();
-            expect(costTracker.getEntries()).toHaveLength(0);
+            costTracker.reset();
+            const totalAfter = costTracker.getTotalCost();
+            expect(totalAfter).toBe(0);
         });
 
-        it('should track session start time', () => {
-            const startTime = costTracker.getStartTime();
-            expect(startTime).toBeInstanceOf(Date);
+        it('should maintain total cost state', () => {
+            const usage1: ModelUsage = {
+                model: 'gpt-4.1',
+                input_tokens: 100,
+                output_tokens: 50,
+                timestamp: new Date()
+            };
+
+            costTracker.addUsage(usage1);
+            const firstTotal = costTracker.getTotalCost();
+            expect(firstTotal).toBeGreaterThan(0);
+
+            const usage2: ModelUsage = {
+                model: 'gpt-4.1-mini',
+                input_tokens: 200,
+                output_tokens: 100,
+                timestamp: new Date()
+            };
+
+            costTracker.addUsage(usage2);
+            const secondTotal = costTracker.getTotalCost();
+            expect(secondTotal).toBeGreaterThan(firstTotal);
         });
     });
 });

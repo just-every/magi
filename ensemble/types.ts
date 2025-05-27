@@ -404,6 +404,193 @@ export type ModelClassID =
     | 'image_generation'
     | 'embedding';
 
+// Available model providers
+export type ModelProviderID =
+    | 'openai'
+    | 'anthropic'
+    | 'google'
+    | 'xai'
+    | 'deepseek'
+    | 'openrouter'
+    | 'test';
+
+// ================================================================
+// Model Registry Types
+// ================================================================
+
+// Represents a tiered pricing structure based on token count
+export interface TieredPrice {
+    threshold_tokens: number; // The token count threshold for the price change
+    price_below_threshold_per_million: number; // Price per million tokens <= threshold
+    price_above_threshold_per_million: number; // Price per million tokens > threshold
+}
+
+// Structure for time-based pricing (Peak/Off-Peak)
+export interface TimeBasedPrice {
+    peak_price_per_million: number;
+    off_peak_price_per_million: number;
+    // Define UTC time boundaries for peak hours (inclusive start, exclusive end)
+    peak_utc_start_hour: number; // e.g., 0 for 00:30
+    peak_utc_start_minute: number; // e.g., 30 for 00:30
+    peak_utc_end_hour: number; // e.g., 16 for 16:30
+    peak_utc_end_minute: number; // e.g., 30 for 16:30
+}
+
+// Represents the cost structure for a model, potentially tiered or time-based
+export interface ModelCost {
+    // Cost components can be flat rate, token-tiered, or time-based
+    input_per_million?: number | TieredPrice | TimeBasedPrice;
+    output_per_million?: number | TieredPrice | TimeBasedPrice;
+    cached_input_per_million?: number | TieredPrice | TimeBasedPrice;
+
+    // Cost per image (for image generation models like Imagen)
+    per_image?: number;
+}
+
+// Represents the feature set of a model
+export interface ModelFeatures {
+    context_length?: number; // Maximum context length in tokens
+    input_modality?: ('text' | 'image' | 'audio' | 'video')[]; // Supported input types
+    output_modality?: ('text' | 'image' | 'audio' | 'embedding')[]; // Supported output types
+    tool_use?: boolean; // Whether the model supports tool/function calling
+    streaming?: boolean; // Whether the model supports streaming responses
+    json_output?: boolean; // Whether the model reliably outputs JSON
+    max_output_tokens?: number; // Maximum output tokens for the model
+    reasoning_output?: boolean; // Whether the model outputs reasoning steps
+}
+
+// Represents a single model entry in the registry
+export interface ModelEntry {
+    id: string; // Model identifier used in API calls
+    aliases?: string[]; // Alternative names for the model
+    provider: ModelProviderID; // Provider (openai, anthropic, google, xai, deepseek)
+    cost: ModelCost; // Cost information using the updated structure
+    features: ModelFeatures; // Feature information for the model
+    class?: string; // Model class as a string to avoid strict typing issues
+    description?: string; // Short description of the model's capabilities
+    rate_limit_fallback?: string; // Fallback model ID in case of rate limit errors
+    openrouter_id?: string; // OpenRouter model ID for this model (if available)
+    embedding?: boolean; // Whether this is an embedding model
+    dim?: number; // Dimension of the embedding vector (for embedding models)
+    score?: number; // Legacy overall MECH model score (0-100)
+    scores?: {
+        // Class-specific scores from artificialanalysis.ai benchmarks
+        monologue?: number; // Humanity's Last Exam (Reasoning & Knowledge) score
+        code?: number; // HumanEval (Coding) score
+        reasoning?: number; // GPQA Diamond (Scientific Reasoning) score
+        // Add more class-specific scores as needed
+    };
+}
+
+// Represents usage data for cost calculation
+export interface ModelUsage {
+    model: string; // The ID of the model used (e.g., 'gemini-2.0-flash')
+    cost?: number; // Calculated cost (optional, will be calculated if missing)
+    input_tokens?: number; // Number of input tokens
+    output_tokens?: number; // Number of output tokens
+    cached_tokens?: number; // Number of cached input tokens
+    image_count?: number; // Number of images generated (for models like Imagen)
+    metadata?: Record<string, any>; // Allow any type for metadata flexibility
+    timestamp?: Date; // Timestamp of the usage, crucial for time-based pricing
+    isFreeTierUsage?: boolean; // Flag for free tier usage override
+}
+
+// Interface for grouping models by class/capability
+export interface ModelClass {
+    models: string[];
+    random?: boolean;
+}
+
+// ================================================================
+// Quota Tracking Types
+// ================================================================
+
+// Interface for tracking model-specific quota information
+export interface ModelSpecificQuota {
+    // Model identifier
+    model: string;
+    // Daily limits in tokens
+    dailyTokenLimit: number;
+    dailyTokensUsed: number;
+    // Daily limits in requests
+    dailyRequestLimit: number;
+    dailyRequestsUsed: number;
+    // Rate limits
+    rateLimit?: {
+        requestsPerMinute: number;
+        tokensPerMinute: number;
+    };
+    // Reset dates/tracking
+    lastResetDate?: Date;
+}
+
+// Main interface for tracking provider-level quota information
+export interface ProviderQuota {
+    provider: ModelProviderID;
+    // Provider-level limits and credits
+    creditBalance?: number;
+    creditLimit?: number;
+    // Provider-specific information (like OpenAI free tier quotas)
+    info?: Record<string, any>;
+    // Model-specific quotas
+    models: Record<string, ModelSpecificQuota>;
+    // Last reset date for the provider (used to trigger daily reset check)
+    lastResetDate?: Date;
+}
+
+// ================================================================
+// Logging Types
+// ================================================================
+
+export interface EnsembleLogger {
+    log_llm_request(
+        agentId: string,
+        providerName: string,
+        model: string,
+        requestData: unknown,
+        timestamp?: Date
+    ): string;
+    log_llm_response(requestId: string | undefined, responseData: unknown, timestamp?: Date): void;
+    log_llm_error(requestId: string | undefined, errorData: unknown, timestamp?: Date): void;
+}
+
+// ================================================================
+// Image Processing Types
+// ================================================================
+
+/**
+ * Result type for extractBase64Image function
+ */
+export interface ExtractBase64ImageResult {
+    found: boolean; // Whether at least one image was found
+    originalContent: string; // Original content unchanged
+    replaceContent: string; // Content with images replaced by placeholders
+    image_id: string | null; // ID of the first image found (for backwards compatibility)
+    images: Record<string, string>; // Map of image IDs to their base64 data
+}
+
+
+// ================================================================
+// Embedding Types
+// ================================================================
+
+/**
+ * Optional parameters for embeddings
+ */
+export interface EmbedOpts {
+    /**
+     * A task-specific hint to the model for optimization
+     * For Gemini models: 'SEMANTIC_SIMILARITY', 'CLASSIFICATION', 'CLUSTERING', 'RETRIEVAL_DOCUMENT', etc.
+     */
+    taskType?: string;
+
+    /** Dimension of vector if model supports variable dimensions */
+    dimensions?: number;
+
+    /** Whether to normalize vectors to unit length */
+    normalize?: boolean;
+}
+
 // ================================================================
 // Ensemble-specific interfaces
 // ================================================================

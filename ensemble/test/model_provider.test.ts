@@ -8,13 +8,13 @@ import {
     getProviderFromModel,
     getModelFromClass,
     isProviderKeyValid
-} from './model_provider.js';
+} from '../model_providers/model_provider.js';
 import { ModelClassID } from '../types.js';
 
 describe('Model Provider Utilities', () => {
     describe('getModelProvider', () => {
         it('should return a provider for known models', () => {
-            const provider = getModelProvider('gpt-4');
+            const provider = getModelProvider('gpt-4.1');
             expect(provider).toBeDefined();
             expect(typeof provider.createResponseStream).toBe('function');
         });
@@ -25,32 +25,34 @@ describe('Model Provider Utilities', () => {
             expect(typeof provider.createResponseStream).toBe('function');
         });
 
-        it('should throw error for unknown models', () => {
-            expect(() => {
-                getModelProvider('unknown-model-xyz');
-            }).toThrow();
+        it('should return openRouter provider for unknown models', () => {
+            const provider = getModelProvider('unknown-model-xyz');
+            expect(provider).toBeDefined();
+            // Should default to openRouter
+            expect(typeof provider.createResponseStream).toBe('function');
         });
 
         it('should handle empty model name', () => {
-            expect(() => {
-                getModelProvider('');
-            }).toThrow();
+            const provider = getModelProvider('');
+            expect(provider).toBeDefined();
+            // Should default to openRouter
+            expect(typeof provider.createResponseStream).toBe('function');
         });
     });
 
     describe('getProviderFromModel', () => {
         it('should identify OpenAI provider for GPT models', () => {
-            const provider = getProviderFromModel('gpt-4');
+            const provider = getProviderFromModel('gpt-4.1');
             expect(provider).toBe('openai');
         });
 
         it('should identify Anthropic provider for Claude models', () => {
-            const provider = getProviderFromModel('claude-3-5-sonnet-20241022');
+            const provider = getProviderFromModel('claude-3-7-sonnet-latest');
             expect(provider).toBe('anthropic');
         });
 
         it('should identify Google provider for Gemini models', () => {
-            const provider = getProviderFromModel('gemini-1.5-pro-latest');
+            const provider = getProviderFromModel('gemini-2.5-pro-exp-03-25');
             expect(provider).toBe('google');
         });
 
@@ -69,10 +71,9 @@ describe('Model Provider Utilities', () => {
             expect(provider).toBe('test');
         });
 
-        it('should throw error for unknown models', () => {
-            expect(() => {
-                getProviderFromModel('unknown-model-xyz');
-            }).toThrow();
+        it('should return openrouter for unknown models', () => {
+            const provider = getProviderFromModel('unknown-model-xyz');
+            expect(provider).toBe('openrouter');
         });
     });
 

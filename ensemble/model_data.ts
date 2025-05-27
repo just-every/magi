@@ -9,104 +9,31 @@
  * - Feature information (context length, modalities, tool use, etc.)
  */
 
-// Represents a tiered pricing structure based on token count
-export interface TieredPrice {
-    threshold_tokens: number; // The token count threshold for the price change
-    price_below_threshold_per_million: number; // Price per million tokens <= threshold
-    price_above_threshold_per_million: number; // Price per million tokens > threshold
-}
-
-// Structure for time-based pricing (Peak/Off-Peak)
-export interface TimeBasedPrice {
-    peak_price_per_million: number;
-    off_peak_price_per_million: number;
-    // Define UTC time boundaries for peak hours (inclusive start, exclusive end)
-    peak_utc_start_hour: number; // e.g., 0 for 00:30
-    peak_utc_start_minute: number; // e.g., 30 for 00:30
-    peak_utc_end_hour: number; // e.g., 16 for 16:30
-    peak_utc_end_minute: number; // e.g., 30 for 16:30
-}
-
-// Represents the cost structure for a model, potentially tiered or time-based
-export interface ModelCost {
-    // Cost components can be flat rate, token-tiered, or time-based
-    input_per_million?: number | TieredPrice | TimeBasedPrice;
-    output_per_million?: number | TieredPrice | TimeBasedPrice;
-    cached_input_per_million?: number | TieredPrice | TimeBasedPrice;
-
-    // Cost per image (for image generation models like Imagen)
-    per_image?: number;
-}
-
-// Represents the feature set of a model
-export interface ModelFeatures {
-    context_length?: number; // Maximum context length in tokens
-    input_modality?: ('text' | 'image' | 'audio' | 'video')[]; // Supported input types
-    output_modality?: ('text' | 'image' | 'audio' | 'embedding')[]; // Supported output types
-    tool_use?: boolean; // Whether the model supports tool/function calling
-    streaming?: boolean; // Whether the model supports streaming responses
-    json_output?: boolean; // Whether the model reliably outputs JSON
-    max_output_tokens?: number; // Maximum output tokens for the model
-    reasoning_output?: boolean; // Whether the model outputs reasoning steps
-}
-
-// Represents a single model entry in the registry
-export interface ModelEntry {
-    id: string; // Model identifier used in API calls
-    aliases?: string[]; // Alternative names for the model
-    provider: ModelProviderID; // Provider (openai, anthropic, google, xai, deepseek)
-    cost: ModelCost; // Cost information using the updated structure
-    features: ModelFeatures; // Feature information for the model
-    class?: string; // Model class as a string to avoid strict typing issues
-    description?: string; // Short description of the model's capabilities
-    rate_limit_fallback?: string; // Fallback model ID in case of rate limit errors
-    openrouter_id?: string; // OpenRouter model ID for this model (if available)
-    embedding?: boolean; // Whether this is an embedding model
-    dim?: number; // Dimension of the embedding vector (for embedding models)
-    score?: number; // Legacy overall MECH model score (0-100)
-    scores?: {
-        // Class-specific scores from artificialanalysis.ai benchmarks
-        monologue?: number; // Humanity's Last Exam (Reasoning & Knowledge) score
-        code?: number; // HumanEval (Coding) score
-        reasoning?: number; // GPQA Diamond (Scientific Reasoning) score
-        // Add more class-specific scores as needed
-    };
-}
-
-// Represents usage data for cost calculation
-export interface ModelUsage {
-    model: string; // The ID of the model used (e.g., 'gemini-2.0-flash')
-    cost?: number; // Calculated cost (optional, will be calculated if missing)
-    input_tokens?: number; // Number of input tokens
-    output_tokens?: number; // Number of output tokens
-    cached_tokens?: number; // Number of cached input tokens
-    image_count?: number; // Number of images generated (for models like Imagen)
-    metadata?: Record<string, any>; // Allow any type for metadata flexibility
-    timestamp?: Date; // Timestamp of the usage, crucial for time-based pricing
-    isFreeTierUsage?: boolean; // Flag for free tier usage override
-}
-
-// Interface for grouping models by class/capability
-export interface ModelClass {
-    models: string[];
-    random?: boolean;
-}
-
-// Available model providers
-export type ModelProviderID =
-    | 'openai'
-    | 'anthropic'
-    | 'google'
-    | 'xai'
-    | 'deepseek'
-    | 'openrouter'
-    | 'test';
-
-// Import from the local types file
-import { ModelClassID } from './types.js';
+// Import all model-related types from types.ts
+import {
+    ModelClassID,
+    ModelProviderID,
+    TieredPrice,
+    TimeBasedPrice,
+    ModelCost,
+    ModelFeatures,
+    ModelEntry,
+    ModelUsage,
+    ModelClass
+} from './types.js';
 
 // Re-export for backward compatibility
-export type { ModelClassID };
+export type {
+    ModelClassID,
+    ModelProviderID,
+    TieredPrice,
+    TimeBasedPrice,
+    ModelCost,
+    ModelFeatures,
+    ModelEntry,
+    ModelUsage,
+    ModelClass
+};
 
 // --- MODEL_CLASSES remains largely the same, but ensure model IDs match the registry ---
 // (Keep your existing MODEL_CLASSES definition here, just ensure IDs are consistent
@@ -1318,6 +1245,30 @@ export const MODEL_REGISTRY: ModelEntry[] = [
         class: 'search',
         description:
             'Best suited for exhaustive research, generating detailed reports and in-depth insights.',
+    },
+    // Test model for unit tests
+    {
+        id: 'test-model',
+        provider: 'test',
+        cost: {
+            input_per_million: 0,
+            output_per_million: 0,
+        },
+        features: {
+            context_length: 8192,
+            input_modality: ['text'],
+            output_modality: ['text'],
+            tool_use: true,
+            streaming: true,
+            json_output: true,
+        },
+        class: 'standard',
+        scores: {
+            monologue: 50,
+            code: 50,
+            reasoning: 50,
+        },
+        description: 'Test model for unit testing purposes',
     },
 ];
 

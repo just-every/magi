@@ -69,37 +69,6 @@ const cancelWithTools = request('gpt-4o', [
 });
 ```
 
-
-## Supported Providers
-
-### Anthropic Claude
-- `claude-3-5-sonnet-20241022`
-- `claude-3-5-haiku-20241022`
-- `claude-3-opus-20240229`
-
-### OpenAI
-- `gpt-4o`
-- `gpt-4o-mini`
-- `gpt-4-turbo`
-- `o1-preview`
-- `o1-mini`
-
-### Google Gemini
-- `gemini-1.5-pro`
-- `gemini-1.5-flash`
-- `gemini-2.0-flash-exp`
-
-### Deepseek
-- `deepseek-chat`
-- `deepseek-reasoner`
-
-### xAI Grok
-- `grok-2-1212`
-- `grok-2-vision-1212`
-
-### OpenRouter
-- Various models via OpenRouter proxy
-
 ## API Reference
 
 ### `request(model, messages, params)`
@@ -218,10 +187,6 @@ DEEPSEEK_API_KEY=your_key_here
 XAI_API_KEY=your_key_here
 OPENROUTER_API_KEY=your_key_here
 ```
-
-## Standalone Usage
-
-This package can be used independently of the full MAGI system. It includes simplified implementations of quota management and other utilities that work without requiring the full MAGI infrastructure.
 
 ## License
 

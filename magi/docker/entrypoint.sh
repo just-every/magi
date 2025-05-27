@@ -39,12 +39,10 @@ echo "Configuring Git to trust directories in /magi_output..."
 gosu magi_user git config --global --add safe.directory '*'
 echo "Git safe.directory configuration set"
 
-# --- Fix /magi_output Permissions ---
-# First ensure the root directory is owned by magi_user
-echo "Fixing ownership of /magi_output for files not already owned by magi_user..."
-# Only change objects not already owned by magi_user - more efficient for large volumes
-find /magi_output ! -user magi_user -exec chown magi_user:magi_user {} + 2>/dev/null || true
-echo "Permissions fixed for /magi_output"
+# --- Fix /magi_output Permissions (lightweight) ---
+echo "Ensuring /magi_output is owned by magi_user..."
+chown magi_user:magi_user /magi_output 2>/dev/null || true
+echo "Ownership checked for /magi_output"
 
 # Check if PROCESS_ID environment variable is set
 if [ -n "$PROCESS_ID" ]; then

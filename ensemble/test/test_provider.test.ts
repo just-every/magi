@@ -7,7 +7,7 @@ import {
     TestProvider, 
     testProviderConfig, 
     resetTestProviderConfig 
-} from './test_provider.js';
+} from '../model_providers/test_provider.js';
 import { EnsembleAgent, EnsembleStreamEvent, ToolFunction } from '../types.js';
 
 // Mock agent implementation for testing
@@ -74,7 +74,7 @@ describe('Test Provider', () => {
             testProviderConfig.streamingDelay = 10;
             
             const stream = provider.createResponseStream('test-model', [
-                { role: 'user', content: 'Hello' }
+                { type: 'message', role: 'user', content: 'Hello' }
             ], mockAgent);
 
             for await (const event of stream) {
@@ -86,7 +86,7 @@ describe('Test Provider', () => {
             // Should have message_start event
             const startEvent = events.find(e => e.type === 'message_start');
             expect(startEvent).toBeDefined();
-            expect(startEvent?.message_id).toBeDefined();
+            expect((startEvent as any)?.message_id).toBeDefined();
             
             // Should have message_delta events
             const deltaEvents = events.filter(e => e.type === 'message_delta');
@@ -105,7 +105,7 @@ describe('Test Provider', () => {
             testProviderConfig.errorMessage = 'Simulated test error';
             
             const stream = provider.createResponseStream('test-model', [
-                { role: 'user', content: 'Hello' }
+                { type: 'message', role: 'user', content: 'Hello' }
             ], mockAgent);
 
             for await (const event of stream) {
@@ -123,7 +123,7 @@ describe('Test Provider', () => {
             testProviderConfig.simulateRateLimit = true;
             
             const stream = provider.createResponseStream('test-model', [
-                { role: 'user', content: 'Hello' }
+                { type: 'message', role: 'user', content: 'Hello' }
             ], mockAgent);
 
             for await (const event of stream) {
@@ -159,8 +159,8 @@ describe('Test Provider', () => {
 
         it('should handle question responses', () => {
             const provider = new TestProvider();
-            const response = (provider as any).generateResponse('What is this?');
-            expect(response).toContain('question');
+            const response = (provider as any).generateResponse('Can you explain?');
+            expect(response).toContain('interesting question');
         });
 
         it('should provide generic response for other inputs', () => {
@@ -183,11 +183,12 @@ describe('Test Provider', () => {
                             type: 'object',
                             properties: {
                                 query: { type: 'string' }
-                            }
+                            },
+                            required: []
                         }
                     }
                 },
-                implementation: vi.fn()
+                function: vi.fn()
             };
             
             const agentWithTools = new MockAgent('test-agent', [mockTool]);
@@ -199,7 +200,7 @@ describe('Test Provider', () => {
             testProviderConfig.streamingDelay = 10;
             
             const stream = provider.createResponseStream('test-model', [
-                { role: 'user', content: 'Search for something' }
+                { type: 'message', role: 'user', content: 'Search for something' }
             ], agentWithTools);
 
             for await (const event of stream) {
@@ -220,7 +221,7 @@ describe('Test Provider', () => {
             testProviderConfig.streamingDelay = 10;
             
             const stream = provider.createResponseStream('test-model', [
-                { role: 'user', content: 'Hello' }
+                { type: 'message', role: 'user', content: 'Hello' }
             ], mockAgent);
 
             for await (const event of stream) {
@@ -241,7 +242,7 @@ describe('Test Provider', () => {
             testProviderConfig.streamingDelay = 10;
             
             const stream = provider.createResponseStream('test-model', [
-                { role: 'user', content: 'Hello' }
+                { type: 'message', role: 'user', content: 'Hello' }
             ], mockAgent);
 
             for await (const event of stream) {
@@ -269,7 +270,7 @@ describe('Test Provider', () => {
             
             const handle = provider.createResponse(
                 'test-model',
-                [{ role: 'user', content: 'Hello' }],
+                [{ type: 'message', role: 'user', content: 'Hello' }],
                 mockAgent,
                 (event) => events.push(event),
                 (error) => errors.push(error)
@@ -298,7 +299,7 @@ describe('Test Provider', () => {
             
             const handle = provider.createResponse(
                 'test-model',
-                [{ role: 'user', content: 'Hello' }],
+                [{ type: 'message', role: 'user', content: 'Hello' }],
                 mockAgent,
                 (event) => events.push(event),
                 (error) => errors.push(error)
@@ -316,7 +317,7 @@ describe('Test Provider', () => {
         it('should support cancellation in callback API', () => {
             const handle = provider.createResponse(
                 'test-model',
-                [{ role: 'user', content: 'Hello' }],
+                [{ type: 'message', role: 'user', content: 'Hello' }],
                 mockAgent,
                 () => {},
                 () => {}

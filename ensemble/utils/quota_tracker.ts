@@ -4,40 +4,10 @@
  * This module tracks quota usage across different model providers and their free/paid tiers
  */
 
-import { ModelProviderID } from '../index.js';
+import { ModelProviderID, ModelSpecificQuota, ProviderQuota } from '../types.js';
 
-// Interface for tracking model-specific quota information
-export interface ModelSpecificQuota {
-    // Model identifier
-    model: string;
-    // Daily limits in tokens
-    dailyTokenLimit: number;
-    dailyTokensUsed: number;
-    // Daily limits in requests
-    dailyRequestLimit: number;
-    dailyRequestsUsed: number;
-    // Rate limits
-    rateLimit?: {
-        requestsPerMinute: number;
-        tokensPerMinute: number;
-    };
-    // Reset dates/tracking
-    lastResetDate?: Date;
-}
-
-// Main interface for tracking provider-level quota information
-export interface ProviderQuota {
-    provider: ModelProviderID;
-    // Provider-level limits and credits
-    creditBalance?: number;
-    creditLimit?: number;
-    // Provider-specific information (like OpenAI free tier quotas)
-    info?: Record<string, any>;
-    // Model-specific quotas
-    models: Record<string, ModelSpecificQuota>;
-    // Last reset date for the provider (used to trigger daily reset check)
-    lastResetDate?: Date;
-}
+// Re-export for backward compatibility
+export type { ModelSpecificQuota, ProviderQuota };
 
 /**
  * Helper for tracking OpenAI free daily usage quotas.
