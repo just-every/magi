@@ -488,16 +488,17 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                 : parentProcess?.colors.rgb;
         let status: string = parentProcess?.status || 'unknown';
         let metaDataString = '';
-        if (selectedItem.data?.statusEvent) {
-            if (selectedItem.data.statusEvent.status) {
-                status = selectedItem.data.statusEvent.status;
+        const agentData = selectedItem.data as AgentData;
+        if (agentData.statusEvent) {
+            if (agentData.statusEvent.status) {
+                status = agentData.statusEvent.status;
             }
             if (
-                selectedItem.data.statusEvent.meta_data &&
-                Object.keys(selectedItem.data.statusEvent.meta_data).length > 0
+                agentData.statusEvent.meta_data &&
+                Object.keys(agentData.statusEvent.meta_data).length > 0
             ) {
                 metaDataString = ` (${Object.entries(
-                    selectedItem.data.statusEvent.meta_data
+                    agentData.statusEvent.meta_data
                 )
                     .map(([key, value]) => `${key}: ${value}`)
                     .join(', ')})`;

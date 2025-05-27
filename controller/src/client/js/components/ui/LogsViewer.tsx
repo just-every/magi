@@ -28,7 +28,15 @@ interface CostData {
 interface LogFile {
     timestamp: string;
     provider: string;
-    request: Record<string, unknown>;
+    request: {
+        messages?: Array<unknown>;
+        input?: Array<unknown>;
+        contents?: Array<unknown>;
+        [key: string]: unknown;
+    };
+    response?: Array<unknown>;
+    errors?: Array<unknown>;
+    model?: string;
 }
 
 const LogsViewer: React.FC<LogsViewerProps> = ({

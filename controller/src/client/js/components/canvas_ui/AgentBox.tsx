@@ -134,7 +134,7 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
                     designEvents &&
                     designEvents.length > 0 && (
                         <DesignDisplay
-                            designs={designEvents}
+                            designEvents={designEvents}
                             collapsible={true}
                         />
                     )}

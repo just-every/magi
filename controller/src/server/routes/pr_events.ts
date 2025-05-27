@@ -34,6 +34,7 @@ router.get('/', async (req, res) => {
 /**
  * Get a specific PR event by ID
  */
+// @ts-ignore
 router.get('/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
@@ -56,6 +57,7 @@ router.get('/:id', async (req, res) => {
 /**
  * Revert a PR merge
  */
+// @ts-ignore
 router.post('/:id/revert', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
@@ -77,7 +79,7 @@ router.post('/:id/revert', async (req, res) => {
         }
 
         // Get user from request
-        const userId = req.body.userId || req.user?.email || 'Unknown';
+        const userId = req.body.userId || (req as any).user?.email || 'Unknown';
 
         // Resolve project path
         // This assumes the same structure as used in git_push.ts
