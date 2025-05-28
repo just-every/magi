@@ -2,9 +2,18 @@
  * Bridge to connect ensemble logging to magi file_utils logging
  */
 
-import { EnsembleLogger, setEnsembleLogger, ModelUsage, getProviderFromModel } from '@magi-system/ensemble';
+import {
+    EnsembleLogger,
+    setEnsembleLogger,
+    ModelUsage,
+    getProviderFromModel,
+} from '@magi-system/ensemble';
 import { costTracker as ensembleCostTracker } from '@magi-system/ensemble/cost_tracker';
-import { log_llm_request, log_llm_response, log_llm_error } from './file_utils.js';
+import {
+    log_llm_request,
+    log_llm_response,
+    log_llm_error,
+} from './file_utils.js';
 import { ModelProviderID } from '@magi-system/ensemble';
 import { CostUpdateEvent } from '../types/shared-types.js';
 import { sendStreamEvent } from './communication.js';
@@ -27,11 +36,19 @@ export class MagiEnsembleLogger implements EnsembleLogger {
         );
     }
 
-    log_llm_response(requestId: string | undefined, responseData: unknown, timestamp?: Date): void {
+    log_llm_response(
+        requestId: string | undefined,
+        responseData: unknown,
+        timestamp?: Date
+    ): void {
         log_llm_response(requestId, responseData, timestamp);
     }
 
-    log_llm_error(requestId: string | undefined, errorData: unknown, timestamp?: Date): void {
+    log_llm_error(
+        requestId: string | undefined,
+        errorData: unknown,
+        timestamp?: Date
+    ): void {
         log_llm_error(requestId, errorData, timestamp);
     }
 }

@@ -5,10 +5,7 @@
  * Uses the provider architecture for abstracting away model-specific details.
  */
 
-import {
-    getModelFromClass,
-    getModelProvider,
-} from '@magi-system/ensemble';
+import { getModelFromClass, getModelProvider } from '@magi-system/ensemble';
 
 // Cache to avoid repeated embedding calls for the same text
 const embeddingCache = new Map<

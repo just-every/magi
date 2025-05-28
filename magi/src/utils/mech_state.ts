@@ -9,10 +9,7 @@ import { ToolFunction, type ModelClassID } from '../types/shared-types.js';
 import { createToolFunction } from './tool_call.js';
 import { addHistory } from './history.js';
 import { spawnMetaThought } from './meta_cognition.js';
-import {
-    findModel,
-    MODEL_CLASSES,
-} from '@magi-system/ensemble';
+import { findModel, MODEL_CLASSES } from '@magi-system/ensemble';
 import { Agent } from './agent.js';
 import { getThoughtTools } from './thought_utils.js';
 

@@ -263,7 +263,7 @@ export async function launchChrome(
         // Let's try using child_process directly to check if Chrome is installed
         try {
             const { execSync } = await import('child_process');
-            
+
             // In WSL, prefer WSL Chrome over Windows Chrome
             let chromeCommand = '';
             try {
@@ -283,19 +283,25 @@ export async function launchChrome(
                     } catch {
                         // If in WSL and no Linux Chrome found, warn about chrome.exe
                         if (process.env.WSL_DISTRO_NAME) {
-                            console.log('WSL detected but no Linux Chrome found. Install Chrome in WSL with:');
-                            console.log('  wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -');
-                            console.log('  echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list');
-                            console.log('  sudo apt update && sudo apt install google-chrome-stable');
+                            console.log(
+                                'WSL detected but no Linux Chrome found. Install Chrome in WSL with:'
+                            );
+                            console.log(
+                                '  wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -'
+                            );
+                            console.log(
+                                '  echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list'
+                            );
+                            console.log(
+                                '  sudo apt update && sudo apt install google-chrome-stable'
+                            );
                         }
                         throw new Error('No Chrome installation found');
                     }
                 }
             }
-            
-            const chromeVersion = execSync(chromeCommand)
-                .toString()
-                .trim();
+
+            const chromeVersion = execSync(chromeCommand).toString().trim();
             console.log(`Detected Chrome version: ${chromeVersion}`);
         } catch (e) {
             console.log(
@@ -310,7 +316,11 @@ export async function launchChrome(
                 const { execSync } = await import('child_process');
                 try {
                     // Prefer google-chrome in WSL/Linux
-                    const path = execSync('which google-chrome', { stdio: 'pipe' }).toString().trim();
+                    const path = execSync('which google-chrome', {
+                        stdio: 'pipe',
+                    })
+                        .toString()
+                        .trim();
                     if (path) {
                         chromePath = path;
                         console.log(`Using Chrome at: ${chromePath}`);
@@ -318,7 +328,9 @@ export async function launchChrome(
                 } catch {
                     try {
                         // Fallback to chrome
-                        const path = execSync('which chrome', { stdio: 'pipe' }).toString().trim();
+                        const path = execSync('which chrome', { stdio: 'pipe' })
+                            .toString()
+                            .trim();
                         if (path) {
                             chromePath = path;
                             console.log(`Using Chrome at: ${chromePath}`);
@@ -326,13 +338,19 @@ export async function launchChrome(
                     } catch {
                         try {
                             // Fallback to chromium
-                            const path = execSync('which chromium', { stdio: 'pipe' }).toString().trim();
+                            const path = execSync('which chromium', {
+                                stdio: 'pipe',
+                            })
+                                .toString()
+                                .trim();
                             if (path) {
                                 chromePath = path;
                                 console.log(`Using Chromium at: ${chromePath}`);
                             }
                         } catch {
-                            console.log('Could not find Chrome binary path, letting chrome-launcher auto-detect');
+                            console.log(
+                                'Could not find Chrome binary path, letting chrome-launcher auto-detect'
+                            );
                         }
                     }
                 }

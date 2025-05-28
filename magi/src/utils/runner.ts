@@ -275,7 +275,7 @@ export class Runner {
             const eventQueue = new AsyncQueue<StreamingEvent>();
             let cancelHandle: any = null;
             let timeoutId: NodeJS.Timeout | null = null;
-            
+
             try {
                 // Ensure correct message sequence before sending
                 const sequencedMessages =
@@ -320,7 +320,7 @@ export class Runner {
                     },
                 });
                 agent.model = selectedModel; // Update agent's selected model
-                
+
                 // Start the request with callback API
                 cancelHandle = ensembleRequest(
                     selectedModel,
@@ -336,16 +336,19 @@ export class Runner {
                                 ...event,
                                 agent: agent.export(),
                             } as StreamingEvent;
-                            
+
                             eventQueue.push(magiEvent);
                             // Complete the queue when we receive terminal events
-                            if (event.type === 'stream_end' || event.type === 'error') {
+                            if (
+                                event.type === 'stream_end' ||
+                                event.type === 'error'
+                            ) {
                                 eventQueue.complete();
                             }
                         },
                         onError: (error: unknown) => {
                             eventQueue.setError(error);
-                        }
+                        },
                     }
                 );
 
@@ -364,7 +367,7 @@ export class Runner {
                         }
                     }, EVENT_TIMEOUT_MS);
                 };
-                
+
                 updateTimeout(); // Start initial timeout
 
                 // Process events from the queue
@@ -398,7 +401,7 @@ export class Runner {
 
                 // Clean up timeout
                 if (timeoutId) clearTimeout(timeoutId);
-                
+
                 // If the for await loop completes without error, this model succeeded.
                 console.log(
                     `[Runner] Model ${selectedModel} completed successfully.`
@@ -417,7 +420,7 @@ export class Runner {
                 // Clean up timeout and cancel handle on error
                 if (timeoutId) clearTimeout(timeoutId);
                 if (cancelHandle) cancelHandle.cancel();
-                
+
                 // --- Catch block for the current model attempt ---
                 // This catches:
                 // 1. TimeoutError thrown by our timeout logic

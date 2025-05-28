@@ -1,6 +1,6 @@
 /**
  * MAGI-specific quota tracker integration
- * 
+ *
  * This file integrates the ensemble QuotaTracker with MAGI's UI communication system
  */
 
