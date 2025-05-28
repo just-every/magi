@@ -263,9 +263,37 @@ export async function launchChrome(
         // Let's try using child_process directly to check if Chrome is installed
         try {
             const { execSync } = await import('child_process');
-            const chromeVersion = execSync(
-                'google-chrome --version || chrome --version || chromium --version'
-            )
+            
+            // In WSL, prefer WSL Chrome over Windows Chrome
+            let chromeCommand = '';
+            try {
+                // First try google-chrome (most common in WSL/Linux)
+                execSync('which google-chrome', { stdio: 'pipe' });
+                chromeCommand = 'google-chrome --version';
+            } catch {
+                try {
+                    // Try chrome
+                    execSync('which chrome', { stdio: 'pipe' });
+                    chromeCommand = 'chrome --version';
+                } catch {
+                    try {
+                        // Try chromium as fallback
+                        execSync('which chromium', { stdio: 'pipe' });
+                        chromeCommand = 'chromium --version';
+                    } catch {
+                        // If in WSL and no Linux Chrome found, warn about chrome.exe
+                        if (process.env.WSL_DISTRO_NAME) {
+                            console.log('WSL detected but no Linux Chrome found. Install Chrome in WSL with:');
+                            console.log('  wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -');
+                            console.log('  echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list');
+                            console.log('  sudo apt update && sudo apt install google-chrome-stable');
+                        }
+                        throw new Error('No Chrome installation found');
+                    }
+                }
+            }
+            
+            const chromeVersion = execSync(chromeCommand)
                 .toString()
                 .trim();
             console.log(`Detected Chrome version: ${chromeVersion}`);
@@ -275,15 +303,60 @@ export async function launchChrome(
             );
         }
 
-        // Now use chrome-launcher as normal
-        const chrome = await chromeLauncher.launch({
+        // Determine Chrome binary path for WSL/Linux environments
+        let chromePath: string | undefined = undefined;
+        if (process.platform === 'linux' || process.env.WSL_DISTRO_NAME) {
+            try {
+                const { execSync } = await import('child_process');
+                try {
+                    // Prefer google-chrome in WSL/Linux
+                    const path = execSync('which google-chrome', { stdio: 'pipe' }).toString().trim();
+                    if (path) {
+                        chromePath = path;
+                        console.log(`Using Chrome at: ${chromePath}`);
+                    }
+                } catch {
+                    try {
+                        // Fallback to chrome
+                        const path = execSync('which chrome', { stdio: 'pipe' }).toString().trim();
+                        if (path) {
+                            chromePath = path;
+                            console.log(`Using Chrome at: ${chromePath}`);
+                        }
+                    } catch {
+                        try {
+                            // Fallback to chromium
+                            const path = execSync('which chromium', { stdio: 'pipe' }).toString().trim();
+                            if (path) {
+                                chromePath = path;
+                                console.log(`Using Chromium at: ${chromePath}`);
+                            }
+                        } catch {
+                            console.log('Could not find Chrome binary path, letting chrome-launcher auto-detect');
+                        }
+                    }
+                }
+            } catch (e) {
+                console.log('Error detecting Chrome path:', e);
+            }
+        }
+
+        // Now use chrome-launcher with explicit Chrome path if found
+        const launchOptions: any = {
             chromeFlags: allFlags,
             userDataDir: chromeProfileDir,
             startingUrl: 'about:blank',
             ignoreDefaultFlags: true, // We're providing all flags we need
             port: port, // Always use explicit port
             logLevel: 'verbose', // Get more detailed logs
-        });
+        };
+
+        // Add Chrome path if we found one (prevents chrome-launcher from using Windows Chrome in WSL)
+        if (chromePath) {
+            launchOptions.chromePath = chromePath;
+        }
+
+        const chrome = await chromeLauncher.launch(launchOptions);
 
         // Verify Chrome is actually running
         if (!chrome.pid) {

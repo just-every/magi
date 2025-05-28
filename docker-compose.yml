@@ -70,8 +70,9 @@ services:
             - TZ=$(date +%Z) # Get host timezone - conversion handled in code
         networks:
             - magi-network
-        profiles:
-            - 'donotstart' # Prevents this service from starting automatically
+        restart: unless-stopped
+#        profiles:
+#            - 'donotstart' # Prevents this service from starting automatically
 
 networks:
     magi-network:

@@ -265,7 +265,8 @@ function copyDirectory(source: string, target: string) {
 export function isChromeRunning(): boolean {
     try {
         const platform = process.platform;
-        if (platform === 'win32') {
+        if (platform === 'win32' && !process.env.WSL_DISTRO_NAME) {
+            // Pure Windows (not WSL)
             const result = execSync(
                 'tasklist /fi "imagename eq chrome.exe" /fo csv /nh'
             ).toString();
@@ -273,11 +274,24 @@ export function isChromeRunning(): boolean {
         } else if (platform === 'darwin') {
             const result = execSync('pgrep -x "Google Chrome"').toString();
             return result.trim().length > 0;
-        } else if (platform === 'linux') {
-            const result = execSync(
-                'pgrep -x "chrome" || pgrep -x "chromium"'
-            ).toString();
-            return result.trim().length > 0;
+        } else if (platform === 'linux' || process.env.WSL_DISTRO_NAME) {
+            // Linux or WSL - check for WSL Chrome processes, not Windows Chrome
+            try {
+                const result = execSync(
+                    'pgrep -f "google-chrome" || pgrep -f "chrome" || pgrep -f "chromium"'
+                ).toString();
+                return result.trim().length > 0;
+            } catch {
+                // If pgrep fails, try ps as fallback
+                try {
+                    const result = execSync(
+                        'ps aux | grep -E "(google-chrome|chrome|chromium)" | grep -v grep'
+                    ).toString();
+                    return result.trim().length > 0;
+                } catch {
+                    return false;
+                }
+            }
         }
         return false;
     } catch (error) {
