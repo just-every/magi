@@ -5,8 +5,8 @@ Shared model-provider utilities for MAGI System. This package provides a unified
 ## Features
 
 - **Multi-provider support**: Claude, OpenAI, Gemini, Deepseek, Grok, OpenRouter
-- **Event-driven API**: Callback-based streaming for better performance
-- **Cancellation support**: Explicit request cancellation with cleanup
+- **AsyncGenerator API**: Clean, native async iteration for streaming responses
+- **Simple interface**: Direct async generator pattern matches native LLM APIs
 - **Tool calling**: Function calling support where available
 - **Image processing**: Image-to-text and image utilities
 - **Cost tracking**: Token usage and cost monitoring
@@ -25,75 +25,99 @@ npm install @magi-system/ensemble
 ```typescript
 import { request } from '@magi-system/ensemble';
 
-// Simple request with callback API
-const cancel = request('claude-3-5-sonnet-20241022', [
+// Simple request with AsyncGenerator API
+const stream = request('claude-3-5-sonnet-20241022', [
   { type: 'message', role: 'user', content: 'Hello, world!' }
-], {
-  onEvent: (event) => {
-    if (event.type === 'message_delta') {
-      console.log(event.content);
-    } else if (event.type === 'message_complete') {
-      console.log('Request completed!');
-    }
-  },
-  onError: (error) => {
-    console.error('Request failed:', error);
-  }
-});
+]);
 
-// Cancel the request if needed
-// cancel.cancel();
+// Process streaming events
+for await (const event of stream) {
+  if (event.type === 'message_delta') {
+    console.log(event.content);
+  } else if (event.type === 'message_complete') {
+    console.log('Request completed!');
+  } else if (event.type === 'error') {
+    console.error('Request failed:', event.error);
+  }
+}
 
 // With tools
-const cancelWithTools = request('gpt-4o', [
+const toolStream = request('gpt-4o', [
   { type: 'message', role: 'user', content: 'What is the weather?' }
 ], {
   tools: [{
-    name: 'get_weather',
-    description: 'Get current weather',
-    parameters: {
-      type: 'object',
-      properties: {
-        location: { type: 'string' }
+    function: async (location: string) => {
+      // Tool implementation
+      return `Weather in ${location}: Sunny, 72°F`;
+    },
+    definition: {
+      type: 'function',
+      function: {
+        name: 'get_weather',
+        description: 'Get current weather',
+        parameters: {
+          type: 'object',
+          properties: {
+            location: { type: 'string' }
+          },
+          required: ['location']
+        }
       }
     }
-  }],
-  onEvent: (event) => {
-    if (event.type === 'tool_call') {
-      console.log('Tool called:', event.tool_calls[0].function.name);
-    } else if (event.type === 'message_delta') {
-      console.log(event.content);
-    }
-  },
-  onError: console.error
+  }]
 });
+
+// Process tool calls
+for await (const event of toolStream) {
+  if (event.type === 'tool_start') {
+    console.log('Tool called:', event.tool_calls[0].function.name);
+  } else if (event.type === 'message_delta') {
+    console.log(event.content);
+  }
+}
+
+// Early termination
+const earlyStream = request('claude-3-5-sonnet-20241022', [
+  { type: 'message', role: 'user', content: 'Count to 100' }
+]);
+
+let count = 0;
+for await (const event of earlyStream) {
+  if (event.type === 'message_delta') {
+    count++;
+    if (count >= 10) break; // Stop after 10 events
+  }
+}
 ```
 
 ## API Reference
 
-### `request(model, messages, params)`
+### `request(model, messages, options?)`
 
-Main function for making LLM requests using the new callback-based API.
+Main function for making LLM requests using the AsyncGenerator API.
 
 **Parameters:**
 - `model` (string): Model identifier
 - `messages` (ResponseInput): Array of message objects
-- `params` (RequestParams): Configuration object with required `onEvent` callback
+- `options` (RequestOptions): Optional configuration object
 
-**Returns:** CancelHandle with `cancel()` method
+**Returns:** `AsyncGenerator<EnsembleStreamEvent>` - An async generator that yields streaming events
 
 ```typescript
-interface RequestParams {
+interface RequestOptions {
   agentId?: string;
   tools?: ToolFunction[];
   modelSettings?: ModelSettings;
   modelClass?: ModelClassID;
-  onEvent: (event: StreamingEvent) => void;    // required
-  onError?: (error: unknown) => void;          // optional
 }
 
-interface CancelHandle {
-  cancel(): void;
+// Usage with try/catch for error handling
+try {
+  for await (const event of request(model, messages, options)) {
+    // Process events
+  }
+} catch (error) {
+  // Handle errors
 }
 ```
 
@@ -104,44 +128,23 @@ Each provider implements the `ModelProvider` interface:
 
 ```typescript
 interface ModelProvider {
-  createResponse(
+  createResponseStream(
     model: string, 
     messages: ResponseInput, 
-    agent: EnsembleAgent,
-    onEvent: (event: StreamingEvent) => void,
-    onError?: (error: unknown) => void
-  ): CancelHandle;
+    agent: EnsembleAgent
+  ): AsyncGenerator<EnsembleStreamEvent>;
 }
 ```
 
 ### Utilities
 
-- **AsyncQueue**: Generic async queue for bridging callbacks to async iteration
 - **Cost Tracking**: Monitor token usage and costs with cost_tracker
 - **Quota Management**: Track API quotas and rate limits with quota_tracker
 - **Image Processing**: Convert images to text, resize, and optimize
 - **Logging System**: Pluggable request/response logging with configurable backends
 - **Communication**: Logging and debugging utilities
 - **Delta Buffer**: Handle streaming response deltas
-
-#### AsyncQueue Example
-
-```typescript
-import { AsyncQueue } from '@magi-system/ensemble';
-
-// Bridge callback events to async iteration
-const queue = new AsyncQueue<string>();
-
-// Push events
-queue.push('event1');
-queue.push('event2');
-queue.complete();
-
-// Consume as async iterator
-for await (const event of queue) {
-  console.log(event);
-}
-```
+- **AsyncQueue**: Generic async queue for bridging callbacks to async iteration (used internally)
 
 ### Logging
 

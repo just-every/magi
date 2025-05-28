@@ -7,12 +7,8 @@
  */
 
 import { BROWSER_WIDTH, BROWSER_HEIGHT } from '../constants.js';
-import {
-    AgentInterface,
-    ResponseInput,
-    ToolFunction,
-    ToolParameterMap,
-} from '../types/shared-types.js'; // Keep if used by your framework
+import { AgentInterface, ToolParameterMap } from '../types/shared-types.js'; // Keep if used by your framework
+import { ResponseInput, ToolFunction } from '@magi-system/ensemble';
 import { createToolFunction } from './tool_call.js'; // Keep if used by your framework
 // Import BrowserAction type, session getter, and BrowserStatusPayload
 import { getAgentBrowserSession, BrowserAction } from './browser_session.js'; // Assuming BrowserAction is exported from here

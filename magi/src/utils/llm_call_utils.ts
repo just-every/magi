@@ -11,11 +11,8 @@ import {
     AgentType,
     createQuickAgent,
 } from '../magi_agents/index.js';
-import {
-    ResponseInput,
-    ModelClassID,
-    type AgentDefinition,
-} from '../types/shared-types.js';
+import { ModelClassID, type AgentDefinition } from '../types/shared-types.js';
+import { ResponseInput } from '@magi-system/ensemble';
 import { Agent } from './agent.js';
 
 /**

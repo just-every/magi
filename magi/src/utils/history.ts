@@ -6,13 +6,13 @@
  */
 import {
     ResponseInput,
+    ResponseInputItem,
     ResponseInputFunctionCall,
     ResponseInputFunctionCallOutput,
     ResponseInputMessage,
     ResponseThinkingMessage,
     ResponseOutputMessage,
-    ResponseInputItem,
-} from '../types/shared-types.js';
+} from '@magi-system/ensemble';
 import { setDelayInterrupted } from './thought_utils.js';
 import { formatHistoryForSummary, createSummary } from './summary_utils.js';
 import { truncateLargeValues } from './file_utils.js';

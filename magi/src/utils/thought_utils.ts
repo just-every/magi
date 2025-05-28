@@ -2,7 +2,7 @@
  * Helper for thought delay processing
  */
 import { dateFormat } from './date_tools.js';
-import { ToolFunction } from '../types/shared-types.js';
+import { ToolFunction } from '@magi-system/ensemble';
 import { createToolFunction } from './tool_call.js';
 // Thought utilities for managing thought delay and related tools
 

@@ -100,24 +100,22 @@ describe('Ensemble Package Exports', () => {
     describe('Request API Integration', () => {
         it('should handle test provider requests', async () => {
             const events: EnsembleStreamEvent[] = [];
-            const errors: unknown[] = [];
             
             testProviderConfig.fixedResponse = 'Test response';
             testProviderConfig.streamingDelay = 10;
 
-            const handle = request('test-model', [
+            const stream = request('test-model', [
                 { type: 'message', role: 'user', content: 'Hello test' }
             ], {
                 agentId: 'test-agent',
                 tools: [],
-                onEvent: (event) => events.push(event),
-                onError: (error) => errors.push(error)
             });
 
-            // Wait for the async operation to complete
-            await new Promise(resolve => setTimeout(resolve, 200));
+            // Collect all events from the stream
+            for await (const event of stream) {
+                events.push(event);
+            }
 
-            expect(errors).toHaveLength(0);
             expect(events.length).toBeGreaterThan(0);
             
             // Should have message_start event
@@ -131,21 +129,25 @@ describe('Ensemble Package Exports', () => {
             // Should have stream_end event
             const endEvent = events.find(e => e.type === 'stream_end');
             expect(endEvent).toBeDefined();
-
-            handle.cancel();
         });
 
-        it('should handle cancellation', () => {
-            const handle = request('test-model', [
+        it('should handle early termination', async () => {
+            const events: EnsembleStreamEvent[] = [];
+            
+            const stream = request('test-model', [
                 { type: 'message', role: 'user', content: 'Hello test' }
             ], {
                 agentId: 'test-agent',
                 tools: [],
-                onEvent: () => {},
-                onError: () => {}
             });
 
-            expect(() => handle.cancel()).not.toThrow();
+            // Only collect first few events then break
+            for await (const event of stream) {
+                events.push(event);
+                if (events.length >= 2) break;
+            }
+
+            expect(events.length).toBe(2);
         });
     });
 

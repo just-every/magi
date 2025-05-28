@@ -7,11 +7,8 @@
 // Note: The 'path' import was removed as it was unused
 
 import { parseArgs } from 'node:util';
-import {
-    ResponseInput,
-    ServerMessage,
-    CommandMessage,
-} from './types/shared-types.js';
+import { ServerMessage, CommandMessage } from './types/shared-types.js';
+import { ResponseInput } from '@magi-system/ensemble';
 import { Runner } from './utils/runner.js';
 import { createAgent } from './magi_agents/index.js';
 import {

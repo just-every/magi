@@ -20,9 +20,9 @@ import { v4 as uuidv4 } from 'uuid';
 import {
     ModelProvider,
     StreamingEvent,
-    ResponseInput,
     MessageEvent,
 } from '../types/shared-types.js';
+import { ResponseInput } from '@magi-system/ensemble';
 import { costTracker } from '../utils/cost_tracker.js';
 import { get_working_dir, log_llm_request } from '../utils/file_utils.js';
 import type { Agent } from '../utils/agent.js';

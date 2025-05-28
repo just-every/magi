@@ -15,11 +15,8 @@ import {
     processPendingHistoryThreads,
 } from './history.js';
 import { runThoughtDelay, getThoughtDelay } from './thought_utils.js';
-import {
-    ToolFunction,
-    ResponseInput,
-    StreamingEvent,
-} from '../types/shared-types.js';
+import { StreamingEvent } from '../types/shared-types.js';
+import { ResponseInput, ToolFunction } from '@magi-system/ensemble';
 import { createToolFunction } from './tool_call.js';
 import { mechState, spawnMetaThoughtIfNeeded } from './mech_state.js';
 import { costTracker } from './cost_tracker.js';

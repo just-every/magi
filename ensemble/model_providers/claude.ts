@@ -109,7 +109,6 @@ import {
     extractBase64Image,
     resizeAndTruncateForClaude,
 } from '../utils/image_utils.js';
-import { CancelHandle } from '../types.js';
 import { convertImageToTextIfNeeded } from '../utils/image_to_text.js';
 import {
     DeltaBuffer,
@@ -1258,43 +1257,6 @@ export class ClaudeProvider implements ModelProvider {
         }
     }
 
-    /**
-     * New callback-based response method
-     */
-    createResponse(
-        model: string,
-        messages: ResponseInput,
-        agent: EnsembleAgent,
-        onEvent: (event: EnsembleStreamEvent) => void,
-        onError?: (error: unknown) => void
-    ): CancelHandle {
-        let cancelled = false;
-
-        // Run the generator and call callbacks
-        (async () => {
-            try {
-                const stream = this.createResponseStream(model, messages, agent);
-                for await (const event of stream) {
-                    if (cancelled) break;
-                    onEvent(event);
-                }
-                // Emit stream_end after successful completion
-                if (!cancelled) {
-                    onEvent({ type: 'stream_end', timestamp: new Date().toISOString() } as EnsembleStreamEvent);
-                }
-            } catch (error) {
-                if (!cancelled && onError) {
-                    onError(error);
-                }
-            }
-        })();
-
-        return {
-            cancel: () => {
-                cancelled = true;
-            }
-        };
-    }
 }
 
 // Export an instance of the provider

@@ -51,23 +51,28 @@ import {
     EnsembleStreamEvent,
     ModelClassID,
     EnsembleAgent,
-    RequestParams,
-    CancelHandle,
 } from './types.js';
 import {
     getModelProvider,
 } from './model_providers/model_provider.js';
+
+export interface RequestOptions {
+    agentId?: string;
+    tools?: ToolFunction[];
+    modelSettings?: ModelSettings;
+    modelClass?: ModelClassID;
+}
 
 class RequestAgent implements EnsembleAgent {
     agent_id: string;
     modelSettings?: ModelSettings;
     modelClass?: ModelClassID;
     private tools: ToolFunction[];
-    constructor(params: RequestParams) {
-        this.agent_id = params.agentId || 'ensemble';
-        this.modelSettings = params.modelSettings;
-        this.modelClass = params.modelClass;
-        this.tools = params.tools || [];
+    constructor(options: RequestOptions) {
+        this.agent_id = options.agentId || 'ensemble';
+        this.modelSettings = options.modelSettings;
+        this.modelClass = options.modelClass;
+        this.tools = options.tools || [];
     }
     async getTools(): Promise<ToolFunction[]> {
         return this.tools;
@@ -76,56 +81,25 @@ class RequestAgent implements EnsembleAgent {
 
 
 /**
- * New callback-based request API
+ * Simplified request API that returns an AsyncGenerator
  */
-export function request(
+export async function* request(
     model: string,
     messages: ResponseInput,
-    params: RequestParams
-): CancelHandle {
+    options: RequestOptions = {}
+): AsyncGenerator<EnsembleStreamEvent> {
     const provider = getModelProvider(model);
-    const agent = new RequestAgent(params);
+    const agent = new RequestAgent(options);
 
-    // Use the new callback-based method if available, otherwise fall back to generator
-    if (provider.createResponse) {
-        // Wrap provider's createResponse to ensure stream_end emission
-        const originalHandle = provider.createResponse(
-            model,
-            messages,
-            agent as any,
-            params.onEvent,
-            params.onError
-        );
-
-        // Providers should emit stream_end themselves, but this ensures it happens
-        // The provider's createResponse method should handle this internally
-        return originalHandle;
+    // Get the stream from the provider
+    const stream = provider.createResponseStream(model, messages, agent as any);
+    
+    // Yield all events from the stream
+    for await (const event of stream) {
+        yield event;
     }
-
-    // Fallback to generator method for providers not yet updated
-    let cancelled = false;
-    (async () => {
-        try {
-            const stream = provider.createResponseStream(model, messages, agent as any);
-            for await (const event of stream) {
-                if (cancelled) break;
-                params.onEvent(event);
-            }
-            // Emit stream_end after generator completes
-            if (!cancelled) {
-                params.onEvent({ type: 'stream_end', timestamp: new Date().toISOString() } as EnsembleStreamEvent);
-            }
-        } catch (error) {
-            if (!cancelled && params.onError) {
-                params.onError(error);
-            }
-        }
-    })();
-
-    return {
-        cancel: () => {
-            cancelled = true;
-        }
-    };
+    
+    // Emit stream_end event
+    yield { type: 'stream_end', timestamp: new Date().toISOString() } as EnsembleStreamEvent;
 }
 

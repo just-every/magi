@@ -15,7 +15,7 @@ import {
     listModelScores,
 } from './mech_state.js';
 import { describeHistory } from './history.js';
-import { ResponseInput } from '../types/shared-types.js';
+import { ResponseInput } from '@magi-system/ensemble';
 import { getModelFromClass } from '@magi-system/ensemble';
 import { MAGI_CONTEXT } from '../magi_agents/constants.js';
 import { getThoughtDelay } from './thought_utils.js';

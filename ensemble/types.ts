@@ -372,17 +372,6 @@ export interface ModelProvider {
         messages: ResponseInput,
         agent: any
     ): AsyncGenerator<EnsembleStreamEvent>;
-    
-    /**
-     * New callback-based response method
-     */
-    createResponse?(
-        model: string,
-        messages: ResponseInput,
-        agent: any,
-        onEvent: (event: EnsembleStreamEvent) => void,
-        onError?: (error: unknown) => void
-    ): CancelHandle;
 }
 
 /**
@@ -602,18 +591,3 @@ export interface EnsembleAgent {
     modelClass?: ModelClassID;
 }
 
-/**
- * Handle for canceling a request
- */
-export interface CancelHandle {
-    cancel(): void;
-}
-
-export interface RequestParams {
-    agentId?: string;
-    tools?: ToolFunction[];
-    modelSettings?: ModelSettings;
-    modelClass?: ModelClassID;
-    onEvent: (event: EnsembleStreamEvent) => void;     // required
-    onError?: (err: unknown) => void;             // optional
-}

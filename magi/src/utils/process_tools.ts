@@ -1,4 +1,5 @@
-import { ProcessToolType, ToolFunction } from '../types/shared-types.js'; // Removed AgentProcess
+import { ProcessToolType } from '../types/shared-types.js'; // Removed AgentProcess
+import { ToolFunction } from '@magi-system/ensemble';
 import { getCommunicationManager, sendStreamEvent } from './communication.js'; // Added sendStreamEvent
 import { processTracker } from './process_tracker.js';
 import { dateFormat } from './date_tools.js';

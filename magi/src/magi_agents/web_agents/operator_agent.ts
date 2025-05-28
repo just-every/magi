@@ -5,7 +5,7 @@
  * Specialized in the full-stack website delivery workflow
  */
 
-import { ResponseInput } from '../../types/shared-types.js';
+import { ResponseInput } from '@magi-system/ensemble';
 import { Agent } from '../../utils/agent.js';
 import {
     addBrowserStatus,

@@ -1,6 +1,9 @@
-import { openaiProvider } from '@magi-system/ensemble';
+import {
+    openaiProvider,
+    ResponseInput,
+    ToolFunction,
+} from '@magi-system/ensemble';
 import { createToolFunction } from './tool_call.js';
-import { ToolFunction, ResponseInput } from '../types/shared-types.js';
 import path from 'path';
 import { write_file } from './file_utils.js';
 import { smart_design_raw } from './design_search.js';

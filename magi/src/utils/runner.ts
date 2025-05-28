@@ -6,21 +6,23 @@
  */
 
 import type {
-    StreamingEvent,
-    ToolEvent,
-    MessageEvent,
     ToolCall,
     ResponseInput,
-    ToolCallHandler,
-    RunnerConfig,
     ResponseInputItem,
     ResponseInputFunctionCall,
     ResponseInputFunctionCallOutput,
     ResponseInputMessage,
     ResponseThinkingMessage,
-    StreamEventType,
-    ErrorEvent,
     ResponseOutputMessage,
+    StreamEventType,
+    ToolEvent,
+    MessageEvent,
+    ErrorEvent,
+} from '@magi-system/ensemble';
+import type {
+    StreamingEvent,
+    ToolCallHandler,
+    RunnerConfig,
     VerifierResult,
 } from '../types/shared-types.js';
 import { Agent } from './agent.js';
@@ -32,7 +34,7 @@ import {
     ModelClassID,
     ModelEntry,
     getModelFromClass,
-    EnsembleStreamEvent,
+    RequestOptions,
 } from '@magi-system/ensemble';
 import { processToolCall } from './tool_call.js';
 import { capitalize } from './llm_utils.js';
@@ -321,16 +323,21 @@ export class Runner {
                 });
                 agent.model = selectedModel; // Update agent's selected model
 
-                // Start the request with callback API
-                cancelHandle = ensembleRequest(
-                    selectedModel,
-                    sequencedMessages,
-                    {
-                        agentId: agent.agent_id,
-                        tools: await agent.getTools(),
-                        modelSettings: agent.modelSettings,
-                        modelClass: agent.modelClass,
-                        onEvent: (event: EnsembleStreamEvent) => {
+                // Start the request with AsyncGenerator API
+                const streamPromise = (async () => {
+                    try {
+                        const stream = ensembleRequest(
+                            selectedModel,
+                            sequencedMessages,
+                            {
+                                agentId: agent.agent_id,
+                                tools: await agent.getTools(),
+                                modelSettings: agent.modelSettings,
+                                modelClass: agent.modelClass,
+                            }
+                        );
+
+                        for await (const event of stream) {
                             // Convert ensemble event to magi event format by adding agent info
                             const magiEvent: StreamingEvent = {
                                 ...event,
@@ -345,12 +352,18 @@ export class Runner {
                             ) {
                                 eventQueue.complete();
                             }
-                        },
-                        onError: (error: unknown) => {
-                            eventQueue.setError(error);
-                        },
+                        }
+                    } catch (error) {
+                        eventQueue.setError(error);
                     }
-                );
+                })();
+
+                // Create a cancel handle
+                cancelHandle = {
+                    cancel: () => {
+                        eventQueue.complete();
+                    },
+                };
 
                 // Process events from the queue with timeout tracking
                 let lastEventTime = Date.now();

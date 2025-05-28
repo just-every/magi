@@ -6,18 +6,20 @@
  */
 
 import {
-    AgentDefinition,
-    ModelSettings,
-    AgentExportDefinition,
-    ToolFunction,
-    WorkerFunction,
-    ResponseInput,
-    AgentInterface,
     ToolCall,
+    ResponseInput,
     ResponseThinkingMessage,
-    ToolParameterMap,
     ResponseOutputMessage,
-    type ResponseJSONSchema,
+    ModelSettings,
+    ToolFunction,
+    ResponseJSONSchema,
+} from '@magi-system/ensemble';
+import {
+    AgentDefinition,
+    AgentExportDefinition,
+    WorkerFunction,
+    AgentInterface,
+    ToolParameterMap,
 } from '../types/shared-types.js';
 import { createToolFunction } from './tool_call.js';
 

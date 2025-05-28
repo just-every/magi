@@ -1,4 +1,24 @@
-import { type ExecSyncOptions, execSync } from 'child_process';
+import type { 
+    ToolCall,
+    ResponseInput,
+    ResponseThinkingMessage,
+    ResponseOutputMessage,
+    ToolParameterType,
+    ToolParameter,
+    ToolFunction,
+    ToolDefinition,
+    ModelSettings,
+    ResponseJSONSchema
+} from '@magi-system/ensemble';
+
+export const validToolParameterTypes: ToolParameterType[] = [
+    'string',
+    'number',
+    'boolean',
+    'object',
+    'array',
+    'null',
+];
 
 /**
  * Common type definitions for the MAGI system.
@@ -69,66 +89,10 @@ export interface AgentProcess {
     projectIds?: string[]; // List of git repositories to mount
 }
 
-export type ToolParameterType =
-    | 'string'
-    | 'number'
-    | 'boolean'
-    | 'object'
-    | 'array'
-    | 'null';
-export const validToolParameterTypes: ToolParameterType[] = [
-    'string',
-    'number',
-    'boolean',
-    'object',
-    'array',
-    'null',
-];
-
-/**
- * Tool parameter type definitions using strict schema format for OpenAI function calling
- */
-export interface ToolParameter {
-    type?: ToolParameterType;
-    description?: string | (() => string);
-    enum?: string[] | (() => Promise<string[]>);
-    items?: ToolParameter | { type: ToolParameterType; enum?: string[] | (() => Promise<string[]>) };
-    properties?: Record<string, ToolParameter>;
-    required?: string[];
-    optional?: boolean;
-    minItems?: number;
-
-    [key: string]: any;
-}
 
 export type ExecutableFunction = (...args: any[]) => Promise<string> | string;
 export type WorkerFunction = (...args: any[]) => AgentInterface;
 
-/**
- * Definition for a tool that can be used by an agent
- */
-export interface ToolFunction {
-    function: ExecutableFunction;
-    definition: ToolDefinition;
-    injectAgentId?: boolean;
-    injectAbortSignal?: boolean;
-}
-
-/**
- * Definition for a tool that can be used by an agent
- */
-export interface ToolDefinition {
-    type: 'function';
-    function: {
-        name: string;
-        description: string;
-        parameters: {
-            type: 'object';
-            properties: Record<string, ToolParameter>;
-            required: string[];
-        };
-    };
-}
 
 /**
  * Type definition for tool implementation functions
@@ -201,73 +165,8 @@ export interface AgentExportDefinition {
     cwd?: string; // Working directory for model providers that need a real shell context
 }
 
-export interface ResponseJSONSchema {
-  /**
-   * The name of the response format. Must be a-z, A-Z, 0-9, or contain underscores
-   * and dashes, with a maximum length of 64.
-   */
-  name: string;
 
-  /**
-   * The schema for the response format, described as a JSON Schema object. Learn how
-   * to build JSON schemas [here](https://json-schema.org/).
-   */
-  schema: Record<string, unknown>;
 
-  /**
-   * The type of response format being defined. Always `json_schema`.
-   */
-  type: 'json_schema';
-
-  /**
-   * A description of what the response format is for, used by the model to determine
-   * how to respond in the format.
-   */
-  description?: string;
-
-  /**
-   * Whether to enable strict schema adherence when generating the output. If set to
-   * true, the model will always follow the exact schema defined in the `schema`
-   * field. Only a subset of JSON Schema is supported when `strict` is `true`. To
-   * learn more, read the
-   * [Structured Outputs guide](https://platform.openai.com/docs/guides/structured-outputs).
-   */
-  strict?: boolean | null;
-}
-
-/**
- * Model settings for the OpenAI API
- */
-export interface ModelSettings {
-    temperature?: number;
-    top_p?: number;
-    top_k?: number;
-    max_tokens?: number;
-    stop_sequence?: string;
-    seed?: number;
-    text?: { format: string };
-    tool_choice?:
-        | 'auto'
-        | 'none'
-        | 'required'
-        | { type: string; function: { name: string } };
-    sequential_tools?: boolean; // Run tools sequentially instead of in parallel
-    json_schema?: ResponseJSONSchema; // JSON schema for structured output
-    force_json?: boolean; // Force JSON output even if model doesn't natively support it
-}
-
-/**
- * Tool call data structure
- */
-export interface ToolCall {
-    id: string;
-    type: 'function';
-    call_id?: string;
-    function: {
-        name: string;
-        arguments: string;
-    };
-}
 
 export interface ToolCallHandler {
     onToolCall?: (toolCall: ToolCall) => void;
@@ -275,72 +174,12 @@ export interface ToolCallHandler {
     onEvent?: (event: StreamingEvent) => void;
 }
 
-export interface ResponseContentText {
-    type: 'input_text';
-    text: string;
-}
 
-export interface ResponseContentImage {
-    type: 'input_image';
-    detail: 'high' | 'low' | 'auto';
-    file_id?: string;
-    image_url?: string;
-}
-
-export interface ResponseContentFileInput {
-    type: 'input_file';
-    file_data?: string;
-    file_id?: string;
-    filename?: string;
-}
-
-/**
- * ResponseContent
- */
-export type ResponseContent =
-    | string
-    | Array<
-          ResponseContentText | ResponseContentImage | ResponseContentFileInput
-      >;
-
-/**
- * ResponseInput
- */
-export type ResponseInput = Array<ResponseInputItem>;
-export type ResponseInputItem =
-    | ResponseInputMessage
-    | ResponseThinkingMessage
-    | ResponseOutputMessage
-    | ResponseInputFunctionCall
-    | ResponseInputFunctionCallOutput;
 
 export interface ResponseBaseMessage {
     type: string;
     model?: string;
     timestamp?: number; // Timestamp for the event, shared by all event types
-}
-
-/**
- * ResponseInputMessage
- */
-export interface ResponseInputMessage extends ResponseBaseMessage {
-    type: 'message';
-    name?: string; // deprecated
-    content: ResponseContent;
-    role: 'user' | 'system' | 'developer';
-    status?: 'in_progress' | 'completed' | 'incomplete';
-}
-
-/**
- * ResponseThinkingMessage
- */
-export interface ResponseThinkingMessage extends ResponseBaseMessage {
-    type: 'thinking';
-    content: ResponseContent;
-    signature?: ResponseContent;
-    thinking_id?: string;
-    role: 'assistant';
-    status?: 'in_progress' | 'completed' | 'incomplete';
 }
 
 export interface ResponseReasoningItem extends ResponseBaseMessage {
@@ -354,40 +193,6 @@ export interface ResponseReasoningItem extends ResponseBaseMessage {
 }
 
 
-/**
- * ResponseOutputMessage
- */
-export interface ResponseOutputMessage extends ResponseBaseMessage {
-    id?: string;
-    type: 'message';
-    content: ResponseContent;
-    role: 'assistant';
-    status: 'in_progress' | 'completed' | 'incomplete';
-}
-
-/**
- * Tool call data structure
- */
-export interface ResponseInputFunctionCall extends ResponseBaseMessage {
-    type: 'function_call';
-    call_id: string;
-    name: string;
-    arguments: string;
-    id?: string;
-    status?: 'in_progress' | 'completed' | 'incomplete';
-}
-
-/**
- * Tool call data structure
- */
-export interface ResponseInputFunctionCallOutput extends ResponseBaseMessage {
-    type: 'function_call_output';
-    call_id: string;
-    name?: string;
-    output: string;
-    id?: string;
-    status?: 'in_progress' | 'completed' | 'incomplete';
-}
 
 /**
  * Response data from the LLM

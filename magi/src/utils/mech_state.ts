@@ -5,7 +5,8 @@
  * It provides a central state container and methods to modify the system's behavior at runtime.
  */
 
-import { ToolFunction, type ModelClassID } from '../types/shared-types.js';
+import { type ModelClassID } from '../types/shared-types.js';
+import { ToolFunction } from '@magi-system/ensemble';
 import { createToolFunction } from './tool_call.js';
 import { addHistory } from './history.js';
 import { spawnMetaThought } from './meta_cognition.js';

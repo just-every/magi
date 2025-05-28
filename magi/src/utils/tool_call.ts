@@ -7,11 +7,13 @@
 
 import {
     ToolCall,
-    ToolCallHandler,
     ToolEvent,
     ToolFunction,
     ToolParameter,
     ToolParameterType,
+} from '@magi-system/ensemble';
+import {
+    ToolCallHandler,
     validToolParameterTypes,
     ToolParameterMap,
 } from '../types/shared-types.js';

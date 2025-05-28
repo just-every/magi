@@ -4,7 +4,7 @@
 import fs from 'fs';
 import path from 'path';
 import { dateFormat } from './date_tools.js';
-import { ToolFunction } from '../types/shared-types.js';
+import { ToolFunction } from '@magi-system/ensemble';
 import { createToolFunction } from './tool_call.js';
 // Memory utilities for storing and retrieving memories
 

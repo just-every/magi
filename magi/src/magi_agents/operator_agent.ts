@@ -19,12 +19,12 @@ import { getCommonTools } from '../utils/index.js';
 import { getRunningToolTools } from '../utils/running_tools.js';
 import { addHistory } from '../utils/history.js';
 import {
-    ResponseInput,
     ToolCall,
+    ResponseInput,
     ResponseThinkingMessage,
-    AgentDefinition,
     ResponseOutputMessage,
-} from '../types/shared-types.js';
+} from '@magi-system/ensemble';
+import { AgentDefinition } from '../types/shared-types.js';
 import { dateFormat, readableTime } from '../utils/date_tools.js';
 import { runningToolTracker } from '../utils/running_tool_tracker.js';
 import { listActiveProjects } from '../utils/project_utils.js';

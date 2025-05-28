@@ -7,12 +7,12 @@
 import { Agent } from '../utils/agent.js';
 import { createToolFunction } from '../utils/tool_call.js';
 import {
-    ResponseInput,
-    StreamingEvent,
     ToolCall,
+    ResponseInput,
     ResponseThinkingMessage,
-    type ResponseOutputMessage,
-} from '../types/shared-types.js';
+    ResponseOutputMessage,
+} from '@magi-system/ensemble';
+import type { StreamingEvent } from '../types/shared-types.js';
 import { v4 as uuidv4 } from 'uuid';
 import { addHistory, addMonologue } from '../utils/history.js';
 import { processTracker } from '../utils/process_tracker.js';

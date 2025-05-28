@@ -7,7 +7,7 @@ import {
     type ImageSource,
 } from '../design_search.js';
 import { write_unique_file } from '../file_utils.js';
-import type { ResponseInput } from '../../types/shared-types.js';
+import type { ResponseInput } from '@magi-system/ensemble';
 import type { DesignSearchResult } from './constants.js';
 
 const DESIGN_ASSETS_DIR = '/magi_output/shared/design_assets';

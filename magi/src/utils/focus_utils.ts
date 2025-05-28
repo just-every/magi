@@ -6,7 +6,7 @@
  */
 
 import { createToolFunction } from './tool_call.js';
-import { ToolFunction } from '../types/shared-types.js';
+import { ToolFunction } from '@magi-system/ensemble';
 import { getHistory } from './history.js';
 import { processTracker } from './process_tracker.js';
 import { getAgentBrowserSession } from './browser_session.js';
