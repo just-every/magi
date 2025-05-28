@@ -52,7 +52,7 @@ if [ -n "$PROCESS_ID" ]; then
     mkdir -p "$PROCESS_DIR"
     # Change ownership to magi_user:magi_user
     # This would be redundant if we fixed ownership above, but we keep it for safety
-    chown -R magi_user:magi_user "$PROCESS_DIR"
+    chown magi_user:magi_user "$PROCESS_DIR"
     echo "Permissions set for $PROCESS_DIR"
 else
     echo "Warning: PROCESS_ID environment variable not set. Cannot fix permissions for specific process directory."

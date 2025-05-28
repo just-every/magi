@@ -1,3 +1,24 @@
+# --- Ensemble Build Stage ---
+FROM node:23-slim AS ensemble-builder
+
+RUN npm install -g npm
+RUN apt-get update && \
+    apt-get install -y python3 make g++ pkg-config \
+                       libpixman-1-dev libcairo2-dev libpango1.0-dev \
+                       libjpeg-dev libgif-dev librsvg2-dev --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Copy ensemble source
+COPY ./ensemble/ ./ensemble/
+COPY ./common/ ./common/
+
+# Build ensemble package
+WORKDIR /build/ensemble
+RUN --mount=type=cache,target=/root/.npm \
+    npm install && npm run build
+
 # --- Build Stage ---
 FROM node:23-slim AS builder
 
@@ -9,6 +30,10 @@ RUN apt-get update && \
 
 # Set working directory for the build stage
 WORKDIR /build
+
+# Copy built ensemble package to node_modules
+COPY --from=ensemble-builder /build/ensemble ./node_modules/@magi-system/ensemble
+COPY --from=ensemble-builder /build/common ./common
 
 # Copy package files for controller
 COPY  ./controller/package.json ./controller/package-lock.json ./
@@ -56,6 +81,8 @@ WORKDIR /app
 # Copy node_modules from builder stage
 # This provides all dependencies separate from the mounted code
 COPY --from=builder --chown=${USER_NAME}:${GROUP_NAME} /build/node_modules ./node_modules
+# Ensure ensemble package is available
+COPY --from=ensemble-builder --chown=${USER_NAME}:${GROUP_NAME} /build/ensemble ./node_modules/@magi-system/ensemble
 
 # Copy the application source code
 # Changes here will invalidate cache from this point onwards
