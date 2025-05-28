@@ -29,6 +29,12 @@ export interface ToolParameter {
 export type ExecutableFunction = (...args: any[]) => Promise<string> | string;
 
 /**
+ * Executable tool function that combines definition with implementation
+ * Used by the new provider system
+ */
+export type ExecutableToolFunction = (args: any) => Promise<any>;
+
+/**
  * Definition for a tool that can be used by an agent
  */
 export interface ToolFunction {
@@ -36,7 +42,14 @@ export interface ToolFunction {
     definition: ToolDefinition;
     injectAgentId?: boolean;
     injectAbortSignal?: boolean;
+    // Alternative property used by new provider system
+    execute?: ExecutableToolFunction;
 }
+
+/**
+ * Registry for looking up tools by name
+ */
+export type ToolRegistry = Map<string, ToolFunction>;
 
 /**
  * Definition for a tool that can be used by an agent
@@ -107,6 +120,7 @@ export interface ModelSettings {
     sequential_tools?: boolean; // Run tools sequentially instead of in parallel
     json_schema?: ResponseJSONSchema; // JSON schema for structured output
     force_json?: boolean; // Force JSON output even if model doesn't natively support it
+    maxToolCallRoundsPerTurn?: number; // Maximum rounds of tool calls per request
 }
 
 /**
@@ -122,6 +136,9 @@ export interface ToolCall {
     };
 }
 
+/**
+ * Content types for messages
+ */
 export interface ResponseContentText {
     type: 'input_text';
     text: string;
@@ -166,6 +183,7 @@ export interface ResponseBaseMessage {
     model?: string;
     timestamp?: number; // Timestamp for the event, shared by all event types
 }
+
 
 /**
  * ResponseInputMessage
@@ -248,6 +266,9 @@ export type StreamEventType =
     | 'message_start'
     | 'message_delta'
     | 'message_complete'
+    | 'thinking_start'
+    | 'thinking_delta'
+    | 'thinking_complete'
     | 'talk_start'
     | 'talk_delta'
     | 'talk_complete'
@@ -255,6 +276,10 @@ export type StreamEventType =
     | 'tool_start'
     | 'tool_delta'
     | 'tool_done'
+    | 'tool_call_start'
+    | 'tool_call_delta'
+    | 'tool_call_complete'
+    | 'tool_calls_chunk'
     | 'file_start'
     | 'file_delta'
     | 'file_complete'
@@ -263,6 +288,7 @@ export type StreamEventType =
     | 'system_update'
     | 'quota_update'
     | 'screenshot'
+    | 'design'
     | 'design_grid'
     | 'console'
     | 'error'
@@ -277,7 +303,8 @@ export type StreamEventType =
     // Git-related events
     | 'git_pull_request'
     // Stream termination event
-    | 'stream_end';
+    | 'stream_end'
+    | 'metadata';
 
 /**
  * Base streaming event interface
@@ -608,6 +635,7 @@ export interface EnsembleAgent {
 export interface CancelHandle {
     cancel(): void;
 }
+
 
 export interface RequestParams {
     agentId?: string;

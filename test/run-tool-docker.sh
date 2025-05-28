@@ -12,7 +12,7 @@ set -euo pipefail
 #   3. Agent ID (defaults to 'docker-test-agent')
 #
 # Example:
-#   ./run-tool-docker.sh examples/hello-world.ts '{"name":"World"}'
+#   ./run-tool-docker.sh examples/hello-world.ts '{"verbose":true}'
 #
 # Returns the exit code from the container, and outputs stdout/stderr.
 

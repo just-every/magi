@@ -20,10 +20,12 @@ import { getRunningToolTools } from '../utils/running_tools.js';
 import { addHistory } from '../utils/history.js';
 import {
     ResponseInput,
-    ToolCall,
     ResponseThinkingMessage,
-    AgentDefinition,
     ResponseOutputMessage,
+} from '@magi-system/ensemble';
+import {
+    ToolCall,
+    AgentDefinition,
 } from '../types/shared-types.js';
 import { dateFormat, readableTime } from '../utils/date_tools.js';
 import { runningToolTracker } from '../utils/running_tool_tracker.js';

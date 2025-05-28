@@ -23,7 +23,7 @@ import fetch from 'node-fetch';
 import { JSDOM } from 'jsdom';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { quick_llm_call } from './llm_call_utils.js';
-import { ResponseInput } from '../types/shared-types.js';
+import { ResponseInput } from '@magi-system/ensemble';
 import {
     DESIGN_ASSET_REFERENCE,
     DESIGN_SEARCH_DESCRIPTIONS,

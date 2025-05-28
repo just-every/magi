@@ -9,6 +9,8 @@
 import { parseArgs } from 'node:util';
 import {
     ResponseInput,
+} from '@magi-system/ensemble';
+import {
     ServerMessage,
     CommandMessage,
 } from './types/shared-types.js';

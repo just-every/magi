@@ -16,8 +16,10 @@ import {
 } from './history.js';
 import { runThoughtDelay, getThoughtDelay } from './thought_utils.js';
 import {
-    ToolFunction,
     ResponseInput,
+} from '@magi-system/ensemble';
+import {
+    ToolFunction,
     StreamingEvent,
 } from '../types/shared-types.js';
 import { createToolFunction } from './tool_call.js';

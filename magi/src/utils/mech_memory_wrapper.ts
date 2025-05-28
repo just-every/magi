@@ -28,7 +28,7 @@ import {
 import { registerRelevantCustomTools } from './index.js';
 import { MechResult } from './mech_tools.js';
 import { quick_llm_call } from './llm_call_utils.js';
-import { ResponseInput } from '../types/shared-types.js';
+import { ResponseInput } from '@magi-system/ensemble';
 import { getProcessProjectIds } from './project_utils.js';
 
 /**

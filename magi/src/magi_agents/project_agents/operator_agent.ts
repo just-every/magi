@@ -11,7 +11,8 @@ import { createReasoningAgent } from '../common_agents/reasoning_agent.js';
 import { updateProject, getProject } from '../../utils/db_utils.js';
 import { createToolFunction } from '../../utils/tool_call.js';
 import { MAGI_CONTEXT } from '../constants.js';
-import { Project, type ResponseInput } from '../../types/shared-types.js';
+import { ResponseInput } from '@magi-system/ensemble';
+import { Project } from '../../types/shared-types.js';
 import {
     PROJECT_TYPES,
     getProjectTypeDescription,

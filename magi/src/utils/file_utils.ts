@@ -8,7 +8,8 @@ let testMode = false;
 
 import fs from 'fs';
 import path from 'path';
-import { ResponseInput, ToolFunction } from '../types/shared-types.js';
+import { ResponseInput } from '@magi-system/ensemble';
+import { ToolFunction } from '../types/shared-types.js';
 import { createToolFunction } from './tool_call.js';
 import { ModelProviderID } from '@magi-system/ensemble';
 // Child process utilities are used via dynamic imports in functions below

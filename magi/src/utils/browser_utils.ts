@@ -7,9 +7,9 @@
  */
 
 import { BROWSER_WIDTH, BROWSER_HEIGHT } from '../constants.js';
+import { ResponseInput } from '@magi-system/ensemble';
 import {
     AgentInterface,
-    ResponseInput,
     ToolFunction,
     ToolParameterMap,
 } from '../types/shared-types.js'; // Keep if used by your framework

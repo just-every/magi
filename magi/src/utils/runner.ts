@@ -9,30 +9,46 @@ import type {
     StreamingEvent,
     ToolEvent,
     MessageEvent,
-    ToolCall,
-    ResponseInput,
     ToolCallHandler,
     RunnerConfig,
-    ResponseInputItem,
-    ResponseInputFunctionCall,
-    ResponseInputFunctionCallOutput,
-    ResponseInputMessage,
-    ResponseThinkingMessage,
     StreamEventType,
     ErrorEvent,
-    ResponseOutputMessage,
     VerifierResult,
 } from '../types/shared-types.js';
+import type {
+    ToolFunction as MagiToolFunction,
+} from '@magi-system/ensemble';
 import { Agent } from './agent.js';
 import {
-    request as ensembleRequest,
+    streamRequest as ensembleStreamRequest,
     AsyncQueue,
     findModel,
+    Conversation,
     MODEL_CLASSES,
     ModelClassID,
     ModelEntry,
     getModelFromClass,
     EnsembleStreamEvent,
+    type ResponseInputItem,
+    type ToolRegistry,
+    type ToolCall,
+    // Import legacy types from ensemble for compatibility
+    type ResponseInput as MagiResponseInput,
+    type ResponseInputItem as MagiResponseInputItem,
+    type LegacyResponseInputItem,
+    type ResponseInputFunctionCall,
+    type ResponseInputFunctionCallOutput,
+    type ResponseInputMessage,
+    type ResponseThinkingMessage,
+    type ResponseOutputMessage,
+    // Import message factory functions
+    createUserMessage,
+    createSystemMessage,
+    createDeveloperMessage,
+    createAssistantMessage,
+    createToolCallMessage,
+    createToolResultMessage,
+    createThinkingMessage,
 } from '@magi-system/ensemble';
 import { processToolCall } from './tool_call.js';
 import { capitalize } from './llm_utils.js';
@@ -59,6 +75,7 @@ class TimeoutError extends Error {
  * @param identifier A string identifier for logging purposes (e.g., agent/model name).
  * @returns An async generator that yields events from the originalStream or throws on timeout.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function* createTimeoutProxyStream<T>(
     originalStream: AsyncGenerator<T>,
     timeoutMs: number,
@@ -200,10 +217,10 @@ export class Runner {
     static async *runStreamed(
         agent: Agent,
         input?: string,
-        conversationHistory: ResponseInput = []
+        conversationHistory: MagiResponseInput = []
     ): AsyncGenerator<StreamingEvent> {
         // Prepare initial messages
-        let messages: ResponseInput = [
+        let messages: MagiResponseInput = [
             { type: 'message', role: 'developer', content: agent.instructions },
             ...conversationHistory,
         ];
@@ -271,15 +288,17 @@ export class Runner {
                     : {}),
             };
 
-            // Create AsyncQueue and tracking variables outside try block for proper cleanup
-            const eventQueue = new AsyncQueue<StreamingEvent>();
-            let cancelHandle: any = null;
+            // Create tracking variables outside try block for proper cleanup
             let timeoutId: NodeJS.Timeout | null = null;
             
             try {
                 // Ensure correct message sequence before sending
                 const sequencedMessages =
                     this.ensureToolResultSequence(messages);
+                
+                // Convert magi messages to ensemble format
+                const ensembleMessages = this.convertToEnsembleMessages(sequencedMessages);
+                console.log(`[Runner] Converted ${sequencedMessages.length} messages to ensemble format for model ${selectedModel}`);
 
                 // Check if system is paused and wait if necessary
                 if (isPaused()) {
@@ -321,36 +340,56 @@ export class Runner {
                 });
                 agent.model = selectedModel; // Update agent's selected model
                 
-                // Start the request with callback API
-                cancelHandle = ensembleRequest(
+                // Convert tools array to Map
+                const toolsArray = await agent.getTools();
+                const toolsMap: ToolRegistry = new Map();
+                for (const tool of toolsArray) {
+                    if (tool.definition?.function?.name) {
+                        // Convert magi ToolFunction to ensemble ToolFunction format
+                        // Need to ensure all parameters have required 'type' field
+                        const ensembleDefinition = {
+                            type: 'function' as const,
+                            function: {
+                                name: tool.definition.function.name,
+                                description: tool.definition.function.description,
+                                parameters: {
+                                    type: 'object' as const,
+                                    properties: Object.entries(tool.definition.function.parameters.properties).reduce((acc, [key, param]) => {
+                                        acc[key] = {
+                                            type: param.type || 'string', // Default to string if type is missing
+                                            description: param.description,
+                                            enum: param.enum,
+                                            items: param.items,
+                                            properties: param.properties,
+                                            required: param.required
+                                        };
+                                        return acc;
+                                    }, {} as Record<string, any>),
+                                    required: tool.definition.function.parameters.required
+                                }
+                            }
+                        };
+                        
+                        toolsMap.set(tool.definition.function.name, {
+                            definition: ensembleDefinition,
+                            execute: tool.function as (args: any) => Promise<any>
+                        });
+                    }
+                }
+                
+                // Start the streaming request
+                const conversation = new Conversation(ensembleMessages);
+                const eventStream = ensembleStreamRequest(
                     selectedModel,
-                    sequencedMessages,
+                    conversation,
                     {
                         agentId: agent.agent_id,
-                        tools: await agent.getTools(),
+                        tools: toolsMap,
                         modelSettings: agent.modelSettings,
-                        modelClass: agent.modelClass,
-                        onEvent: (event: EnsembleStreamEvent) => {
-                            // Convert ensemble event to magi event format by adding agent info
-                            const magiEvent: StreamingEvent = {
-                                ...event,
-                                agent: agent.export(),
-                            } as StreamingEvent;
-                            
-                            eventQueue.push(magiEvent);
-                            // Complete the queue when we receive terminal events
-                            if (event.type === 'stream_end' || event.type === 'error') {
-                                eventQueue.complete();
-                            }
-                        },
-                        onError: (error: unknown) => {
-                            eventQueue.setError(error);
-                        }
                     }
                 );
 
-                // Process events from the queue with timeout tracking
-                let lastEventTime = Date.now();
+                // Create a timeout wrapper for the stream
                 const updateTimeout = () => {
                     if (timeoutId) clearTimeout(timeoutId);
                     timeoutId = setTimeout(() => {
@@ -358,21 +397,19 @@ export class Runner {
                             `[${agent.name || 'Agent'}:${selectedModel}] Stream timeout: No event received for ${EVENT_TIMEOUT_MS / 1000} seconds`
                         );
                         console.error(`[TimeoutProxy] ${error.message}`);
-                        eventQueue.setError(error);
-                        if (cancelHandle) {
-                            cancelHandle.cancel();
-                        }
+                        // Note: We can't directly cancel the stream, but the error will be caught
+                        throw error;
                     }, EVENT_TIMEOUT_MS);
                 };
                 
                 updateTimeout(); // Start initial timeout
 
-                // Process events from the queue
-                for await (const event of eventQueue) {
-                    lastEventTime = Date.now();
+                // Process events from the stream
+                for await (const event of eventStream) {
                     updateTimeout(); // Reset timeout on each event
-                    // Type assertion needed because event comes from AsyncGenerator<unknown>
-                    const streamEvent = event as StreamingEvent;
+                    
+                    // Convert ensemble event to magi event format
+                    const streamEvent = this.convertEnsembleEventToMagi(event, agent);
 
                     // Ensure the event reflects the currently used model
                     streamEvent.agent = streamEvent.agent
@@ -414,9 +451,8 @@ export class Runner {
                 });
                 return; // Success: exit the generator function normally.
             } catch (error) {
-                // Clean up timeout and cancel handle on error
+                // Clean up timeout on error
                 if (timeoutId) clearTimeout(timeoutId);
-                if (cancelHandle) cancelHandle.cancel();
                 
                 // --- Catch block for the current model attempt ---
                 // This catches:
@@ -507,7 +543,7 @@ export class Runner {
     static async verifyRun(
         verifier: Agent,
         output: string,
-        history: ResponseInput,
+        history: MagiResponseInput,
         handlers: ToolCallHandler,
         allowed: StreamEventType[] | null
     ): Promise<VerifierResult> {
@@ -542,7 +578,7 @@ export class Runner {
     static async runStreamedWithTools(
         agent: Agent,
         input?: string,
-        conversationHistory: ResponseInput = [],
+        conversationHistory: MagiResponseInput = [],
         handlers: ToolCallHandler = {},
         allowedEvents: StreamEventType[] | null = null,
         toolCallCount = 0, // Track the number of tool call iterations across recursive calls
@@ -564,7 +600,7 @@ export class Runner {
             const stream = this.runStreamed(agent, input, conversationHistory);
 
             // Start with initial messages - convert standard message format to responses format
-            const messageItems: ResponseInput = [...conversationHistory];
+            const messageItems: MagiResponseInput = [...conversationHistory];
 
             if (input) {
                 // Add the user input message
@@ -738,9 +774,7 @@ export class Runner {
                                 if (i < toolEvent.tool_calls.length) {
                                     collectedToolResults.push({
                                         id: toolEvent.tool_calls[i].id,
-                                        call_id:
-                                            toolEvent.tool_calls[i].call_id ||
-                                            toolEvent.tool_calls[i].id,
+                                        call_id: toolEvent.tool_calls[i].id,
                                         output:
                                             typeof result === 'string'
                                                 ? result
@@ -759,9 +793,7 @@ export class Runner {
                             if (toolEvent.tool_calls.length > 0) {
                                 collectedToolResults.push({
                                     id: toolEvent.tool_calls[0].id,
-                                    call_id:
-                                        toolEvent.tool_calls[0].call_id ||
-                                        toolEvent.tool_calls[0].id,
+                                    call_id: toolEvent.tool_calls[0].id,
                                     output: resultStr,
                                 });
                             }
@@ -876,7 +908,7 @@ export class Runner {
                 }
 
                 // Create tool call messages for the next model request
-                let toolCallMessages: ResponseInput = [];
+                let toolCallMessages: MagiResponseInput = [];
 
                 // Add the function calls
                 for (const toolCall of collectedToolCalls) {
@@ -885,7 +917,7 @@ export class Runner {
                     messageItems.push({
                         type: 'function_call',
                         id: toolCall.id,
-                        call_id: toolCall.call_id || toolCall.id,
+                        call_id: toolCall.id,
                         name: toolCall.function.name,
                         arguments: toolCall.function.arguments,
                         model: agent.model,
@@ -893,13 +925,13 @@ export class Runner {
 
                     // Add the corresponding tool result
                     const result = collectedToolResults.find(
-                        r => r.call_id === toolCall.call_id || toolCall.id
+                        r => r.call_id === toolCall.id
                     );
                     if (result) {
                         messageItems.push({
                             type: 'function_call_output',
                             id: toolCall.id,
-                            call_id: toolCall.call_id || toolCall.id,
+                            call_id: toolCall.id,
                             name: toolCall.function.name,
                             output: result.output,
                             model: agent.model,
@@ -932,7 +964,7 @@ export class Runner {
             if (agent.modelSettings?.json_schema) {
                 try {
                     // Try to parse the response as JSON
-                    let jsonResponse;
+                    let jsonResponse: any;
                     try {
                         jsonResponse = JSON.parse(fullResponse.trim());
                         console.log(
@@ -1006,7 +1038,7 @@ export class Runner {
                     console.warn(
                         `[Runner] verifier failed: ${vResult.reason ?? '(no reason)'}`
                     );
-                    const retryHistory: ResponseInput = [
+                    const retryHistory: MagiResponseInput = [
                         ...conversationHistory,
                         {
                             type: 'message',
@@ -1061,7 +1093,7 @@ export class Runner {
         maxRetries: number = 3,
         maxTotalRetries: number = 10
     ): Promise<string> {
-        const history: ResponseInput = [
+        const history: MagiResponseInput = [
             { type: 'message', role: 'user', content: input },
         ];
         const lastOutput: Record<string, string> = {};
@@ -1119,7 +1151,7 @@ export class Runner {
                 ];
 
                 let stageOutput: string | null = null; // To store the result string
-                let directExecutionResult: ResponseInput | null = null; // To store the raw ResponseInput if executed directly
+                let directExecutionResult: MagiResponseInput | null = null; // To store the raw MagiResponseInput if executed directly
 
                 // Check if the agent has a direct execution hook
                 if (agent.tryDirectExecution) {
@@ -1132,7 +1164,7 @@ export class Runner {
                     console.log(
                         `[Runner] Stage ${currentStage} executed directly via tryDirectExecution.`
                     );
-                    // Extract the content string from the ResponseInput for logging/next stage input
+                    // Extract the content string from the MagiResponseInput for logging/next stage input
                     // Check if the first item is a message-like object with content
                     if (
                         Array.isArray(directExecutionResult) &&
@@ -1260,14 +1292,14 @@ export class Runner {
      *
      * The process repeats until the array is stable (no changes made in a full pass).
      *
-     * @param messages The array of ResponseInputItem messages to reorder.
-     * @returns A new array with messages correctly ordered (ResponseInput).
+     * @param messages The array of MagiResponseInputItem messages to reorder.
+     * @returns A new array with messages correctly ordered (MagiResponseInput).
      */
     public static ensureToolResultSequence(
-        messages: ResponseInput
-    ): ResponseInput {
+        messages: MagiResponseInput
+    ): MagiResponseInput {
         // Work on a mutable copy
-        const currentMessages: ResponseInput = [...messages]; // Use the specific type
+        const currentMessages: MagiResponseInput = [...messages]; // Use the specific type
         let changedInPass = false;
 
         // First, collect all function_call IDs to identify orphaned outputs later
@@ -1314,7 +1346,7 @@ export class Runner {
             while (
                 i < currentMessages.length /* Recalculate length each time */
             ) {
-                const currentMsg: ResponseInputItem = currentMessages[i]; // Use the specific type
+                const currentMsg: MagiResponseInputItem = currentMessages[i]; // Use the specific type
 
                 if (currentMsg.type && currentMsg.type === 'function_call') {
                     // Assert type now that we've checked it
@@ -1323,7 +1355,7 @@ export class Runner {
                     const targetId = functionCallMsg.id;
                     const targetCallId = functionCallMsg.call_id;
                     const nextMsgIndex = i + 1;
-                    const nextMsg: ResponseInputItem | null =
+                    const nextMsg: MagiResponseInputItem | null =
                         nextMsgIndex < currentMessages.length
                             ? currentMessages[nextMsgIndex]
                             : null;
@@ -1492,5 +1524,104 @@ export class Runner {
         }
 
         return model;
+    }
+
+    /**
+     * Convert ensemble event to magi event format
+     */
+    private static convertEnsembleEventToMagi(event: EnsembleStreamEvent, agent: Agent): StreamingEvent {
+        // Most events can pass through with minimal conversion
+        // Just add the agent information
+        return {
+            ...event,
+            agent: agent.export(),
+        } as StreamingEvent;
+    }
+
+    /**
+     * Convert magi MagiResponseInput messages to ensemble ResponseInputItem[] format
+     * This converts from the legacy format to the new core types expected by Conversation
+     */
+    private static convertToEnsembleMessages(messages: MagiResponseInput): ResponseInputItem[] {
+        return messages.map((msg, index) => {
+            // Generate consistent IDs and timestamps
+            const id = (msg as any).id || `msg-${Date.now()}-${Math.random()}`;
+            const timestamp = (msg as any).timestamp || Date.now();
+            
+            switch (msg.type) {
+                case 'message':
+                    if (msg.role === 'user' || msg.role === 'system' || msg.role === 'developer') {
+                        const messageContent = typeof msg.content === 'string' 
+                            ? msg.content 
+                            : (msg.content ? JSON.stringify(msg.content) : '');
+                        
+                        // Use factory functions to create proper core types
+                        if (msg.role === 'user') {
+                            return createUserMessage(messageContent || '');
+                        } else if (msg.role === 'system') {
+                            return createSystemMessage(messageContent || '');
+                        } else if (msg.role === 'developer') {
+                            return createDeveloperMessage(messageContent || '');
+                        }
+                    } else if (msg.role === 'assistant') {
+                        const assistantMsg = msg as ResponseOutputMessage;
+                        const messageContent = typeof assistantMsg.content === 'string' 
+                            ? assistantMsg.content 
+                            : (assistantMsg.content ? JSON.stringify(assistantMsg.content) : '');
+                        
+                        return createAssistantMessage(messageContent || '');
+                    }
+                    break;
+                    
+                case 'thinking': {
+                    const thinkingMsg = msg as ResponseThinkingMessage;
+                    const thinkingContent = typeof thinkingMsg.content === 'string' 
+                        ? thinkingMsg.content 
+                        : (thinkingMsg.content ? JSON.stringify(thinkingMsg.content) : '');
+                    
+                    return createThinkingMessage(thinkingContent || '', thinkingMsg.thinking_id);
+                }
+                    
+                case 'function_call': {
+                    const funcCall = msg as ResponseInputFunctionCall;
+                    // Ensure name is never empty
+                    const functionName = funcCall.name || 'unknown_function';
+                    
+                    // Log any function calls with missing data
+                    if (!funcCall.name || !funcCall.call_id) {
+                        console.warn(`[Runner] Function call at index ${index} missing required fields:`, {
+                            name: funcCall.name,
+                            call_id: funcCall.call_id,
+                            arguments: funcCall.arguments?.substring(0, 100)
+                        });
+                    }
+                    
+                    // Create a tool call using the proper format
+                    const toolCall: ToolCall = {
+                        id: funcCall.call_id,
+                        type: 'function',
+                        function: {
+                            name: functionName,
+                            arguments: funcCall.arguments || '{}'
+                        }
+                    };
+                    
+                    return createToolCallMessage([toolCall]);
+                }
+                    
+                case 'function_call_output': {
+                    const funcOutput = msg as ResponseInputFunctionCallOutput;
+                    return createToolResultMessage(
+                        funcOutput.call_id,
+                        funcOutput.name || 'unknown',
+                        funcOutput.output || ''
+                    );
+                }
+            }
+            
+            // Default fallback
+            console.warn(`[Runner] Unknown message type at index ${index}:`, msg.type);
+            return createUserMessage(JSON.stringify(msg) || '');
+        });
     }
 }

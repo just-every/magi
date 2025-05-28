@@ -4,7 +4,9 @@
 import fs from 'fs/promises'; // Use promises for async file operations
 import path from 'path';
 import crypto from 'crypto';
-import { ResponseInput } from '../types/shared-types.js';
+import {
+    ResponseInput,
+} from '@magi-system/ensemble';
 import { Runner } from './runner.js';
 import { createSummaryAgent } from '../magi_agents/common_agents/summary_agent.js';
 import { get_output_dir } from './file_utils.js'; // Import get_output_dir

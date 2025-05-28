@@ -14,7 +14,8 @@ import { createToolFunction } from './tool_call.js';
 // Import only what we use from model_data.js
 import { getHelperDescriptions } from './tool_context.js';
 import { quick_llm_call } from './llm_call_utils.js';
-import { ToolFunction, ToolParameterType } from '../types/shared-types.js';
+import { ToolParameterType } from '@magi-system/ensemble';
+import { ToolFunction } from '../types/shared-types.js';
 import {
     CustomTool,
     addCustomTool,

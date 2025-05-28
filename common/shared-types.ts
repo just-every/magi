@@ -1,4 +1,52 @@
 import { type ExecSyncOptions, execSync } from 'child_process';
+// When in Docker build context, these types come from @magi-system/ensemble
+// When in local development, they come from ../ensemble/types.js
+import type { 
+    ToolFunction, 
+    ToolDefinition, 
+    ToolParameter, 
+    ToolParameterType,
+    ResponseInput, 
+    ResponseOutputMessage,
+    ResponseThinkingMessage,
+    StreamEventType, 
+    ModelSettings, 
+    ToolCall, 
+    ResponseJSONSchema, 
+    ModelClassID, 
+    ModelProvider, 
+    ModelUsage,
+    EnsembleStreamEvent
+} from '@magi-system/ensemble';
+
+// Re-export the types so they're available to consumers of shared-types
+export type { 
+    ToolFunction, 
+    ToolDefinition, 
+    ToolParameter, 
+    ToolParameterType,
+    ResponseInput, 
+    ResponseOutputMessage,
+    ResponseThinkingMessage,
+    StreamEventType, 
+    ModelSettings, 
+    ToolCall, 
+    ResponseJSONSchema, 
+    ModelClassID, 
+    ModelProvider, 
+    ModelUsage,
+    EnsembleStreamEvent
+};
+
+// Define validToolParameterTypes here since it's not exported from ensemble
+export const validToolParameterTypes: ToolParameterType[] = [
+    'string',
+    'number',
+    'boolean',
+    'object',
+    'array',
+    'null',
+];
 
 /**
  * Common type definitions for the MAGI system.
@@ -69,66 +117,16 @@ export interface AgentProcess {
     projectIds?: string[]; // List of git repositories to mount
 }
 
-export type ToolParameterType =
-    | 'string'
-    | 'number'
-    | 'boolean'
-    | 'object'
-    | 'array'
-    | 'null';
-export const validToolParameterTypes: ToolParameterType[] = [
-    'string',
-    'number',
-    'boolean',
-    'object',
-    'array',
-    'null',
-];
+// ToolParameterType moved to ensemble/types.ts
 
-/**
- * Tool parameter type definitions using strict schema format for OpenAI function calling
- */
-export interface ToolParameter {
-    type?: ToolParameterType;
-    description?: string | (() => string);
-    enum?: string[] | (() => Promise<string[]>);
-    items?: ToolParameter | { type: ToolParameterType; enum?: string[] | (() => Promise<string[]>) };
-    properties?: Record<string, ToolParameter>;
-    required?: string[];
-    optional?: boolean;
-    minItems?: number;
+// ToolParameter moved to ensemble/types.ts
 
-    [key: string]: any;
-}
-
-export type ExecutableFunction = (...args: any[]) => Promise<string> | string;
+// ExecutableFunction moved to ensemble/types.ts
 export type WorkerFunction = (...args: any[]) => AgentInterface;
 
-/**
- * Definition for a tool that can be used by an agent
- */
-export interface ToolFunction {
-    function: ExecutableFunction;
-    definition: ToolDefinition;
-    injectAgentId?: boolean;
-    injectAbortSignal?: boolean;
-}
+// ToolFunction moved to ensemble/types.ts
 
-/**
- * Definition for a tool that can be used by an agent
- */
-export interface ToolDefinition {
-    type: 'function';
-    function: {
-        name: string;
-        description: string;
-        parameters: {
-            type: 'object';
-            properties: Record<string, ToolParameter>;
-            required: string[];
-        };
-    };
-}
+// ToolDefinition moved to ensemble/types.ts
 
 /**
  * Type definition for tool implementation functions
@@ -201,73 +199,11 @@ export interface AgentExportDefinition {
     cwd?: string; // Working directory for model providers that need a real shell context
 }
 
-export interface ResponseJSONSchema {
-  /**
-   * The name of the response format. Must be a-z, A-Z, 0-9, or contain underscores
-   * and dashes, with a maximum length of 64.
-   */
-  name: string;
+// ResponseJSONSchema moved to ensemble/types.ts
 
-  /**
-   * The schema for the response format, described as a JSON Schema object. Learn how
-   * to build JSON schemas [here](https://json-schema.org/).
-   */
-  schema: Record<string, unknown>;
+// ModelSettings moved to ensemble/types.ts
 
-  /**
-   * The type of response format being defined. Always `json_schema`.
-   */
-  type: 'json_schema';
-
-  /**
-   * A description of what the response format is for, used by the model to determine
-   * how to respond in the format.
-   */
-  description?: string;
-
-  /**
-   * Whether to enable strict schema adherence when generating the output. If set to
-   * true, the model will always follow the exact schema defined in the `schema`
-   * field. Only a subset of JSON Schema is supported when `strict` is `true`. To
-   * learn more, read the
-   * [Structured Outputs guide](https://platform.openai.com/docs/guides/structured-outputs).
-   */
-  strict?: boolean | null;
-}
-
-/**
- * Model settings for the OpenAI API
- */
-export interface ModelSettings {
-    temperature?: number;
-    top_p?: number;
-    top_k?: number;
-    max_tokens?: number;
-    stop_sequence?: string;
-    seed?: number;
-    text?: { format: string };
-    tool_choice?:
-        | 'auto'
-        | 'none'
-        | 'required'
-        | { type: string; function: { name: string } };
-    sequential_tools?: boolean; // Run tools sequentially instead of in parallel
-    json_schema?: ResponseJSONSchema; // JSON schema for structured output
-    force_json?: boolean; // Force JSON output even if model doesn't natively support it
-}
-
-/**
- * Tool call data structure
- */
-export interface ToolCall {
-    id: string;
-    type: 'function';
-    call_id?: string;
-    function: {
-        name: string;
-        arguments: string;
-    };
-}
+// ToolCall moved to ensemble/types.ts
 
 export interface ToolCallHandler {
     onToolCall?: (toolCall: ToolCall) => void;
@@ -275,119 +211,9 @@ export interface ToolCallHandler {
     onEvent?: (event: StreamingEvent) => void;
 }
 
-export interface ResponseContentText {
-    type: 'input_text';
-    text: string;
-}
+// ResponseContent types moved to ensemble/types.ts
 
-export interface ResponseContentImage {
-    type: 'input_image';
-    detail: 'high' | 'low' | 'auto';
-    file_id?: string;
-    image_url?: string;
-}
-
-export interface ResponseContentFileInput {
-    type: 'input_file';
-    file_data?: string;
-    file_id?: string;
-    filename?: string;
-}
-
-/**
- * ResponseContent
- */
-export type ResponseContent =
-    | string
-    | Array<
-          ResponseContentText | ResponseContentImage | ResponseContentFileInput
-      >;
-
-/**
- * ResponseInput
- */
-export type ResponseInput = Array<ResponseInputItem>;
-export type ResponseInputItem =
-    | ResponseInputMessage
-    | ResponseThinkingMessage
-    | ResponseOutputMessage
-    | ResponseInputFunctionCall
-    | ResponseInputFunctionCallOutput;
-
-export interface ResponseBaseMessage {
-    type: string;
-    model?: string;
-    timestamp?: number; // Timestamp for the event, shared by all event types
-}
-
-/**
- * ResponseInputMessage
- */
-export interface ResponseInputMessage extends ResponseBaseMessage {
-    type: 'message';
-    name?: string; // deprecated
-    content: ResponseContent;
-    role: 'user' | 'system' | 'developer';
-    status?: 'in_progress' | 'completed' | 'incomplete';
-}
-
-/**
- * ResponseThinkingMessage
- */
-export interface ResponseThinkingMessage extends ResponseBaseMessage {
-    type: 'thinking';
-    content: ResponseContent;
-    signature?: ResponseContent;
-    thinking_id?: string;
-    role: 'assistant';
-    status?: 'in_progress' | 'completed' | 'incomplete';
-}
-
-export interface ResponseReasoningItem extends ResponseBaseMessage {
-    type: 'reasoning';
-    id: string;
-    summary: Array<{
-        text: string;
-        type: 'summary_text';
-      }>;
-    status?: 'in_progress' | 'completed' | 'incomplete';
-}
-
-
-/**
- * ResponseOutputMessage
- */
-export interface ResponseOutputMessage extends ResponseBaseMessage {
-    id?: string;
-    type: 'message';
-    content: ResponseContent;
-    role: 'assistant';
-    status: 'in_progress' | 'completed' | 'incomplete';
-}
-
-/**
- * Tool call data structure
- */
-export interface ResponseInputFunctionCall extends ResponseBaseMessage {
-    type: 'function_call';
-    call_id: string;
-    name: string;
-    arguments: string;
-    id?: string;
-    status?: 'in_progress' | 'completed' | 'incomplete';
-}
-
-/**
- * Tool call data structure
- */
-export interface ResponseInputFunctionCallOutput extends ResponseBaseMessage {
-    type: 'function_call_output';
-    call_id: string;
-    name?: string;
-    output: string;
-    id?: string;
-    status?: 'in_progress' | 'completed' | 'incomplete';
-}
+// ResponseInput types moved to ensemble/types.ts
 
 /**
  * Response data from the LLM
@@ -408,60 +234,7 @@ export interface LLMResponse extends LLMMessage {
     tool_calls?: ToolCall[];
 }
 
-/**
- * Streaming event types
- */
-export type StreamEventType =
-    | 'connected'
-    | 'command_start'
-    | 'command_done'
-    | 'project_create'
-    | 'project_update'
-    | 'process_start'
-    | 'process_running'
-    | 'process_updated'
-    | 'process_done'
-    | 'process_failed'
-    | 'process_waiting'
-    | 'process_terminated'
-    | 'agent_start'
-    | 'agent_updated'
-    | 'agent_done'
-    | 'agent_status'
-    | 'message_start'
-    | 'message_delta'
-    | 'message_complete'
-    | 'talk_start'
-    | 'talk_delta'
-    | 'talk_complete'
-    | 'audio_stream'
-    | 'tool_start'
-    | 'tool_delta'
-    | 'tool_done'
-    | 'file_start'
-    | 'file_delta'
-    | 'file_complete'
-    | 'cost_update'
-    | 'system_status'
-    | 'system_update'
-    | 'quota_update'
-    | 'screenshot'
-    | 'design'
-    | 'design_grid'
-    | 'console'
-    | 'error'
-    // New types for waiting on tools
-    | 'tool_wait_start'
-    | 'tool_waiting'
-    | 'tool_wait_complete'
-    // New types for waiting on tasks
-    | 'task_wait_start'
-    | 'task_waiting'
-    | 'task_wait_complete'
-    // Git-related events
-    | 'git_pull_request'
-    // Stream termination event
-    | 'stream_end';
+// StreamEventType moved to ensemble/types.ts
 
 /**
  * Base streaming event interface
@@ -762,20 +535,7 @@ export interface ConsoleEvent extends StreamEvent {
     message_id?: string; // Optional reference to the message that generated this console output
 }
 
-/**
- * Interface for model usage data
- */
-export interface ModelUsage {
-    model: string;
-    cost?: number;
-    input_tokens?: number; // Made optional to match model_data.ts
-    output_tokens?: number; // Made optional to match model_data.ts
-    cached_tokens?: number;
-    image_count?: number; // Added to match model_data.ts
-    metadata?: Record<string, any>;
-    timestamp?: string | Date; // Support both string and Date types
-    isFreeTierUsage?: boolean; // Added flag for free tier usage
-}
+// ModelUsage moved to ensemble/types.ts
 
 // New interface for the core cost data structure
 export interface CostUpdateData {
@@ -1014,35 +774,9 @@ export type RunnerConfig = {
     [stage: string]: RunnerStageConfig;
 };
 
-/**
- * Model provider interface
- */
-export interface ModelProvider {
-    createResponseStream(
-        model: string,
-        messages: ResponseInput,
-        agent: any
-    ): AsyncGenerator<StreamingEvent>;
-}
+// ModelProvider moved to ensemble/types.ts
 
-/**
- * Model class identifier
- */
-export type ModelClassID =
-    | 'standard'
-    | 'mini'
-    | 'reasoning'
-    | 'reasoning_mini'
-    | 'monologue'
-    | 'metacognition'
-    | 'code'
-    | 'writing'
-    | 'summary'
-    | 'vision'
-    | 'vision_mini'
-    | 'search'
-    | 'image_generation'
-    | 'embedding';
+// ModelClassID moved to ensemble/types.ts
 
 // --- Custom Signals for Task Flow Control ---
 

@@ -1,4 +1,4 @@
-import { ResponseInput } from '../types/shared-types.js';
+import { ResponseInput } from '@magi-system/ensemble';
 
 /**
  * LLM utility functions for the MAGI system.

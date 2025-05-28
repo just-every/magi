@@ -1,131 +1,256 @@
-// Export all types
-export * from './types.js';
+// ================================================================
+// Ensemble - Standalone Conversation Engine
+// Public API Exports
+// ================================================================
 
-// Export specific functions from model_providers to avoid conflicts
+// Initialize providers (this happens when the module is imported)
+import './provider/registry.js';
+
+// ================================================================
+// Core Abstractions
+// ================================================================
+export { Conversation } from './core/conversation.js';
+export {
+    createUserMessage,
+    createSystemMessage,
+    createDeveloperMessage,
+    createAssistantMessage,
+    createToolCallMessage,
+    createToolResultMessage,
+    createThinkingMessage,
+    isUserMessage,
+    isAssistantMessage,
+    isToolCall,
+    isToolResult,
+    isThinking
+} from './core/message_factory.js';
+export {
+    generateId,
+    generateIdWithPrefix,
+    generateToolCallId,
+    generateMessageId,
+    generateThinkingId
+} from './core/ids.js';
+
+// ================================================================
+// Main Request Pipeline
+// ================================================================
+export {
+    request,
+    simpleRequest,
+    streamRequest,
+    validateRequestParams,
+    isModelSupported,
+    type ConversationHandle,
+    type RequestPipelineOptions
+} from './orchestration/request_pipeline.js';
+
+// ================================================================
+// Tool Orchestration
+// ================================================================
+export {
+    executeTools,
+    validateToolCall,
+    validateToolRegistry,
+    createToolRegistry,
+    mergeToolRegistries,
+    type ToolExecutionResult,
+    type ToolExecutionOptions
+} from './orchestration/tool_executor.js';
+
+// ================================================================
+// Stream Processing
+// ================================================================
+export {
+    accumulateStream,
+    type AccumulateStreamResult
+} from './stream/accumulator.js';
+export {
+    EventFactory,
+    isMessageStartEvent,
+    isMessageDeltaEvent,
+    isMessageCompleteEvent,
+    isToolCallStartEvent,
+    isToolCallDeltaEvent,
+    isToolCallCompleteEvent,
+    isToolCallsChunkEvent,
+    isThinkingStartEvent,
+    isThinkingDeltaEvent,
+    isThinkingCompleteEvent,
+    isErrorEvent,
+    isStreamEndEvent,
+    isCostUpdateEvent,
+    isMetadataEvent,
+    type StreamEventType
+} from './stream/events.js';
+
+// ================================================================
+// Provider System
+// ================================================================
 export {
     getModelProvider,
+    registerProvider,
+    getAllProviders,
+    clearProviders,
+    hasProvider,
+    AbstractProvider,
+    type BaseProvider,
+    type ProviderRequestParams
+} from './provider/base_provider.js';
+
+// ================================================================
+// Core Types
+// ================================================================
+export type {
+    // Message types
+    ResponseInputItem,
+    ResponseInputMessage,
+    ResponseThinkingMessage,
+    ResponseOutputMessage,
+    ResponseInputFunctionCall,
+    ResponseInputFunctionCallOutput,
+    ResponseContent,
+
+    // Tool types
+    ToolDefinition,
+    ToolFunction,
+    ToolRegistry,
+    ToolCall,
+    ToolParameter,
+    ToolParameterType,
+    ExecutableToolFunction,
+    ExecutableFunction,
+
+    // Model types
+    ModelSettings,
+    ResponseJSONSchema,
+
+    // Request types
+    RequestParams
+} from './types.js';
+
+// ================================================================
+// Stream Event Types
+// ================================================================
+// Temporarily commented out due to type conflicts
+// export type {
+//     EnsembleStreamEvent,
+//     BaseEnsembleStreamEvent,
+//     MessageStartEvent,
+//     MessageDeltaEvent,
+//     MessageCompleteEvent,
+//     ToolCallStartEvent,
+//     ToolCallDeltaEvent,
+//     ToolCallCompleteEvent,
+//     ToolCallsChunkEvent,
+//     ThinkingStartEvent,
+//     ThinkingDeltaEvent,
+//     ThinkingCompleteEvent,
+//     ErrorEvent,
+//     StreamEndEvent,
+//     CostUpdateEvent,
+//     MetadataEvent
+// } from './stream/events.js';
+
+// ================================================================
+// Legacy Compatibility Layer
+// ================================================================
+// Re-export some existing functionality for backward compatibility
+
+// Model data and provider utilities from the original system
+export {
+    getModelProvider as getLegacyModelProvider,
     getProviderFromModel,
     getModelFromClass,
-    isProviderKeyValid,
-    ModelProvider, // This is the extended interface from model_provider.ts
-    EmbedOpts
+    isProviderKeyValid
 } from './model_providers/model_provider.js';
 
-// Export all model data (excluding ModelClassID to avoid conflict)
 export {
     MODEL_REGISTRY,
     MODEL_CLASSES,
     findModel,
-    ModelProviderID,
-    ModelUsage,
-    TieredPrice,
-    TimeBasedPrice,
-    ModelEntry
+    type ModelProviderID,
+    type ModelUsage,
+    type TieredPrice,
+    type TimeBasedPrice,
+    type ModelEntry,
+    type ModelClassID
 } from './model_data.js';
 
-
-// Export individual model providers
-export * from './model_providers/claude.js';
-export * from './model_providers/openai.js';
-export * from './model_providers/openai_chat.js';
-export * from './model_providers/deepseek.js';
-export * from './model_providers/gemini.js';
-export * from './model_providers/grok.js';
-export * from './model_providers/openrouter.js';
-export * from './model_providers/test_provider.js';
-
-// Export all utils
-export * from './utils/async_queue.js';
-export * from './utils/communication.js';
-export * from './utils/cost_tracker.js';
-export * from './utils/delta_buffer.js';
-export * from './utils/image_to_text.js';
-export * from './utils/image_utils.js';
-export * from './utils/llm_logger.js';
-export * from './utils/quota_tracker.js';
-
-import {
-    ModelSettings,
-    ToolFunction,
+// Additional types
+export type {
     ResponseInput,
-    EnsembleStreamEvent,
-    ModelClassID,
     EnsembleAgent,
-    RequestParams,
     CancelHandle,
+    StreamEvent,
+    MessageEvent,
+    ToolEvent,
+    ModelProvider,
+    EnsembleStreamEvent
+    // ErrorEvent,  // Commented out due to duplicates
+    // CostUpdateEvent,  // Commented out due to duplicates
 } from './types.js';
+
+// Utils that are commonly used
+export * from './utils/cost_tracker.js';
+export * from './utils/quota_tracker.js';
+export * from './utils/async_queue.js';
+export * from './utils/delta_buffer.js';
+
+// Logger exports
+export { EnsembleLogger, setEnsembleLogger } from './utils/llm_logger.js';
+
+// Provider exports
+export { openaiProvider } from './model_providers/openai.js';
+
+
+// ================================================================
+// Convenience Factory Functions
+// ================================================================
+
+import { Conversation } from './core/conversation.js';
 import {
-    getModelProvider,
-} from './model_providers/model_provider.js';
-
-class RequestAgent implements EnsembleAgent {
-    agent_id: string;
-    modelSettings?: ModelSettings;
-    modelClass?: ModelClassID;
-    private tools: ToolFunction[];
-    constructor(params: RequestParams) {
-        this.agent_id = params.agentId || 'ensemble';
-        this.modelSettings = params.modelSettings;
-        this.modelClass = params.modelClass;
-        this.tools = params.tools || [];
-    }
-    async getTools(): Promise<ToolFunction[]> {
-        return this.tools;
-    }
-}
-
+    ResponseInputItem,
+    ToolFunction,
+    ToolRegistry,
+    ToolDefinition,
+    ExecutableToolFunction
+} from './types.js';
+import { createToolRegistry } from './orchestration/tool_executor.js';
 
 /**
- * New callback-based request API
+ * Create a new conversation with optional initial messages
  */
-export function request(
-    model: string,
-    messages: ResponseInput,
-    params: RequestParams
-): CancelHandle {
-    const provider = getModelProvider(model);
-    const agent = new RequestAgent(params);
-
-    // Use the new callback-based method if available, otherwise fall back to generator
-    if (provider.createResponse) {
-        // Wrap provider's createResponse to ensure stream_end emission
-        const originalHandle = provider.createResponse(
-            model,
-            messages,
-            agent as any,
-            params.onEvent,
-            params.onError
-        );
-
-        // Providers should emit stream_end themselves, but this ensures it happens
-        // The provider's createResponse method should handle this internally
-        return originalHandle;
-    }
-
-    // Fallback to generator method for providers not yet updated
-    let cancelled = false;
-    (async () => {
-        try {
-            const stream = provider.createResponseStream(model, messages, agent as any);
-            for await (const event of stream) {
-                if (cancelled) break;
-                params.onEvent(event);
-            }
-            // Emit stream_end after generator completes
-            if (!cancelled) {
-                params.onEvent({ type: 'stream_end', timestamp: new Date().toISOString() } as EnsembleStreamEvent);
-            }
-        } catch (error) {
-            if (!cancelled && params.onError) {
-                params.onError(error);
-            }
-        }
-    })();
-
-    return {
-        cancel: () => {
-            cancelled = true;
-        }
-    };
+export function createConversation(initialMessages?: ResponseInputItem[]): Conversation {
+    return new Conversation(initialMessages);
 }
 
+/**
+ * Create a simple tool registry from an array of functions
+ */
+export function createSimpleToolRegistry(tools: ToolFunction[]): ToolRegistry {
+    return createToolRegistry(tools);
+}
+
+/**
+ * Helper to create a basic tool function
+ */
+export function createToolFunction(
+    name: string,
+    description: string,
+    parameters: ToolDefinition['function']['parameters'],
+    execute: ExecutableToolFunction
+): ToolFunction {
+    return {
+        definition: {
+            type: 'function',
+            function: {
+                name,
+                description,
+                parameters
+            }
+        },
+        function: execute as any,
+        execute
+    };
+}

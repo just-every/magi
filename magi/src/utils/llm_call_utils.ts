@@ -13,6 +13,8 @@ import {
 } from '../magi_agents/index.js';
 import {
     ResponseInput,
+} from '@magi-system/ensemble';
+import {
     ModelClassID,
     type AgentDefinition,
 } from '../types/shared-types.js';
