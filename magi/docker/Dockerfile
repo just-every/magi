@@ -8,36 +8,7 @@ RUN set -e; \
     npm view @openai/codex              dist-tags.latest  > /tmp/CODEX_VER
 
 ###############################################################################
-# Stage 1 – Build the ensemble package first
-###############################################################################
-FROM node:23-slim AS ensemble-builder
-
-RUN npm install -g npm
-RUN apt-get update && \
-    apt-get install -y python3 make g++ pkg-config \
-                       libpixman-1-dev libcairo2-dev libpango1.0-dev \
-                       libjpeg-dev libgif-dev librsvg2-dev --no-install-recommends && \
-    rm -rf /var/lib/apt/lists/*
-
-WORKDIR /build
-
-# Copy ensemble and mech source
-COPY ./ensemble/ ./ensemble/
-COPY ./mech/ ./mech/
-COPY ./common/ ./common/
-
-# Build ensemble package (with stream_end support)
-WORKDIR /build/ensemble
-RUN --mount=type=cache,target=/root/.npm \
-    npm install && npm run build
-
-# Build mech package
-WORKDIR /build/mech
-RUN --mount=type=cache,target=/root/.npm \
-    npm install && npm run build
-
-###############################################################################
-# Stage 2 – Build the application's dependencies
+# Stage 1 – Build the application's dependencies
 ###############################################################################
 FROM node:23-slim AS builder
 
@@ -50,10 +21,8 @@ RUN apt-get update && \
 
 WORKDIR /build
 
-# Copy built ensemble and mech packages to node_modules with all necessary files
-COPY --from=ensemble-builder /build/ensemble ./node_modules/@magi-system/ensemble
-COPY --from=ensemble-builder /build/mech ./node_modules/@magi-system/mech
-COPY --from=ensemble-builder /build/common ./common
+# Copy common files
+COPY ./common/ ./common/
 
 COPY ./magi/package.json ./magi/package-lock.json ./
 
@@ -109,9 +78,7 @@ RUN mkdir -p /home/${USER_NAME}/.claude /home/${USER_NAME}/.cache && \
 # ---- Bring in project dependencies ----------------------------------
 ########################################################################
 COPY --from=builder --chown=${USER_NAME}:${GROUP_NAME} /build/node_modules ./node_modules
-# Ensure ensemble and mech packages are available
-COPY --from=ensemble-builder --chown=${USER_NAME}:${GROUP_NAME} /build/ensemble ./node_modules/@magi-system/ensemble
-COPY --from=ensemble-builder --chown=${USER_NAME}:${GROUP_NAME} /build/mech ./node_modules/@magi-system/mech
+# Ensemble and mech packages are now installed from npm
 
 ########################################################################
 # ---- 1️⃣  Install exact AI CLI versions (cached until new tags) -----
