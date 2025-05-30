@@ -3,7 +3,7 @@
  *
  * API endpoints for managing pull request events
  */
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { execSync } from 'child_process';
 import path from 'path';
 import {
@@ -34,8 +34,7 @@ router.get('/', async (req, res) => {
 /**
  * Get a specific PR event by ID
  */
-// @ts-ignore
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req: any, res: any) => {
     try {
         const id = parseInt(req.params.id, 10);
         if (isNaN(id)) {
@@ -57,8 +56,7 @@ router.get('/:id', async (req, res) => {
 /**
  * Revert a PR merge
  */
-// @ts-ignore
-router.post('/:id/revert', async (req, res) => {
+router.post('/:id/revert', async (req: any, res: any) => {
     try {
         const id = parseInt(req.params.id, 10);
         if (isNaN(id)) {

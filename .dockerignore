@@ -9,6 +9,7 @@
 !db/
 !templates/
 !ensemble/
+!mech/
 
 # Ignore unnecessary files in the included directories
 **/__pycache__/

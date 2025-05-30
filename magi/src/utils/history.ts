@@ -13,7 +13,7 @@ import {
     ResponseThinkingMessage,
     ResponseOutputMessage,
 } from '@magi-system/ensemble';
-import { setDelayInterrupted } from './thought_utils.js';
+import { setDelayInterrupted } from './mech_wrapper.js';
 import { formatHistoryForSummary, createSummary } from './summary_utils.js';
 import { truncateLargeValues } from './file_utils.js';
 import { readableTime } from './date_tools.js';

@@ -118,6 +118,7 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                                 setSelectedItemId={setSelectedItemId}
                                 statusFilter={[
                                     'running',
+                                    'waiting',
                                     'failed',
                                     'terminated',
                                     'ending',

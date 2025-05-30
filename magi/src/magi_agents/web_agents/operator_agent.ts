@@ -20,7 +20,7 @@ import {
 } from '../../utils/project_utils.js';
 import { runningToolTracker } from '../../utils/running_tool_tracker.js';
 import { getRunningToolTools } from '../../utils/running_tools.js';
-import { getThoughtDelay } from '../../utils/thought_utils.js';
+import { getThoughtDelay } from '../../utils/mech_wrapper.js';
 import { createReasoningAgent } from '../common_agents/reasoning_agent.js';
 import { createSearchAgent } from '../common_agents/search_agent.js';
 import { createShellAgent } from '../common_agents/shell_agent.js';

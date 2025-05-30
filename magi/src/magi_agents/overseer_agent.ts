@@ -18,7 +18,7 @@ import { addHistory, addMonologue } from '../utils/history.js';
 import { processTracker } from '../utils/process_tracker.js';
 import { runningToolTracker } from '../utils/running_tool_tracker.js';
 import { dateFormat, readableTime } from '../utils/date_tools.js';
-import { getThoughtDelay, getThoughtTools } from '../utils/thought_utils.js';
+import { getThoughtDelay, getThoughtTools } from '../utils/mech_wrapper.js';
 import {
     getMemoryTools,
     listShortTermMemories,

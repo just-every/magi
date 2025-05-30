@@ -11,6 +11,18 @@ export {
     EmbedOpts
 } from './model_providers/model_provider.js';
 
+// Export external model registration functions
+export {
+    registerExternalModel,
+    getExternalModel,
+    getAllExternalModels,
+    getExternalProvider,
+    isExternalModel,
+    clearExternalRegistrations,
+    overrideModelClass,
+    getModelClassOverride
+} from './external_models.js';
+
 // Export all model data (excluding ModelClassID to avoid conflict)
 export {
     MODEL_REGISTRY,
@@ -43,6 +55,8 @@ export * from './utils/image_to_text.js';
 export * from './utils/image_utils.js';
 export * from './utils/llm_logger.js';
 export * from './utils/quota_tracker.js';
+export { convertStreamToMessages, chainRequests } from './utils/stream_converter.js';
+export type { ConversionOptions, ConversionResult } from './utils/stream_converter.js';
 
 import {
     ModelSettings,

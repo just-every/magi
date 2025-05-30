@@ -28,7 +28,7 @@ import { AgentDefinition } from '../types/shared-types.js';
 import { dateFormat, readableTime } from '../utils/date_tools.js';
 import { runningToolTracker } from '../utils/running_tool_tracker.js';
 import { listActiveProjects } from '../utils/project_utils.js';
-import { getThoughtDelay } from '../utils/thought_utils.js';
+import { getThoughtDelay } from '../utils/mech_wrapper.js';
 import { getImageGenerationTools } from '../utils/image_generation.js';
 
 export const startTime = new Date();

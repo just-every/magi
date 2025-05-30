@@ -144,7 +144,7 @@ async function wait_for_running_tool(
                         const abortReason2 = (abort_signal as any)?.reason
                             ? ` Reason: ${(abort_signal as any)?.reason}.`
                             : '';
-                        finalResult = `Wait for running tool ${runningToolId} was aborted during polling delay.${abortReason2}`;
+                        finalResult = `Wait for running tool ${runningToolId} completed.${abortReason2}`;
                         // Send stream event
                         sendStreamEvent({
                             type: 'tool_wait_complete',

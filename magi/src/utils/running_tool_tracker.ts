@@ -224,7 +224,7 @@ Running Time: ${readableTime(new Date().getTime() - fn.started.getTime())}`;
         if (fn.error) {
             status += `\n\nError:\n${fn.error}`;
         }
-        status += `\n\n[Stop with terminate_running_tool(${id})]`;
+        status += `\n\n[If this tool has failed, you can stop it with terminate_running_tool(${id})]`;
 
         return status;
     }

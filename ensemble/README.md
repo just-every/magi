@@ -8,6 +8,7 @@ Shared model-provider utilities for MAGI System. This package provides a unified
 - **AsyncGenerator API**: Clean, native async iteration for streaming responses
 - **Simple interface**: Direct async generator pattern matches native LLM APIs
 - **Tool calling**: Function calling support where available
+- **Stream conversion**: Convert streaming events to conversation history for chaining
 - **Image processing**: Image-to-text and image utilities
 - **Cost tracking**: Token usage and cost monitoring
 - **Quota management**: Rate limiting and usage tracking
@@ -145,6 +146,54 @@ interface ModelProvider {
 - **Communication**: Logging and debugging utilities
 - **Delta Buffer**: Handle streaming response deltas
 - **AsyncQueue**: Generic async queue for bridging callbacks to async iteration (used internally)
+
+### Stream Conversion
+
+Convert streaming events into conversation history for chaining LLM calls:
+
+```typescript
+import { convertStreamToMessages, chainRequests } from '@magi-system/ensemble';
+
+// Convert a single stream to messages
+const stream = request('claude-3-5-sonnet-20241022', [
+  { type: 'message', role: 'user', content: 'Tell me a joke' }
+]);
+
+const result = await convertStreamToMessages(stream);
+console.log(result.messages); // Array of ResponseInput items
+console.log(result.fullResponse); // Complete response text
+
+// Chain multiple requests together
+const chainResult = await chainRequests([
+  {
+    model: 'claude-3-5-sonnet-20241022',
+    systemPrompt: 'You are a helpful assistant that tells jokes.',
+  },
+  {
+    model: 'gpt-4o',
+    systemPrompt: 'Rate the previous joke on a scale of 1-10.',
+  }
+], [
+  { type: 'message', role: 'user', content: 'Tell me a joke about programming' }
+]);
+
+// Custom tool processing during conversion
+const streamWithTools = request('gpt-4o', messages, {
+  tools: [weatherTool]
+});
+
+const toolResult = await convertStreamToMessages(streamWithTools, [], {
+  processToolCall: async (toolCalls) => {
+    // Process tool calls and return results
+    const results = await Promise.all(
+      toolCalls.map(call => processMyTool(call))
+    );
+    return results;
+  },
+  onThinking: (msg) => console.log('Thinking:', msg.content),
+  onResponse: (msg) => console.log('Response:', msg.content),
+});
+```
 
 ### Logging
 

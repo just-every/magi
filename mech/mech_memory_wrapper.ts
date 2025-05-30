@@ -10,26 +10,10 @@
  * 3. Tracking of runtime and cost metrics
  */
 
-import { Agent } from './agent.js';
+import { randomUUID } from 'crypto';
+import type { MechAgent, MechContext, MechResult } from './types.js';
 import { runMECH } from './mech_tools.js';
-import { sendStreamEvent } from './communication.js';
-import { addHistory, getHistory, describeHistory } from './history.js';
-import { costTracker } from './cost_tracker.js';
-import { embed } from './embedding_utils.js';
-import { planAndCommitChanges } from './commit_planner.js';
-import {
-    recordTaskStart,
-    recordTaskEnd,
-    lookupMemoriesEmbedding,
-    formatMemories,
-    insertMemories,
-    MemoryMatch,
-} from './db_utils.js';
-import { registerRelevantCustomTools } from './index.js';
-import { MechResult } from './mech_tools.js';
-import { quick_llm_call } from './llm_call_utils.js';
 import { ResponseInput } from '@magi-system/ensemble';
-import { getProcessProjectIds } from './project_utils.js';
 
 /**
  * Runs the Meta-cognition Ensemble Chain-of-thought Hierarchy (MECH) with memory
@@ -38,13 +22,15 @@ import { getProcessProjectIds } from './project_utils.js';
  *
  * @param agent - The agent to run
  * @param content - The user input to process
+ * @param context - The MECH context containing required utilities
  * @param loop - Whether to loop continuously or exit after completion
  * @param model - Optional fixed model to use
  * @returns Promise that resolves to a MechResult containing status, cost, and metrics
  */
 export async function runMECHWithMemory(
-    agent: Agent,
+    agent: MechAgent,
     content: string,
+    context: MechContext,
     loop: boolean = false,
     model?: string
 ): Promise<MechResult> {
@@ -52,57 +38,69 @@ export async function runMECHWithMemory(
         `Running MECH with memory for task: ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`
     );
 
+    // Check if memory features are available
+    const hasMemoryFeatures = context.recordTaskStart && 
+                            context.embed && 
+                            context.lookupMemoriesEmbedding &&
+                            context.formatMemories;
+
     // Record the task start time and get a task ID
     const startTime = Date.now();
-    const costBaseline = costTracker.getTotalCost();
+    const costBaseline = context.costTracker.getTotalCost();
     let taskId: string | null = null;
     let status: 'complete' | 'fatal_error' = 'complete';
     let embedding: number[] | null = null;
-    let memories: MemoryMatch[] = [];
+    let memories: any[] = [];
 
-    try {
-        taskId = await recordTaskStart({
-            prompt: content,
-            model,
-        });
-        console.log(`Task recorded with ID: ${taskId}`);
-    } catch (err) {
-        console.error('Failed to record task start:', err);
-    }
+    if (hasMemoryFeatures) {
+        try {
+            taskId = await context.recordTaskStart!({
+                taskId: randomUUID(),
+                taskDescription: content,
+                prompt: content,
+                model,
+            });
+            console.log(`Task recorded with ID: ${taskId}`);
+        } catch (err) {
+            console.error('Failed to record task start:', err);
+        }
 
-    try {
-        // Generate embedding for the prompt
-        console.log('Generating embedding for prompt...');
-        embedding = await embed(content);
+        try {
+            // Generate embedding for the prompt
+            console.log('Generating embedding for prompt...');
+            embedding = await context.embed!(content);
 
-        // Search for similar memories
-        console.log('Searching for relevant memories...');
-        memories = await lookupMemoriesEmbedding(embedding);
+            // Search for similar memories
+            console.log('Searching for relevant memories...');
+            memories = await context.lookupMemoriesEmbedding!(embedding);
 
-        if (memories.length > 0) {
-            // Format and add memories to the history
-            const formattedMemories = formatMemories(memories);
-            console.log(`Found ${memories.length} relevant memories.`);
+            if (memories.length > 0) {
+                // Format and add memories to the history
+                const formattedMemories = context.formatMemories!(memories);
+                console.log(`Found ${memories.length} relevant memories.`);
 
-            // Add memories to history as a system message
-            addHistory({
-                type: 'message',
-                role: 'user',
-                content: `PRIOR TASK MEMORIES:
+                // Add memories to history as a system message
+                context.addHistory({
+                    type: 'message',
+                    role: 'user',
+                    content: `PRIOR TASK MEMORIES:
 When a similar task completed in the past, we recorded the following notes. They may be relevant. You can choose if you would like to use these to inform your approach to this task, if they make sense.
 
 ${formattedMemories}`,
-            });
-        } else {
-            console.log('No relevant memories found.');
-        }
+                });
+            } else {
+                console.log('No relevant memories found.');
+            }
 
-        // Register any relevant custom tools based on the task embedding
-        console.log('Looking for relevant custom tools...');
-        // Pass the agent with its ID for proper per-agent tool management
-        await registerRelevantCustomTools(embedding, agent);
-    } catch (err) {
-        console.error('Failed to retrieve memories:', err);
+            // Register any relevant custom tools based on the task embedding
+            if (context.registerRelevantCustomTools) {
+                console.log('Looking for relevant custom tools...');
+                // Pass the agent with its ID for proper per-agent tool management
+                await context.registerRelevantCustomTools(embedding, agent);
+            }
+        } catch (err) {
+            console.error('Failed to retrieve memories:', err);
+        }
     }
 
     // Step 2: Run the original MECH process and get the result
@@ -110,6 +108,7 @@ ${formattedMemories}`,
         const mechResult: MechResult = await runMECH(
             agent,
             content,
+            context,
             loop,
             model
         );
@@ -124,13 +123,14 @@ ${formattedMemories}`,
         );
 
         // Step 3: Record completion metrics and extract learnings
-        if (taskId) {
+        if (hasMemoryFeatures && taskId) {
             try {
                 // Execute all post-task operations concurrently
                 const taskOperations = [
                     // Record task completion metrics
-                    recordTaskEnd({
-                        task_id: taskId,
+                    context.recordTaskEnd!({
+                        taskId,
+                        taskDescription: content,
                         status,
                         durationSec,
                         totalCost,
@@ -139,6 +139,7 @@ ${formattedMemories}`,
                     // Extract learnings from the task history
                     extractAndStoreMemories(
                         agent,
+                        context,
                         taskId,
                         status,
                         embedding,
@@ -147,14 +148,16 @@ ${formattedMemories}`,
                 ];
 
                 // Add git operations if needed
-                const projectIds = getProcessProjectIds();
-                if (projectIds && projectIds.length > 0) {
-                    // Add each project's git operation directly to taskOperations
-                    taskOperations.push(
-                        ...projectIds.map(projectId =>
-                            planAndCommitChanges(agent, projectId)
-                        )
-                    );
+                if (context.getProcessProjectIds && context.planAndCommitChanges) {
+                    const projectIds = context.getProcessProjectIds();
+                    if (projectIds && projectIds.length > 0) {
+                        // Add each project's git operation directly to taskOperations
+                        taskOperations.push(
+                            ...projectIds.map(projectId =>
+                                context.planAndCommitChanges!(agent, projectId)
+                            )
+                        );
+                    }
                 }
 
                 // Run all operations concurrently
@@ -165,7 +168,10 @@ ${formattedMemories}`,
         }
 
         if (mechResult.mechOutcome?.event) {
-            sendStreamEvent(mechResult.mechOutcome.event); // Cast to any to bypass type checking
+            // Use sendStreamEvent if available
+            if (context.sendStreamEvent) {
+                context.sendStreamEvent(mechResult.mechOutcome.event);
+            }
         }
 
         // Return the result to the caller
@@ -177,13 +183,14 @@ ${formattedMemories}`,
 
         const endTime = Date.now();
         const durationSec = Math.round((endTime - startTime) / 1000);
-        const totalCost = costTracker.getTotalCost() - costBaseline;
+        const totalCost = context.costTracker.getTotalCost() - costBaseline;
 
         // Record error in database
-        if (taskId) {
+        if (hasMemoryFeatures && taskId && context.recordTaskEnd) {
             try {
-                await recordTaskEnd({
-                    task_id: taskId,
+                await context.recordTaskEnd({
+                    taskId,
+                    taskDescription: content,
                     status: 'fatal_error',
                     durationSec,
                     totalCost,
@@ -200,7 +207,7 @@ ${formattedMemories}`,
         return {
             status: 'fatal_error',
             mechOutcome: { error: `Unexpected error: ${error}` },
-            history: getHistory(),
+            history: context.getHistory(),
             durationSec,
             totalCost,
         };
@@ -212,21 +219,32 @@ ${formattedMemories}`,
 /**
  * Extract learnings from the task history and store them in the database
  *
+ * @param agent - The agent that ran the task
+ * @param context - The MECH context
  * @param taskId - The ID of the task to extract learnings from
  * @param status - The completion status of the task
+ * @param embedding - The embedding of the original task
+ * @param memories - Previously retrieved memories
  */
 async function extractAndStoreMemories(
-    agent: Agent,
+    agent: MechAgent,
+    context: MechContext,
     taskId: string,
     status: 'complete' | 'fatal_error',
     embedding: number[] | null,
-    memories: MemoryMatch[]
+    memories: any[]
 ): Promise<void> {
     // Skip MemoryAgent for project_update processes
     if (agent.args?.tool === 'project_update') {
         console.log(
             'MemoryAgent disabled for project_update; skipping learnings extraction.'
         );
+        return;
+    }
+
+    // Check if we have the necessary utilities
+    if (!context.quick_llm_call || !context.describeHistory || !context.formatMemories || !context.insertMemories) {
+        console.log('Memory extraction utilities not available, skipping learnings extraction.');
         return;
     }
 
@@ -244,8 +262,8 @@ Task Result: **${status === 'complete' ? 'COMPLETED SUCCESSFULLY' : 'FAILED WITH
         });
 
         // Call the reasoning model to extract learnings using our utility with JSON mode
-        const response = await quick_llm_call(
-            describeHistory(agent, messages, 100),
+        const response = await context.quick_llm_call(
+            context.describeHistory(agent, messages, 100),
             null,
             {
                 name: 'MemoryAgent',
@@ -261,12 +279,12 @@ Return insights **only if they clear a very high bar**.
 │    • Would a skilled developer NOT know this without seeing the      │
 │      task succeed/fail?                                              │
 │    • Is it missing from PREVIOUS LEARNINGS?                          │
-│    If “no” to either → discard.                                      │
+│    If "no" to either → discard.                                      │
 │                                                                      │
 │ 1. If it *is* novel, write ONE sentence in this exact template:      │
-│    “[Tag] <Actionable advice>. Learned <how / when / why we          │
-│     discovered this>.”                                               │
-│    • Start with “Always…”, “Avoid…”, “Prefer…”, or “Consider…”.      │
+│    "[Tag] <Actionable advice>. Learned <how / when / why we          │
+│     discovered this>."                                               │
+│    • Start with "Always…", "Avoid…", "Prefer…", or "Consider…".      │
 │    • Tag = [BestPractice] [Pitfall] or [Idea].                       │
 │    • ≤ 35 words.  Max 3 items.                                       │
 ╰──────────────────────────────────────────────────────────────────────╯
@@ -275,19 +293,19 @@ Typical outcome: **no items** ⇒ respond \`{"learnings": []}\`.
 
 GOOD vs. BAD
 ────────────────────────────────────────────────────────────────────────────
-❌ Narrative only: “We cloned the repo.”
-❌ Obvious tip: “[BestPractice] Use a virtualenv.”
-✅ “[Pitfall] Avoid running ‘npm ci’ inside Docker on Apple Silicon. \
-Learned after repeated segfaults due to incompatible node-gyp binaries.”
-✅ “[BestPractice] Prefer shallow git clones ( --depth 1 ) to cut CI time \
-by 40 %. Learned when full clone exceeded the runner’s memory limit.”
+❌ Narrative only: "We cloned the repo."
+❌ Obvious tip: "[BestPractice] Use a virtualenv."
+✅ "[Pitfall] Avoid running 'npm ci' inside Docker on Apple Silicon. \
+Learned after repeated segfaults due to incompatible node-gyp binaries."
+✅ "[BestPractice] Prefer shallow git clones ( --depth 1 ) to cut CI time \
+by 40 %. Learned when full clone exceeded the runner's memory limit."
 
 ---
 
 ` +
                     (memories.length > 0
                         ? `PREVIOUS LEARNINGS (skip duplicates):
-${formatMemories(memories)}`
+${context.formatMemories(memories)}`
                         : ''),
                 modelClass: 'reasoning_mini',
                 modelSettings: {
@@ -346,20 +364,20 @@ ${formatMemories(memories)}`
                 return {
                     text,
                     embedding:
-                        embedding === null ? await embed(text) : embedding,
+                        embedding === null ? await context.embed!(text) : embedding,
                     // Score successful tasks higher than failed ones
                     score: status === 'complete' ? 1.0 : 0.5,
                     metadata: {
                         status,
                         // Extract tool names from the history
-                        tools: extractToolNames(getHistory()),
+                        tools: extractToolNames(context.getHistory()),
                     },
                 };
             })
         );
 
         // Store in database
-        await insertMemories(taskId, memoryEmbeddings);
+        await context.insertMemories(taskId, memoryEmbeddings);
         console.log('Learnings stored in database.');
     } catch (err) {
         console.error('Failed to extract or store learnings:', err);

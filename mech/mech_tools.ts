@@ -6,63 +6,34 @@
  * with the more advanced MECH system that adds meta-cognition and hierarchy capabilities.
  */
 
-import { Agent } from './agent.js';
-import { Runner } from './runner.js';
-import { getCommunicationManager, sendComms } from './communication.js';
-import {
-    addHistory,
-    getHistory,
-    processPendingHistoryThreads,
-} from './history.js';
+import type { MechAgent, MechContext, MechOutcome, MechResult } from './types.js';
+import { mechState, incrementLLMRequestCount } from './mech_state.js';
 import { runThoughtDelay, getThoughtDelay } from './thought_utils.js';
-import { StreamingEvent } from '../types/shared-types.js';
-import { ResponseInput, ToolFunction } from '@magi-system/ensemble';
-import { createToolFunction } from './tool_call.js';
-import { mechState, spawnMetaThoughtIfNeeded } from './mech_state.js';
-import { costTracker } from './cost_tracker.js';
-
-export type MechOutcome = {
-    status?: 'complete' | 'fatal_error';
-    result?: string;
-    error?: string;
-    event?: StreamingEvent;
-};
-
-/**
- * Result structure returned from running MECH
- */
-export type MechResult =
-    | {
-          status: 'complete';
-          mechOutcome?: MechOutcome;
-          history: ResponseInput;
-          durationSec: number;
-          totalCost: number;
-      }
-    | {
-          status: 'fatal_error';
-          mechOutcome?: MechOutcome;
-          history: ResponseInput;
-          durationSec: number;
-          totalCost: number;
-      };
+import { spawnMetaThought } from './meta_cognition.js';
+import { rotateModel } from './model_rotation.js';
+import { ToolFunction } from '@magi-system/ensemble';
 
 // Shared state for MECH execution
 let mechComplete = false;
 let mechOutcome: MechOutcome = {};
+
+// Track task start time for duration calculation
+let taskStartTime = new Date();
 
 /**
  * Runs the Meta-cognition Ensemble Chain-of-thought Hierarchy (MECH)
  *
  * @param agent - The agent to run
  * @param content - The user input to process
+ * @param context - The MECH context containing required utilities
  * @param loop - Whether to loop continuously or exit after completion
  * @param model - Optional fixed model to use (if not provided, models will rotate based on hierarchy scores)
  * @returns Promise that resolves to a MechResult containing status, cost, and duration
  */
 export async function runMECH(
-    agent: Agent,
+    agent: MechAgent,
     content: string,
+    context: MechContext,
     loop: boolean = false,
     model?: string
 ): Promise<MechResult> {
@@ -74,7 +45,8 @@ export async function runMECH(
 
     // Start timing
     const startTime = new Date();
-    const costBaseline = costTracker.getTotalCost();
+    taskStartTime = startTime;
+    const costBaseline = context.costTracker.getTotalCost();
 
     // Reset the meta-cognition state
     mechState.llmRequestCount = 0;
@@ -84,7 +56,7 @@ export async function runMECH(
     mechState.metaFrequency = '5';
 
     // Add initial prompt to history
-    addHistory({
+    context.addHistory({
         type: 'message',
         role: 'user',
         content,
@@ -92,22 +64,33 @@ export async function runMECH(
 
     // Add MECH tools to the agent
     agent.tools = agent.tools || [];
-    agent.tools.unshift(...getMECHTools());
+    agent.tools.unshift(...getMECHTools(context));
 
-    const comm = getCommunicationManager();
+    const comm = context.getCommunicationManager();
 
     do {
         try {
-            await spawnMetaThoughtIfNeeded(agent);
+            // Check if we need to trigger meta-cognition
+            const { shouldTriggerMeta } = incrementLLMRequestCount();
+            if (shouldTriggerMeta) {
+                console.log(
+                    `[MECH] Triggering meta-cognition after ${mechState.llmRequestCount} LLM requests`
+                );
+                try {
+                    await spawnMetaThought(agent, context, startTime);
+                } catch (error) {
+                    console.error('[MECH] Error in meta-cognition:', error);
+                }
+            }
 
             // Process any pending history threads at the start of each mech loop
-            await processPendingHistoryThreads();
+            await context.processPendingHistoryThreads();
 
             // Rotate the model using the MECH hierarchy-aware rotation (influenced by model scores)
-            agent.model = model || Runner.rotateModel(agent);
-            delete agent.modelSettings;
+            agent.model = model || await rotateModel(agent);
+            // Note: modelSettings deletion is handled by the runner
 
-            sendComms({
+            context.sendComms({
                 type: 'agent_status',
                 agent_id: agent.agent_id,
                 status: 'mech_start',
@@ -117,15 +100,21 @@ export async function runMECH(
             });
 
             // Run the command with unified tool handling
-            const response = await Runner.runStreamedWithTools(
-                agent,
-                '',
-                getHistory()
-            );
+            // Note: The actual runner execution is provided by the context
+            let response;
+            if (context.runStreamedWithTools) {
+                response = await context.runStreamedWithTools(
+                    agent,
+                    '',
+                    context.getHistory()
+                );
+            } else {
+                throw new Error('runStreamedWithTools not provided in context');
+            }
 
             console.log('[MECH] ', response);
 
-            sendComms({
+            context.sendComms({
                 type: 'agent_status',
                 agent_id: agent.agent_id,
                 status: 'mech_done',
@@ -138,10 +127,10 @@ export async function runMECH(
                 // Let magi know our progress
                 comm.send({
                     type: 'process_updated',
-                    history: getHistory(),
+                    history: context.getHistory(),
                 });
 
-                sendComms({
+                context.sendComms({
                     type: 'agent_status',
                     agent_id: agent.agent_id,
                     status: 'thought_delay',
@@ -166,14 +155,14 @@ export async function runMECH(
     const durationSec = Math.round(
         (new Date().getTime() - startTime.getTime()) / 1000
     );
-    const totalCost = costTracker.getTotalCost() - costBaseline;
+    const totalCost = context.costTracker.getTotalCost() - costBaseline;
 
     // Build and return the appropriate result object
     if (mechOutcome.status === 'complete') {
         return {
             status: 'complete',
             mechOutcome,
-            history: getHistory(),
+            history: context.getHistory(),
             durationSec,
             totalCost,
         };
@@ -181,7 +170,7 @@ export async function runMECH(
         return {
             status: 'fatal_error',
             mechOutcome,
-            history: getHistory(),
+            history: context.getHistory(),
             durationSec,
             totalCost,
         };
@@ -192,28 +181,25 @@ export async function runMECH(
         );
         return {
             status: 'complete',
-            history: getHistory(),
+            history: context.getHistory(),
             durationSec,
             totalCost,
         };
     }
 }
 
-// Track task start time for duration calculation
-const taskStartTime = new Date();
-
 /**
  * Tool function to mark a task as successfully completed.
  * This also triggers automatic handling of git repositories for the task.
  */
-export async function task_complete(result: string): Promise<string> {
+export async function task_complete(result: string, context: MechContext): Promise<string> {
     console.log(`[TaskRun] Task completed successfully: ${result}`);
 
     // Calculate metrics for immediate use in the response
     const durationSec = Math.round(
         (new Date().getTime() - taskStartTime.getTime()) / 1000
     );
-    const totalCost = costTracker.getTotalCost();
+    const totalCost = context.costTracker.getTotalCost();
 
     // Add metrics to the result message
     const resultWithMetrics = `${result}\n\n=== METRICS ===\nDuration  : ${durationSec}s\nTotal cost: $${totalCost.toFixed(6)}`;
@@ -225,8 +211,8 @@ export async function task_complete(result: string): Promise<string> {
         event: {
             type: 'process_done',
             output: resultWithMetrics,
-            history: getHistory(),
-        },
+            history: context.getHistory(),
+        } as any,
     };
 
     return `Task ended successfully\n\n${resultWithMetrics}`;
@@ -235,14 +221,14 @@ export async function task_complete(result: string): Promise<string> {
 /**
  * Tool function to mark a task as failed with a fatal error.
  */
-export function task_fatal_error(error: string): string {
+export function task_fatal_error(error: string, context: MechContext): string {
     console.error(`[TaskRun] Task failed: ${error}`);
 
     // Calculate metrics for immediate use in the response
     const durationSec = Math.round(
         (new Date().getTime() - taskStartTime.getTime()) / 1000
     );
-    const totalCost = costTracker.getTotalCost();
+    const totalCost = context.costTracker.getTotalCost();
 
     // Add metrics to the error message
     const errorWithMetrics = `Error: ${error}\n\n=== METRICS ===\nDuration  : ${durationSec}s\nTotal cost: $${totalCost.toFixed(6)}`;
@@ -254,8 +240,8 @@ export function task_fatal_error(error: string): string {
         event: {
             type: 'process_failed',
             error: errorWithMetrics,
-            history: getHistory(),
-        },
+            history: context.getHistory(),
+        } as any,
     };
 
     return `Task failed\n\n${errorWithMetrics}`;
@@ -264,17 +250,21 @@ export function task_fatal_error(error: string): string {
 /**
  * Get all MECH tools as an array of tool definitions
  */
-export function getMECHTools(): ToolFunction[] {
+export function getMECHTools(context: MechContext): ToolFunction[] {
+    if (!context.createToolFunction) {
+        return [];
+    }
+    
     return [
-        createToolFunction(
-            task_complete,
+        context.createToolFunction(
+            (result: unknown) => task_complete(result as string, context),
             'Report that the task has completed successfully',
             {
                 result: 'A few paragraphs describing the result of the task. Include any assumptions you made, problems overcome and what the final outcome was.',
             }
         ),
-        createToolFunction(
-            task_fatal_error,
+        context.createToolFunction(
+            (error: unknown) => task_fatal_error(error as string, context),
             'Report that you were not able to complete the task',
             { error: 'Describe the error that occurred in a few sentences' }
         ),

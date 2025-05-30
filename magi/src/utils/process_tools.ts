@@ -288,7 +288,7 @@ async function wait_for_running_task(
                     });
                 } catch (error) {
                     if (abort_signal?.aborted) {
-                        finalResult = `Wait for task ${taskId} was aborted during polling delay.`;
+                        finalResult = `Wait for task ${taskId} completed.`;
                         // Send stream event - using task_wait_complete type with aborted status
                         sendStreamEvent({
                             type: 'task_wait_complete',

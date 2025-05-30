@@ -18,6 +18,7 @@ import type {
     ToolEvent,
     MessageEvent,
     ErrorEvent,
+    EnsembleStreamEvent,
 } from '@magi-system/ensemble';
 import type {
     StreamingEvent,
@@ -34,13 +35,14 @@ import {
     ModelClassID,
     ModelEntry,
     getModelFromClass,
-    RequestOptions,
+    convertStreamToMessages,
+    ConversionOptions,
 } from '@magi-system/ensemble';
 import { processToolCall } from './tool_call.js';
 import { capitalize } from './llm_utils.js';
 import { getCommunicationManager, sendComms } from './communication.js';
 import { isPaused, sleep } from './communication.js';
-import { mechState, getModelScore } from './mech_state.js';
+import { rotateModel as mechRotateModel } from '@magi-system/mech';
 
 const EVENT_TIMEOUT_MS = 300000; // 5 min timeout for events
 
@@ -61,6 +63,7 @@ class TimeoutError extends Error {
  * @param identifier A string identifier for logging purposes (e.g., agent/model name).
  * @returns An async generator that yields events from the originalStream or throws on timeout.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function* createTimeoutProxyStream<T>(
     originalStream: AsyncGenerator<T>,
     timeoutMs: number,
@@ -324,7 +327,7 @@ export class Runner {
                 agent.model = selectedModel; // Update agent's selected model
 
                 // Start the request with AsyncGenerator API
-                const streamPromise = (async () => {
+                (async () => {
                     try {
                         const stream = ensembleRequest(
                             selectedModel,
@@ -366,7 +369,6 @@ export class Runner {
                 };
 
                 // Process events from the queue with timeout tracking
-                let lastEventTime = Date.now();
                 const updateTimeout = () => {
                     if (timeoutId) clearTimeout(timeoutId);
                     timeoutId = setTimeout(() => {
@@ -385,7 +387,6 @@ export class Runner {
 
                 // Process events from the queue
                 for await (const event of eventQueue) {
-                    lastEventTime = Date.now();
                     updateTimeout(); // Reset timeout on each event
                     // Type assertion needed because event comes from AsyncGenerator<unknown>
                     const streamEvent = event as StreamingEvent;
@@ -948,7 +949,7 @@ export class Runner {
             if (agent.modelSettings?.json_schema) {
                 try {
                     // Try to parse the response as JSON
-                    let jsonResponse;
+                    let jsonResponse: any;
                     try {
                         jsonResponse = JSON.parse(fullResponse.trim());
                         console.log(
@@ -1429,84 +1430,115 @@ export class Runner {
         return currentMessages;
     }
 
-    public static rotateModel(
+    public static async rotateModel(
         agent: Agent,
         modelClass?: ModelClassID
-    ): string | undefined {
-        // Store last model used to ensure rotation
-        const lastModel = agent.model;
-        mechState.lastModelUsed = lastModel;
-        let model: string | undefined;
+    ): Promise<string | undefined> {
+        // Convert Agent to MechAgent interface
+        const mechAgent = {
+            name: agent.name,
+            agent_id: agent.agent_id,
+            model: agent.model,
+            modelClass: agent.modelClass,
+            tools: agent.tools,
+            instructions: agent.instructions,
+            historyThread: agent.historyThread,
+            args: agent.args,
+            export: () => agent.export() as unknown as Record<string, unknown>,
+            getTools: () => agent.getTools()
+        };
+        // Delegate to the mech module's rotateModel function
+        return mechRotateModel(mechAgent, modelClass);
+    }
 
-        modelClass = modelClass || agent.modelClass;
-        if (modelClass) {
-            // Convert modelClass to string and check if it's a valid key in MODEL_CLASSES
-            const modelClassStr = modelClass as string;
+    /**
+     * Converts a stream of events into ResponseInput messages.
+     * This is useful for chaining LLM calls or building conversation history.
+     *
+     * @param agent The agent to run
+     * @param input Optional user input
+     * @param conversationHistory Existing conversation history
+     * @param handlers Tool call handlers
+     * @returns Converted messages and the full response
+     */
+    static async convertStreamToHistory(
+        agent: Agent,
+        input?: string,
+        conversationHistory: ResponseInput = [],
+        handlers: ToolCallHandler = {}
+    ): Promise<{
+        messages: ResponseInput;
+        fullResponse: string;
+        toolCalls: ToolCall[];
+    }> {
+        const stream = this.runStreamed(agent, input, conversationHistory);
 
-            if (modelClassStr in MODEL_CLASSES) {
-                // Safe to use the key since we've verified it exists
-                const modelClassConfig =
-                    MODEL_CLASSES[modelClassStr as keyof typeof MODEL_CLASSES];
-                let models: string[] = [...modelClassConfig.models];
-
-                // Filter out models
-                models = models.filter(modelId => {
-                    // Skip last used model to ensure rotation
-                    if (modelId === lastModel) return false;
-
-                    // Skip disabled models
-                    if (mechState.disabledModels.has(modelId)) return false;
-
-                    return true;
-                });
-
-                if (models.length > 0) {
-                    // Use weighted selection based on model scores
-                    // Pass the model class to getModelScore to get class-specific scores
-                    const totalScore = models.reduce(
-                        (sum, modelId) =>
-                            sum + getModelScore(modelId, modelClassStr),
-                        0
-                    );
-
-                    if (totalScore > 0) {
-                        // Weighted random selection
-                        let rand = Math.random() * totalScore;
-                        for (const modelId of models) {
-                            // Use class-specific score for weighting
-                            rand -= getModelScore(modelId, modelClassStr);
-                            if (rand <= 0) {
-                                model = modelId;
-                                break;
-                            }
-                        }
-
-                        // Fallback in case rounding errors cause us to miss
-                        if (!model) {
-                            model = models[models.length - 1];
-                        }
-                    } else {
-                        // If all scores are 0 for some reason, pick a random model
-                        models = models.sort(() => Math.random() - 0.5);
-                        model = models[0];
-                    }
-                }
-            } else {
-                // If modelClass isn't a valid key, fall back to 'standard'
-                console.warn(
-                    `Invalid model class '${modelClassStr}', falling back to standard models`
-                );
-                if ('standard' in MODEL_CLASSES) {
-                    const standardModels =
-                        MODEL_CLASSES['standard' as keyof typeof MODEL_CLASSES]
-                            .models;
-                    if (standardModels.length > 0) {
-                        model = standardModels[0];
-                    }
-                }
-            }
+        // Build initial messages
+        const initialMessages: ResponseInput = [];
+        if (input) {
+            initialMessages.push({
+                type: 'message',
+                role: 'user',
+                content: input,
+            });
         }
 
-        return model;
+        // Create conversion options
+        const conversionOptions: ConversionOptions = {
+            model: agent.model,
+            onThinking: agent.onThinking,
+            onResponse: agent.onResponse,
+            processToolCall: async (toolCalls: ToolCall[]) => {
+                // Send status
+                sendComms({
+                    type: 'agent_status',
+                    agent_id: agent.agent_id,
+                    status: 'tool_start',
+                    meta_data: {
+                        name: toolCalls[0].function.name,
+                    },
+                });
+
+                // Process tool call using existing logic
+                const toolEvent = {
+                    type: 'tool_start' as const,
+                    tool_calls: toolCalls,
+                    agent: agent.export(),
+                };
+
+                const result = await processToolCall(
+                    toolEvent,
+                    agent,
+                    handlers
+                );
+
+                sendComms({
+                    type: 'agent_status',
+                    agent_id: agent.agent_id,
+                    status: 'tool_done',
+                    meta_data: {
+                        name: toolCalls[0].function.name,
+                    },
+                });
+
+                // Parse and return result
+                try {
+                    return JSON.parse(result);
+                } catch {
+                    return result;
+                }
+            },
+        };
+
+        // Convert stream to messages - cast to EnsembleStreamEvent
+        // This is safe because convertStreamToMessages only handles events that are in EnsembleStreamEvent
+        const ensembleStream = stream as AsyncGenerator<EnsembleStreamEvent>;
+        const result = await convertStreamToMessages(
+            ensembleStream,
+            initialMessages,
+            conversionOptions
+        );
+
+        return result;
     }
 }

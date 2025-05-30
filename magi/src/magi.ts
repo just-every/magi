@@ -28,9 +28,9 @@ import {
 import { move_to_working_dir, set_file_test_mode } from './utils/file_utils.js';
 import { costTracker } from './utils/cost_tracker.js';
 import { Agent } from './utils/agent.js';
-import { runThoughtDelay } from './utils/thought_utils.js';
+import { runThoughtDelay } from './utils/mech_wrapper.js';
 // Removed runMECH as it's now handled by runMECHWithMemory
-import { runMECHWithMemory } from './utils/mech_memory_wrapper.js';
+import { runMECHWithMemory } from './utils/mech_wrapper.js';
 import { getProcessProjectIds } from './utils/project_utils.js';
 import { initDatabase } from './utils/db.js';
 import { ensureMemoryDirectories } from './utils/memory_utils.js';
@@ -120,7 +120,7 @@ export async function spawnThought(
     await addHumanMessage(command, thread);
 
     // Only modify the clone, leaving the original untouched
-    agent.model = Runner.rotateModel(agent, 'writing');
+    agent.model = await Runner.rotateModel(agent, 'writing');
     agent.historyThread = thread;
     agent.maxToolCallRoundsPerTurn = 1;
 
@@ -178,7 +178,7 @@ export async function mainLoop(
             // Get conversation history
             const history = getHistory();
 
-            agent.model = model || Runner.rotateModel(agent);
+            agent.model = model || await Runner.rotateModel(agent);
             delete agent.modelSettings;
 
             // Run the command with unified tool handling
@@ -300,6 +300,10 @@ async function main(): Promise<void> {
     if (!(await initDatabase())) {
         return endProcess(1, 'Database connection failed.');
     }
+
+    // Register custom code providers with ensemble
+    const { registerCodeProviders } = await import('./utils/register_code_providers.js');
+    registerCodeProviders();
 
     // Verify API keys for model providers
     if (!checkModelProviderApiKeys()) {

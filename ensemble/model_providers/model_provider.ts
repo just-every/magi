@@ -25,6 +25,10 @@ export interface ModelProvider extends BaseModelProvider {
         opts?: EmbedOpts
     ): Promise<number[] | number[][]>;
 }
+
+// Import external model functions
+import { isExternalModel, getExternalModel, getExternalProvider, getModelClassOverride } from '../external_models.js';
+
 import { openaiProvider } from './openai.js';
 import { claudeProvider } from './claude.js';
 import { geminiProvider } from './gemini.js';
@@ -93,6 +97,11 @@ export function isProviderKeyValid(provider: ModelProviderID): boolean {
         case 'test':
             return true; // Test provider is always valid
         default:
+            // Check if it's an external provider
+            const externalProvider = getExternalProvider(provider);
+            if (externalProvider) {
+                return true; // External providers are assumed to be valid
+            }
             return false;
     }
 }
@@ -101,6 +110,14 @@ export function isProviderKeyValid(provider: ModelProviderID): boolean {
  * Get the provider name from a model name
  */
 export function getProviderFromModel(model: string): ModelProviderID {
+    // First check if it's an external model
+    if (isExternalModel(model)) {
+        const externalModel = getExternalModel(model);
+        if (externalModel) {
+            return externalModel.provider;
+        }
+    }
+    
     if (
         model.startsWith('gpt-') ||
         model.startsWith('o1') ||
@@ -144,13 +161,23 @@ export async function getModelFromClass(
 
     // Try each model in the group until we find one with a valid API key and quota
     if (modelGroup in MODEL_CLASSES) {
-        // Type assertion here is safe because we've already checked that modelGroup is a key in MODEL_CLASSES
-        const modelClassConfig =
-            MODEL_CLASSES[modelGroup as keyof typeof MODEL_CLASSES];
-        let models = [...modelClassConfig.models];
+        // Check for class override first
+        const override = getModelClassOverride(modelGroup);
+        let modelClassConfig = MODEL_CLASSES[modelGroup as keyof typeof MODEL_CLASSES];
+        
+        // Apply override if it exists
+        if (override) {
+            modelClassConfig = {
+                ...modelClassConfig,
+                ...override
+            } as typeof modelClassConfig;
+        }
+        
+        let models = [...(override?.models || modelClassConfig.models)];
 
         // Only access the random property if it exists
-        if ('random' in modelClassConfig && modelClassConfig.random) {
+        const shouldRandomize = override?.random ?? ('random' in modelClassConfig && modelClassConfig.random);
+        if (shouldRandomize) {
             models = models.sort(() => Math.random() - 0.5);
         }
 
@@ -241,6 +268,17 @@ export async function getModelFromClass(
 export function getModelProvider(model?: string): ModelProvider {
     // If no class override, use the model name to determine the provider
     if (model) {
+        // First check if it's an external model
+        if (isExternalModel(model)) {
+            const externalModel = getExternalModel(model);
+            if (externalModel) {
+                const externalProvider = getExternalProvider(externalModel.provider);
+                if (externalProvider) {
+                    return externalProvider;
+                }
+            }
+        }
+        
         for (const [prefix, provider] of Object.entries(MODEL_PROVIDER_MAP)) {
             if (
                 model.startsWith(prefix) &&

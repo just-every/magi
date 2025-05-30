@@ -10,7 +10,7 @@ import { get_output_dir } from '../../utils/file_utils.js';
 import { ResponseInput } from '@magi-system/ensemble';
 import { runningToolTracker } from '../../utils/running_tool_tracker.js';
 import { dateFormat, readableTime } from '../../utils/date_tools.js';
-import { getThoughtDelay } from '../../utils/thought_utils.js';
+import { getThoughtDelay } from '../../utils/mech_wrapper.js';
 
 /**
  * ResearchOperatorAgent v2 – Incorporating multi-engine parallel search, explicit planning, and a verify-after-write pass.

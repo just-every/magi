@@ -360,7 +360,7 @@ export async function launchChrome(
         }
 
         // Now use chrome-launcher with explicit Chrome path if found
-        const launchOptions: any = {
+        const launchOptions: Record<string, unknown> = {
             chromeFlags: allFlags,
             userDataDir: chromeProfileDir,
             startingUrl: 'about:blank',

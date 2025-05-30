@@ -21,12 +21,18 @@ RUN apt-get update && \
 
 WORKDIR /build
 
-# Copy ensemble source
+# Copy ensemble and mech source
 COPY ./ensemble/ ./ensemble/
+COPY ./mech/ ./mech/
 COPY ./common/ ./common/
 
 # Build ensemble package (with stream_end support)
 WORKDIR /build/ensemble
+RUN --mount=type=cache,target=/root/.npm \
+    npm install && npm run build
+
+# Build mech package
+WORKDIR /build/mech
 RUN --mount=type=cache,target=/root/.npm \
     npm install && npm run build
 
@@ -44,15 +50,17 @@ RUN apt-get update && \
 
 WORKDIR /build
 
-# Copy built ensemble package to node_modules with all necessary files
+# Copy built ensemble and mech packages to node_modules with all necessary files
 COPY --from=ensemble-builder /build/ensemble ./node_modules/@magi-system/ensemble
+COPY --from=ensemble-builder /build/mech ./node_modules/@magi-system/mech
 COPY --from=ensemble-builder /build/common ./common
 
 COPY ./magi/package.json ./magi/package-lock.json ./
 
 # Install dependencies (updated for stream_end)
+# Don't use --ignore-scripts so native modules like node-pty get built
 RUN --mount=type=cache,target=/root/.npm \
-    npm install --ignore-scripts
+    npm install
 
 ###############################################################################
 # Stage 2 – Final runtime image
@@ -101,8 +109,9 @@ RUN mkdir -p /home/${USER_NAME}/.claude /home/${USER_NAME}/.cache && \
 # ---- Bring in project dependencies ----------------------------------
 ########################################################################
 COPY --from=builder --chown=${USER_NAME}:${GROUP_NAME} /build/node_modules ./node_modules
-# Ensure ensemble package is available
+# Ensure ensemble and mech packages are available
 COPY --from=ensemble-builder --chown=${USER_NAME}:${GROUP_NAME} /build/ensemble ./node_modules/@magi-system/ensemble
+COPY --from=ensemble-builder --chown=${USER_NAME}:${GROUP_NAME} /build/mech ./node_modules/@magi-system/mech
 
 ########################################################################
 # ---- 1️⃣  Install exact AI CLI versions (cached until new tags) -----

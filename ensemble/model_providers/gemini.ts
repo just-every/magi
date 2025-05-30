@@ -52,6 +52,82 @@ import {
 } from '../utils/delta_buffer.js';
 
 // Convert our tool definition to Gemini's updated FunctionDeclaration format
+/**
+ * Recursively convert parameter schema to Gemini format
+ */
+function convertParameterToGeminiFormat(param: any): any {
+    let type: Type = Type.STRING;
+
+    switch (param.type) {
+        case 'string':
+            type = Type.STRING;
+            break;
+        case 'number':
+            type = Type.NUMBER;
+            break;
+        case 'boolean':
+            type = Type.BOOLEAN;
+            break;
+        case 'object':
+            type = Type.OBJECT;
+            break;
+        case 'array':
+            type = Type.ARRAY;
+            break;
+        case 'null':
+            type = Type.STRING;
+            console.warn(`Mapping 'null' type to STRING`);
+            break;
+        default:
+            console.warn(
+                `Unsupported parameter type '${param.type}'. Defaulting to STRING.`
+            );
+            type = Type.STRING;
+    }
+
+    const result: any = { type, description: param.description };
+
+    if (type === Type.ARRAY) {
+        // Handle array items
+        if (param.items) {
+            if (param.items.type === 'object') {
+                result.items = convertParameterToGeminiFormat(param.items);
+            } else {
+                result.items = { 
+                    type: param.items.type === 'string' ? Type.STRING :
+                          param.items.type === 'number' ? Type.NUMBER :
+                          param.items.type === 'boolean' ? Type.BOOLEAN : Type.STRING
+                };
+                if (param.items.enum) {
+                    result.items.enum = param.items.enum;
+                }
+            }
+        } else {
+            result.items = { type: Type.STRING };
+        }
+        if (param.enum) {
+            result.items.enum = param.enum;
+        }
+    } else if (type === Type.OBJECT) {
+        // Gemini requires OBJECT types to have a properties field
+        if (param.properties && typeof param.properties === 'object') {
+            // Recursively convert nested properties
+            result.properties = {};
+            for (const [propName, propSchema] of Object.entries(param.properties)) {
+                result.properties[propName] = convertParameterToGeminiFormat(propSchema);
+            }
+        } else {
+            // No properties specified, add empty object
+            result.properties = {};
+        }
+    } else if (param.enum) {
+        result.format = 'enum';
+        result.enum = param.enum;
+    }
+
+    return result;
+}
+
 function convertToGeminiFunctionDeclarations(
     tools: ToolFunction[]
 ): FunctionDeclaration[] {
@@ -70,51 +146,7 @@ function convertToGeminiFunctionDeclarations(
 
             if (toolParams) {
                 for (const [name, param] of Object.entries(toolParams)) {
-                    let type: Type = Type.STRING;
-
-                    switch (param.type) {
-                        case 'string':
-                            type = Type.STRING;
-                            break;
-                        case 'number':
-                            type = Type.NUMBER;
-                            break;
-                        case 'boolean':
-                            type = Type.BOOLEAN;
-                            break;
-                        case 'object':
-                            type = Type.OBJECT;
-                            break;
-                        case 'array':
-                            type = Type.ARRAY;
-                            break;
-                        case 'null':
-                            type = Type.STRING;
-                            console.warn(
-                                `Mapping 'null' type to STRING for parameter ${name} in tool ${tool.definition.function.name}`
-                            );
-                            break;
-                        default:
-                            console.warn(
-                                `Unsupported parameter type '${param.type}' for ${name} in tool ${tool.definition.function.name}. Defaulting to STRING.`
-                            );
-                            type = Type.STRING;
-                    }
-
-                    properties[name] = { type, description: param.description };
-
-                    if (type === Type.ARRAY) {
-                        const itemType = Type.STRING; // Assuming string items
-                        properties[name].items = { type: itemType };
-                        if (param.items?.enum) {
-                            properties[name].items.enum = param.items.enum;
-                        } else if (param.enum) {
-                            properties[name].items.enum = param.enum;
-                        }
-                    } else if (param.enum) {
-                        properties[name].format = 'enum';
-                        properties[name].enum = param.enum;
-                    }
+                    properties[name] = convertParameterToGeminiFormat(param);
                 }
             } else {
                 console.warn(

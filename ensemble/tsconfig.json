@@ -23,6 +23,8 @@
     "exclude": [
         "dist",
         "node_modules",
-        "examples"
+        "examples",
+        "test",
+        "**/*.test.ts"
     ]
 }

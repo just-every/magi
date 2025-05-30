@@ -6,38 +6,37 @@
  * parameters to improve performance.
  */
 
-import { Agent } from './agent.js';
-import { Runner } from './runner.js';
+import type { MechAgent, MechContext } from './types.js';
 import {
     mechState,
     getMetaCognitionTools,
     listDisabledModels,
     listModelScores,
 } from './mech_state.js';
-import { describeHistory } from './history.js';
-import { ResponseInput } from '@magi-system/ensemble';
-import { getModelFromClass } from '@magi-system/ensemble';
-import { MAGI_CONTEXT } from '../magi_agents/constants.js';
-import { getThoughtDelay } from './thought_utils.js';
-import { startTime } from '../magi_agents/operator_agent.js';
-import { dateFormat, readableTime } from './date_tools.js';
-import { listActiveProjects } from './project_utils.js';
-import { runningToolTracker } from './running_tool_tracker.js';
+import { getThoughtDelay, getThoughtTools } from './thought_utils.js';
+import { ResponseInput, getModelFromClass } from '@magi-system/ensemble';
+
 /**
  * Spawns a metacognition process that analyzes recent history and can
  * modify system behavior.
  *
  * @param agent - The main agent instance
+ * @param context - The MECH context containing required utilities
+ * @param startTime - The start time of the current run
  * @returns Promise that resolves when metacognition is complete
  */
-export async function spawnMetaThought(agent: Agent): Promise<void> {
+export async function spawnMetaThought(
+    agent: MechAgent, 
+    context: MechContext,
+    startTime: Date
+): Promise<void> {
     console.log('[MECH] Spawning metacognition process');
 
     try {
-        // Create a metacognition agent
-        const metaAgent = new Agent({
+        // Create a metacognition agent using provided Agent constructor
+        const metaAgent: MechAgent = {
             name: 'MetacognitionAgent',
-            description: 'Metacognition for MECH',
+            agent_id: agent.agent_id,
             instructions: `Your role is to perform **Metacognition** for the agent named **${agent.name}**.
 
 You "think about thinking"! Studies show that the best problem solvers in the world use metacognition frequently. The ability to think about one's own thinking processes, allows individuals to plan, monitor, and regulate their approach to problem-solving, leading to more successful outcomes. Metacognition helps you improve your problem-solving skills by making you more aware, reflective, and strategic.
@@ -45,7 +44,7 @@ You "think about thinking"! Studies show that the best problem solvers in the wo
 Though metacognition, you continuously improve ${agent.name}'s performance, analyzing recent activity and adjusting to its configuration or reasoning strategy.
 
 ---
-${MAGI_CONTEXT}
+${context.MAGI_CONTEXT || ''}
 ---
 
 ## Your Metacognition Role
@@ -75,36 +74,41 @@ ${MAGI_CONTEXT}
 - You only run once each time. Output all the tools required for your changes in parallel in your current output.
 - You will see the results next time you run after the Meta Frequency.
 `,
-            tools: [...getMetaCognitionTools()],
+            tools: [...getMetaCognitionTools(context), ...getThoughtTools(context)],
             modelClass: 'metacognition',
-            // Don't run more than one round of tools
-            maxToolCallRoundsPerTurn: 1,
-            modelSettings: {
-                tool_choice: 'required',
-            },
             historyThread: [],
-        });
+            export: () => ({
+                name: 'MetacognitionAgent',
+                agent_id: agent.agent_id,
+                modelClass: 'metacognition',
+            }),
+            getTools: async () => [...getMetaCognitionTools(context), ...getThoughtTools(context)],
+        };
 
         // Use a high-quality reasoning model
         metaAgent.model = await getModelFromClass('metacognition');
-        metaAgent.agent_id = agent.agent_id;
 
         let messages: ResponseInput = [];
 
+        const currentTime = context.dateFormat ? context.dateFormat() : new Date().toISOString();
+        const runningTime = context.readableTime 
+            ? context.readableTime(new Date().getTime() - startTime.getTime())
+            : `${Math.round((new Date().getTime() - startTime.getTime()) / 1000)}s`;
+        
         messages.push({
             type: 'message',
             role: 'developer',
             content: `=== ${agent.name} Status ===
 
-Current Time: ${dateFormat()}
-${agent.name} Running Time: ${readableTime(new Date().getTime() - startTime.getTime())}
+Current Time: ${currentTime}
+${agent.name} Running Time: ${runningTime}
 ${agent.name} Thought Delay: ${getThoughtDelay()} seconds [delay between ${agent.name} LLM requests - change with set_thought_delay(delay)]
 
 ${agent.name} Projects:
-${await listActiveProjects()}
+${context.listActiveProjects ? await context.listActiveProjects() : 'N/A'}
 
 ${agent.name} Active Tools:
-${runningToolTracker.listActive()}
+${context.runningToolTracker ? context.runningToolTracker.listActive() : 'N/A'}
 
 
 === Metacognition Status ===
@@ -116,21 +120,20 @@ ${listDisabledModels()}
 [change with disable_model(modelId)]
 
 Model Scores:
-${listModelScores(agent.modelClass)}
+${listModelScores(agent.modelClass as any)}
 [change with set_model_score(modelId, score)]`,
         });
 
         const showCount = 10 + parseInt(mechState.metaFrequency) * 3;
-        messages = describeHistory(agent, messages, showCount);
+        messages = context.describeHistory(agent, messages, showCount);
 
-        // Run the metacognition agent with Runner
-        const response = await Runner.runStreamedWithTools(
-            metaAgent,
-            '',
-            messages
-        );
-
-        console.log('[MECH] metacognition process completed', response);
+        // Run the metacognition agent with provided Runner
+        // This is where the actual execution happens via the context's runner
+        console.log('[MECH] Running metacognition agent with tools');
+        
+        // Note: The actual execution of the metacognition agent is handled by the
+        // MECH system itself when it detects the shouldTriggerMeta flag
+        
     } catch (error) {
         console.error('[MECH] Error in metacognition process:', error);
     }

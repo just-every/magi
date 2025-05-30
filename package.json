@@ -6,6 +6,7 @@
     "private": true,
     "workspaces": [
         "ensemble",
+        "mech",
         "magi",
         "controller",
         "host"

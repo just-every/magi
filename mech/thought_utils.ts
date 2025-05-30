@@ -1,9 +1,9 @@
 /**
  * Helper for thought delay processing
  */
-import { dateFormat } from './date_tools.js';
 import { ToolFunction } from '@magi-system/ensemble';
-import { createToolFunction } from './tool_call.js';
+import type { MechContext } from './types.js';
+
 // Thought utilities for managing thought delay and related tools
 
 export const validThoughtDelays: string[] = [
@@ -97,22 +97,27 @@ export async function runThoughtDelay(): Promise<void> {
  * @param level The message content to process.
  * @returns A promise that resolves with a success message after the calculated delay.
  */
-export function set_thought_delay(delay: string): string {
+export function set_thought_delay(delay: string, context?: MechContext): string {
     if (validThoughtDelays.includes(delay)) {
         thoughtDelay = delay;
-        return `Successfully set Thought Delay to '${thoughtDelay} seconds' at ${dateFormat()}`; // Return the success message
+        const dateStr = context?.dateFormat ? context.dateFormat() : new Date().toISOString();
+        return `Successfully set Thought Delay to '${thoughtDelay} seconds' at ${dateStr}`; // Return the success message
     }
 
     return `Invalid thought delay '${delay} seconds'. Valid delay seconds are: ${validThoughtDelays.join(', ')}`;
 }
 
 /**
- * Get all shell tools as an array of tool definitions
+ * Get all thought tools as an array of tool definitions
  */
-export function getThoughtTools(): ToolFunction[] {
+export function getThoughtTools(context: MechContext): ToolFunction[] {
+    if (!context.createToolFunction) {
+        return [];
+    }
+    
     return [
-        createToolFunction(
-            set_thought_delay,
+        context.createToolFunction(
+            (delay: unknown) => set_thought_delay(delay as string, context),
             'Sets the Thought Delay for your next set of thoughts. Can be changed any time. Extend your Delay to think slower while waiting.',
             {
                 delay: {

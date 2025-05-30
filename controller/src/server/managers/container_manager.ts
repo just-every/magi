@@ -169,31 +169,66 @@ async function prepareGitRepository(
             fs.rmSync(outputPath, { recursive: true, force: true });
         }
 
-        // Clone the repository directly with a shallow clone for speed
-        console.log('Cloning host repo', hostPath, outputPath);
-        await execPromise(`git clone --depth 1 "${hostPath}" "${outputPath}"`);
-        await execPromise(
-            `git -C "${outputPath}" remote set-url origin "${hostPath}"`
-        );
+        // Use git worktree for faster setup and shared storage
+        console.log('Creating git worktree', hostPath, outputPath);
+        
+        // First, ensure the main repo has no uncommitted changes that would block worktree
+        try {
+            // Check if the repository has any remotes configured
+            const { stdout: remotes } = await execPromise(`git -C "${hostPath}" remote`);
+            
+            if (remotes.trim()) {
+                // Only fetch if there are remotes configured
+                try {
+                    await execPromise(`git -C "${hostPath}" fetch --all`);
+                } catch (fetchError) {
+                    // This is common in Docker environments without SSH keys
+                    console.log('Note: Could not fetch from remote (this is normal for local repos or when SSH keys are not configured)');
+                }
+            }
+        } catch (error) {
+            console.warn('Could not check remotes, continuing without fetch:', error);
+        }
+        
+        // Create a unique branch name for this process
+        const branchName = `magi-${processId}-${Date.now()}`;
+        
+        // Try to use worktree first (much faster and shares git objects)
+        try {
+            await execPromise(`git -C "${hostPath}" worktree add "${outputPath}" -b ${branchName}`);
+            console.log('Successfully created git worktree');
+        } catch (worktreeError) {
+            // Fallback to clone if worktree fails (e.g., if branch already exists)
+            console.log('Worktree failed, falling back to clone:', worktreeError);
+            await execPromise(`git clone --depth 1 "${hostPath}" "${outputPath}"`);
+            await execPromise(
+                `git -C "${outputPath}" remote set-url origin "${hostPath}"`
+            );
+        }
 
         // Host path will be deterministically derived from projectId
 
-        // Create or checkout the branch
-        const branchName = `magi/${processId}`;
-
-        // Check if branch exists
-        const branchExists = await execPromiseFallback(
-            `git -C "${outputPath}" show-ref --verify --quiet refs/heads/${branchName}`
+        // Branch handling - only needed for clone fallback
+        // (worktree already creates and checks out the branch)
+        const isWorktree = await execPromiseFallback(
+            `git -C "${outputPath}" rev-parse --git-dir | grep -q worktrees`
         );
-
-        if (branchExists.stderr) {
-            // Branch doesn't exist, create it
-            await execPromise(
-                `git -C "${outputPath}" checkout -b ${branchName}`
+        
+        if (isWorktree.stderr) {
+            // This is a clone, not a worktree - need to handle branch
+            const branchExists = await execPromiseFallback(
+                `git -C "${outputPath}" show-ref --verify --quiet refs/heads/${branchName}`
             );
-        } else {
-            // Branch exists, checkout
-            await execPromise(`git -C "${outputPath}" checkout ${branchName}`);
+
+            if (branchExists.stderr) {
+                // Branch doesn't exist, create it
+                await execPromise(
+                    `git -C "${outputPath}" checkout -b ${branchName}`
+                );
+            } else {
+                // Branch exists, checkout
+                await execPromise(`git -C "${outputPath}" checkout ${branchName}`);
+            }
         }
 
         // Set git config for commits
@@ -545,7 +580,7 @@ export async function runDockerContainer(
         console.log('gitProjects (after readiness check)', gitProjects);
 
         if (gitProjects.length > 0) {
-            // Process each repo
+            // Process each repo using git worktree/clone
             const projectPromises = gitProjects.map(project =>
                 prepareGitRepository(processId, project)
             );
@@ -638,6 +673,32 @@ export async function stopDockerContainer(processId: string): Promise<boolean> {
         // Stop the container using docker stop command with a timeout (default is 10 seconds)
         // Use a shorter timeout of 2 seconds to speed up the shutdown process
         await execPromise(`docker stop --time=2 ${containerName}`);
+        
+        // Clean up git worktrees for this process
+        try {
+            const projectsDir = path.join('/magi_output', processId, 'projects');
+            if (fs.existsSync(projectsDir)) {
+                const projects = fs.readdirSync(projectsDir);
+                for (const projectId of projects) {
+                    const workTreePath = path.join(projectsDir, projectId);
+                    const hostPath = path.join('/external/host', projectId);
+                    
+                    // Check if this is a worktree
+                    const isWorktree = await execPromiseFallback(
+                        `git -C "${workTreePath}" rev-parse --git-dir | grep -q worktrees`
+                    );
+                    
+                    if (!isWorktree.stderr) {
+                        // Remove the worktree
+                        console.log(`Removing git worktree: ${workTreePath}`);
+                        await execPromise(`git -C "${hostPath}" worktree remove --force "${workTreePath}"`);
+                    }
+                }
+            }
+        } catch (worktreeError) {
+            console.error('Error cleaning up worktrees:', worktreeError);
+            // Continue with cleanup even if worktree removal fails
+        }
 
         // Also stop any project containers for this process
         try {

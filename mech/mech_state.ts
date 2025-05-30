@@ -5,37 +5,10 @@
  * It provides a central state container and methods to modify the system's behavior at runtime.
  */
 
-import { type ModelClassID } from '../types/shared-types.js';
-import { ToolFunction } from '@magi-system/ensemble';
-import { createToolFunction } from './tool_call.js';
-import { addHistory } from './history.js';
-import { spawnMetaThought } from './meta_cognition.js';
-import { findModel, MODEL_CLASSES } from '@magi-system/ensemble';
-import { Agent } from './agent.js';
-import { getThoughtTools } from './thought_utils.js';
+import type { MECHState, MetaFrequency, MechContext } from './types.js';
+import { ToolFunction, MODEL_CLASSES, findModel, ModelClassID } from '@magi-system/ensemble';
 
-export type MetaFrequency = '5' | '10' | '20' | '40';
 export const validFrequencies: string[] = ['5', '10', '20', '40'];
-
-/**
- * State container for the MECH system
- */
-export interface MECHState {
-    /** Counter for LLM requests to trigger meta-cognition */
-    llmRequestCount: number;
-
-    /** How often meta-cognition should run (every N LLM requests) */
-    metaFrequency: MetaFrequency;
-
-    /** Set of model IDs that have been temporarily disabled */
-    disabledModels: Set<string>;
-
-    /** Model effectiveness scores (0-100) - higher scores mean the model is selected more often */
-    modelScores: Record<string, number>;
-
-    /** Last model used, to ensure rotation */
-    lastModelUsed?: string;
-}
 
 /**
  * Global MECH state
@@ -135,8 +108,8 @@ export function getModelScore(modelId: string, modelClass?: string): number {
 
     if (modelEntry) {
         // If a specific class is requested, check if there's a class-specific score
-        if (modelClass && modelEntry.scores && modelEntry.scores[modelClass]) {
-            return modelEntry.scores[modelClass];
+        if (modelClass && modelEntry.scores && modelClass in modelEntry.scores) {
+            return (modelEntry.scores as any)[modelClass];
         }
 
         // Fall back to general score if available
@@ -173,28 +146,13 @@ export function incrementLLMRequestCount(): {
     };
 }
 
-export async function spawnMetaThoughtIfNeeded(agent: Agent): Promise<void> {
-    // Check if we need to trigger meta-cognition
-    const { shouldTriggerMeta } = incrementLLMRequestCount();
-    if (shouldTriggerMeta) {
-        console.log(
-            `[MECH] Triggering meta-cognition after ${mechState.llmRequestCount} LLM requests`
-        );
-        try {
-            await spawnMetaThought(agent);
-        } catch (error) {
-            console.error('[MECH] Error in meta-cognition:', error);
-        }
-    }
-}
-
 /**
  * Create a thought that will be injected into the history
  * @param content - The thought content to inject
  * @returns Message indicating success
  */
-function inject_thought(content: string): string {
-    addHistory({
+function inject_thought(content: string, context: MechContext): string {
+    context.addHistory({
         type: 'message',
         role: 'developer',
         content: `**IMPORTANT - METACOGNITION:** ${content}`,
@@ -213,57 +171,62 @@ function no_changes_needed(): string {
  * Get all metacognition tools as an array of tool definitions
  * These are available only to the metacognition agent, not the main agent
  */
-export function getMetaCognitionTools(): ToolFunction[] {
-    return [
-        createToolFunction(
-            inject_thought,
-            'Your core tool for altering the thought process of the agent. Injects a thought with high priority into the next loop for the agent. The agent will see this before choosing their next thought or action.',
-            {
-                content:
-                    'The thought to inject. Be detailed and explain why this is important.',
-            }
-        ),
-        ...getThoughtTools(),
-        createToolFunction(
-            set_meta_frequency,
-            'Change how often metacognition should run (every N LLM requests)',
-            {
-                frequency: {
-                    // Wrap enum in a ToolParameter object
-                    type: 'string',
-                    description:
-                        'Frequency value (5, 10, 20, or 40 LLM requests)',
-                    enum: validFrequencies,
+export function getMetaCognitionTools(context: MechContext): ToolFunction[] {
+    const tools: ToolFunction[] = [];
+    
+    if (context.createToolFunction) {
+        tools.push(
+            context.createToolFunction(
+                (content: unknown) => inject_thought(content as string, context),
+                'Your core tool for altering the thought process of the agent. Injects a thought with high priority into the next loop for the agent. The agent will see this before choosing their next thought or action.',
+                {
+                    content:
+                        'The thought to inject. Be detailed and explain why this is important.',
+                }
+            ),
+            context.createToolFunction(
+                (frequency: unknown) => set_meta_frequency(frequency as string),
+                'Change how often metacognition should run (every N LLM requests)',
+                {
+                    frequency: {
+                        // Wrap enum in a ToolParameter object
+                        type: 'string',
+                        description:
+                            'Frequency value (5, 10, 20, or 40 LLM requests)',
+                        enum: validFrequencies,
+                    },
                 },
-            },
-            'Confirmation message' // Added return description
-        ),
-        createToolFunction(
-            set_model_score,
-            'Set a score for a specific model (affects selection frequency)',
-            {
-                modelId: 'The model ID to score',
-                score: 'Score between 0-100, higher means the model is selected more often',
-            },
-            'The new score for the model' // Added return description
-        ),
-        createToolFunction(
-            disable_model,
-            'Temporarily disable a model from being selected. Pass disabled=false to enable it again.',
-            {
-                modelId: 'The model ID to change',
-                disabled: {
-                    type: 'boolean',
-                    description:
-                        'Whether to disable the model (true) or enable it (false)',
-                    optional: true,
-                    default: true,
+                'Confirmation message' // Added return description
+            ),
+            context.createToolFunction(
+                (modelId: unknown, score: unknown) => set_model_score(modelId as string, score as number),
+                'Set a score for a specific model (affects selection frequency)',
+                {
+                    modelId: 'The model ID to score',
+                    score: 'Score between 0-100, higher means the model is selected more often',
                 },
-            }
-        ),
-        createToolFunction(
-            no_changes_needed,
-            'Everything is perfect. Use when no other tools are needed.'
-        ),
-    ];
+                'The new score for the model' // Added return description
+            ),
+            context.createToolFunction(
+                (modelId: unknown, disabled?: unknown) => disable_model(modelId as string, disabled as boolean | undefined),
+                'Temporarily disable a model from being selected. Pass disabled=false to enable it again.',
+                {
+                    modelId: 'The model ID to change',
+                    disabled: {
+                        type: 'boolean',
+                        description:
+                            'Whether to disable the model (true) or enable it (false)',
+                        optional: true,
+                        default: true,
+                    },
+                }
+            ),
+            context.createToolFunction(
+                no_changes_needed,
+                'Everything is perfect. Use when no other tools are needed.'
+            ),
+        );
+    }
+    
+    return tools;
 }

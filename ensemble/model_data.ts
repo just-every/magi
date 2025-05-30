@@ -22,6 +22,9 @@ import {
     ModelClass
 } from './types.js';
 
+// Import external model functions
+import { getExternalModel } from './external_models.js';
+
 // Re-export for backward compatibility
 export type {
     ModelClassID,
@@ -120,10 +123,11 @@ export const MODEL_CLASSES = {
     // Programming models
     code: {
         models: [
-            'claude-code', // Anthropic
-            'codex', // OpenAI
+            'claude-3-7-sonnet-latest', // Anthropic
+            'gpt-4.1', // OpenAI
+            'gemini-2.5-flash-preview-05-20-medium', // Google
         ],
-        //random: true,
+        random: true,
     },
 
     // Writing models - optimized for conversation and text generation
@@ -1082,52 +1086,7 @@ export const MODEL_REGISTRY: ModelEntry[] = [
             "OpenAI's GPT-Image-1 model for text-to-image generation. Supports quality levels (low: $0.011-0.016, medium: $0.042-0.063, high: $0.167-0.25) and sizes (1024x1024, 1024x1536, 1536x1024).",
     },
 
-    // Code-specific models
-    {
-        id: 'claude-code',
-        provider: 'anthropic',
-        cost: {
-            input_per_million: 3.0,
-            output_per_million: 15.0,
-        },
-        features: {
-            context_length: 200000,
-            input_modality: ['text'],
-            output_modality: ['text'],
-            tool_use: true,
-            streaming: true,
-            json_output: true,
-        },
-        class: 'code',
-        score: 75, // Legacy overall score
-        scores: {
-            code: 48, // HumanEval score
-        },
-        description: 'Claude model optimized for coding tasks',
-    },
-
-    {
-        id: 'codex',
-        provider: 'openai',
-        cost: {
-            input_per_million: 1.0,
-            output_per_million: 5.0,
-        },
-        features: {
-            context_length: 8000,
-            input_modality: ['text'],
-            output_modality: ['text'],
-            tool_use: false,
-            streaming: true,
-            json_output: true,
-        },
-        class: 'code',
-        score: 70, // Legacy overall score
-        scores: {
-            code: 44, // HumanEval score (legacy)
-        },
-        description: 'OpenAI model optimized for coding tasks',
-    },
+    // Code-specific models (removed claude-code and codex as they're now external)
     {
         id: 'codex-mini-latest',
         provider: 'openai',
@@ -1279,6 +1238,10 @@ export const MODEL_REGISTRY: ModelEntry[] = [
  * @returns The model entry or undefined if not found
  */
 export function findModel(modelId: string): ModelEntry | undefined {
+    // First check external models
+    const externalModel = getExternalModel(modelId);
+    if (externalModel) return externalModel;
+    
     // Direct match on ID
     const directMatch = MODEL_REGISTRY.find(model => model.id === modelId);
     if (directMatch) return directMatch;
