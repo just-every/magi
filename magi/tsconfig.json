@@ -18,8 +18,8 @@
         "paths": {
             "*": ["node_modules/*"],
             "@types/*": ["src/types/*"],
-            "@magi-system/ensemble": ["node_modules/@magi-system/ensemble"],
-            "@magi-system/ensemble/*": ["node_modules/@magi-system/ensemble/*"]
+            "@just-every/ensemble": ["node_modules/@just-every/ensemble"],
+            "@just-every/ensemble/*": ["node_modules/@just-every/ensemble/*"]
         }
     },
     "include": ["src/**/*"],
