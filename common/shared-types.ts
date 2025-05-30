@@ -9,7 +9,7 @@ import type {
     ToolDefinition,
     ModelSettings,
     ResponseJSONSchema
-} from '@magi-system/ensemble';
+} from '@just-every/ensemble';
 
 export const validToolParameterTypes: ToolParameterType[] = [
     'string',

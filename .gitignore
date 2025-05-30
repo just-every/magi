@@ -78,3 +78,7 @@ yarn-error.log
 !templates/web-static/tailwind.config.js
 
 /*chrome*
+
+# Temporary split directories
+temp-ecot/
+temp-ensemble/

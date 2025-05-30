@@ -42,7 +42,7 @@ import { processToolCall } from './tool_call.js';
 import { capitalize } from './llm_utils.js';
 import { getCommunicationManager, sendComms } from './communication.js';
 import { isPaused, sleep } from './communication.js';
-import { rotateModel as mechRotateModel } from '@magi-system/mech';
+import { rotateModel as mechRotateModel } from '@just-every/ecot';
 
 const EVENT_TIMEOUT_MS = 300000; // 5 min timeout for events
 

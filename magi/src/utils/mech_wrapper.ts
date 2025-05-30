@@ -5,8 +5,8 @@
  * magi's implementation details, creating the required MechContext.
  */
 
-import type { MechAgent, MechContext, MechResult } from '@magi-system/mech';
-import { runMECHAdvanced as mechRunMECH, runMECHWithMemoryAdvanced as mechRunMECHWithMemory } from '@magi-system/mech';
+import type { MechAgent, MechContext, MechResult } from '@just-every/ecot';
+import { runMECHAdvanced as mechRunMECH, runMECHWithMemoryAdvanced as mechRunMECHWithMemory } from '@just-every/ecot';
 import { Agent } from './agent.js';
 import type { AgentDefinition } from '../types/shared-types.js';
 import { Runner } from './runner.js';
@@ -236,7 +236,7 @@ import {
     task_fatal_error as mechTaskFatalError,
     getMetaCognitionTools as mechGetMetaCognitionTools,
     type MechOutcome,
-} from '@magi-system/mech';
+} from '@just-every/ecot';
 
 // Re-export types
 export type { MechOutcome, MechResult };
@@ -258,7 +258,7 @@ export {
     listDisabledModels,
     listModelScores,
     incrementLLMRequestCount,
-} from '@magi-system/mech';
+} from '@just-every/ecot';
 
 // Wrapper for getThoughtTools
 export function getThoughtTools() {
@@ -276,7 +276,7 @@ export function set_thought_delay(delay: string): string {
 import { 
     set_thought_delay as mechSetThoughtDelay,
     getThoughtTools as mechGetThoughtTools 
-} from '@magi-system/mech';
+} from '@just-every/ecot';
 
 // Re-export thought utilities
 export {
@@ -285,10 +285,10 @@ export {
     runThoughtDelay,
     isDelayInterrupted,
     getDelayAbortSignal,
-} from '@magi-system/mech';
+} from '@just-every/ecot';
 
 // Re-export meta-cognition
-export { spawnMetaThought } from '@magi-system/mech';
+export { spawnMetaThought } from '@just-every/ecot';
 
 // Re-export types
 export type {
@@ -297,4 +297,4 @@ export type {
     MechConfig,
     MechAgent,
     MechContext,
-} from '@magi-system/mech';
+} from '@just-every/ecot';
