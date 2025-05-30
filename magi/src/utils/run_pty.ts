@@ -24,7 +24,7 @@ import {
     DeltaBuffer,
     bufferDelta,
     flushBufferedDeltas,
-} from '@magi-system/ensemble/utils/delta_buffer';
+} from '@just-every/ensemble/utils/delta_buffer';
 
 // --- Global cleanup to ensure PTY processes exit cleanly even if the host process is killed ---
 const activePtyProcesses = new Set<pty.IPty>();

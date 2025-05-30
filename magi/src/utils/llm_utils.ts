@@ -1,4 +1,4 @@
-import { ResponseInput } from '@magi-system/ensemble';
+import { ResponseInput } from '@just-every/ensemble';
 
 /**
  * LLM utility functions for the MAGI system.

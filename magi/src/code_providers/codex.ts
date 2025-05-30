@@ -8,7 +8,7 @@ import {
     StreamingEvent,
     MessageEvent,
 } from '../types/shared-types.js';
-import { ResponseInput } from '@magi-system/ensemble';
+import { ResponseInput } from '@just-every/ensemble';
 import { get_working_dir, log_llm_request } from '../utils/file_utils.js';
 import type { Agent } from '../utils/agent.js';
 import { runPty, PtyRunOptions } from '../utils/run_pty.js';

@@ -9,7 +9,7 @@ import {
     generate_design_vibe_doc,
     type VibeDocResult,
 } from './design/vibe_doc.js';
-import type { ResponseInput } from '@magi-system/ensemble';
+import type { ResponseInput } from '@just-every/ensemble';
 
 /**
  * Plan which design assets are needed for a project using an LLM.

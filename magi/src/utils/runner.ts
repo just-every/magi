@@ -19,7 +19,7 @@ import type {
     MessageEvent,
     ErrorEvent,
     EnsembleStreamEvent,
-} from '@magi-system/ensemble';
+} from '@just-every/ensemble';
 import type {
     StreamingEvent,
     ToolCallHandler,
@@ -37,7 +37,7 @@ import {
     getModelFromClass,
     convertStreamToMessages,
     ConversionOptions,
-} from '@magi-system/ensemble';
+} from '@just-every/ensemble';
 import { processToolCall } from './tool_call.js';
 import { capitalize } from './llm_utils.js';
 import { getCommunicationManager, sendComms } from './communication.js';

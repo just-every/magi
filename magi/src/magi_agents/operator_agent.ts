@@ -23,7 +23,7 @@ import {
     ResponseInput,
     ResponseThinkingMessage,
     ResponseOutputMessage,
-} from '@magi-system/ensemble';
+} from '@just-every/ensemble';
 import { AgentDefinition } from '../types/shared-types.js';
 import { dateFormat, readableTime } from '../utils/date_tools.js';
 import { runningToolTracker } from '../utils/running_tool_tracker.js';

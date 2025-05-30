@@ -11,7 +11,7 @@ import {
     ResponseInput,
     ResponseThinkingMessage,
     ResponseOutputMessage,
-} from '@magi-system/ensemble';
+} from '@just-every/ensemble';
 import type { StreamingEvent } from '../types/shared-types.js';
 import { v4 as uuidv4 } from 'uuid';
 import { addHistory, addMonologue } from '../utils/history.js';

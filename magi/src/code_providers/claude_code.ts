@@ -22,11 +22,11 @@ import {
     StreamingEvent,
     MessageEvent,
 } from '../types/shared-types.js';
-import { ResponseInput } from '@magi-system/ensemble';
+import { ResponseInput } from '@just-every/ensemble';
 import { costTracker } from '../utils/cost_tracker.js';
 import { get_working_dir, log_llm_request } from '../utils/file_utils.js';
 import type { Agent } from '../utils/agent.js';
-import { findModel } from '@magi-system/ensemble';
+import { findModel } from '@just-every/ensemble';
 import { runPty, PtyRunOptions } from '../utils/run_pty.js';
 import { acquireSlot, releaseSlot } from '../utils/claude_db_limiter.js';
 import { codexProvider } from './codex.js';

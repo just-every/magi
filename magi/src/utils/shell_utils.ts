@@ -7,7 +7,7 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
-import { ToolFunction } from '@magi-system/ensemble';
+import { ToolFunction } from '@just-every/ensemble';
 import { createToolFunction } from './tool_call.js';
 
 // Promisify exec for async/await usage

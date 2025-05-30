@@ -5,7 +5,7 @@
  */
 
 import axios from 'axios';
-import { ToolFunction } from '@magi-system/ensemble';
+import { ToolFunction } from '@just-every/ensemble';
 import { createToolFunction } from './tool_call.js';
 import { quick_llm_call } from './llm_call_utils.js';
 

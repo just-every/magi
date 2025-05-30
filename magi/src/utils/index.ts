@@ -1,4 +1,4 @@
-import type { ToolFunction } from '@magi-system/ensemble';
+import type { ToolFunction } from '@just-every/ensemble';
 import { getFileTools } from './file_utils.js';
 import { getShellTools } from './shell_utils.js';
 import { getSummaryTools } from './summary_utils.js';

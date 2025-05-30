@@ -7,14 +7,14 @@ import {
     setEnsembleLogger,
     ModelUsage,
     getProviderFromModel,
-} from '@magi-system/ensemble';
-import { costTracker as ensembleCostTracker } from '@magi-system/ensemble/cost_tracker';
+} from '@just-every/ensemble';
+import { costTracker as ensembleCostTracker } from '@just-every/ensemble/cost_tracker';
 import {
     log_llm_request,
     log_llm_response,
     log_llm_error,
 } from './file_utils.js';
-import { ModelProviderID } from '@magi-system/ensemble';
+import { ModelProviderID } from '@just-every/ensemble';
 import { CostUpdateEvent } from '../types/shared-types.js';
 import { sendStreamEvent } from './communication.js';
 import { quotaTracker } from './quota_tracker.js';

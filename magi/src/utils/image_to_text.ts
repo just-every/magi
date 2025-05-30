@@ -6,7 +6,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import { findModel } from '@magi-system/ensemble';
+import { findModel } from '@just-every/ensemble';
 
 // Define the types we need based on the Anthropic SDK structure
 type TextBlock = {

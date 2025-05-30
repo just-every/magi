@@ -7,7 +7,7 @@ import {
     ModelProvider as EnsembleModelProvider, 
     EnsembleStreamEvent,
     overrideModelClass 
-} from '@magi-system/ensemble';
+} from '@just-every/ensemble';
 import { claudeCodeProvider } from '../code_providers/claude_code.js';
 import { codexProvider } from '../code_providers/codex.js';
 import { ModelProvider as MagiModelProvider } from '../types/shared-types.js';

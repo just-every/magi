@@ -34,7 +34,7 @@ import { registerRelevantCustomTools } from './index.js';
 import { quick_llm_call } from './llm_call_utils.js';
 import { runningToolTracker } from './running_tool_tracker.js';
 import { MAGI_CONTEXT } from '../magi_agents/constants.js';
-import type { ResponseInput } from '@magi-system/ensemble';
+import type { ResponseInput } from '@just-every/ensemble';
 
 /**
  * Convert a magi Agent to a MechAgent

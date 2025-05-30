@@ -12,7 +12,7 @@ import {
     ResponseInput,
     ModelProviderID,
     ToolFunction,
-} from '@magi-system/ensemble';
+} from '@just-every/ensemble';
 import { createToolFunction } from './tool_call.js';
 // Child process utilities are used via dynamic imports in functions below
 

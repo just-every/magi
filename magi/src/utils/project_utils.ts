@@ -2,7 +2,7 @@
  * Helper for project management
  */
 import { ProjectType } from '../types/shared-types.js';
-import { ToolFunction } from '@magi-system/ensemble';
+import { ToolFunction } from '@just-every/ensemble';
 import { sendStreamEvent } from './communication.js';
 import { getDB } from './db.js';
 import { createToolFunction } from './tool_call.js';

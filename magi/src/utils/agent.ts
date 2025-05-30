@@ -13,7 +13,7 @@ import {
     ModelSettings,
     ToolFunction,
     ResponseJSONSchema,
-} from '@magi-system/ensemble';
+} from '@just-every/ensemble';
 import {
     AgentDefinition,
     AgentExportDefinition,
@@ -26,7 +26,7 @@ import { createToolFunction } from './tool_call.js';
 import { v4 as uuid } from 'uuid';
 // Import removed to fix lint error
 import { Runner } from './runner.js';
-import { ModelClassID } from '@magi-system/ensemble';
+import { ModelClassID } from '@just-every/ensemble';
 
 import { getAgentSpecificTools } from './custom_tool_utils.js';
 

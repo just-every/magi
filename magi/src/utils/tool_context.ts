@@ -9,7 +9,7 @@
 import { quick_llm_call } from './llm_call_utils.js';
 import { getToolsForCustomFunctions } from './index.js';
 import type { ModelClassID } from '../types/shared-types.js';
-import type { ToolFunction } from '@magi-system/ensemble';
+import type { ToolFunction } from '@just-every/ensemble';
 import { v4 as uuid } from 'uuid';
 
 /**

@@ -5,7 +5,7 @@
  * Specialized in the full-stack website delivery workflow
  */
 
-import { ResponseInput } from '@magi-system/ensemble';
+import { ResponseInput } from '@just-every/ensemble';
 import { Agent } from '../../utils/agent.js';
 import {
     addBrowserStatus,

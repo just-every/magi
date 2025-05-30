@@ -12,7 +12,7 @@ import { updateProject, getProject } from '../../utils/db_utils.js';
 import { createToolFunction } from '../../utils/tool_call.js';
 import { MAGI_CONTEXT } from '../constants.js';
 import { Project } from '../../types/shared-types.js';
-import { ResponseInput } from '@magi-system/ensemble';
+import { ResponseInput } from '@just-every/ensemble';
 import {
     PROJECT_TYPES,
     getProjectTypeDescription,

@@ -4,7 +4,7 @@
  * This file integrates the ensemble QuotaTracker with MAGI's UI communication system
  */
 
-import { QuotaTracker, QuotaUpdateCallback } from '@magi-system/ensemble';
+import { QuotaTracker, QuotaUpdateCallback } from '@just-every/ensemble';
 import { QuotaUpdateEvent } from '../types/shared-types.js';
 import { sendStreamEvent } from './communication.js';
 
@@ -29,4 +29,4 @@ const createQuotaUpdateCallback = (): QuotaUpdateCallback => {
 export const quotaTracker = new QuotaTracker(createQuotaUpdateCallback());
 
 // Export the class for type compatibility
-export { QuotaTracker } from '@magi-system/ensemble';
+export { QuotaTracker } from '@just-every/ensemble';

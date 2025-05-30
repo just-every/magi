@@ -12,7 +12,7 @@ import {
     createQuickAgent,
 } from '../magi_agents/index.js';
 import { ModelClassID, type AgentDefinition } from '../types/shared-types.js';
-import { ResponseInput } from '@magi-system/ensemble';
+import { ResponseInput } from '@just-every/ensemble';
 import { Agent } from './agent.js';
 
 /**

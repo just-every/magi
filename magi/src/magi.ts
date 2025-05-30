@@ -8,7 +8,7 @@
 
 import { parseArgs } from 'node:util';
 import { ServerMessage, CommandMessage } from './types/shared-types.js';
-import { ResponseInput } from '@magi-system/ensemble';
+import { ResponseInput } from '@just-every/ensemble';
 import { Runner } from './utils/runner.js';
 import { createAgent } from './magi_agents/index.js';
 import {

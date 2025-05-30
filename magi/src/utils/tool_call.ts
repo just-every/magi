@@ -11,7 +11,7 @@ import {
     ToolFunction,
     ToolParameter,
     ToolParameterType,
-} from '@magi-system/ensemble';
+} from '@just-every/ensemble';
 import {
     ToolCallHandler,
     validToolParameterTypes,

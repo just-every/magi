@@ -4,8 +4,8 @@
  * This is now a thin wrapper around the Ensemble cost tracker,
  * adding quota tracking and MAGI-specific functionality.
  */
-import { ModelUsage } from '@magi-system/ensemble';
-import { costTracker as ensembleCostTracker } from '@magi-system/ensemble/cost_tracker';
+import { ModelUsage } from '@just-every/ensemble';
+import { costTracker as ensembleCostTracker } from '@just-every/ensemble/cost_tracker';
 import { quotaTracker } from './quota_tracker.js';
 
 /**

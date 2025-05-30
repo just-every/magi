@@ -2,7 +2,7 @@ import {
     openaiProvider,
     ResponseInput,
     ToolFunction,
-} from '@magi-system/ensemble';
+} from '@just-every/ensemble';
 import { createToolFunction } from './tool_call.js';
 import path from 'path';
 import { write_file } from './file_utils.js';

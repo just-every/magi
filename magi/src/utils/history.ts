@@ -12,7 +12,7 @@ import {
     ResponseInputMessage,
     ResponseThinkingMessage,
     ResponseOutputMessage,
-} from '@magi-system/ensemble';
+} from '@just-every/ensemble';
 import { setDelayInterrupted } from './mech_wrapper.js';
 import { formatHistoryForSummary, createSummary } from './summary_utils.js';
 import { truncateLargeValues } from './file_utils.js';

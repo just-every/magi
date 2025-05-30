@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { Agent } from './agent.js';
-import { ResponseInput } from '@magi-system/ensemble';
+import { ResponseInput } from '@just-every/ensemble';
 import {
     DESIGN_ASSETS_DIR,
     createNumberedGrid,

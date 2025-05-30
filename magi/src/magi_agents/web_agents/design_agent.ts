@@ -26,7 +26,7 @@ import {
     getProcessProjectIds,
     getProcessProjectPorts,
 } from '../../utils/project_utils.js';
-import { ResponseInput } from '@magi-system/ensemble';
+import { ResponseInput } from '@just-every/ensemble';
 
 /**
  * Create the design agent for specialized UI design tasks
