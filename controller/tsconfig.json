@@ -10,7 +10,7 @@
         "sourceMap": true,
         "declaration": false,
         "removeComments": true,
-        "jsx": "react",
+        "jsx": "react-jsx",
         "skipLibCheck": true,
         "typeRoots": ["./node_modules/@types", "./src/types"],
         "paths": {

@@ -733,32 +733,29 @@ export class CommunicationManager {
                     event,
                 })
             );
-        } else if (
-            event.type === 'tool_start' &&
-            event.tool_call
-        ) {
+        } else if (event.type === 'tool_start' && event.tool_call) {
             const toolCall = event.tool_call;
             if (toolCall.function.name.startsWith('talk_to_')) {
-                    const toolParams: Record<string, unknown> = JSON.parse(
-                        toolCall.function.arguments
+                const toolParams: Record<string, unknown> = JSON.parse(
+                    toolCall.function.arguments
+                );
+                if (
+                    toolParams.message &&
+                    typeof toolParams.message === 'string' &&
+                    typeof toolParams.affect === 'string'
+                ) {
+                    // Call talk, but don't await it.
+                    const talkPromise = talk(
+                        toolParams.message,
+                        toolParams.affect,
+                        processId
                     );
-                    if (
-                        toolParams.message &&
-                        typeof toolParams.message === 'string' &&
-                        typeof toolParams.affect === 'string'
-                    ) {
-                        // Call talk, but don't await it.
-                        const talkPromise = talk(
-                            toolParams.message,
-                            toolParams.affect,
-                            processId
-                        );
 
-                        talkPromise.catch(error => {
-                            console.error('Error calling talk:', error);
-                        });
-                    }
+                    talkPromise.catch(error => {
+                        console.error('Error calling talk:', error);
+                    });
                 }
+            }
         } else if (event.type === 'cost_update' && 'usage' in event) {
             this.handleModelUsage(
                 processId,

@@ -4,7 +4,8 @@
     "rootDir": "./src",
     "outDir": "./dist",
     "moduleResolution": "node16",
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "skipLibCheck": true
   },
   "include": ["src/**/*.ts"]
 }

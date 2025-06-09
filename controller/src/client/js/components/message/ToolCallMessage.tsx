@@ -26,32 +26,34 @@ const ToolCallMessage: React.FC<ToolCallMessageProps> = ({
 }) => {
     if (message.toolName.startsWith('talk_to_')) {
         if (message.t)
-        return (
-            <div
-                className="message-group assistant-message"
-                key={message.message_id || message.id}
-            >
-                {message.agent?.model && (
-                    <div className="message-header">
-                        <div className="message-model">
-                            {message.agent.model}
-                        </div>
-                    </div>
-                )}
+            return (
                 <div
-                    className={'message-bubble assistant-bubble talk-bubble'}
-                    style={{ color: `rgba(${rgb} / 1)` }}
+                    className="message-group assistant-message"
+                    key={message.message_id || message.id}
                 >
-                    {message.command && (
-                        <div
-                            dangerouslySetInnerHTML={parseMarkdown(
-                                message.command
-                            )}
-                        />
+                    {message.agent?.model && (
+                        <div className="message-header">
+                            <div className="message-model">
+                                {message.agent.model}
+                            </div>
+                        </div>
                     )}
+                    <div
+                        className={
+                            'message-bubble assistant-bubble talk-bubble'
+                        }
+                        style={{ color: `rgba(${rgb} / 1)` }}
+                    >
+                        {message.command && (
+                            <div
+                                dangerouslySetInnerHTML={parseMarkdown(
+                                    message.command
+                                )}
+                            />
+                        )}
+                    </div>
                 </div>
-            </div>
-        );
+            );
     }
 
     // Ensure we have a string representation of the tool parameters
@@ -105,7 +107,9 @@ const ToolCallMessage: React.FC<ToolCallMessageProps> = ({
                     >
                         <pre>
                             {message.toolName}(
-                            {toolCallParams && toolCallParams !== '{}' && toolCallParams !== 'null'
+                            {toolCallParams &&
+                            toolCallParams !== '{}' &&
+                            toolCallParams !== 'null'
                                 ? '\n\t' + toolCallParams + '\n'
                                 : ''}
                             )

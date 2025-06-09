@@ -139,11 +139,13 @@ export class ServerManager {
         // Calculate the correct dist path
         // In Docker: __dirname is /app/dist/app/src/server/managers, we need to go to /app/dist
         // In local dev: __dirname is controller/dist/controller/src/server/managers, we need to go to controller/dist
-        this.inDocker = process.env.NODE_ENV === 'production' || __dirname.startsWith('/app/');
-        this.distPath = this.inDocker 
-            ? '/app/dist'  // Use absolute path for Docker
+        this.inDocker =
+            process.env.NODE_ENV === 'production' ||
+            __dirname.startsWith('/app/');
+        this.distPath = this.inDocker
+            ? '/app/dist' // Use absolute path for Docker
             : path.join(__dirname, '../../../..');
-        
+
         this.processManager = new ProcessManager(this.io);
 
         // Initialize the communication manager before setting up WebSockets
@@ -335,10 +337,10 @@ export class ServerManager {
         });
 
         // 3. Serve images from the img directory
-        const clientPath = this.inDocker 
+        const clientPath = this.inDocker
             ? path.join(this.distPath, 'app/src/client')
             : path.join(this.distPath, 'client');
-            
+
         this.app.use(
             '/img',
             express.static(path.join(clientPath, 'img'), {
@@ -920,7 +922,7 @@ export class ServerManager {
             }
 
             // For all other routes, serve the index.html for client-side routing
-            const clientPath = this.inDocker 
+            const clientPath = this.inDocker
                 ? path.join(this.distPath, 'app/src/client')
                 : path.join(this.distPath, 'client');
             res.sendFile(path.join(clientPath, 'html/index.html'));

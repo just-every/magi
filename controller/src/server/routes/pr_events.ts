@@ -3,7 +3,7 @@
  *
  * API endpoints for managing pull request events
  */
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
 import { execSync } from 'child_process';
 import path from 'path';
 import {

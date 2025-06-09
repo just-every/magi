@@ -14,8 +14,7 @@ const localPath = path.join(process.cwd(), 'dist/.server/magi_storage');
 
 // Check if external path is available
 const useExternalPath =
-    fs.existsSync('/external/host/magi') ||
-    fs.existsSync('/external/host');
+    fs.existsSync('/external/host/magi') || fs.existsSync('/external/host');
 
 // Set the storage directory
 const STORAGE_DIR = useExternalPath ? externalPath : localPath;

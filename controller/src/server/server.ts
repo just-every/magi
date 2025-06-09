@@ -44,10 +44,10 @@ function validateProjectRepositories(): void {
     }
 
     console.log('Validating PROJECT_REPOSITORIES...');
-    
+
     const missingProjects: string[] = [];
     const basePath = '/external/host'; // This is where parent directory is mounted in container
-    
+
     for (const projectId of projectIds) {
         const projectPath = path.join(basePath, projectId);
         if (!fs.existsSync(projectPath)) {
@@ -56,18 +56,23 @@ function validateProjectRepositories(): void {
     }
 
     if (missingProjects.length > 0) {
-        const errorMsg = `ERROR: The following PROJECT_REPOSITORIES do not exist on the filesystem:\n` +
-            missingProjects.map(p => `  - ${p} (expected at: ${path.join(basePath, p)})`).join('\n') +
-            `\n\nPlease ensure these directories exist in the parent directory of the magi project, or remove them from PROJECT_REPOSITORIES.`;
-        
+        const errorMsg =
+            'ERROR: The following PROJECT_REPOSITORIES do not exist on the filesystem:\n' +
+            missingProjects
+                .map(p => `  - ${p} (expected at: ${path.join(basePath, p)})`)
+                .join('\n') +
+            '\n\nPlease ensure these directories exist in the parent directory of the magi project, or remove them from PROJECT_REPOSITORIES.';
+
         console.error('\n' + '='.repeat(80));
         console.error(errorMsg);
         console.error('='.repeat(80) + '\n');
-        
+
         process.exit(1); // Exit with error code
     }
 
-    console.log(`✓ All ${projectIds.length} PROJECT_REPOSITORIES validated successfully`);
+    console.log(
+        `✓ All ${projectIds.length} PROJECT_REPOSITORIES validated successfully`
+    );
 }
 
 /**

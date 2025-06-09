@@ -40,26 +40,29 @@ export async function ensureMigrations(): Promise<void> {
             // When running from controller directory, we need to go up one level
             const possiblePaths = [
                 path.resolve(process.cwd(), '../db'), // When running from controller directory
-                path.resolve(process.cwd(), 'db'),     // When running from project root
+                path.resolve(process.cwd(), 'db'), // When running from project root
                 path.resolve(__dirname, '../../../../../db'), // Fallback based on __dirname
             ];
-            
+
             for (const possiblePath of possiblePaths) {
                 if (fs.existsSync(possiblePath)) {
                     dbPath = possiblePath;
                     break;
                 }
             }
-            
+
             if (!fs.existsSync(dbPath)) {
-                throw new Error(`Could not find db directory. Tried: ${possiblePaths.join(', ')}`);
+                throw new Error(
+                    `Could not find db directory. Tried: ${possiblePaths.join(', ')}`
+                );
             }
         }
-        
+
         // Use localhost for local development
         const isLocal = !fs.existsSync('/app/db');
-        const actualDbHost = isLocal && dbHost === 'host.docker.internal' ? 'localhost' : dbHost;
-        
+        const actualDbHost =
+            isLocal && dbHost === 'host.docker.internal' ? 'localhost' : dbHost;
+
         const connectionString = `postgres://${dbUser}:${dbPassword}@${actualDbHost}:${dbPort}/${dbName}`;
         const command = `cd ${dbPath} && DATABASE_URL="${connectionString}" npx node-pg-migrate up`;
 

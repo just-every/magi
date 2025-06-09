@@ -140,7 +140,8 @@ export async function convertImageToText(
         });
 
         // Get the description from the response
-        const description = response.content?.[0]?.text || '';
+        const firstContent = response.content?.[0];
+        const description = firstContent && 'text' in firstContent ? firstContent.text : '';
 
         // Format the result
         const formattedDescription = `[Image description: ${description.trim()}]`;

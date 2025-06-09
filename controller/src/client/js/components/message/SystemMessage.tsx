@@ -11,12 +11,13 @@ interface SystemMessageProps {
 }
 
 const SystemMessage: React.FC<SystemMessageProps> = ({ message }) => {
-    const content = typeof message.content === 'string' 
-        ? message.content 
-        : typeof message.content === 'object'
-            ? JSON.stringify(message.content, null, 2)
-            : String(message.content);
-    
+    const content =
+        typeof message.content === 'string'
+            ? message.content
+            : typeof message.content === 'object'
+              ? JSON.stringify(message.content, null, 2)
+              : String(message.content);
+
     if (message.type === 'error') {
         return (
             <div
@@ -31,9 +32,7 @@ const SystemMessage: React.FC<SystemMessageProps> = ({ message }) => {
                             : 'alert-secondary')
                     }
                 >
-                    <div
-                        dangerouslySetInnerHTML={parseMarkdown(content)}
-                    />
+                    <div dangerouslySetInnerHTML={parseMarkdown(content)} />
                 </div>
             </div>
         );

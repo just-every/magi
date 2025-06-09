@@ -56,7 +56,7 @@ const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
     const getLastText = (
         process: ProcessData,
         defaultText: string
-    ): JSX.Element => {
+    ): React.ReactElement => {
         if (
             !process.agent ||
             !process.agent.messages ||
@@ -108,7 +108,7 @@ const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
         process: ProcessData,
         agentId: string,
         defaultText: string
-    ): JSX.Element => {
+    ): React.ReactElement => {
         if (!process.agent || !process.agent.workers)
             return <TruncatedStartText text={defaultText} />;
 
@@ -185,9 +185,12 @@ const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
                             >
                                 <div className="d-flex align-items-center">
                                     <span className="process-name fw-bold">
-                                        {typeof process.name === 'string' ? process.name :
-                                         typeof process.agent?.name === 'string' ? process.agent.name :
-                                         process.id}
+                                        {typeof process.name === 'string'
+                                            ? process.name
+                                            : typeof process.agent?.name ===
+                                                'string'
+                                              ? process.agent.name
+                                              : process.id}
                                     </span>
                                     <i
                                         className={`bi ${statusInfo.icon} ms-2`}
@@ -212,18 +215,33 @@ const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
 
                                             // If parent process is visible, show all its workers
                                             // This ensures workers appear even before they have a status
-                                            if (statusFilter.includes(process.status as ProcessStatus)) {
+                                            if (
+                                                statusFilter.includes(
+                                                    process.status as ProcessStatus
+                                                )
+                                            ) {
                                                 // For completed filter, only show completed workers
                                                 if (showCompletedOnly) {
-                                                    return worker.statusEvent?.status === 'completed';
+                                                    return (
+                                                        worker.statusEvent
+                                                            ?.status ===
+                                                        'completed'
+                                                    );
                                                 }
                                                 // For active filter, show all workers of active processes
                                                 return true;
                                             }
 
                                             // If parent is not in filter, check worker's own status
-                                            const workerStatus = worker.statusEvent?.status as ProcessStatus;
-                                            if (workerStatus && statusFilter.includes(workerStatus)) {
+                                            const workerStatus = worker
+                                                .statusEvent
+                                                ?.status as ProcessStatus;
+                                            if (
+                                                workerStatus &&
+                                                statusFilter.includes(
+                                                    workerStatus
+                                                )
+                                            ) {
                                                 return true;
                                             }
 
@@ -252,7 +270,10 @@ const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
                                                 >
                                                     <div className="d-flex align-items-center">
                                                         <span className="process-name fw-bold">
-                                                            {typeof worker.name === 'string' ? worker.name : workerId}
+                                                            {typeof worker.name ===
+                                                            'string'
+                                                                ? worker.name
+                                                                : workerId}
                                                         </span>
                                                         <i
                                                             className={`bi ${agentStatusInfo.icon} ms-2`}

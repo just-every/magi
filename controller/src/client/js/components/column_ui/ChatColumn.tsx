@@ -11,16 +11,16 @@ import StatusDisplay from '../ui/StatusDisplay'; // Import StatusDisplay
 import { parseMarkdown } from '../utils/MarkdownUtils';
 
 // Helper function to check if a URL points to an image
-const isImageUrl = (url: string): boolean => {
-    try {
-        // Basic check for common image extensions
-        const pathname = new URL(url).pathname.toLowerCase();
-        return /\.(jpg|jpeg|png|gif|webp|svg)$/.test(pathname);
-    } catch (e) {
-        // If URL parsing fails or it doesn't have a recognized extension, treat as non-image
-        return false;
-    }
-};
+// const isImageUrl = (url: string): boolean => {
+//     try {
+//         // Basic check for common image extensions
+//         const pathname = new URL(url).pathname.toLowerCase();
+//         return /\.(jpg|jpeg|png|gif|webp|svg)$/.test(pathname);
+//     } catch (e) {
+//         // If URL parsing fails or it doesn't have a recognized extension, treat as non-image
+//         return false;
+//     }
+// };
 
 interface ChatColumnProps {
     processes: Map<string, ProcessData>;
@@ -278,7 +278,7 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                 : null;
 
                         let document = null;
-                        let media = null;
+                        const media = null;
                         // Check if toolCallMessage exists before accessing its properties
                         if (
                             toolCallMessage &&
@@ -327,11 +327,17 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                     >
                                         {toolCallMessage
                                             ? toolCallMessage.command
-                                            : typeof message.content === 'string'
-                                                ? message.content
-                                                : typeof message.content === 'object'
-                                                    ? JSON.stringify(message.content, null, 2)
-                                                    : String(message.content)}
+                                            : typeof message.content ===
+                                                'string'
+                                              ? message.content
+                                              : typeof message.content ===
+                                                  'object'
+                                                ? JSON.stringify(
+                                                      message.content,
+                                                      null,
+                                                      2
+                                                  )
+                                                : String(message.content)}
                                     </div>
                                 </div>
                                 {document}

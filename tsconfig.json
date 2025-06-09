@@ -13,7 +13,6 @@
         "removeComments": true,
     "skipLibCheck": true,
     "typeRoots": [
-        "./controller/node_modules/@types",
         "./common/shared-types",
         "./node_modules/@types"
     ],

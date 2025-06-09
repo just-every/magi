@@ -21,9 +21,8 @@ async function fileExists(p: string): Promise<boolean> {
 // Detect if we're running locally or in Docker
 const isLocal = !fileExists('/app/db');
 const TOOLS_DIR = isLocal
-    ? path.resolve(process.cwd(), '../custom_tools')  // Local: relative to controller dir
-    : path.resolve('/custom_tools');                  // Docker: absolute path
-
+    ? path.resolve(process.cwd(), '../custom_tools') // Local: relative to controller dir
+    : path.resolve('/custom_tools'); // Docker: absolute path
 
 async function readLocalTools(): Promise<CustomTool[]> {
     const tools: CustomTool[] = [];

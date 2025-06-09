@@ -400,36 +400,49 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
                     const updatedAgent = agent || process.agent!;
                     const isCoreProcess = process.id === coreProcessId;
-                    const isMainProcessAgent = !agent && updatedAgent === process.agent;
+                    const isMainProcessAgent =
+                        !agent && updatedAgent === process.agent;
 
                     // For core process, be more permissive with updates
-                    if (!agent_id ||
+                    if (
+                        !agent_id ||
                         updatedAgent.agent_id === agent_id ||
                         (isMainProcessAgent && !updatedAgent.agent_id) ||
-                        (isCoreProcess && isMainProcessAgent)) {
+                        (isCoreProcess && isMainProcessAgent)
+                    ) {
                         // Set the agent_id if it's not set yet
                         if (!updatedAgent.agent_id && agent_id) {
                             updatedAgent.agent_id = agent_id;
                         }
                         // Validate values before assigning
                         const validatedValues = { ...values };
-                        if ('name' in validatedValues && validatedValues.name != null) {
+                        if (
+                            'name' in validatedValues &&
+                            validatedValues.name != null
+                        ) {
                             // Ensure name is always a string
-                            validatedValues.name = typeof validatedValues.name === 'string'
-                                ? validatedValues.name
-                                : JSON.stringify(validatedValues.name);
+                            validatedValues.name =
+                                typeof validatedValues.name === 'string'
+                                    ? validatedValues.name
+                                    : JSON.stringify(validatedValues.name);
                         }
                         Object.assign(updatedAgent, validatedValues);
                     } else if (updatedAgent.workers) {
                         // Try to find the worker with the matching agent_id
-                        for (const [workerId, worker] of updatedAgent.workers) {
+                        for (const [, worker] of updatedAgent.workers) {
                             if (worker.agent_id === agent_id) {
                                 // Update the worker directly
                                 const validatedValues = { ...values };
-                                if ('name' in validatedValues && validatedValues.name != null) {
-                                    validatedValues.name = typeof validatedValues.name === 'string'
-                                        ? validatedValues.name
-                                        : JSON.stringify(validatedValues.name);
+                                if (
+                                    'name' in validatedValues &&
+                                    validatedValues.name != null
+                                ) {
+                                    validatedValues.name =
+                                        typeof validatedValues.name === 'string'
+                                            ? validatedValues.name
+                                            : JSON.stringify(
+                                                  validatedValues.name
+                                              );
                                 }
                                 Object.assign(worker, validatedValues);
                                 return updatedAgent;
@@ -443,7 +456,10 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                                 agent_id,
                                 worker
                             );
-                            updatedWorkers.set(workerId, updatedWorker || worker);
+                            updatedWorkers.set(
+                                workerId,
+                                updatedWorker || worker
+                            );
                         });
                         updatedAgent.workers = updatedWorkers;
                     }
@@ -467,17 +483,20 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     // 2. The agent doesn't have an ID yet (not initialized)
                     // 3. The agent_id matches
                     const isCoreProcess = process.id === coreProcessId;
-                    const isMainProcessAgent = !agent && updatedAgent === process.agent;
+                    const isMainProcessAgent =
+                        !agent && updatedAgent === process.agent;
 
                     // Accept the message if any of these conditions are true:
                     // 1. No agent_id provided (message for main agent)
                     // 2. Agent IDs match
                     // 3. Main process agent with no agent_id yet
                     // 4. Core process main agent (special handling)
-                    if (!agent_id ||
+                    if (
+                        !agent_id ||
                         updatedAgent.agent_id === agent_id ||
                         (isMainProcessAgent && !updatedAgent.agent_id) ||
-                        (isCoreProcess && isMainProcessAgent)) {
+                        (isCoreProcess && isMainProcessAgent)
+                    ) {
                         // Set the agent_id if it's not set yet
                         if (!updatedAgent.agent_id && agent_id) {
                             updatedAgent.agent_id = agent_id;
@@ -488,7 +507,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         updatedAgent.messages.push(message);
                     } else if (updatedAgent.workers) {
                         // Try to find the worker with the matching agent_id
-                        for (const [workerId, worker] of updatedAgent.workers) {
+                        for (const [, worker] of updatedAgent.workers) {
                             if (worker.agent_id === agent_id) {
                                 // Add message directly to the worker
                                 if (!message.agent) {
@@ -506,7 +525,10 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                                 agent_id,
                                 worker
                             );
-                            updatedWorkers.set(workerId, updatedWorker || worker);
+                            updatedWorkers.set(
+                                workerId,
+                                updatedWorker || worker
+                            );
                         });
                         updatedAgent.workers = updatedWorkers;
                     }
@@ -662,7 +684,10 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     message: PartialClientMessage
                 ): AgentData | undefined {
                     const agent_id = streamingEvent.agent?.agent_id;
-                    const result = addMessage(completeMessage(message), agent_id);
+                    const result = addMessage(
+                        completeMessage(message),
+                        agent_id
+                    );
 
                     // If message couldn't be added to an agent (agent not found), queue it
                     // For core process without agent_id, don't queue - just add directly
@@ -732,33 +757,31 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     if ('tool_call' in streamingEvent) {
                         const toolCall = streamingEvent.tool_call;
                         const toolName = toolCall.function.name;
-                            let toolParams: Record<string, unknown> = {};
-                            try {
-                                toolParams = JSON.parse(
-                                    toolCall.function.arguments
-                                );
-                            } catch (e) {
-                                console.error(
-                                    'Error parsing tool arguments:',
-                                    e
-                                );
-                            }
-
-                            // Generate command representation for certain tool types
-                            let command: string = '';
-                            ['prompt', 'input', 'command', 'message'].forEach(
-                                (param: string) => {
-                                    if (
-                                        !command &&
-                                        param in toolParams &&
-                                        typeof toolParams[param] === 'string'
-                                    ) {
-                                        command = toolParams[param];
-                                    }
-                                }
+                        let toolParams: Record<string, unknown> = {};
+                        try {
+                            toolParams = JSON.parse(
+                                toolCall.function.arguments
                             );
+                        } catch (e) {
+                            console.error('Error parsing tool arguments:', e);
+                        }
 
-                            addMessage({
+                        // Generate command representation for certain tool types
+                        let command: string = '';
+                        ['prompt', 'input', 'command', 'message'].forEach(
+                            (param: string) => {
+                                if (
+                                    !command &&
+                                    param in toolParams &&
+                                    typeof toolParams[param] === 'string'
+                                ) {
+                                    command = toolParams[param];
+                                }
+                            }
+                        );
+
+                        addMessage(
+                            {
                                 id: generateId(),
                                 processId: event.id,
                                 type: 'tool_call',
@@ -769,7 +792,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                                 toolParams: toolParams,
                                 command: command,
                                 rawEvent: data,
-                            } as ToolCallMessage, streamingEvent.agent?.agent_id);
+                            } as ToolCallMessage,
+                            streamingEvent.agent?.agent_id
+                        );
                     }
                 } else if (eventType === 'tool_done') {
                     // Tool result message
@@ -782,17 +807,20 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
                         const toolName = toolCall.function.name;
 
-                        addMessage({
-                            id: generateId(),
-                            processId: event.id,
-                            type: 'tool_result',
-                            content: `Result from ${toolName}`,
-                            timestamp: timestamp,
-                            toolName: toolName,
-                            toolCallId: toolCall.id,
-                            result: result,
-                            rawEvent: data,
-                        } as ToolResultMessage, streamingEvent.agent?.agent_id);
+                        addMessage(
+                            {
+                                id: generateId(),
+                                processId: event.id,
+                                type: 'tool_result',
+                                content: `Result from ${toolName}`,
+                                timestamp: timestamp,
+                                toolName: toolName,
+                                toolCallId: toolCall.id,
+                                result: result,
+                                rawEvent: data,
+                            } as ToolResultMessage,
+                            streamingEvent.agent?.agent_id
+                        );
                     }
                 } else if (
                     eventType === 'message_start' ||
@@ -815,10 +843,11 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                             // Get agent_id from the streaming event
                             const agent_id = streamingEvent.agent?.agent_id;
                             // First check if we can find the message in the main agent
-                            const targetAgent = agent_id ?
-                                (process.agent!.agent_id === agent_id ? process.agent! :
-                                 process.agent!.workers?.get(agent_id)) :
-                                process.agent!;
+                            const targetAgent = agent_id
+                                ? process.agent!.agent_id === agent_id
+                                    ? process.agent!
+                                    : process.agent!.workers?.get(agent_id)
+                                : process.agent!;
 
                             if (targetAgent) {
                                 targetAgent.messages.forEach(message => {
@@ -1074,11 +1103,15 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     eventType === 'message_complete' ||
                     eventType === 'tool_done'
                 ) {
-                    updateAgent({ isTyping: false }, streamingEvent.agent?.agent_id);
+                    updateAgent(
+                        { isTyping: false },
+                        streamingEvent.agent?.agent_id
+                    );
                 } else if (eventType === 'agent_status') {
                     updateAgent(
                         { statusEvent: streamingEvent },
-                        streamingEvent.agent_id || streamingEvent.agent?.agent_id
+                        streamingEvent.agent_id ||
+                            streamingEvent.agent?.agent_id
                     );
                 }
 
