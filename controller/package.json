@@ -44,7 +44,7 @@
         "dockerode": "^4.0.7",
         "dotenv": "^16.5.0",
         "ef-infinite-canvas": "^0.6.8",
-        "express": "^5.1.0",
+        "express": "^4.21.2",
         "marked": "^15.0.12",
         "micromatch": "^4.0.8",
         "node-telegram-bot-api": "^0.66.0",
