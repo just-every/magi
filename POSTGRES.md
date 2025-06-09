@@ -1,13 +1,13 @@
 # Shared PostgreSQL Database
 
-This project uses a shared PostgreSQL database container that can be accessed by all services and applications within the magi-system. This approach simplifies database management and avoids port conflicts that would occur if each project had its own database container.
+This project uses a shared PostgreSQL database container that can be accessed by all services and applications within the magi-engine. This approach simplifies database management and avoids port conflicts that would occur if each project had its own database container.
 
 ## Starting the Database
 
 To start the shared PostgreSQL database:
 
 ```bash
-# From the magi-system root directory
+# From the magi root directory
 docker compose up -d db
 ```
 

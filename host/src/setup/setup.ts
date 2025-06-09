@@ -118,24 +118,22 @@ function getRecentDirectories(baseDir: string, limit: number = 10): string[] {
         // Sort by modification time (most recent first)
         const sortedDirs = dirs.sort((a, b) => b.mtime - a.mtime);
 
-        // Check if magi-system is in the list
-        const magiSystemDir = sortedDirs.find(
-            dir => dir.name === 'magi-system'
-        );
+        // Check if magi is in the list
+        const magiSystemDir = sortedDirs.find(dir => dir.name === 'magi');
         const magiSystemPath = magiSystemDir ? magiSystemDir.path : null;
 
         // Get paths from sorted directories
         const results = sortedDirs.map(dir => dir.path);
 
-        // If magi-system is not in the list and doesn't match rootDir, add it
-        if (!magiSystemPath && !rootDir.endsWith('magi-system')) {
-            // Try to find magi-system in parent directory
-            const possibleMagiPath = path.join(parentDir, 'magi-system');
+        // If magi is not in the list and doesn't match rootDir, add it
+        if (!magiSystemPath && !rootDir.endsWith('magi')) {
+            // Try to find magi in parent directory
+            const possibleMagiPath = path.join(parentDir, 'magi');
             if (
                 fs.existsSync(possibleMagiPath) &&
                 fs.existsSync(path.join(possibleMagiPath, '.git'))
             ) {
-                // Add magi-system to the list (at the end)
+                // Add magi to the list (at the end)
                 results.push(possibleMagiPath);
             }
         }
@@ -961,7 +959,7 @@ function buildDockerImage(): void {
 
     try {
         execSync(
-            'docker build --no-cache -t magi-system:latest -f magi/docker/Dockerfile ./',
+            'docker build --no-cache -t magi-engine:latest -f engine/docker/Dockerfile ./',
             {
                 stdio: 'inherit',
                 cwd: rootDir,

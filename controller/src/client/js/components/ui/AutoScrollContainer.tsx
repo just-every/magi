@@ -62,9 +62,9 @@ const AutoScrollContainer: React.FC<AutoScrollContainerProps> = ({
                 setPrevScrollHeight(scrollHeight);
             }
         }
-        // Dependency array: Re-run when children change, auto-scroll status changes,
-        // or the previous scroll height state updates.
-    }, [children, scrollToBottom, isUserScrolledUp, prevScrollHeight]);
+        // Dependency array: Re-run when children change or auto-scroll status changes.
+        // Don't include prevScrollHeight to avoid infinite loops
+    }, [children, scrollToBottom, isUserScrolledUp]);
 
     /**
      * Effect to scroll to bottom on initial mount and set initial scroll height.

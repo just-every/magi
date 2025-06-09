@@ -3,7 +3,7 @@
  * Specifically focused on checking that 710w images are correctly extracted from srcset
  */
 
-import { searchEnvato } from '../../magi/src/utils/design_search.js';
+import { searchEnvato } from '../../engine/src/utils/design_search.js';
 
 // Test with a straightforward query
 async function runEnvatoTest() {

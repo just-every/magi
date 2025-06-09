@@ -5,6 +5,8 @@
  */
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import * as path from 'path';
+import * as fs from 'fs';
 
 // Promisify exec for async/await usage
 const execAsync = promisify(exec);
@@ -29,8 +31,37 @@ export async function ensureMigrations(): Promise<void> {
         const dbPassword = process.env.DATABASE_PASSWORD || 'postgres';
         const dbName = process.env.DATABASE_NAME || 'postgres';
 
-        const connectionString = `postgres://${dbUser}:${dbPassword}@${dbHost}:${dbPort}/${dbName}`;
-        const command = `cd /app/db && DATABASE_URL="${connectionString}" npx node-pg-migrate up`;
+        // Determine the correct db directory path
+        // In Docker: /app/db
+        // In local dev: relative to the controller directory
+        let dbPath = '/app/db';
+        if (!fs.existsSync(dbPath)) {
+            // Local development - the db directory is at the project root
+            // When running from controller directory, we need to go up one level
+            const possiblePaths = [
+                path.resolve(process.cwd(), '../db'), // When running from controller directory
+                path.resolve(process.cwd(), 'db'),     // When running from project root
+                path.resolve(__dirname, '../../../../../db'), // Fallback based on __dirname
+            ];
+            
+            for (const possiblePath of possiblePaths) {
+                if (fs.existsSync(possiblePath)) {
+                    dbPath = possiblePath;
+                    break;
+                }
+            }
+            
+            if (!fs.existsSync(dbPath)) {
+                throw new Error(`Could not find db directory. Tried: ${possiblePaths.join(', ')}`);
+            }
+        }
+        
+        // Use localhost for local development
+        const isLocal = !fs.existsSync('/app/db');
+        const actualDbHost = isLocal && dbHost === 'host.docker.internal' ? 'localhost' : dbHost;
+        
+        const connectionString = `postgres://${dbUser}:${dbPassword}@${actualDbHost}:${dbPort}/${dbName}`;
+        const command = `cd ${dbPath} && DATABASE_URL="${connectionString}" npx node-pg-migrate up`;
 
         // Execute the command
         const { stdout, stderr } = await execAsync(command);

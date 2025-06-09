@@ -25,6 +25,7 @@ const ToolCallMessage: React.FC<ToolCallMessageProps> = ({
     callFollows,
 }) => {
     if (message.toolName.startsWith('talk_to_')) {
+        if (message.t)
         return (
             <div
                 className="message-group assistant-message"
@@ -53,11 +54,19 @@ const ToolCallMessage: React.FC<ToolCallMessageProps> = ({
         );
     }
 
-    const toolCallParams = JSON.stringify(
-        message.toolParams || '',
-        null,
-        2
-    ).trim();
+    // Ensure we have a string representation of the tool parameters
+    let toolCallParams = '';
+    if (message.toolParams) {
+        if (typeof message.toolParams === 'string') {
+            // If it's already a string, use it as-is
+            toolCallParams = message.toolParams.trim();
+        } else if (typeof message.toolParams === 'object') {
+            // If it's an object, stringify it
+            toolCallParams = JSON.stringify(message.toolParams, null, '\t')
+                .replace(/^[\t ]*[{}][\t ]*(?=\r?\n|$)/gm, '')
+                .trim();
+        }
+    }
     return (
         <div className="message-group tool-message" key={message.id}>
             <div className="message-bubble tool-bubble">
@@ -96,8 +105,8 @@ const ToolCallMessage: React.FC<ToolCallMessageProps> = ({
                     >
                         <pre>
                             {message.toolName}(
-                            {toolCallParams && toolCallParams !== '{}'
-                                ? toolCallParams
+                            {toolCallParams && toolCallParams !== '{}' && toolCallParams !== 'null'
+                                ? '\n\t' + toolCallParams + '\n'
                                 : ''}
                             )
                         </pre>

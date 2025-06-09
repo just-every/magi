@@ -78,11 +78,19 @@ trap cleanup TERM INT
 # Print environment for debugging
 echo "Starting MAGI controller with NODE_ENV=${NODE_ENV:-production}"
 
+# Fix SSL certificate issues for Telegram bot
+# This is a workaround for certificate validation issues in some Docker environments
+# In production, you should properly configure certificates instead
+if [ "$DISABLE_TLS_VERIFICATION" = "true" ]; then
+    export NODE_TLS_REJECT_UNAUTHORIZED=0
+    echo "WARNING: Disabling TLS certificate validation for Telegram bot (development mode)"
+fi
+
 # Determine what mode to start in
 if [ "$1" = "dev" ] || [ "$1" = "prod" ]; then
     echo "Starting in $1 mode..."
     # Start node in foreground
-    node dist/server/server.js &
+    node /app/dist/app/src/server/server.js &
 else
     # Default to running whatever command was passed
     echo "Running custom command: $@"

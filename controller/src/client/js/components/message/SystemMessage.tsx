@@ -11,6 +11,12 @@ interface SystemMessageProps {
 }
 
 const SystemMessage: React.FC<SystemMessageProps> = ({ message }) => {
+    const content = typeof message.content === 'string' 
+        ? message.content 
+        : typeof message.content === 'object'
+            ? JSON.stringify(message.content, null, 2)
+            : String(message.content);
+    
     if (message.type === 'error') {
         return (
             <div
@@ -26,7 +32,7 @@ const SystemMessage: React.FC<SystemMessageProps> = ({ message }) => {
                     }
                 >
                     <div
-                        dangerouslySetInnerHTML={parseMarkdown(message.content)}
+                        dangerouslySetInnerHTML={parseMarkdown(content)}
                     />
                 </div>
             </div>
@@ -44,7 +50,7 @@ const SystemMessage: React.FC<SystemMessageProps> = ({ message }) => {
                 )}
             </div>
             <div className="message-bubble assistant-bubble">
-                <div dangerouslySetInnerHTML={parseMarkdown(message.content)} />
+                <div dangerouslySetInnerHTML={parseMarkdown(content)} />
             </div>
         </div>
     );

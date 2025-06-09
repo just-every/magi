@@ -97,6 +97,8 @@ const getContentType = (filePath: string): string | undefined => {
 
 export class ServerManager {
     private app = express();
+    private distPath: string;
+    private inDocker: boolean;
 
     /**
      * Get the Express application instance
@@ -134,6 +136,14 @@ export class ServerManager {
     private isTelegramEnabled = true;
 
     constructor() {
+        // Calculate the correct dist path
+        // In Docker: __dirname is /app/dist/app/src/server/managers, we need to go to /app/dist
+        // In local dev: __dirname is controller/dist/controller/src/server/managers, we need to go to controller/dist
+        this.inDocker = process.env.NODE_ENV === 'production' || __dirname.startsWith('/app/');
+        this.distPath = this.inDocker 
+            ? '/app/dist'  // Use absolute path for Docker
+            : path.join(__dirname, '../../../..');
+        
         this.processManager = new ProcessManager(this.io);
 
         // Initialize the communication manager before setting up WebSockets
@@ -318,16 +328,20 @@ export class ServerManager {
         // Set up Docker volume access for magi_output
         await this.setupDockerVolumeAccess();
 
-        // 2. Serve compiled JavaScript files from dist/src
+        // 2. Serve compiled JavaScript files from dist
         this.app.use('/client.js', (req, res) => {
             res.setHeader('Content-Type', 'application/javascript');
-            res.sendFile(path.join(__dirname, '../../client.js'));
+            res.sendFile(path.join(this.distPath, 'client.js'));
         });
 
         // 3. Serve images from the img directory
+        const clientPath = this.inDocker 
+            ? path.join(this.distPath, 'app/src/client')
+            : path.join(this.distPath, 'client');
+            
         this.app.use(
             '/img',
-            express.static(path.join(__dirname, '../../client/img'), {
+            express.static(path.join(clientPath, 'img'), {
                 setHeaders: (res, filePath) => {
                     const contentType = getContentType(filePath);
                     if (contentType) {
@@ -338,11 +352,11 @@ export class ServerManager {
         );
 
         // 4. Serve static files from the dist folder
-        this.app.use(express.static(path.join(__dirname, '../..')));
+        this.app.use(express.static(this.distPath));
 
         // 5. Ensure the root route returns the index.html
         this.app.get('/', (req, res) => {
-            res.sendFile(path.join(__dirname, '../../client/html/index.html'));
+            res.sendFile(path.join(clientPath, 'html/index.html'));
         });
     }
 
@@ -351,7 +365,7 @@ export class ServerManager {
      * This creates a persistent helper container to access the volume
      */
     private async setupDockerVolumeAccess(): Promise<void> {
-        const HELPER_CONTAINER_NAME = 'magi-file-server';
+        const HELPER_CONTAINER_NAME = 'task-file-server';
         const fileCache = new Map<string, boolean>();
 
         // Define helper functions at the root level of setupDockerVolumeAccess
@@ -592,7 +606,7 @@ export class ServerManager {
                 this.wss.handleUpgrade(request, socket, head, ws => {
                     this.wss.emit('connection', ws, request);
                 });
-            } else if (pathname.startsWith('/ws/magi/')) {
+            } else if (pathname.startsWith('/ws/engine/')) {
                 // Pass the upgrade request to the CommunicationManager's WebSocket server
                 this.communicationManager.handleWebSocketUpgrade(
                     request,
@@ -636,7 +650,7 @@ export class ServerManager {
         this.app.get('/api/llm-logs/:processId', (req, res) => {
             try {
                 const processId = req.params.processId;
-                const containerName = `magi-${processId}`;
+                const containerName = `task-${processId}`;
 
                 // Get Docker logs
                 exec(
@@ -697,7 +711,7 @@ export class ServerManager {
                     return next();
                 }
 
-                const containerName = `magi-${processId}`;
+                const containerName = `task-${processId}`;
 
                 // Get Docker logs with agent filtering
                 exec(
@@ -755,7 +769,7 @@ export class ServerManager {
             try {
                 const processId = req.params.processId;
                 const logFile = req.params.logFile;
-                const containerName = `magi-${processId}`;
+                const containerName = `task-${processId}`;
 
                 // Validate log file name to prevent injection
                 if (!logFile.match(/^[\w-.]+\.json$/)) {
@@ -810,7 +824,7 @@ export class ServerManager {
         this.app.get('/api/cost-tracker/:processId', (req, res) => {
             try {
                 const processId = req.params.processId;
-                const containerName = `magi-${processId}`;
+                const containerName = `task-${processId}`;
 
                 // Get cost tracker data from Docker container
                 exec(
@@ -858,7 +872,7 @@ export class ServerManager {
         this.app.get('/api/docker-logs/:processId', (req, res) => {
             try {
                 const processId = req.params.processId;
-                const containerName = `magi-${processId}`;
+                const containerName = `task-${processId}`;
                 const lines = req.query.lines
                     ? parseInt(req.query.lines as string)
                     : 1000;
@@ -906,7 +920,10 @@ export class ServerManager {
             }
 
             // For all other routes, serve the index.html for client-side routing
-            res.sendFile(path.join(__dirname, '../../client/html/index.html'));
+            const clientPath = this.inDocker 
+                ? path.join(this.distPath, 'app/src/client')
+                : path.join(this.distPath, 'client');
+            res.sendFile(path.join(clientPath, 'html/index.html'));
         });
     }
 
@@ -989,7 +1006,7 @@ export class ServerManager {
             console.log('Cleaning up all containers...');
             await cleanupAllContainers();
             const { stdout } = await execPromise(
-                'docker ps -a --filter "name=magi-" --format "{{.Names}}"'
+                'docker ps -a --filter "name=task-" --format "{{.Names}}"'
             );
             if (stdout.trim()) {
                 console.log('Remaining containers:', stdout);

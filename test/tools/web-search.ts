@@ -30,7 +30,7 @@ const engines = [
   'sonar-deep-research'
 ];
 
-import { web_search } from '../../magi/src/utils/search_utils.js';
+import { web_search } from '../../engine/src/utils/search_utils.js';
 
 export default async function webSearchTest(options: ToolsOptions = {}): Promise<ToolResult> {
   const { verbose = false, engine } = options;

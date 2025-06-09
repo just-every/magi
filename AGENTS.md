@@ -20,7 +20,7 @@ npm run build:ci    # ensure tools are working
 - controller/: Gateway between browser UI and Overseer (Node + TypeScript)
   - src/server/server.ts – Express/Socket.IO server entry // Server initialization
   - src/client/ – React UI code with components // User interface
-- magi/: Core orchestration logic for agents
+- engine/: Core orchestration logic for agents
   - src/magi.ts – Main bootstrapping entry for the Overseer // Entry point
   - src/magi_agents/ – Specialized agent implementations // Agent definitions
   - src/model_providers/ – LLM providers (Claude, GPT, Gemini, etc.) // Model APIs
@@ -38,7 +38,7 @@ High-level machine-readable index of the repository. Use it to quickly locate en
 // Container-based architecture
 The system relies on Docker for reproducible environments. Use `npm run build` to compile TypeScript and build the images.
 - `npm run build:host` – compile host utilities only
-- `npm run build:docker` – build controller and magi images
+- `npm run build:docker` – build controller and engine images
 
 ## Common Bash Commands
 ```bash
@@ -115,22 +115,22 @@ docker compose up -d db # spin up Postgres & pgvector
 
 ## Key Utility Functions / APIs
 // Most important functions
-- `magi/src/utils/runner.ts` – Core agent runner
-- `magi/src/utils/history.ts` – Conversation history management
-- `magi/src/utils/memory.ts` – Memory persistence
-- `magi/src/utils/custom_tool_utils.ts` – Dynamic tool creation
-- `magi/src/model_providers/` – LLM API wrappers
+- `engine/src/utils/runner.ts` – Core agent runner
+- `engine/src/utils/history.ts` – Conversation history management
+- `engine/src/utils/memory.ts` – Memory persistence
+- `engine/src/utils/custom_tool_utils.ts` – Dynamic tool creation
+- `engine/src/model_providers/` – LLM API wrappers
 - `controller/src/server/docker_interface.ts` – Container management
 
 ## Agent Implementation
 // Agent architecture
-- Overseer: Central coordinator (magi/src/magi_agents/overseer_agent.ts)
-- Operator: Task breakdown and assignment (magi/src/magi_agents/operator_agent.ts)
-- Browser: Web interaction via CDP (magi/src/magi_agents/common_agents/browser_agent.ts)
-- Code: Programming across languages (magi/src/magi_agents/common_agents/code_agent.ts)
-- Search: Information retrieval (magi/src/magi_agents/common_agents/search_agent.ts)
-- Shell: System command execution (magi/src/magi_agents/common_agents/shell_agent.ts)
-- Reasoning: Complex problem solving (magi/src/magi_agents/common_agents/reasoning_agent.ts)
+- Overseer: Central coordinator (engine/src/magi_agents/overseer_agent.ts)
+- Operator: Task breakdown and assignment (engine/src/magi_agents/operator_agent.ts)
+- Browser: Web interaction via CDP (engine/src/magi_agents/common_agents/browser_agent.ts)
+- Code: Programming across languages (engine/src/magi_agents/common_agents/code_agent.ts)
+- Search: Information retrieval (engine/src/magi_agents/common_agents/search_agent.ts)
+- Shell: System command execution (engine/src/magi_agents/common_agents/shell_agent.ts)
+- Reasoning: Complex problem solving (engine/src/magi_agents/common_agents/reasoning_agent.ts)
 
 ## Special Features
 // Advanced capabilities

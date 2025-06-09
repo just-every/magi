@@ -126,10 +126,22 @@ export const findImagePath = (text: string): string => {
  */
 export const getDeltaMessageContent = (message: ClientMessage): string => {
     // If this is a delta message with chunks, ensure we display all concatenated content
+    const thinkingContent = typeof message.thinking_content === 'string'
+        ? message.thinking_content
+        : typeof message.thinking_content === 'object'
+            ? JSON.stringify(message.thinking_content, null, 2)
+            : message.thinking_content ? String(message.thinking_content) : '';
+    
+    const messageContent = typeof message.content === 'string'
+        ? message.content
+        : typeof message.content === 'object'
+            ? JSON.stringify(message.content, null, 2)
+            : message.content ? String(message.content) : '';
+    
     return (
-        (message.thinking_content || '') +
-        (message.thinking_content && message.content ? '\n\n---\n\n' : '') +
-        (message.content || '')
+        thinkingContent +
+        (thinkingContent && messageContent ? '\n\n---\n\n' : '') +
+        messageContent
     );
 };
 

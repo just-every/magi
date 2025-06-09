@@ -53,6 +53,8 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
     const agentName = process?.agent.name;
     const isTyping = process?.agent.isTyping || false;
 
+    console.log('***messages***', messages);
+
     // Effect to handle mount animation
     useEffect(() => {
         setMounted(true);

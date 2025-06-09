@@ -2,7 +2,7 @@
 set -euo pipefail
 # Usage: ./run-tool-docker.sh path/to/tool.ts '{"json":"args"}' [agent_id]
 #
-# This script runs a TypeScript file inside the magi-base Docker container
+# This script runs a TypeScript file inside the magi-engine Docker container
 # using the test-custom-tool.sh command. This ensures that the execution environment
 # matches the one used in production.
 #
@@ -44,9 +44,9 @@ RANDOM_SUFFIX=$(openssl rand -hex 4)
 CONTAINER_NAME="test-tool-${RANDOM_SUFFIX}"
 
 # Build the docker image with --quiet flag when using cache
-echo "🔄 Building magi-system:latest image (if needed)..."
+echo "🔄 Building magi-engine:latest image (if needed)..."
 export DOCKER_CLI_HINTS=false
-docker build -t magi-system:latest -f magi/docker/Dockerfile "$REPO_ROOT" >/dev/null
+docker build -t magi-engine:latest -f engine/docker/Dockerfile "$REPO_ROOT" >/dev/null
 
 echo "ℹ️ Script path: $SCRIPT_PATH"
 echo "ℹ️ Agent ID: $AGENT_ID"
@@ -66,7 +66,7 @@ docker run --rm --name $CONTAINER_NAME \
     -v custom_tools:/custom_tools:rw \
     -v "$ABS_PATH:/tmp/tool_script.ts:ro" \
     --add-host=host.docker.internal:host-gateway \
-    magi-system:latest \
+    magi-engine:latest \
     test-custom-tool.sh "$AGENT_ID" "/tmp/tool_script.ts" "$JSON_ARGS"
 
 # Capture exit code

@@ -1,4 +1,4 @@
-import type { 
+import type {
     ToolCall,
     ResponseInput,
     ResponseThinkingMessage,
@@ -8,17 +8,60 @@ import type {
     ToolFunction,
     ToolDefinition,
     ModelSettings,
-    ResponseJSONSchema
+    ResponseJSONSchema,
+    ToolParameterMap,
+    ModelClassID,
+    StreamEventType as ProviderStreamEventType,
+    ModelUsage,
+    AgentExportDefinition,
+    AgentDefinition,
+    ModelProvider,
+    Agent,
 } from '@just-every/ensemble';
 
-export const validToolParameterTypes: ToolParameterType[] = [
+// Re-export types from ensemble for convenience
+export type {
+    ToolParameterType,
+    ToolCall,
+    ResponseInput,
+    ResponseThinkingMessage,
+    ResponseOutputMessage,
+    ToolParameter,
+    ToolFunction,
+    ToolDefinition,
+    ModelSettings,
+    ResponseJSONSchema,
+    ToolParameterMap,
+    ModelClassID,
+    ModelUsage,
+    AgentDefinition,
+    ModelProvider,
+    Agent,
+};
+
+// Create alias for backward compatibility
+export type AgentInterface = AgentDefinition;
+
+// MAGI-specific agent interface that extends the base Agent with additional properties
+export interface MagiAgent extends Agent {
+    // Verification settings - verifier property is already defined in Agent as AgentDefinition
+    // maxVerificationAttempts is also already defined in Agent
+
+    // Working directory for code execution - already defined in Agent
+
+    // Original arguments/metadata
+    args?: Record<string, unknown>;
+}
+
+// Valid tool parameter types from ensemble
+export const validToolParameterTypes = [
     'string',
     'number',
     'boolean',
     'object',
     'array',
     'null',
-];
+] as const;
 
 /**
  * Common type definitions for the MAGI system.
@@ -49,27 +92,6 @@ declare global {
     }
 }
 
-// Define the Agent interface to avoid circular dependency
-export interface AgentInterface {
-    agent_id: string;
-    name: string;
-    description: string;
-    instructions: string;
-    parent_id?: string;
-    workers?: AgentInterface[];
-    tools?: ToolFunction[];
-    model?: string;
-    modelClass?: string;
-    modelSettings?: ModelSettings;
-    maxToolCalls?: number;
-    verifier?: AgentInterface; // Optional verifier agent
-    onToolCall?: (toolCall: ToolCall) => void;
-    onToolResult?: (toolCall: ToolCall, result: string) => void;
-    tryDirectExecution?: (messages: ResponseInput) => Promise<ResponseInput | null>; // Added from AgentDefinition
-    export(): AgentExportDefinition;
-    asTool(): ToolFunction;
-}
-
 export interface AgentProcess {
     processId: string;
     started: Date;
@@ -89,92 +111,23 @@ export interface AgentProcess {
     projectIds?: string[]; // List of git repositories to mount
 }
 
-
 export type ExecutableFunction = (...args: any[]) => Promise<string> | string;
-export type WorkerFunction = (...args: any[]) => AgentInterface;
-
 
 /**
  * Type definition for tool implementation functions
  */
 export type ToolImplementationFn = (...args: any[]) => any | Promise<any>;
 
-export type ToolParameterMap = {
-    [key: string]:
-        | string
-        | ToolParameter;
-};
-
 export interface VerifierResult {
     status: 'pass' | 'fail';
     reason?: string;
 }
-
-/**
- * Definition of an agent with model and tool settings
- */
-export interface AgentDefinition {
-    agent_id?: string;
-    name: string;
-    description: string;
-    instructions: string;
-    workers?: WorkerFunction[];
-    tools?: ToolFunction[];
-    model?: string;
-    modelClass?: ModelClassID;
-    modelSettings?: ModelSettings;
-    maxToolCalls?: number;
-    maxToolCallRoundsPerTurn?: number; // Maximum number of tool call rounds per turn
-    verifier?: AgentDefinition;
-    maxVerificationAttempts?: number;
-    jsonSchema?: ResponseJSONSchema; // JSON schema definition for structured output
-    historyThread?: ResponseInput | undefined;
-    cwd?: string; // Working directory for model providers that need a real shell context
-
-    onToolCall?: (toolCall: ToolCall) => Promise<void>;
-    onToolResult?: (toolCall: ToolCall, result: string) => Promise<void>;
-    onRequest?: (
-        agent: AgentInterface, // Reverted back to AgentInterface
-        messages: ResponseInput
-    ) => Promise<[any, ResponseInput]>; // Reverted back to AgentInterface
-    onResponse?: (message: ResponseOutputMessage) => Promise<void>;
-    onThinking?: (message: ResponseThinkingMessage) => Promise<void>;
-    tryDirectExecution?: (
-        messages: ResponseInput
-    ) => Promise<ResponseInput | null>; // Add this line
-
-    params?: ToolParameterMap; // Map of parameter names to their definitions
-    processParams?: (
-        agent: AgentInterface,
-        params: Record<string, any>
-    ) => Promise<{
-        prompt: string;
-        intelligence?: 'low' | 'standard' | 'high';
-    }>;
-}
-
-/**
- * Definition-exportable version of the agent
- */
-export interface AgentExportDefinition {
-    agent_id: string;
-    name: string;
-    parent_id?: string;
-    model?: string;
-    modelClass?: string;
-    cwd?: string; // Working directory for model providers that need a real shell context
-}
-
-
-
 
 export interface ToolCallHandler {
     onToolCall?: (toolCall: ToolCall) => void;
     onToolResult?: (toolCall: ToolCall, result: string) => void;
     onEvent?: (event: StreamingEvent) => void;
 }
-
-
 
 export interface ResponseBaseMessage {
     type: string;
@@ -214,59 +167,9 @@ export interface LLMResponse extends LLMMessage {
 }
 
 /**
- * Streaming event types
+ * Streaming event types - extends ensemble's StreamEventType with 'design'
  */
-export type StreamEventType =
-    | 'connected'
-    | 'command_start'
-    | 'command_done'
-    | 'project_create'
-    | 'project_update'
-    | 'process_start'
-    | 'process_running'
-    | 'process_updated'
-    | 'process_done'
-    | 'process_failed'
-    | 'process_waiting'
-    | 'process_terminated'
-    | 'agent_start'
-    | 'agent_updated'
-    | 'agent_done'
-    | 'agent_status'
-    | 'message_start'
-    | 'message_delta'
-    | 'message_complete'
-    | 'talk_start'
-    | 'talk_delta'
-    | 'talk_complete'
-    | 'audio_stream'
-    | 'tool_start'
-    | 'tool_delta'
-    | 'tool_done'
-    | 'file_start'
-    | 'file_delta'
-    | 'file_complete'
-    | 'cost_update'
-    | 'system_status'
-    | 'system_update'
-    | 'quota_update'
-    | 'screenshot'
-    | 'design'
-    | 'design_grid'
-    | 'console'
-    | 'error'
-    // New types for waiting on tools
-    | 'tool_wait_start'
-    | 'tool_waiting'
-    | 'tool_wait_complete'
-    // New types for waiting on tasks
-    | 'task_wait_start'
-    | 'task_waiting'
-    | 'task_wait_complete'
-    // Git-related events
-    | 'git_pull_request'
-    // Stream termination event
-    | 'stream_end';
+export type StreamEventType = ProviderStreamEventType | 'design';
 
 /**
  * Base streaming event interface
@@ -397,9 +300,7 @@ export interface Project {
  * Project updated streaming event
  */
 export interface ProjectEvent extends StreamEvent {
-    type:
-        | 'project_create'
-        | 'project_update';
+    type: 'project_create' | 'project_update';
     project_id: string;
 }
 
@@ -452,7 +353,7 @@ export interface AgentStatusEvent extends StreamEvent {
  * Message streaming event
  */
 export interface MessageEventBase extends StreamEvent {
-    type: StreamEventType
+    type: StreamEventType;
     content: string;
     message_id: string; // Added message_id for tracking deltas and completes
     order?: number; // Optional order property for message sorting
@@ -480,19 +381,12 @@ export interface FileEvent extends StreamEvent {
 }
 
 /**
- * Message streaming event
- */
-export interface TalkEvent extends MessageEventBase {
-    type: 'talk_start' | 'talk_delta' | 'talk_complete';
-}
-
-/**
  * Tool call streaming event
  */
 export interface ToolEvent extends StreamEvent {
     type: 'tool_start' | 'tool_delta' | 'tool_done';
-    tool_calls: ToolCall[];
-    results?: any;
+    tool_call: ToolCall;
+    result?: any;
 }
 
 /**
@@ -567,20 +461,6 @@ export interface ConsoleEvent extends StreamEvent {
     message_id?: string; // Optional reference to the message that generated this console output
 }
 
-/**
- * Interface for model usage data
- */
-export interface ModelUsage {
-    model: string;
-    cost?: number;
-    input_tokens?: number; // Made optional to match model_data.ts
-    output_tokens?: number; // Made optional to match model_data.ts
-    cached_tokens?: number;
-    image_count?: number; // Added to match model_data.ts
-    metadata?: Record<string, any>;
-    timestamp?: string | Date; // Support both string and Date types
-    isFreeTierUsage?: boolean; // Added flag for free tier usage
-}
 
 // New interface for the core cost data structure
 export interface CostUpdateData {
@@ -643,7 +523,6 @@ export type StreamingEvent =
     | AgentStatusEvent
     | MessageEvent
     | FileEvent
-    | TalkEvent
     | ToolEvent
     | ErrorEvent
     | CostUpdateEvent
@@ -819,35 +698,6 @@ export type RunnerConfig = {
     [stage: string]: RunnerStageConfig;
 };
 
-/**
- * Model provider interface
- */
-export interface ModelProvider {
-    createResponseStream(
-        model: string,
-        messages: ResponseInput,
-        agent: any
-    ): AsyncGenerator<StreamingEvent>;
-}
-
-/**
- * Model class identifier
- */
-export type ModelClassID =
-    | 'standard'
-    | 'mini'
-    | 'reasoning'
-    | 'reasoning_mini'
-    | 'monologue'
-    | 'metacognition'
-    | 'code'
-    | 'writing'
-    | 'summary'
-    | 'vision'
-    | 'vision_mini'
-    | 'search'
-    | 'image_generation'
-    | 'embedding';
 
 // --- Custom Signals for Task Flow Control ---
 
@@ -974,9 +824,6 @@ export type MessagePayloads = {
     message_start: Omit<MessageEvent, 'type'>;
     message_delta: Omit<MessageEvent, 'type'>;
     message_complete: Omit<MessageEvent, 'type'>;
-    talk_start: Omit<TalkEvent, 'type'>;
-    talk_delta: Omit<TalkEvent, 'type'>;
-    talk_complete: Omit<TalkEvent, 'type'>;
     audio_stream: Omit<AudioEvent, 'type'>;
     tool_start: Omit<ToolEvent, 'type'>;
     tool_delta: Omit<ToolEvent, 'type'>;

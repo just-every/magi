@@ -3,6 +3,7 @@
  */
 
 import CDP from 'chrome-remote-interface';
+import fs from 'fs';
 
 /**
  * Connects to the browser via CDP and opens the controller UI
@@ -19,7 +20,9 @@ export async function openUI(url: string): Promise<void> {
     }
 
     let cdpClient: CDP.Client | null = null; // Use Client type and allow null
-    const host = 'host.docker.internal';
+    // Detect if we're running locally or in Docker
+    const isLocal = !fs.existsSync('/app/db');
+    const host = isLocal ? 'localhost' : 'host.docker.internal';
     const port = parseInt(process.env.HOST_CDP_PORT || '9001', 10); // Ensure port is a number
 
     try {

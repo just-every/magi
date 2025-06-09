@@ -8,13 +8,13 @@ import path from 'path';
 import { AppSettings } from '../../types/index';
 
 // Directory to store persistent data
-// Use /external/host/magi-system/.server/ if available, otherwise fallback to local storage
-const externalPath = '/external/host/magi-system/.server/';
+// Use /external/host/magi/.server/ if available, otherwise fallback to local storage
+const externalPath = '/external/host/magi/.server/';
 const localPath = path.join(process.cwd(), 'dist/.server/magi_storage');
 
 // Check if external path is available
 const useExternalPath =
-    fs.existsSync('/external/host/magi-system') ||
+    fs.existsSync('/external/host/magi') ||
     fs.existsSync('/external/host');
 
 // Set the storage directory

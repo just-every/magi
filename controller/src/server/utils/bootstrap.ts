@@ -9,6 +9,8 @@ import {
     getProject,
     updateProject,
 } from './db_utils';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * Ensure external projects from PROJECT_REPOSITORIES environment variable exist in the database
@@ -34,6 +36,29 @@ async function ensureExternalProjects(): Promise<string[]> {
     console.log(
         `Found ${extIds.length} external projects in environment: ${extIds.join(', ')}`
     );
+
+    // Validate that each project directory exists
+    const missingProjects: string[] = [];
+    const basePath = '/external/host'; // This is where parent directory is mounted in container
+    
+    for (const projectId of extIds) {
+        const projectPath = path.join(basePath, projectId);
+        if (!fs.existsSync(projectPath)) {
+            missingProjects.push(projectId);
+        }
+    }
+
+    if (missingProjects.length > 0) {
+        const errorMsg = `ERROR: The following PROJECT_REPOSITORIES do not exist on the filesystem:\n` +
+            missingProjects.map(p => `  - ${p} (expected at: ${path.join(basePath, p)})`).join('\n') +
+            `\n\nPlease ensure these directories exist in the parent directory of the magi project, or remove them from PROJECT_REPOSITORIES.`;
+        
+        console.error('\n' + '='.repeat(80));
+        console.error(errorMsg);
+        console.error('='.repeat(80) + '\n');
+        
+        throw new Error(`Missing project directories: ${missingProjects.join(', ')}`);
+    }
 
     // Track newly created projects
     const newProjectIds: string[] = [];

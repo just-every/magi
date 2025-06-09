@@ -47,7 +47,36 @@ export async function initTelegramBot(
     processManager = procManager;
 
     try {
-        telegramBot = new TelegramBot(token, { polling: true });
+        // Configure bot with options to handle network issues
+        const botOptions: TelegramBot.ConstructorOptions = {
+            polling: {
+                interval: 2000, // Increase polling interval to reduce requests
+                autoStart: true,
+                params: {
+                    timeout: 10,
+                },
+            },
+            request: {
+                // Disable SSL verification if NODE_TLS_REJECT_UNAUTHORIZED is set
+                agentOptions: {
+                    rejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0',
+                },
+                // Set a longer timeout
+                timeout: 30000,
+            },
+        };
+
+        // Check if we're behind a corporate proxy/firewall
+        if (process.env.HTTPS_PROXY || process.env.HTTP_PROXY) {
+            console.log('[Telegram] Proxy detected, configuring bot for proxy environment');
+            const proxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+            botOptions.request = {
+                ...botOptions.request,
+                proxy,
+            };
+        }
+
+        telegramBot = new TelegramBot(token, botOptions);
         console.log('[Telegram] Bot started in polling mode');
 
         // Get bot info to log the bot username
@@ -134,6 +163,25 @@ function setupMessageHandlers(): void {
     // Handle polling errors
     telegramBot.on('polling_error', error => {
         console.error('[Telegram] Polling error:', error);
+        
+        // Check if this is a Cisco Umbrella or similar network filtering issue
+        if (error.code === 'EPARSE' && error.response) {
+            const response = error.response;
+            if (response.statusCode === 303 && response.headers?.server?.includes('Cisco')) {
+                console.error('[Telegram] Network security (Cisco Umbrella) is blocking Telegram API access');
+                console.error('[Telegram] This typically happens in corporate/restricted networks');
+                console.error('[Telegram] Solutions:');
+                console.error('  1. Configure HTTP_PROXY/HTTPS_PROXY environment variables');
+                console.error('  2. Use a VPN to bypass network restrictions');
+                console.error('  3. Disable Telegram integration by removing TELEGRAM_BOT_TOKEN');
+                
+                // Stop trying to poll to avoid spamming errors
+                if (telegramBot) {
+                    console.log('[Telegram] Stopping polling due to network restrictions');
+                    telegramBot.stopPolling();
+                }
+            }
+        }
     });
 
     // Handle webhook errors

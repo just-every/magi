@@ -117,7 +117,7 @@ Core Affect: ${affect}`;
                 cost: totalCost,
                 input_tokens,
                 output_tokens,
-                timestamp: new Date().toISOString(),
+                timestamp: new Date(),
             },
         };
         communicationManager.handleModelUsage(processId, costEvent);

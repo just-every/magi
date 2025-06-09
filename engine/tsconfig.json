@@ -1,0 +1,27 @@
+{
+    "compilerOptions": {
+        "target": "ESNext",
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+        "strict": false,
+        "baseUrl": "./",
+        "outDir": "./dist",
+        "sourceMap": true,
+        "declaration": false,
+        "removeComments": true,
+        "skipLibCheck": true,
+        "resolveJsonModule": true,
+        "forceConsistentCasingInFileNames": true,
+        "typeRoots": ["node_modules/@types", "src/types"],
+        "paths": {
+            "*": ["node_modules/*"],
+            "@types/*": ["src/types/*"],
+            "@just-every/ensemble": ["node_modules/@just-every/ensemble"],
+            "@just-every/ensemble/*": ["node_modules/@just-every/ensemble/*"]
+        }
+    },
+    "include": ["src/**/*"],
+    "exclude": ["node_modules", "dist", "src/**/*.test.ts", "src/**/test_mocks.ts"]
+}

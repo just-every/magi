@@ -4,6 +4,7 @@
 
 import { Pool } from 'pg';
 import * as process from 'process';
+import * as fs from 'fs';
 
 // Configure database connection
 let pool: Pool | null = null;
@@ -11,9 +12,13 @@ let pool: Pool | null = null;
 function getPool(): Pool {
     if (pool) return pool;
 
+    // Detect if we're running locally or in Docker
+    const isLocal = !fs.existsSync('/app/db');
+    const defaultHost = isLocal ? 'localhost' : 'host.docker.internal';
+
     // Set up DB connection config based on environment
     const config = {
-        host: process.env.DATABASE_HOST || 'host.docker.internal',
+        host: process.env.DATABASE_HOST || defaultHost,
         user: process.env.DATABASE_USER || 'postgres',
         password: process.env.DATABASE_PASSWORD || 'postgres',
         database: process.env.DATABASE_NAME || 'postgres',

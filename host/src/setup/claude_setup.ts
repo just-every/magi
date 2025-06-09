@@ -56,7 +56,7 @@ export async function setupClaudeAuth(): Promise<boolean> {
         const containerIdResult = await new Promise<string>(
             (resolve, reject) => {
                 exec(
-                    `docker run -d --rm -v claude_credentials:/claude_shared -it magi-system:latest sh -c "${setupCmd}"`,
+                    `docker run -d --rm -v claude_credentials:/claude_shared -it magi-engine:latest sh -c "${setupCmd}"`,
                     (error, stdout) => {
                         if (error) {
                             reject(error);

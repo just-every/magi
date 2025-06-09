@@ -1,5 +1,5 @@
 {
-  "root": "magi-system",
+  "root": "magi",
   "summary": "MAGI System is a modular, autonomous AI orchestration framework that coordinates specialized agents through a central Overseer running on Node.js. It uses a persistent chain of thought with intelligent model selection to solve complex tasks with minimal human intervention.",
   "primary_language": "TypeScript",
   "frameworks": [
@@ -13,13 +13,13 @@
   ],
   "entry_points": [
     "controller/src/server/server.ts",
-    "controller/src/client/client.tsx", 
-    "magi/src/magi.ts"
+    "controller/src/client/client.tsx",
+    "engine/src/magi.ts"
   ],
   "tests": [
     "test/",
     "test/playwright/",
-    "magi/src/utils/run_pty.test.ts"
+    "engine/src/utils/run_pty.test.ts"
   ],
   "build_commands": [
     "npm run build",
@@ -44,7 +44,7 @@
       ]
     },
     {
-      "path": "magi/",
+      "path": "engine/",
       "summary": "Core orchestration logic for agents with specialized implementations and model providers",
       "languages": ["TypeScript"],
       "important_files": [
@@ -129,7 +129,7 @@
       "all": "npm run build",
       "docker": "npm run build:docker",
       "controller": "cd controller && npm run build",
-      "magi": "cd magi && npm run build",
+      "engine": "cd engine && npm run build",
       "host": "npm run build:host"
     },
     "dev": "npm run dev",
@@ -161,12 +161,12 @@
         "/controller/src/client"
       ]
     },
-    "magi": {
+    "engine": {
       "description": "Agent runtime & model providers",
       "paths": [
-        "/magi/src/magi_agents",
-        "/magi/src/model_providers",
-        "/magi/src/utils"
+        "/engine/src/magi_agents",
+        "/engine/src/model_providers",
+        "/engine/src/utils"
       ]
     },
     "db": {
@@ -204,11 +204,11 @@
     "docker": [
       "/docker-compose.yml",
       "/controller/docker/Dockerfile",
-      "/magi/docker/Dockerfile"
+      "/engine/docker/Dockerfile"
     ],
     "configuration": [
       "/controller/tsconfig.json",
-      "/magi/tsconfig.json",
+      "/engine/tsconfig.json",
       "/controller/webpack.config.js",
       "/vitest.config.ts"
     ],
@@ -225,7 +225,7 @@
   },
   "project_structure": {
     "controller": "Web UI & container manager with React/Express/Socket.IO",
-    "magi": "Agent runtime & LLM model providers",
+    "task": "Agent runtime & LLM model providers",
     "host": "Browser bridge CLI for Chrome automation",
     "db": "PostgreSQL migrations and schema",
     "common": "Shared TypeScript types",

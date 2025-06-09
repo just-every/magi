@@ -18,7 +18,7 @@ services:
             - magi-network
 
     # Controller service - the main web interface and container manager
-    controller:
+    magi-controller:
         container_name: magi-controller
         build:
             context: ./
@@ -39,7 +39,7 @@ services:
             - ./.env
         environment:
             - PORT=3010
-            - HOST_HOSTNAME=controller # Use service name for internal communication
+            - HOST_HOSTNAME=magi-controller # Use service name for internal communication
             - NODE_ENV=development # Set environment to development
             - TZ=$(date +%Z) # Get host timezone - conversion handled in code
         networks:
@@ -49,23 +49,23 @@ services:
         restart: unless-stopped
 
     # Base service configuration for magi containers
-    magi-base:
-        image: magi-system:latest
+    magi-engine:
+        image: magi-engine:latest
         build:
             context: ./
-            dockerfile: ./magi/docker/Dockerfile
+            dockerfile: ./engine/docker/Dockerfile
             # Enable BuildKit features
             args:
                 BUILDKIT_INLINE_CACHE: 1
         volumes:
-            - ./magi/src:/app/src:rw # Mount source code for development hot reloading
+            - ./engine/src:/app/src:rw # Mount source code for development hot reloading
             - claude_credentials:/claude_shared:rw
             - magi_output:/magi_output:rw
             - custom_tools:/custom_tools:rw
         env_file:
             - ./.env
         environment:
-            - HOST_HOSTNAME=controller # Use service name instead of host.docker.internal
+            - HOST_HOSTNAME=magi-controller # Use service name instead of host.docker.internal
             - CONTROLLER_PORT=3010
             - TZ=$(date +%Z) # Get host timezone - conversion handled in code
         networks:

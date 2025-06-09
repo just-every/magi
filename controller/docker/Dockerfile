@@ -1,3 +1,12 @@
+###############################################################################
+# Stage 0 – Grab current `latest` tag numbers (runs quickly, every build)
+###############################################################################
+FROM node:23-slim AS latest-versions
+
+RUN set -e; \
+    npm view @just-every/ensemble       dist-tags.latest  > /tmp/ENSEMBLE_VER && \
+    npm view @just-every/task           dist-tags.latest  > /tmp/MIND_VER
+
 # --- Build Stage ---
 FROM node:23-slim AS builder
 
@@ -14,10 +23,11 @@ WORKDIR /build
 COPY ./common/ ./common/
 
 # Copy package files for controller
-COPY  ./controller/package.json ./controller/package-lock.json ./
+COPY  ./controller/package.json ./package.json
+COPY  ./controller/package-lock.json ./package-lock.json
 
 # Install ALL dependencies (including dev dependencies)
-RUN npm ci
+RUN npm install
 
 # --- Final Stage ---
 FROM node:23-slim
@@ -25,6 +35,8 @@ FROM node:23-slim
 # Install Docker CLI and other tools needed at runtime
 RUN apt-get update && \
     apt-get install -y ca-certificates curl gnupg rsync git && \
+    # Update ca-certificates to ensure we have the latest root certificates
+    update-ca-certificates && \
     install -m 0755 -d /etc/apt/keyrings && \
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
     chmod a+r /etc/apt/keyrings/docker.gpg && \
@@ -61,15 +73,19 @@ WORKDIR /app
 COPY --from=builder --chown=${USER_NAME}:${GROUP_NAME} /build/node_modules ./node_modules
 # Ensemble package is now installed from npm
 
+# Copy version files to force rebuild when packages update
+COPY --from=latest-versions /tmp/ENSEMBLE_VER /tmp/
+COPY --from=latest-versions /tmp/MIND_VER /tmp/
+
 # Copy the application source code
 # Changes here will invalidate cache from this point onwards
 COPY --chown=${USER_NAME}:${GROUP_NAME} ./controller/ ./
-COPY --chown=${USER_NAME}:${GROUP_NAME} ./common/shared-types.ts ./src/types/shared-types.ts
+COPY --chown=${USER_NAME}:${GROUP_NAME} ./common/ ../common/
 COPY --chown=${USER_NAME}:${GROUP_NAME} ./db/ ./db/
 COPY --chown=${USER_NAME}:${GROUP_NAME} ./templates/ ./templates/
 
 # Build the application (runs as root)
-RUN npm run build
+RUN npm run build:docker
 
 # Default command for development
 # We'll run as root to have Docker socket access

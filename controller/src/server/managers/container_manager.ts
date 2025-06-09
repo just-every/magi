@@ -47,7 +47,7 @@ export async function buildDockerImage(
         const tag = options.tag || 'latest';
         const dockerfilePath = path.resolve(
             __dirname,
-            '../../../../../magi/docker/Dockerfile'
+            '../../../../../engine/docker/Dockerfile'
         );
         const contextPath = path.resolve(__dirname, '../../../../../');
 
@@ -60,7 +60,7 @@ export async function buildDockerImage(
         const buildArgs = [
             'build',
             '-t',
-            `magi-system:${tag}`,
+            `magi-engine:${tag}`,
             '-f',
             dockerfilePath,
             contextPath,
@@ -171,12 +171,12 @@ async function prepareGitRepository(
 
         // Use git worktree for faster setup and shared storage
         console.log('Creating git worktree', hostPath, outputPath);
-        
+
         // First, ensure the main repo has no uncommitted changes that would block worktree
         try {
             // Check if the repository has any remotes configured
             const { stdout: remotes } = await execPromise(`git -C "${hostPath}" remote`);
-            
+
             if (remotes.trim()) {
                 // Only fetch if there are remotes configured
                 try {
@@ -189,10 +189,10 @@ async function prepareGitRepository(
         } catch (error) {
             console.warn('Could not check remotes, continuing without fetch:', error);
         }
-        
+
         // Create a unique branch name for this process
-        const branchName = `magi-${processId}-${Date.now()}`;
-        
+        const branchName = `task-${processId}-${Date.now()}`;
+
         // Try to use worktree first (much faster and shares git objects)
         try {
             await execPromise(`git -C "${hostPath}" worktree add "${outputPath}" -b ${branchName}`);
@@ -213,7 +213,7 @@ async function prepareGitRepository(
         const isWorktree = await execPromiseFallback(
             `git -C "${outputPath}" rev-parse --git-dir | grep -q worktrees`
         );
-        
+
         if (isWorktree.stderr) {
             // This is a clone, not a worktree - need to handle branch
             const branchExists = await execPromiseFallback(
@@ -438,7 +438,7 @@ export async function runProjectContainers(
         await execPromise(`docker build -t ${imageTag} ${projectPath}`);
 
         const containerName = validateContainerName(
-            `magi-${processId}-${projectId}`
+            `task-${processId}-${projectId}`
         );
         const { stdout: runOut } = await execPromise(
             `docker run -d --rm -P --name ${containerName} -v ${projectPath}:/app ${imageTag}`
@@ -483,7 +483,7 @@ export async function runDockerContainer(
         const projectRoot = path.resolve(process.cwd(), '..');
 
         // Generate container name and validate
-        const containerName = validateContainerName(`magi-${processId}`);
+        const containerName = validateContainerName(`task-${processId}`);
 
         // Use base64 encoding to avoid escaping issues entirely
         const base64Command = Buffer.from(command).toString('base64');
@@ -494,7 +494,7 @@ export async function runDockerContainer(
 
         // Create the docker run command using base64 encoded command
         // Get HOST_HOSTNAME from environment variable, fallback to docker service name
-        const hostName = process.env.HOST_HOSTNAME || 'controller';
+        const hostName = process.env.HOST_HOSTNAME || 'magi-controller';
 
         console.log('***** runDockerContainer', options);
 
@@ -581,10 +581,20 @@ export async function runDockerContainer(
 
         if (gitProjects.length > 0) {
             // Process each repo using git worktree/clone
-            const projectPromises = gitProjects.map(project =>
-                prepareGitRepository(processId, project)
-            );
-            await Promise.all(projectPromises);
+            const projectPromises = gitProjects.map(async project => {
+                try {
+                    return await prepareGitRepository(processId, project);
+                } catch (error) {
+                    console.error(`Failed to prepare git repository ${project}:`, error);
+                    console.log(`Continuing without project ${project}`);
+                    return null;
+                }
+            });
+            const results = await Promise.all(projectPromises);
+            // Filter out failed repositories
+            const successfulProjects = gitProjects.filter((_, index) => results[index] !== null);
+            // Update gitProjects to only include successful ones
+            gitProjects = successfulProjects;
         }
 
         // Simply use the environment's TZ variable or empty string
@@ -614,8 +624,8 @@ export async function runDockerContainer(
       -v custom_tools:/custom_tools:rw \
       -v /etc/timezone:/etc/timezone:ro \
       -v /etc/localtime:/etc/localtime:ro \
-      --network magi-system_magi-network \
-      magi-system:latest \
+      --network magi_magi-network \
+      magi-engine:latest \
       --tool ${tool || 'none'} \
       --base64 "${base64Command}"`;
 
@@ -647,7 +657,7 @@ export async function runDockerContainer(
  */
 export async function stopDockerContainer(processId: string): Promise<boolean> {
     try {
-        const containerName = validateContainerName(`magi-${processId}`);
+        const containerName = validateContainerName(`task-${processId}`);
 
         // First check if the container exists and is running
         try {
@@ -673,7 +683,7 @@ export async function stopDockerContainer(processId: string): Promise<boolean> {
         // Stop the container using docker stop command with a timeout (default is 10 seconds)
         // Use a shorter timeout of 2 seconds to speed up the shutdown process
         await execPromise(`docker stop --time=2 ${containerName}`);
-        
+
         // Clean up git worktrees for this process
         try {
             const projectsDir = path.join('/magi_output', processId, 'projects');
@@ -682,12 +692,12 @@ export async function stopDockerContainer(processId: string): Promise<boolean> {
                 for (const projectId of projects) {
                     const workTreePath = path.join(projectsDir, projectId);
                     const hostPath = path.join('/external/host', projectId);
-                    
+
                     // Check if this is a worktree
                     const isWorktree = await execPromiseFallback(
                         `git -C "${workTreePath}" rev-parse --git-dir | grep -q worktrees`
                     );
-                    
+
                     if (!isWorktree.stderr) {
                         // Remove the worktree
                         console.log(`Removing git worktree: ${workTreePath}`);
@@ -741,7 +751,7 @@ export function monitorContainerLogs(
     callback: (log: string) => void
 ): () => void {
     try {
-        const containerName = validateContainerName(`magi-${processId}`);
+        const containerName = validateContainerName(`task-${processId}`);
 
         // Start the log process (using spawn as it's easier to stream logs this way)
         const logProcess = spawn('docker', ['logs', '-f', containerName]);
@@ -800,9 +810,9 @@ export async function getRunningMagiContainers(): Promise<
     { id: string; containerId: string; command: string }[]
 > {
     try {
-        // Get list of running containers with name starting with 'magi-'
+        // Get list of running containers with name starting with 'task-'
         const { stdout } = await execPromise(
-            "docker ps -a --filter 'name=magi-' --filter 'status=running' --format '{{.ID}}|{{.Names}}|{{.Command}}'"
+            "docker ps -a --filter 'name=task-' --filter 'status=running' --format '{{.ID}}|{{.Names}}|{{.Command}}'"
         );
 
         if (!stdout.trim()) {
@@ -817,8 +827,8 @@ export async function getRunningMagiContainers(): Promise<
                 .map(line => {
                     const [containerId, name, command] = line.split('|');
 
-                    // Extract process ID from name (remove 'magi-' prefix)
-                    const id = name.replace('magi-', '');
+                    // Extract process ID from name (remove 'task-' prefix)
+                    const id = name.replace('task-', '');
 
                     // Extract original command (it's in the format 'python -m... "command"')
                     const originalCommandMatch = command.match(/"(.+)"$/);
@@ -851,38 +861,38 @@ export async function getRunningMagiContainers(): Promise<
  */
 export async function cleanupAllContainers(): Promise<boolean> {
     try {
-        // First approach: Stop any containers with magi-AI prefix (the ones we create for processes)
+        // First approach: Stop any containers with task-AI prefix (the ones we create for processes)
         try {
             console.log('Attempt 1: Stopping all AI process containers');
             const stopAICommand =
-                "docker ps -a --filter 'name=magi-AI' -q | xargs -r docker stop --time=2 2>/dev/null || true";
+                "docker ps -a --filter 'name=task-AI' -q | xargs -r docker stop --time=2 2>/dev/null || true";
             await execPromise(stopAICommand);
 
             // Force remove those containers
             const removeAICommand =
-                "docker ps -a --filter 'name=magi-AI' -q | xargs -r docker rm -f 2>/dev/null || true";
+                "docker ps -a --filter 'name=task-AI' -q | xargs -r docker rm -f 2>/dev/null || true";
             await execPromise(removeAICommand);
 
             // Print what containers are still running
             console.log('Post AI cleanup container check:');
             await execPromise(
-                "docker ps --filter 'name=magi-AI' --format '{{.Names}}' | xargs -r echo 'Still running: '"
+                "docker ps --filter 'name=task-AI' --format '{{.Names}}' | xargs -r echo 'Still running: '"
             );
         } catch (commandError) {
             console.error('Error during AI container cleanup:', commandError);
         }
 
-        // Second approach: Try to clean up all magi- containers
+        // Second approach: Try to clean up all task- containers
         try {
-            console.log('Attempt 2: Stopping all containers with magi- prefix');
-            // First attempt to stop all containers with name starting with magi- with a 2 second timeout
+            console.log('Attempt 2: Stopping all containers with task- prefix');
+            // First attempt to stop all containers with name starting with task- with a 2 second timeout
             const stopCommand =
-                "docker ps -a --filter 'name=magi-' -q | xargs -r docker stop --time=2 2>/dev/null || true";
+                "docker ps -a --filter 'name=task-' -q | xargs -r docker stop --time=2 2>/dev/null || true";
             await execPromise(stopCommand);
 
-            // Then try to forcefully remove any containers with the magi-system image
+            // Then try to forcefully remove any containers with the magi-engine image
             const removeCommand =
-                "docker ps -a --filter 'ancestor=magi-system:latest' -q | xargs -r docker rm -f 2>/dev/null || true";
+                "docker ps -a --filter 'ancestor=magi-engine:latest' -q | xargs -r docker rm -f 2>/dev/null || true";
             await execPromise(removeCommand);
         } catch (commandError) {
             console.error(
@@ -894,9 +904,9 @@ export async function cleanupAllContainers(): Promise<boolean> {
         // Third approach: More targeted explicit cleanup with container names
         try {
             console.log('Attempt 3: Explicit container cleanup by name');
-            // First, get both running and stopped containers with magi-AI prefix
+            // First, get both running and stopped containers with task-AI prefix
             const { stdout: aiContainerStdout } = await execPromise(
-                "docker ps -a --filter 'name=magi-AI' --format '{{.Names}}'"
+                "docker ps -a --filter 'name=task-AI' --format '{{.Names}}'"
             );
 
             if (aiContainerStdout.trim()) {
@@ -944,7 +954,7 @@ export async function cleanupAllContainers(): Promise<boolean> {
 
             // Next, get all other magi containers
             const { stdout } = await execPromise(
-                "docker ps -a --filter 'name=magi-' --format '{{.Names}}'"
+                "docker ps -a --filter 'name=task-' --format '{{.Names}}'"
             );
 
             if (stdout.trim()) {
@@ -993,7 +1003,7 @@ export async function cleanupAllContainers(): Promise<boolean> {
         try {
             console.log('Final verification of container cleanup');
             const { stdout: finalCheck } = await execPromise(
-                "docker ps -a --filter 'name=magi-' --format '{{.Names}}'"
+                "docker ps -a --filter 'name=task-' --format '{{.Names}}'"
             );
 
             if (finalCheck.trim()) {
@@ -1003,7 +1013,7 @@ export async function cleanupAllContainers(): Promise<boolean> {
                 // One last desperate attempt with force
                 console.log('Performing final force cleanup');
                 await execPromise(
-                    "docker ps -a --filter 'name=magi-' -q | xargs -r docker rm -f"
+                    "docker ps -a --filter 'name=task-' -q | xargs -r docker rm -f"
                 );
             } else {
                 console.log('All containers successfully removed');
@@ -1021,7 +1031,7 @@ export async function cleanupAllContainers(): Promise<boolean> {
         try {
             console.log('Emergency cleanup after error');
             await execPromise(
-                "docker ps -a --filter 'name=magi-' -q | xargs -r docker rm -f 2>/dev/null || true"
+                "docker ps -a --filter 'name=task-' -q | xargs -r docker rm -f 2>/dev/null || true"
             );
         } catch (e) {
             // Ignore any errors in this last-ditch effort

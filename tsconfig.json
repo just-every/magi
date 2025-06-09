@@ -24,7 +24,7 @@
         }
     },
     "include": [
-        "magi/**/*",
+        "engine/**/*",
         "controller/**/*",
         "browser/**/*",
         "common/**/*",

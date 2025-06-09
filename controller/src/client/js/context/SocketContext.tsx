@@ -222,7 +222,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
         // Handle cost information updates
         socketInstance.on('cost:info', (costData: GlobalCostData) => {
-            console.log('***Received cost:info', costData);
+            //console.log('***Received cost:info', costData);
             setCostData(costData);
         });
 
@@ -301,6 +301,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     logs: '',
                     name: event.name,
                     agent: {
+                        agent_id: undefined, // Explicitly set as undefined initially
                         name: event.name,
                         messages: [initialMessage],
                         isTyping: true,
@@ -396,22 +397,53 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     agent?: AgentData
                 ): AgentData | undefined {
                     agent_id = agent_id || streamingEvent.agent?.agent_id;
-                    if (!agent_id) return;
 
                     const updatedAgent = agent || process.agent!;
-                    if (updatedAgent.agent_id === agent_id) {
-                        Object.assign(updatedAgent, values);
+                    const isCoreProcess = process.id === coreProcessId;
+                    const isMainProcessAgent = !agent && updatedAgent === process.agent;
+
+                    // For core process, be more permissive with updates
+                    if (!agent_id ||
+                        updatedAgent.agent_id === agent_id ||
+                        (isMainProcessAgent && !updatedAgent.agent_id) ||
+                        (isCoreProcess && isMainProcessAgent)) {
+                        // Set the agent_id if it's not set yet
+                        if (!updatedAgent.agent_id && agent_id) {
+                            updatedAgent.agent_id = agent_id;
+                        }
+                        // Validate values before assigning
+                        const validatedValues = { ...values };
+                        if ('name' in validatedValues && validatedValues.name != null) {
+                            // Ensure name is always a string
+                            validatedValues.name = typeof validatedValues.name === 'string'
+                                ? validatedValues.name
+                                : JSON.stringify(validatedValues.name);
+                        }
+                        Object.assign(updatedAgent, validatedValues);
                     } else if (updatedAgent.workers) {
+                        // Try to find the worker with the matching agent_id
+                        for (const [workerId, worker] of updatedAgent.workers) {
+                            if (worker.agent_id === agent_id) {
+                                // Update the worker directly
+                                const validatedValues = { ...values };
+                                if ('name' in validatedValues && validatedValues.name != null) {
+                                    validatedValues.name = typeof validatedValues.name === 'string'
+                                        ? validatedValues.name
+                                        : JSON.stringify(validatedValues.name);
+                                }
+                                Object.assign(worker, validatedValues);
+                                return updatedAgent;
+                            }
+                        }
+                        // If no direct match, try recursive search through worker's workers
                         const updatedWorkers = new Map();
                         updatedAgent.workers.forEach((worker, workerId) => {
-                            const updatedAgent = updateAgent(
+                            const updatedWorker = updateAgent(
                                 values,
                                 agent_id,
                                 worker
                             );
-                            if (updatedAgent) {
-                                updatedWorkers.set(workerId, updatedAgent);
-                            }
+                            updatedWorkers.set(workerId, updatedWorker || worker);
                         });
                         updatedAgent.workers = updatedWorkers;
                     }
@@ -427,25 +459,54 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     agent?: AgentData
                 ): AgentData | undefined {
                     agent_id = agent_id || streamingEvent.agent?.agent_id;
-                    if (!agent_id) return agent;
 
                     const updatedAgent = agent || process.agent!;
-                    if (updatedAgent.agent_id === agent_id) {
+
+                    // For the core process, always accept messages to the main agent if:
+                    // 1. No agent_id is provided (message is for the main agent)
+                    // 2. The agent doesn't have an ID yet (not initialized)
+                    // 3. The agent_id matches
+                    const isCoreProcess = process.id === coreProcessId;
+                    const isMainProcessAgent = !agent && updatedAgent === process.agent;
+
+                    // Accept the message if any of these conditions are true:
+                    // 1. No agent_id provided (message for main agent)
+                    // 2. Agent IDs match
+                    // 3. Main process agent with no agent_id yet
+                    // 4. Core process main agent (special handling)
+                    if (!agent_id ||
+                        updatedAgent.agent_id === agent_id ||
+                        (isMainProcessAgent && !updatedAgent.agent_id) ||
+                        (isCoreProcess && isMainProcessAgent)) {
+                        // Set the agent_id if it's not set yet
+                        if (!updatedAgent.agent_id && agent_id) {
+                            updatedAgent.agent_id = agent_id;
+                        }
                         if (!message.agent) {
                             message.agent = { ...updatedAgent }; // Save a copy of the agent for this particular message
                         }
                         updatedAgent.messages.push(message);
                     } else if (updatedAgent.workers) {
+                        // Try to find the worker with the matching agent_id
+                        for (const [workerId, worker] of updatedAgent.workers) {
+                            if (worker.agent_id === agent_id) {
+                                // Add message directly to the worker
+                                if (!message.agent) {
+                                    message.agent = { ...worker };
+                                }
+                                worker.messages.push(message);
+                                return updatedAgent;
+                            }
+                        }
+                        // If no direct match, try recursive search through worker's workers
                         const updatedWorkers = new Map();
                         updatedAgent.workers.forEach((worker, workerId) => {
-                            const newMessage = addMessage(
+                            const updatedWorker = addMessage(
                                 message,
                                 agent_id,
                                 worker
                             );
-                            if (newMessage) {
-                                updatedWorkers.set(workerId, newMessage);
-                            }
+                            updatedWorkers.set(workerId, updatedWorker || worker);
                         });
                         updatedAgent.workers = updatedWorkers;
                     }
@@ -601,15 +662,19 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     message: PartialClientMessage
                 ): AgentData | undefined {
                     const agent_id = streamingEvent.agent?.agent_id;
-                    const result = addMessage(completeMessage(message));
+                    const result = addMessage(completeMessage(message), agent_id);
 
                     // If message couldn't be added to an agent (agent not found), queue it
+                    // For core process without agent_id, don't queue - just add directly
                     if (!result && agent_id) {
                         queuePending(
                             process.pendingMessages,
                             agent_id,
                             message
                         );
+                    } else if (!result && event.id === coreProcessId) {
+                        // For core process without agent_id, add directly to main agent
+                        addMessage(completeMessage(message), undefined);
                     }
 
                     return result;
@@ -664,10 +729,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     }
                 } else if (eventType === 'tool_start') {
                     // Tool call message
-                    if ('tool_calls' in streamingEvent) {
-                        const toolCalls = streamingEvent.tool_calls || [];
-                        for (const toolCall of toolCalls) {
-                            const toolName = toolCall.function.name;
+                    if ('tool_call' in streamingEvent) {
+                        const toolCall = streamingEvent.tool_call;
+                        const toolName = toolCall.function.name;
                             let toolParams: Record<string, unknown> = {};
                             try {
                                 toolParams = JSON.parse(
@@ -705,42 +769,35 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                                 toolParams: toolParams,
                                 command: command,
                                 rawEvent: data,
-                            } as ToolCallMessage);
-                        }
+                            } as ToolCallMessage, streamingEvent.agent?.agent_id);
                     }
                 } else if (eventType === 'tool_done') {
                     // Tool result message
                     if (
-                        'tool_calls' in streamingEvent &&
-                        'results' in streamingEvent
+                        'tool_call' in streamingEvent &&
+                        'result' in streamingEvent
                     ) {
-                        const toolCalls = streamingEvent.tool_calls || [];
-                        const results = streamingEvent.results || {};
+                        const toolCall = streamingEvent.tool_call;
+                        const result = streamingEvent.result;
 
-                        for (const toolCall of toolCalls) {
-                            const toolName = toolCall.function.name;
-                            const result = results[toolCall.id] || {};
+                        const toolName = toolCall.function.name;
 
-                            addMessage({
-                                id: generateId(),
-                                processId: event.id,
-                                type: 'tool_result',
-                                content: `Result from ${toolName}`,
-                                timestamp: timestamp,
-                                toolName: toolName,
-                                toolCallId: toolCall.id,
-                                result: result,
-                                rawEvent: data,
-                            } as ToolResultMessage);
-                        }
+                        addMessage({
+                            id: generateId(),
+                            processId: event.id,
+                            type: 'tool_result',
+                            content: `Result from ${toolName}`,
+                            timestamp: timestamp,
+                            toolName: toolName,
+                            toolCallId: toolCall.id,
+                            result: result,
+                            rawEvent: data,
+                        } as ToolResultMessage, streamingEvent.agent?.agent_id);
                     }
                 } else if (
                     eventType === 'message_start' ||
                     eventType === 'message_delta' ||
                     eventType === 'message_complete' ||
-                    eventType === 'talk_start' ||
-                    eventType === 'talk_delta' ||
-                    eventType === 'talk_complete' ||
                     eventType === 'system_update'
                 ) {
                     // Assistant message
@@ -748,18 +805,28 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         const content = streamingEvent.content || '';
                         const thinking_content =
                             streamingEvent.thinking_content &&
-                            streamingEvent.thinking_content !== '{empty}'
+                            streamingEvent.thinking_content !== ''
                                 ? streamingEvent.thinking_content
                                 : '';
                         const message_id = streamingEvent.message_id || '';
 
                         if ((content || thinking_content) && message_id) {
                             let existingMessage = undefined;
-                            process.agent!.messages.forEach(message => {
-                                if (message.message_id === message_id) {
-                                    existingMessage = message;
-                                }
-                            });
+                            // Get agent_id from the streaming event
+                            const agent_id = streamingEvent.agent?.agent_id;
+                            // First check if we can find the message in the main agent
+                            const targetAgent = agent_id ?
+                                (process.agent!.agent_id === agent_id ? process.agent! :
+                                 process.agent!.workers?.get(agent_id)) :
+                                process.agent!;
+
+                            if (targetAgent) {
+                                targetAgent.messages.forEach(message => {
+                                    if (message.message_id === message_id) {
+                                        existingMessage = message;
+                                    }
+                                });
+                            }
                             if (!existingMessage && process.agent!.workers) {
                                 process.agent!.workers.forEach(worker => {
                                     worker.messages.forEach(message => {
@@ -828,8 +895,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                                             .join('');
                                 }
                             } else if (
-                                (eventType === 'message_complete' ||
-                                    eventType === 'talk_complete') &&
+                                eventType === 'message_complete' &&
                                 existingMessage
                             ) {
                                 // Update the existing message in place
@@ -841,38 +907,18 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                             }
 
                             if (existingMessage) {
-                                // Update in agent's messages array
-                                process.agent!.messages.forEach(
+                                // Update the message in the target agent
+                                targetAgent.messages.forEach(
                                     (message, index) => {
                                         if (message.message_id === message_id) {
-                                            process.agent!.messages[index] =
+                                            targetAgent.messages[index] =
                                                 completeMessage(updatedMessage);
                                         }
                                     }
                                 );
+                            }
 
-                                // Update in workers' messages
-                                if (process.agent!.workers) {
-                                    // Correctly iterate over a Map
-                                    process.agent!.workers.forEach(worker => {
-                                        worker.messages.forEach(
-                                            (message, messageIndex) => {
-                                                if (
-                                                    message.message_id ===
-                                                    message_id
-                                                ) {
-                                                    worker.messages[
-                                                        messageIndex
-                                                    ] =
-                                                        completeMessage(
-                                                            updatedMessage
-                                                        );
-                                                }
-                                            }
-                                        );
-                                    });
-                                }
-                            } else {
+                            if (!existingMessage) {
                                 // If this is a new message, add it to the agent's messages
                                 addPartialMessage(updatedMessage);
                             }
@@ -1028,11 +1074,11 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     eventType === 'message_complete' ||
                     eventType === 'tool_done'
                 ) {
-                    updateAgent({ isTyping: false });
+                    updateAgent({ isTyping: false }, streamingEvent.agent?.agent_id);
                 } else if (eventType === 'agent_status') {
                     updateAgent(
                         { statusEvent: streamingEvent },
-                        streamingEvent.agent_id
+                        streamingEvent.agent_id || streamingEvent.agent?.agent_id
                     );
                 }
 

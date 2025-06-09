@@ -1,21 +1,16 @@
 {
-    "name": "magi-system",
-    "version": "1.0.0",
-    "description": "MAGI System",
+    "name": "magi",
+    "version": "0.2.0",
+    "description": "Mostly Autonomous Generative Intelligence",
     "type": "module",
     "private": true,
-    "workspaces": [
-        "magi",
-        "controller",
-        "host"
-    ],
     "scripts": {
-        "postinstall": "if [ \"$INIT_CWD\" != \"$PWD\" ]; then exit 0; fi && cd controller && npm install && cd ../magi && npm install",
+        "postinstall": "if [ \"$INIT_CWD\" != \"$PWD\" ]; then exit 0; fi && cd controller && npm install && cd ../engine && npm install",
         "build": "npm run build:host && npm run build:docker",
-        "build:ci": "npm run build:host && cd controller && npm run build && cd ../magi && npm run build",
-        "build:docker": "docker compose build controller magi-base",
+        "build:ci": "npm run build:host && cd controller && npm run build && cd ../engine && npm run build",
+        "build:docker": "docker compose build magi-controller magi-engine",
         "build:host": "npx tsc -p host",
-        "dev": "npm run build:host && npm run browser:start && npm run build:docker && docker compose up",
+        "dev": "[ ! -f .env ] && npm run setup || true; npm run build:host && npm run browser:start && npm run build:docker && docker compose up",
         "browser:start": "node host/dist/browser/browser-control.js start",
         "browser:kill": "node host/dist/browser/browser-control.js kill",
         "browser:status": "node host/dist/browser/browser-control.js status",
@@ -24,8 +19,8 @@
         "browser:test-connection": "node host/dist/browser/test-cdp-connection.js",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
-        "lint": "eslint 'controller/src/**/*.{ts,tsx}' 'magi/src/**/*.{ts,tsx}' 'host/**/*.{ts,tsx}'",
-        "lint:fix": "eslint 'controller/src/**/*.{ts,tsx}' 'magi/src/**/*.{ts,tsx}' 'host/**/*.{ts,tsx}' --fix",
+        "lint": "eslint 'controller/src/**/*.{ts,tsx}' 'engine/src/**/*.{ts,tsx}' 'host/**/*.{ts,tsx}'",
+        "lint:fix": "eslint 'controller/src/**/*.{ts,tsx}' 'engine/src/**/*.{ts,tsx}' 'host/**/*.{ts,tsx}' --fix",
         "setup": "node host/setup.js",
         "setup:claude": "node host/dist/setup/claude_setup.js",
         "test": "vitest run",
@@ -37,48 +32,51 @@
         "test:e2e:install": "cd test/playwright && npm install && npx playwright install",
         "test:tool": "test/run-tool-docker.sh",
         "test:tools": "test/run-all-tools.sh",
-        "test:js-tools": "test/run-js-tools.sh"
+        "test:js-tools": "test/run-js-tools.sh",
+        "update:all": "npm update && cd controller && npm update && cd ../engine && npm update && cd .."
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/has-context/magi-system.git"
+        "url": "git+https://github.com/just-every/magi.git"
     },
     "overrides": {
         "tar-fs": "^2.1.2"
     },
     "devDependencies": {
         "@eslint/js": "^8.56.0",
-        "@types/node": "^22.14.0",
+        "@types/node": "^22.15.29",
         "@types/ws": "^8.18.1",
         "@typescript-eslint/eslint-plugin": "^7.0.0",
         "@typescript-eslint/parser": "^7.0.0",
-        "@vitest/coverage-v8": "^3.1.1",
+        "@vitest/coverage-v8": "^3.1.4",
         "@vitest/ui": "^3.1.1",
-        "eslint": "^8.56.0",
-        "eslint-config-prettier": "^10.1.2",
-        "eslint-plugin-prettier": "^5.2.6",
-        "jsdom": "^26.0.0",
+        "eslint": "^8.57.1",
+        "eslint-config-prettier": "^10.1.5",
+        "eslint-plugin-prettier": "^5.4.1",
+        "jsdom": "^26.1.0",
         "node-pg-migrate": "^7.9.1",
         "prettier": "^3.5.3",
-        "prettier-plugin-sh": "^0.17.2",
+        "prettier-plugin-sh": "^0.17.4",
         "ts-node": "^10.9.2",
-        "typescript": "^5.8.2",
-        "typescript-eslint": "^7.0.0",
+        "typescript": "^5.8.3",
+        "typescript-eslint": "^7.18.0",
         "vitest": "^3.1.1"
     },
     "dependencies": {
         "@anthropic-ai/sdk": "^0.51.0",
         "@google/genai": "^0.12.0",
-        "@types/pg": "^8.11.14",
+        "@just-every/ensemble": "^0.2.16",
+        "@just-every/task": "^0.2.4",
+        "@types/pg": "^8.15.2",
         "canvas": "^3.1.0",
-        "chrome-launcher": "^1.1.2",
+        "chrome-launcher": "^1.2.0",
         "chrome-remote-interface": "^0.33.3",
-        "openai": "^4.100.0",
         "dotenv": "^16.5.0",
-        "esbuild": "^0.25.4",
-        "pg": "^8.15.6",
+        "esbuild": "^0.25.5",
+        "openai": "^4.104.0",
+        "pg": "^8.16.0",
         "proper-lockfile": "^4.1.2",
         "simple-git": "^3.27.0",
-        "ws": "^8.18.1"
+        "ws": "^8.18.2"
     }
 }

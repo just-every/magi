@@ -69,7 +69,7 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                         padding: '1rem',
                     }}
                 >
-                    <ul className="nav nav-tabs small mb-2">
+                    <ul className="nav nav-pills nav-fill small mb-3">
                         <li className="nav-item">
                             <button
                                 className={`nav-link${

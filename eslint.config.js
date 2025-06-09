@@ -21,7 +21,7 @@ export default [
                 project: [
                     './tsconfig.json',
                     './controller/tsconfig.json',
-                    './magi/tsconfig.json',
+                    './engine/tsconfig.json',
                     'browser/bridge/tsconfig.json',
                 ],
             },
@@ -45,7 +45,7 @@ export default [
             '**/*.js',
             '**/*.js.map',
         ],
-        files: ['controller/src/**/*.ts', 'magi/src/**/*.ts'],
+        files: ['controller/src/**/*.ts', 'engine/src/**/*.ts'],
     },
     // Add Prettier plugin rules
     {

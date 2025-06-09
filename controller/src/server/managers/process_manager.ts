@@ -467,7 +467,7 @@ export class ProcessManager {
      * @param processId - The process ID to check status for
      */
     setupContainerStatusChecking(processId: string): void {
-        const containerName = `magi-${processId}`;
+        const containerName = `task-${processId}`;
 
         // Set up periodic container status checking
         const statusCheckIntervalMs = 5000; // Check every 5 seconds
@@ -752,17 +752,17 @@ export class ProcessManager {
             }
         }
 
-        // Step 2: Get ALL containers with "magi-AI" name prefix, not just the ones we're tracking
+        // Step 2: Get ALL containers with "task-AI" name prefix, not just the ones we're tracking
         // This ensures we also catch containers that might have been created but not fully tracked
         try {
             const { stdout } = await execPromise(
-                "docker ps -a --filter 'name=magi-AI' --format '{{.Names}}'"
+                "docker ps -a --filter 'name=task-AI' --format '{{.Names}}'"
             );
 
             if (stdout.trim()) {
                 const containerNames = stdout.trim().split('\n');
                 const containerIds = containerNames.map(name =>
-                    name.replace('magi-', '')
+                    name.replace('task-', '')
                 );
 
                 console.log(
@@ -788,7 +788,7 @@ export class ProcessManager {
 
                 // Mark all related processes as terminated
                 for (const containerName of containerNames) {
-                    const processId = containerName.replace('magi-', '');
+                    const processId = containerName.replace('task-', '');
                     if (this.processes[processId]) {
                         this.processes[processId].status = 'terminated';
 
@@ -872,14 +872,14 @@ export class ProcessManager {
         // Step 4: Final check to make sure ALL containers are really gone
         try {
             const { stdout } = await execPromise(
-                "docker ps --filter 'name=magi-AI' -q"
+                "docker ps --filter 'name=task-AI' -q"
             );
             if (stdout.trim()) {
                 console.log(
                     `Found ${stdout.trim().split('\n').length} containers still running, forcing removal...`
                 );
                 await execPromise(
-                    "docker ps --filter 'name=magi-AI' -q | xargs -r docker rm -f"
+                    "docker ps --filter 'name=task-AI' -q | xargs -r docker rm -f"
                 );
             } else {
                 console.log(

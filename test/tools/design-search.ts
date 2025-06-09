@@ -30,7 +30,7 @@ const engines = [
 ];
 
 
-import { DesignSearchEngine, design_search, smart_design } from '../../magi/src/utils/design_search.js';
+import { DesignSearchEngine, design_search, smart_design } from '../../engine/src/utils/design_search.js';
 
 export default async function designSearchTest(options: ToolsOptions = {}): Promise<ToolResult> {
   const { verbose = false, engine, limit = 9, query = "customer support homepage" } = options;

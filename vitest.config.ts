@@ -20,7 +20,7 @@ export default defineConfig({
         include: [
             // Paths for all test files across the monorepo
             'ensemble/**/*.{test,spec}.{ts,tsx}',
-            'magi/src/**/*.{test,spec}.{ts,tsx}',
+            'engine/src/**/*.{test,spec}.{ts,tsx}',
             'controller/src/**/*.{test,spec}.{ts,tsx}',
             'browser/extension/src/**/*.{test,spec}.{ts,tsx}',
             'browser/bridge/**/*.{test,spec}.{ts,tsx}',
@@ -29,7 +29,7 @@ export default defineConfig({
         // Test aliasing and resolution configuration
         alias: {
             '@ensemble': path.resolve(__dirname, './ensemble'),
-            '@magi': path.resolve(__dirname, './magi/src'),
+            '@engine': path.resolve(__dirname, './engine/src'),
             '@controller': path.resolve(__dirname, './controller/src'),
             '@browser': path.resolve(__dirname, './browser'),
         },

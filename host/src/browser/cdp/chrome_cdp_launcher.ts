@@ -101,6 +101,7 @@ async function connectToExistingChrome(
             port,
             pid: pid || 0, // Ensure pid is a number (not undefined)
             process: null!, // We don't have the actual process object
+            remoteDebuggingPipes: null,
             kill: async () => {
                 if (pid) {
                     try {

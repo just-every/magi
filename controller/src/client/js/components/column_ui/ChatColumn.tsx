@@ -308,51 +308,6 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                 </div>
                             );
                         }
-                        // Check if toolCallMessage exists before accessing its properties
-                        if (
-                            toolCallMessage &&
-                            toolCallMessage.toolParams &&
-                            toolCallMessage.toolParams.open_urls
-                        ) {
-                            media = (
-                                toolCallMessage.toolParams.open_urls as string[]
-                            ).map((url: string, index: number) => {
-                                const isImage = isImageUrl(url);
-                                return (
-                                    <div key={index} className={`mt-2`}>
-                                        {isImage ? (
-                                            <img
-                                                src={url}
-                                                alt={`Media content ${index + 1}`}
-                                                style={{
-                                                    maxHeight: '300px',
-                                                    display: 'block',
-                                                    borderRadius: '0.5rem',
-                                                }}
-                                                className="border border-light-subtle"
-                                            />
-                                        ) : (
-                                            <a
-                                                href={url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className={`d-inline-block p-3 pb-0 rounded-top-3 bg-white text-black border border-light-subtle rounded-end-3 font-monospace`}
-                                                style={{
-                                                    textAlign: 'left',
-                                                    fontSize: '0.8em',
-                                                    backgroundColor:
-                                                        'rgb(255 255 255 / 35%) !important',
-                                                    borderColor:
-                                                        'rgb(255 255 255 / 65%) !important',
-                                                }}
-                                            >
-                                                {url}
-                                            </a>
-                                        )}
-                                    </div>
-                                );
-                            });
-                        }
 
                         return (
                             <div key={message.id} className="mb-4">
@@ -372,7 +327,11 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                     >
                                         {toolCallMessage
                                             ? toolCallMessage.command
-                                            : message.content}
+                                            : typeof message.content === 'string'
+                                                ? message.content
+                                                : typeof message.content === 'object'
+                                                    ? JSON.stringify(message.content, null, 2)
+                                                    : String(message.content)}
                                     </div>
                                 </div>
                                 {document}

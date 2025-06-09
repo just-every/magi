@@ -67,12 +67,12 @@ export async function checkDockerImageExists(
 ): Promise<boolean> {
     try {
         const images = await docker.listImages({
-            filters: { reference: [`magi-system:${tag}`] },
+            filters: { reference: [`magi-engine:${tag}`] },
         });
         return images.length > 0;
     } catch (error) {
         console.error(
-            `Error checking if Docker image magi-system:${tag} exists:`,
+            `Error checking if Docker image magi-engine:${tag} exists:`,
             error
         );
         return false;

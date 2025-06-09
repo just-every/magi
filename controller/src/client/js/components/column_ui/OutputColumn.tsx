@@ -38,7 +38,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
     if (selectedTool) {
         return (
             <div className="output-column h-100 overflow-auto p-3">
-                <h4>{selectedTool.name}</h4>
+                <h4>{typeof selectedTool.name === 'string' ? selectedTool.name : JSON.stringify(selectedTool.name)}</h4>
                 <pre style={{ whiteSpace: 'pre-wrap' }}>
                     {selectedTool.implementation || 'No implementation found.'}
                 </pre>
@@ -235,7 +235,10 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                 <div className="process-header pb-4 pt-1">
                     <div className="d-flex gap-2 justify-content-between align-items-start mb-2">
                         <h4 className="mb-2">
-                            {process.name || process.agent?.name || process.id}
+                            {(() => {
+                                const displayName = process.name || process.agent?.name || process.id;
+                                return typeof displayName === 'string' ? displayName : JSON.stringify(displayName);
+                            })()}
                         </h4>
                         <div className="d-flex gap-4 justify-content-end align-items-center">
                             <div>
@@ -544,7 +547,11 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
 
                         <div className="mt-2">
                             <i className="bi bi-code me-1"></i>{' '}
-                            {truncate(messages[0].content, 200)}
+                            {messages[0] && typeof messages[0].content === 'string' 
+                                ? truncate(messages[0].content, 200)
+                                : messages[0] && typeof messages[0].content === 'object'
+                                    ? truncate(JSON.stringify(messages[0].content), 200)
+                                    : 'No content available'}
                         </div>
                     </div>
                 </div>

@@ -24,10 +24,10 @@ Magi consists of four core components:
   - React/HTML/CSS frontend (UI at http://localhost:3010)
   - Manages Docker agent containers via Dockerode
 
-• **Magi Agents** (`magi/`)
+• **Magi Agents** (`engine/`)
   - TypeScript runtime executing chain-of-thought loops
   - Tool integrations: browser automation (CDP), shell, web search, code execution
-  - Runs in isolated Docker containers (`magi-base` image)
+  - Runs in isolated Docker containers (`magi-engine` image)
   - Supports multiple LLM providers with fallback and cost tracking
 
 • **Browser Bridge** (`host/`)
@@ -52,8 +52,8 @@ Magi consists of four core components:
 
 ```bash
 # Clone the repository
-git clone https://github.com/has-context/magi-system.git
-cd magi-system
+git clone https://github.com/just-every/magi.git
+cd magi
 
 # Install dependencies
 npm install
@@ -68,8 +68,8 @@ npm run setup
 ### Starting the System
 
 ```bash
-git clone https://github.com/has-context/magi-system.git
-cd magi-system
+git clone https://github.com/just-every/magi.git
+cd magi
 npm install
 npm run setup
 npm run dev
@@ -77,7 +77,7 @@ npm run dev
 
 This will:
 - Launch a detached CDP Chrome instance
-- Build Docker images (controller & magi-base)
+- Build Docker images (controller & magi-engine)
 - Start Postgres and controller (`docker compose up`)
 - Serve the web UI at http://localhost:3010
 
@@ -115,14 +115,14 @@ common/     Shared TS types & templates
 db/         Postgres migrations
 host/       Browser bridge CLI
 controller/ Web UI & container manager
-magi/       Agent runtime & model providers
+engine/     Agent runtime & model providers
 test/       E2E tests (Playwright)
 docker-compose.yml
 ```
 
 ### Development Workflow
 
-1. Edit code in `host/`, `controller/`, or `magi/`
+1. Edit code in `host/`, `controller/`, or `engine/`
 2. Lint & type-check:
    ```bash
    npm run lint
@@ -136,6 +136,44 @@ docker-compose.yml
    ```bash
    npm run dev
    ```
+
+### Development Options
+
+#### Docker Development (Full System)
+From the root directory:
+```bash
+npm run dev  # Builds and runs everything in Docker
+```
+This is the production-like environment with all services containerized.
+
+#### Local Development (Without Docker)
+
+For faster development iteration, you can run the controller and task modules directly:
+
+**Controller Development:**
+```bash
+cd controller
+cp .env.example .env  # First time only
+npm install           # First time only
+./start-dev.sh        # Or npm run dev
+```
+This starts the controller with auto-reload on file changes at http://localhost:3010
+
+**Engine (Agent) Development:**
+```bash
+cd engine
+cp .env.example .env  # Configure API keys
+npm install          # First time only
+./start-dev.sh       # Watch mode
+# Or run specific agent:
+./start-dev.sh --agent browser "search TypeScript"
+```
+
+**Note:** The package.json scripts in subdirectories have been updated:
+- `npm run dev` - For local development with hot reload
+- `npm run start:docker` - For Docker builds (used by root npm run dev)
+
+See `controller/README.dev.md` and `engine/README.dev.md` for detailed local development guides.
 
 ## Key Features
 

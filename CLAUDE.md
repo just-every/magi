@@ -5,7 +5,7 @@ MAGI System is a modular, autonomous AI orchestration framework. It coordinates 
 - controller/: Gateway between browser UI and Overseer (Node + TypeScript)
   - src/server/server.ts – Express/Socket.IO server entry
   - src/client/ – React UI code with components for messages, canvas, and columns
-- magi/: Core orchestration logic for agents
+- engine/: Core orchestration logic for agents
   - src/magi.ts – Main bootstrapping entry for the Overseer
   - src/magi_agents/ – Specialized agent implementations (browser, code, search, etc.)
   - src/model_providers/ – LLM providers (Claude, GPT, Gemini, Deepseek, Grok, OpenRouter)
@@ -39,6 +39,8 @@ npm test               # run unit tests (Vitest)
 npm run test:e2e       # run E2E tests (Playwright)
 npm run test:tools     # execute example custom tools
 npm run test:js-tools  # execute JavaScript tools
+npm run update:all     # update packages in root, controller, and engine directories
+                       # IMPORTANT: Claude should ALWAYS use this command when updating packages
 docker compose up -d   # spin up Postgres & pgvector
 ```
 
@@ -61,6 +63,7 @@ docker compose up -d   # spin up Postgres & pgvector
 - Conventional Commits required (e.g., "feat: add new agent capability")
 - PRs must pass CI and require at least one approving review
 - Keep PR descriptions detailed with testing steps
+- All packages under `@just-every/` are owned by this project - fix issues rather than work around them
 
 ## Developer Environment Setup
 1. `cp .env.example .env` and fill in API keys
@@ -69,6 +72,11 @@ docker compose up -d   # spin up Postgres & pgvector
 4. `docker compose up -d db`
 5. `npm run dev` – open http://localhost:3010
 
+## Package Management
+- **ALWAYS** use `npm run update:all` when updating packages - this ensures all workspaces (root, controller, task) are updated together
+- Never use `npm update` alone as it only updates the current directory
+- The project has multiple package.json files in different directories that must stay in sync
+
 ## Project-Specific Warnings
 - Do NOT commit real API keys. `.env` is git-ignored.
 - Heavy tasks may consume OpenAI/Anthropic quotas quickly.
@@ -76,21 +84,21 @@ docker compose up -d   # spin up Postgres & pgvector
 - Browser automation requires Chrome to be installed.
 
 ## Key Utility Functions / APIs
-- `magi/src/utils/runner.ts` – Core agent runner
-- `magi/src/utils/history.ts` – Conversation history management
-- `magi/src/utils/memory.ts` – Memory persistence
-- `magi/src/utils/custom_tool_utils.ts` – Dynamic tool creation
-- `magi/src/model_providers/` – LLM API wrappers
+- `engine/src/utils/runner.ts` – Core agent runner
+- `engine/src/utils/history.ts` – Conversation history management
+- `engine/src/utils/memory.ts` – Memory persistence
+- `engine/src/utils/custom_tool_utils.ts` – Dynamic tool creation
+- `engine/src/model_providers/` – LLM API wrappers
 - `controller/src/server/docker_interface.ts` – Container management
 
 ## Agent Implementation
-- Overseer: Central coordinator (magi/src/magi_agents/overseer_agent.ts)
-- Operator: Task breakdown and assignment (magi/src/magi_agents/operator_agent.ts)
-- Browser: Web interaction via CDP (magi/src/magi_agents/common_agents/browser_agent.ts)
-- Code: Programming across languages (magi/src/magi_agents/common_agents/code_agent.ts)
-- Search: Information retrieval (magi/src/magi_agents/common_agents/search_agent.ts)
-- Shell: System command execution (magi/src/magi_agents/common_agents/shell_agent.ts)
-- Reasoning: Complex problem solving (magi/src/magi_agents/common_agents/reasoning_agent.ts)
+- Overseer: Central coordinator (engine/src/magi_agents/overseer_agent.ts)
+- Operator: Task breakdown and assignment (engine/src/magi_agents/operator_agent.ts)
+- Browser: Web interaction via CDP (engine/src/magi_agents/common_agents/browser_agent.ts)
+- Code: Programming across languages (engine/src/magi_agents/common_agents/code_agent.ts)
+- Search: Information retrieval (engine/src/magi_agents/common_agents/search_agent.ts)
+- Shell: System command execution (engine/src/magi_agents/common_agents/shell_agent.ts)
+- Reasoning: Complex problem solving (engine/src/magi_agents/common_agents/reasoning_agent.ts)
 
 ## Special Features
 - MECH (Meta-cognition Ensemble Chain-of-thought Hierarchy) - Intelligent model selection

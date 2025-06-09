@@ -3,7 +3,7 @@
 
 # Only required directories
 !controller/
-!magi/
+!engine/
 !setup/
 !common/
 !db/
@@ -32,3 +32,8 @@
 
 # Very important we don't overwrite the node_modules build for the container
 **/node_modules
+
+# Ignore dist directories - they should be built inside the container
+**/dist
+controller/dist
+engine/dist

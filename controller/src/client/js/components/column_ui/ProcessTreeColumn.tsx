@@ -47,25 +47,6 @@ const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
             return processA.id.localeCompare(processB.id);
         });
 
-    // Debug logging to help identify worker visibility issues
-    React.useEffect(() => {
-        console.log('ProcessTreeColumn Debug:', {
-            totalProcesses: processes.size,
-            filteredProcesses: processList.length,
-            statusFilter,
-            processesWithWorkers: processList.filter(p => p.agent?.workers?.size > 0).map(p => ({
-                name: p.name || p.id,
-                workerCount: p.agent?.workers?.size || 0,
-                workers: p.agent?.workers ? Array.from(p.agent.workers.entries()).map(([id, w]) => ({
-                    id,
-                    name: w.name,
-                    hasStatus: !!w.statusEvent?.status,
-                    status: w.statusEvent?.status || 'no-status'
-                })) : []
-            }))
-        });
-    }, [processes, processList, statusFilter]);
-
     // Select a process or agent
     const handleSelect = (itemId: string) => {
         setSelectedItemId(itemId);
@@ -204,9 +185,9 @@ const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
                             >
                                 <div className="d-flex align-items-center">
                                     <span className="process-name fw-bold">
-                                        {process.name ||
-                                            process.agent?.name ||
-                                            process.id}
+                                        {typeof process.name === 'string' ? process.name :
+                                         typeof process.agent?.name === 'string' ? process.agent.name :
+                                         process.id}
                                     </span>
                                     <i
                                         className={`bi ${statusInfo.icon} ms-2`}
@@ -228,7 +209,7 @@ const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
                                         .filter(([, worker]) => {
                                             // If no status filter is applied, show all workers
                                             if (!statusFilter) return true;
-                                            
+
                                             // If parent process is visible, show all its workers
                                             // This ensures workers appear even before they have a status
                                             if (statusFilter.includes(process.status as ProcessStatus)) {
@@ -239,13 +220,13 @@ const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
                                                 // For active filter, show all workers of active processes
                                                 return true;
                                             }
-                                            
+
                                             // If parent is not in filter, check worker's own status
                                             const workerStatus = worker.statusEvent?.status as ProcessStatus;
                                             if (workerStatus && statusFilter.includes(workerStatus)) {
                                                 return true;
                                             }
-                                            
+
                                             return false;
                                         })
                                         .map(([workerId, worker]) => {
@@ -271,8 +252,7 @@ const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
                                                 >
                                                     <div className="d-flex align-items-center">
                                                         <span className="process-name fw-bold">
-                                                            {worker.name ||
-                                                                workerId}
+                                                            {typeof worker.name === 'string' ? worker.name : workerId}
                                                         </span>
                                                         <i
                                                             className={`bi ${agentStatusInfo.icon} ms-2`}

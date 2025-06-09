@@ -8,7 +8,7 @@ These are some of the higher priority tasks for the magi system.
   -- All communication (process <-> server <-> client) should use this interface
   -- Remove all other message passing code.
 
-- Simplify tools for magi/src/magi_agents/overseer_agent.ts
+- Simplify tools for engine/src/magi_agents/overseer_agent.ts
   -- Maintain all the functionality, but reduce some complexity.
   -- Combine tools with additional parameters to reduce token usage.
 

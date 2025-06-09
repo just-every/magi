@@ -60,13 +60,14 @@ export class CommunicationManager {
     private processCostData: Record<string, ProcessState> = {};
     private readonly LAST_MINUTE_WINDOW_MS = 60 * 1000;
     private eventHandlers: Map<string, EventHandler> = new Map();
+    private childToParentMap: Map<string, string> = new Map(); // Maps child processId to parent processId
 
     constructor(server: HttpServer, processManager: ProcessManager) {
         this.processManager = processManager;
         this.processManager.setCommunicationManager(this);
         this.storageDir = path.join(
             process.cwd(),
-            'dist/.server/magi_messages'
+            'dist/.server/task_messages'
         );
 
         // Add debug logging
@@ -99,12 +100,12 @@ export class CommunicationManager {
      */
     public handleWebSocketUpgrade(request: any, socket: any, head: any): void {
         // Extract process ID from URL path
-        // Expected format: /ws/magi/:processId
+        // Expected format: /ws/engine/:processId
         const urlPath = request.url || '';
         const pathParts = urlPath.split('/');
         const processId = pathParts[pathParts.length - 1];
 
-        if (!processId || processId === 'magi') {
+        if (!processId || processId === 'task') {
             console.error(
                 'Invalid WebSocket upgrade attempt - missing process ID'
             );
@@ -126,7 +127,7 @@ export class CommunicationManager {
                 // Get the processId from the WebSocket object
                 const processId = (ws as any).processId;
 
-                if (!processId || processId === 'magi') {
+                if (!processId || processId === 'task') {
                     console.error(
                         'Invalid WebSocket connection attempt - missing process ID'
                     );
@@ -734,11 +735,10 @@ export class CommunicationManager {
             );
         } else if (
             event.type === 'tool_start' &&
-            event.tool_calls &&
-            Array.isArray(event.tool_calls)
+            event.tool_call
         ) {
-            for (const toolCall of event.tool_calls) {
-                if (toolCall.function.name.startsWith('talk_to_')) {
+            const toolCall = event.tool_call;
+            if (toolCall.function.name.startsWith('talk_to_')) {
                     const toolParams: Record<string, unknown> = JSON.parse(
                         toolCall.function.arguments
                     );
@@ -759,32 +759,6 @@ export class CommunicationManager {
                         });
                     }
                 }
-            }
-        } else if (
-            event.type === 'tool_done' &&
-            event.results &&
-            typeof event.results === 'object'
-        ) {
-            // Process each result to fix output paths in result strings
-            const results = event.results as Record<string, any>;
-            for (const resultId in results) {
-                const result = results[resultId];
-
-                // Fix paths in string results
-                if (typeof result === 'string') {
-                    results[resultId] = this.processOutputPaths(result);
-                }
-
-                // Fix paths in object results with output property
-                else if (
-                    typeof result === 'object' &&
-                    result !== null &&
-                    'output' in result &&
-                    typeof result.output === 'string'
-                ) {
-                    result.output = this.processOutputPaths(result.output);
-                }
-            }
         } else if (event.type === 'cost_update' && 'usage' in event) {
             this.handleModelUsage(
                 processId,

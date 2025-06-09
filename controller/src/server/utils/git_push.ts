@@ -253,15 +253,15 @@ function safeFastForward(
                     '[git-push] Local and MAGI commits have diverged, cannot fast-forward'
                 );
                 console.warn(
-                    '[git-push] Creating branch magi/incoming instead'
+                    '[git-push] Creating branch task/incoming instead'
                 );
                 const timestamp = Date.now();
                 runGit(
                     hostPath,
-                    `branch magi/incoming-${timestamp} FETCH_HEAD`
+                    `branch task/incoming-${timestamp} FETCH_HEAD`
                 );
                 console.log(
-                    `[git-push] Created branch magi/incoming-${timestamp} pointing to FETCH_HEAD`
+                    `[git-push] Created branch task/incoming-${timestamp} pointing to FETCH_HEAD`
                 );
                 return;
             }
@@ -353,7 +353,7 @@ function safeFastForward(
                         '[git-push] Local and MAGI commits have diverged, cannot fast-forward'
                     );
                     console.warn(
-                        '[git-push] Restoring stashed changes and creating magi/incoming instead'
+                        '[git-push] Restoring stashed changes and creating task/incoming instead'
                     );
 
                     // Restore the stash since we're not fast-forwarding
@@ -369,24 +369,24 @@ function safeFastForward(
                     const timestamp = Date.now();
                     runGit(
                         hostPath,
-                        `branch magi/incoming-${timestamp} FETCH_HEAD`
+                        `branch task/incoming-${timestamp} FETCH_HEAD`
                     );
                     console.log(
-                        `[git-push] Created branch magi/incoming-${timestamp} pointing to FETCH_HEAD`
+                        `[git-push] Created branch task/incoming-${timestamp} pointing to FETCH_HEAD`
                     );
                 }
             } catch (stashErr) {
                 console.warn(
-                    '[git-push] Failed to stash changes, falling back to magi/incoming',
+                    '[git-push] Failed to stash changes, falling back to task/incoming',
                     stashErr
                 );
                 const timestamp = Date.now();
                 runGit(
                     hostPath,
-                    `branch magi/incoming-${timestamp} FETCH_HEAD`
+                    `branch task/incoming-${timestamp} FETCH_HEAD`
                 );
                 console.log(
-                    `[git-push] Created branch magi/incoming-${timestamp} pointing to FETCH_HEAD`
+                    `[git-push] Created branch task/incoming-${timestamp} pointing to FETCH_HEAD`
                 );
             }
             return;
@@ -398,11 +398,11 @@ function safeFastForward(
             console.warn(
                 `  ${conflictRisk.slice(0, 5).join(', ')}${conflictRisk.length > 5 ? '...' : ''}`
             );
-            console.warn('[git-push] Creating branch magi/incoming instead');
+            console.warn('[git-push] Creating branch task/incoming instead');
             const timestamp = Date.now();
-            runGit(hostPath, `branch magi/incoming-${timestamp} FETCH_HEAD`);
+            runGit(hostPath, `branch task/incoming-${timestamp} FETCH_HEAD`);
             console.log(
-                `[git-push] Created branch magi/incoming-${timestamp} pointing to FETCH_HEAD`
+                `[git-push] Created branch task/incoming-${timestamp} pointing to FETCH_HEAD`
             );
             return;
         }
@@ -411,13 +411,13 @@ function safeFastForward(
         // Create fallback branch so changes aren't lost
         try {
             const timestamp = Date.now();
-            runGit(hostPath, `branch magi/incoming-${timestamp} FETCH_HEAD`);
+            runGit(hostPath, `branch task/incoming-${timestamp} FETCH_HEAD`);
             console.log(
-                `[git-push] Created fallback branch magi/incoming-${timestamp} pointing to FETCH_HEAD`
+                `[git-push] Created fallback branch task/incoming-${timestamp} pointing to FETCH_HEAD`
             );
         } catch (branchErr) {
             console.error(
-                `[git-push] Also failed to create magi/incoming branch: ${branchErr}`
+                `[git-push] Also failed to create task/incoming branch: ${branchErr}`
             );
         }
         throw err;
@@ -437,11 +437,11 @@ function safeFastForward(
         console.warn(
             '[git-push] Local and MAGI commits have diverged, cannot fast-forward'
         );
-        console.warn('[git-push] Creating branch magi/incoming instead');
+        console.warn('[git-push] Creating branch task/incoming instead');
         const timestamp = Date.now();
-        runGit(hostPath, `branch magi/incoming-${timestamp} FETCH_HEAD`);
+        runGit(hostPath, `branch task/incoming-${timestamp} FETCH_HEAD`);
         console.log(
-            `[git-push] Created branch magi/incoming-${timestamp} pointing to FETCH_HEAD`
+            `[git-push] Created branch task/incoming-${timestamp} pointing to FETCH_HEAD`
         );
     }
 }
