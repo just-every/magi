@@ -63,7 +63,13 @@ function ensureGlobalExitHook() {
                 // Ask process to terminate gracefully
                 const exitCmd =
                     ptyExitCommands.get(instance) || DEFAULT_EXIT_COMMAND;
-                instance.write(`${exitCmd}\x1b\n\r`);
+                // Use multiple newline variations for better compatibility
+                instance.write(`${exitCmd}\r\n`);
+                setTimeout(() => instance.write('\r'), 50);
+                setTimeout(() => instance.write('\n'), 100);
+                setTimeout(() => instance.write('\x1b\r'), 150);
+                setTimeout(() => instance.write('\x1b\n'), 200);
+                setTimeout(() => instance.write('\x1b\n\r'), 250);
             } catch {
                 /* ignore errors during shutdown */
             }
@@ -810,7 +816,13 @@ function resumeAllSilenceTimeouts(): void {
                 if (ptyProcess) {
                     try {
                         const exitCommand = ptyExitCommands.get(ptyProcess) || DEFAULT_EXIT_COMMAND;
-                        ptyProcess.write(`${exitCommand}\x1b\n\r`);
+                        // Use the same newline variations as requestExit for consistency
+                        ptyProcess.write(`${exitCommand}\r\n`);
+                        setTimeout(() => ptyProcess.write('\r'), 50);
+                        setTimeout(() => ptyProcess.write('\n'), 100);
+                        setTimeout(() => ptyProcess.write('\x1b\r'), 150);
+                        setTimeout(() => ptyProcess.write('\x1b\n'), 200);
+                        setTimeout(() => ptyProcess.write('\x1b\n\r'), 250);
                     } catch (e) {
                         console.warn('[runPty] Error sending exit command:', e);
                     }
