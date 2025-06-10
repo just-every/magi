@@ -64,7 +64,7 @@ const ToolCallMessage: React.FC<ToolCallMessageProps> = ({
             toolCallParams = message.toolParams.trim();
         } else if (typeof message.toolParams === 'object') {
             // If it's an object, stringify it
-            toolCallParams = JSON.stringify(message.toolParams, null, '\t')
+            toolCallParams = JSON.stringify(message.toolParams, null, 4)
                 .replace(/^[\t ]*[{}][\t ]*(?=\r?\n|$)/gm, '')
                 .trim();
         }
@@ -110,7 +110,7 @@ const ToolCallMessage: React.FC<ToolCallMessageProps> = ({
                             {toolCallParams &&
                             toolCallParams !== '{}' &&
                             toolCallParams !== 'null'
-                                ? '\n\t' + toolCallParams + '\n'
+                                ? '\n    ' + toolCallParams + '\n'
                                 : ''}
                             )
                         </pre>

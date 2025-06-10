@@ -27,9 +27,26 @@ import { processTracker } from './process_tracker.js';
 import { addSystemMessage } from './history.js';
 
 import { truncateLargeValues } from './file_utils.js';
-import { pause, resume } from '@just-every/ensemble';
+import { pause, resume, getPauseController } from '@just-every/ensemble';
+import { sendToAllPtyProcesses } from './run_pty.js';
 
 let lastEventLogged = '';
+
+// Set up pause controller event handlers for code providers
+const pauseController = getPauseController();
+
+// Send escape sequences to pause/resume code providers
+pauseController.on('paused', () => {
+    // Send double escape to pause execution
+    sendToAllPtyProcesses('\x1b\x1b');
+    console.log('[Communication] Sent pause signal to all code providers');
+});
+
+pauseController.on('resumed', () => {
+    // Send "Please continue" with the extra characters to resume execution
+    sendToAllPtyProcesses('Please continue\x1b\n\r');
+    console.log('[Communication] Sent resume signal to all code providers');
+});
 
 export class CommunicationManager {
     private ws: WebSocket | null = null;

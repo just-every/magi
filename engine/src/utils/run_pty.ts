@@ -728,3 +728,19 @@ export function runPty(
 
     return { stream, kill, write };
 }
+
+/**
+ * Send a command to all active PTY processes
+ * Used for pausing/resuming code providers
+ */
+export function sendToAllPtyProcesses(command: string): void {
+    console.log(`[runPty] Sending command to ${activePtyProcesses.size} active PTY processes: ${JSON.stringify(command)}`);
+    
+    for (const ptyProcess of activePtyProcesses) {
+        try {
+            ptyProcess.write(command);
+        } catch (e) {
+            console.warn('[runPty] Error sending command to PTY process:', e);
+        }
+    }
+}
