@@ -38,6 +38,16 @@ const DEFAULT_EXIT_COMMAND = '/exit';
 // Map to store custom exit commands for each PTY
 const ptyExitCommands = new Map<pty.IPty, string>();
 
+// Map to store silence timeout handlers and remaining time when paused
+interface TimeoutInfo {
+    timeoutId: NodeJS.Timeout | null;
+    remainingTime: number;
+    lastActivity: number;
+    messageId: string;
+}
+const activeSilenceTimeouts = new Map<string, TimeoutInfo>();
+let pausedState = false;
+
 /**
  * Register global exit hooks to ensure all PTY processes are terminated
  * when the Node.js process exits.
@@ -226,6 +236,14 @@ export function runPty(
          */
         const resetSilenceTimeout = () => {
             if (silenceTimeoutId) clearTimeout(silenceTimeoutId);
+            
+            // Don't start a new timeout if we're paused
+            if (pausedState) {
+                silenceTimeoutId = null;
+                return;
+            }
+            
+            const now = Date.now();
             silenceTimeoutId = setTimeout(() => {
                 if (ptyExited) return; // Don't timeout if the PTY has already exited
 
@@ -238,7 +256,16 @@ export function runPty(
                 );
 
                 requestExit();
+                activeSilenceTimeouts.delete(messageId);
             }, silenceTimeoutMs);
+            
+            // Track this timeout in our map
+            activeSilenceTimeouts.set(messageId, {
+                timeoutId: silenceTimeoutId,
+                remainingTime: silenceTimeoutMs,
+                lastActivity: now,
+                messageId: messageId
+            });
         };
 
         /**
@@ -533,6 +560,8 @@ export function runPty(
                         // Clean up the ptyMap and exit command map
                         ptyMap.delete(messageId);
                         ptyExitCommands.delete(ptyProcess);
+                        // Clean up timeout tracking
+                        activeSilenceTimeouts.delete(messageId);
 
                         if (silenceTimeoutId) clearTimeout(silenceTimeoutId);
 
@@ -611,6 +640,8 @@ export function runPty(
                     );
                     ptyError = spawnError;
                     ptyExited = true;
+                    // Clean up timeout tracking
+                    activeSilenceTimeouts.delete(messageId);
                     if (silenceTimeoutId) clearTimeout(silenceTimeoutId);
                     if (batchTimerId) {
                         clearTimeout(batchTimerId);
@@ -699,6 +730,8 @@ export function runPty(
                             activePtyProcesses.delete(ptyProcess);
                             ptyMap.delete(messageId);
                             ptyExitCommands.delete(ptyProcess);
+                            // Clean up timeout tracking
+                            activeSilenceTimeouts.delete(messageId);
                         } catch (e) {
                             console.warn('[runPty] Error during kill:', e);
                         }
@@ -730,11 +763,68 @@ export function runPty(
 }
 
 /**
+ * Pause all active silence timeouts
+ */
+function pauseAllSilenceTimeouts(): void {
+    pausedState = true;
+    const now = Date.now();
+    
+    for (const [messageId, info] of activeSilenceTimeouts) {
+        if (info.timeoutId) {
+            clearTimeout(info.timeoutId);
+            info.timeoutId = null;
+            // Calculate remaining time
+            const elapsed = now - info.lastActivity;
+            info.remainingTime = Math.max(0, info.remainingTime - elapsed);
+            console.log(`[runPty] Paused silence timeout for message ${messageId}, remaining time: ${info.remainingTime}ms`);
+        }
+    }
+}
+
+/**
+ * Resume all paused silence timeouts
+ */
+function resumeAllSilenceTimeouts(): void {
+    pausedState = false;
+    const now = Date.now();
+    
+    for (const [messageId, info] of activeSilenceTimeouts) {
+        if (!info.timeoutId && info.remainingTime > 0) {
+            info.lastActivity = now;
+            info.timeoutId = setTimeout(() => {
+                console.error(`[runPty] PTY process timed out after pause/resume for message ${messageId}`);
+                // Find the PTY process and request exit
+                const ptyProcess = ptyMap.get(messageId);
+                if (ptyProcess) {
+                    try {
+                        const exitCommand = ptyExitCommands.get(ptyProcess) || DEFAULT_EXIT_COMMAND;
+                        ptyProcess.write(`${exitCommand}\x1b\n\r`);
+                    } catch (e) {
+                        console.warn('[runPty] Error sending exit command:', e);
+                    }
+                }
+                activeSilenceTimeouts.delete(messageId);
+            }, info.remainingTime);
+            console.log(`[runPty] Resumed silence timeout for message ${messageId}, will timeout in ${info.remainingTime}ms`);
+        }
+    }
+}
+
+/**
  * Send a command to all active PTY processes
  * Used for pausing/resuming code providers
  */
 export function sendToAllPtyProcesses(command: string): void {
     console.log(`[runPty] Sending command to ${activePtyProcesses.size} active PTY processes: ${JSON.stringify(command)}`);
+    
+    // Check if this is a pause or resume command
+    if (command === '\x1b\x1b') {
+        // Pause command - also pause timeouts
+        pauseAllSilenceTimeouts();
+    } else if (command.startsWith('Please continue')) {
+        // Resume command - also resume timeouts
+        resumeAllSilenceTimeouts();
+    }
     
     for (const ptyProcess of activePtyProcesses) {
         try {

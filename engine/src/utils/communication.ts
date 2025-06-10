@@ -37,9 +37,13 @@ const pauseController = getPauseController();
 
 // Send escape sequences to pause/resume code providers
 pauseController.on('paused', () => {
-    // Send double escape to pause execution
+    // Send double escape twice for better reliability
     sendToAllPtyProcesses('\x1b\x1b');
-    console.log('[Communication] Sent pause signal to all code providers');
+    // Small delay then send again
+    setTimeout(() => {
+        sendToAllPtyProcesses('\x1b\x1b');
+        console.log('[Communication] Sent pause signal (2x) to all code providers');
+    }, 100);
 });
 
 pauseController.on('resumed', () => {
