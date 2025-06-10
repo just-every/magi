@@ -70,7 +70,7 @@ export class AsyncQueue<T> {
             }
 
             // Wait for next item
-            const result = await new Promise<IteratorResult<T>>((resolve) => {
+            const result = await new Promise<IteratorResult<T>>(resolve => {
                 this.waiters.push(resolve);
             });
 

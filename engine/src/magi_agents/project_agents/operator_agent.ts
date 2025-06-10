@@ -8,9 +8,7 @@ import { getCommonTools } from '../../utils/index.js';
 import { createCodeAgent } from '../common_agents/code_agent.js';
 import { createReasoningAgent } from '../common_agents/reasoning_agent.js';
 import { updateProject, getProject } from '../../utils/db_utils.js';
-import {
-    Agent,createToolFunction
-} from '@just-every/ensemble';
+import { Agent, createToolFunction } from '@just-every/ensemble';
 import { MAGI_CONTEXT } from '../constants.js';
 import { Project } from '../../types/shared-types.js';
 import { ResponseInput } from '@just-every/ensemble';

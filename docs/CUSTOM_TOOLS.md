@@ -92,7 +92,7 @@ console.log(result);
 
 The system will automatically include relevant custom tools when:
 
-1. Running an agent via `mindTask` (auto-discovery during embedding generation)
+1. Running an agent via `runTask` (auto-discovery during embedding generation)
 2. Manually registering tools with an agent:
    ```typescript
    import { registerRelevantCustomTools } from './utils/index.js';

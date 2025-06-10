@@ -3,11 +3,11 @@
  */
 
 import {
-    Agent,registerExternalModel,
+    Agent,
+    registerExternalModel,
     ModelProvider as EnsembleModelProvider,
     ProviderStreamEvent,
-    overrideModelClass
-
+    overrideModelClass,
 } from '@just-every/ensemble';
 import { claudeCodeProvider } from '../code_providers/claude_code.js';
 import { codexProvider } from '../code_providers/codex.js';
@@ -15,7 +15,9 @@ import { ModelProvider as MagiModelProvider } from '../types/shared-types.js';
 /**
  * Create a wrapper that adapts a magi ModelProvider to ensemble's ModelProvider interface
  */
-function createProviderAdapter(provider: MagiModelProvider): EnsembleModelProvider {
+function createProviderAdapter(
+    provider: MagiModelProvider
+): EnsembleModelProvider {
     return {
         async *createResponseStream(
             messages: any,
@@ -23,7 +25,11 @@ function createProviderAdapter(provider: MagiModelProvider): EnsembleModelProvid
             agent: Agent
         ): AsyncGenerator<ProviderStreamEvent> {
             // Use the magi provider's stream
-            const stream = provider.createResponseStream(messages, model, agent);
+            const stream = provider.createResponseStream(
+                messages,
+                model,
+                agent
+            );
 
             // Convert each event from magi's StreamingEvent to ensemble's ProviderStreamEvent
             for await (const event of stream) {
@@ -31,7 +37,7 @@ function createProviderAdapter(provider: MagiModelProvider): EnsembleModelProvid
                 // We just need to ensure the type is compatible
                 yield event as unknown as ProviderStreamEvent;
             }
-        }
+        },
     };
 }
 
@@ -92,8 +98,10 @@ export function registerCodeProviders(): void {
     // Override the code model class to use our custom providers
     overrideModelClass('code', {
         models: ['claude-code', 'codex'],
-        random: false // Always prefer claude-code first
+        random: false, // Always prefer claude-code first
     });
 
-    console.log('[MAGI] Overrode code model class to use claude-code and codex');
+    console.log(
+        '[MAGI] Overrode code model class to use claude-code and codex'
+    );
 }

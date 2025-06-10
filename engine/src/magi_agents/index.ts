@@ -12,8 +12,9 @@ import { createShellAgent } from './common_agents/shell_agent.js';
 import { createDesignAgent } from './web_agents/design_agent.js';
 import { createOverseerAgent } from './overseer_agent.js';
 import {
-    Agent,ModelClassID,
-    type ProviderStreamEvent
+    Agent,
+    ModelClassID,
+    type ProviderStreamEvent,
 } from '@just-every/ensemble';
 import type { MagiAgent } from '../types/shared-types.js';
 import { createOperatorAgent } from './operator_agent.js';

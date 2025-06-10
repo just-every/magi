@@ -3,7 +3,7 @@
  * Provides backward compatibility wrapper for the new streaming mind API
  */
 
-import { mindTask as mechRunMECH } from '@just-every/task';
+import { runTask as mechRunMECH } from '@just-every/task';
 import { quick_llm_call } from '../utils/llm-utils.js';
 import type { ProviderStreamEvent, ModelUsage, ResponseInput } from '@just-every/ensemble';
 export { Agent } from '@just-every/ensemble';
@@ -24,9 +24,9 @@ export interface MechResult {
  * and returns the expected result format
  */
 /**
- * Export the streaming version of mindTask for direct use
+ * Export the streaming version of runTask for direct use
  */
-export { mindTask as runMECHStreaming } from '@just-every/task';
+export { runTask as runMECHStreaming } from '@just-every/task';
 
 export async function runMECH(agent: any, content: string): Promise<MechResult> {
     try {

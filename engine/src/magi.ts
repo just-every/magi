@@ -35,8 +35,12 @@ import {
 } from './utils/communication.js';
 import { move_to_working_dir, set_file_test_mode } from './utils/file_utils.js';
 import { costTracker } from './utils/cost_tracker.js';
-import { Agent, ProviderStreamEvent, setEventHandler } from '@just-every/ensemble';
-import { mindTask } from '@just-every/task';
+import {
+    Agent,
+    ProviderStreamEvent,
+    setEventHandler,
+} from '@just-every/ensemble';
+import { runTask } from '@just-every/task';
 
 // Temporary workaround for runThoughtDelay - mind now handles delays internally
 async function runThoughtDelay(): Promise<void> {
@@ -319,7 +323,9 @@ async function main(): Promise<void> {
     }
 
     // Register custom code providers with ensemble
-    const { registerCodeProviders } = await import('./utils/register_code_providers.js');
+    const { registerCodeProviders } = await import(
+        './utils/register_code_providers.js'
+    );
     registerCodeProviders();
 
     // Verify API keys for model providers
@@ -391,16 +397,22 @@ async function main(): Promise<void> {
 
             try {
                 console.log('[DEBUG] Agent name:', agent.name);
-                console.log('[DEBUG] Agent has workers:', agent.workers?.length || 0);
+                console.log(
+                    '[DEBUG] Agent has workers:',
+                    agent.workers?.length || 0
+                );
 
                 // Process the mind task stream
-                const mindStream = mindTask(agent, promptText);
+                const runTaskStream = runTask(agent, promptText);
 
-                for await (const event of mindStream) {
+                for await (const event of runTaskStream) {
                     // Check for task completion or error
                     if (event.type === 'tool_start' && 'tool_call' in event) {
                         const toolName = event.tool_call.function.name;
-                        if (toolName === 'task_complete' || toolName === 'task_fatal_error') {
+                        if (
+                            toolName === 'task_complete' ||
+                            toolName === 'task_fatal_error'
+                        ) {
                             taskCompleted = true;
                         }
                     } else if (event.type === 'error' && 'error' in event) {
@@ -410,7 +422,11 @@ async function main(): Promise<void> {
 
                 // Log task completion with timing
                 const durationSec = (Date.now() - startTime) / 1000;
-                const status = error ? 'error' : (taskCompleted ? 'complete' : 'incomplete');
+                const status = error
+                    ? 'error'
+                    : taskCompleted
+                      ? 'complete'
+                      : 'incomplete';
                 console.log(`Task ${status}: ${error ? 'failure' : 'success'}`);
                 console.log(`Duration: ${durationSec.toFixed(1)}s`);
                 // Cost is tracked by ensemble's cost tracker

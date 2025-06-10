@@ -5,7 +5,11 @@ import fs from 'fs/promises'; // Use promises for async file operations
 import path from 'path';
 import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
-import { ResponseInput, ToolFunction, createToolFunction } from '@just-every/ensemble';
+import {
+    ResponseInput,
+    ToolFunction,
+    createToolFunction,
+} from '@just-every/ensemble';
 import { Runner } from './runner.js';
 import { createSummaryAgent } from '../magi_agents/common_agents/summary_agent.js';
 import { get_output_dir } from './file_utils.js'; // Import get_output_dir

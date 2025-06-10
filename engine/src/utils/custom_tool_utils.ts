@@ -13,7 +13,11 @@ import { createToolFunction } from '@just-every/ensemble';
 // Import only what we use from model_data.js
 import { getHelperDescriptions } from './tool_context.js';
 import { quick_llm_call } from './llm_call_utils.js';
-import { ensembleEmbed, ToolParameterType, ToolFunction } from '@just-every/ensemble';
+import {
+    ensembleEmbed,
+    ToolParameterType,
+    ToolFunction,
+} from '@just-every/ensemble';
 import {
     CustomTool,
     addCustomTool,
@@ -1287,7 +1291,9 @@ export async function CUSTOM_TOOL(
         const description = `${problem} -> ${result}`;
 
         // Generate embedding for description once and reuse
-        const embedding = await ensembleEmbed(description, { model: 'text-embedding-3-small' });
+        const embedding = await ensembleEmbed(description, {
+            model: 'text-embedding-3-small',
+        });
 
         // ------------------------------------------------------------------
         // 1️⃣  Existing-tool discovery phase (unless force_new is true)
@@ -1569,7 +1575,9 @@ export async function modify_tool(
             }
 
             // Generate embedding for the new description
-            const embedding = await ensembleEmbed(generatedTool.description, { model: 'text-embedding-3-small' });
+            const embedding = await ensembleEmbed(generatedTool.description, {
+                model: 'text-embedding-3-small',
+            });
 
             // Store the modified tool in the database with incremented version
             const customTool: CustomTool = {

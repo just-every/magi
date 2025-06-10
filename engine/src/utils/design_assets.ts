@@ -1,8 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import {
-    Agent,ResponseInput 
-} from '@just-every/ensemble';
+import { Agent, ResponseInput } from '@just-every/ensemble';
 import {
     DESIGN_ASSETS_DIR,
     createNumberedGrid,

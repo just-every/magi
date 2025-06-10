@@ -5,9 +5,7 @@
  * Specialized in the full-stack website delivery workflow
  */
 
-import {
-    Agent,ResponseInput
-} from '@just-every/ensemble';
+import { Agent, ResponseInput } from '@just-every/ensemble';
 import {
     addBrowserStatus,
     getBrowserTools,

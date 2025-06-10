@@ -42,7 +42,9 @@ pauseController.on('paused', () => {
     // Small delay then send again
     setTimeout(() => {
         sendToAllPtyProcesses('\x1b\x1b');
-        console.log('[Communication] Sent pause signal (2x) to all code providers');
+        console.log(
+            '[Communication] Sent pause signal (2x) to all code providers'
+        );
     }, 100);
 });
 
@@ -65,7 +67,9 @@ pauseController.on('resumed', () => {
     setTimeout(() => {
         sendToAllPtyProcesses('\x1b\n\r');
     }, 250);
-    console.log('[Communication] Sent resume signal with multiple newline variations to all code providers');
+    console.log(
+        '[Communication] Sent resume signal with multiple newline variations to all code providers'
+    );
 });
 
 export class CommunicationManager {
@@ -275,7 +279,6 @@ export class CommunicationManager {
      * Send a message to the controller
      */
     sendMessage(message: MagiMessage): void {
-
         // Always add to history (except in test mode and delta)
         if (
             !this.testMode &&

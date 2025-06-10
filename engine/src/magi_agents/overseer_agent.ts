@@ -33,7 +33,7 @@ function getThoughtTools() {
                     type: 'string',
                     description: 'The delay in seconds',
                     enum: THOUGHT_DELAYS,
-                } as ToolParameter
+                } as ToolParameter,
             },
             undefined,
             'set_thought_delay'
@@ -178,7 +178,7 @@ export function createOverseerAgent(): Agent {
         let indexOfLastCommand: number | undefined;
         let indexOfLastTalk: number | undefined;
 
-        if(agent.modelSettings?.tool_choice) {
+        if (agent.modelSettings?.tool_choice) {
             // Ensure that we don't force the same tool every time
             delete agent.modelSettings.tool_choice;
         }
@@ -248,7 +248,10 @@ export function createOverseerAgent(): Agent {
                 type: 'function',
                 function: { name: talkToolName },
             };
-            console.log('*** SET tool_choice ***', agent.modelSettings.tool_choice);
+            console.log(
+                '*** SET tool_choice ***',
+                agent.modelSettings.tool_choice
+            );
         } else if (
             indexOfLastTalk &&
             (!indexOfLastCommand || indexOfLastCommand < indexOfLastTalk) &&
@@ -403,7 +406,7 @@ Example thought header:
                 agent.historyThread
             );
         },
-        onToolResult: async (result) => {
+        onToolResult: async result => {
             await addHistory(
                 {
                     id: result.toolCall.id,

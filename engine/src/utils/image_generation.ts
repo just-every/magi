@@ -174,12 +174,27 @@ async function generate_image_raw(
                     prompt,
                     { model: 'gpt-image-1' },
                     {
-                        quality: quality as 'standard' | 'low' | 'high' | 'medium' | 'hd',
-                        size: aspect as 'square' | 'landscape' | 'portrait' | '1024x1024' | '1536x1024' | '1024x1536' | '1792x1024' | '1024x1792' | '512x512' | '256x256',
+                        quality: quality as
+                            | 'standard'
+                            | 'low'
+                            | 'high'
+                            | 'medium'
+                            | 'hd',
+                        size: aspect as
+                            | 'square'
+                            | 'landscape'
+                            | 'portrait'
+                            | '1024x1024'
+                            | '1536x1024'
+                            | '1024x1536'
+                            | '1792x1024'
+                            | '1024x1792'
+                            | '512x512'
+                            | '256x256',
                         n: number_of_images,
                         ...(processedImages.length > 0 && {
-                            source_images: processedImages[0] // Use first image for editing
-                        })
+                            source_images: processedImages[0], // Use first image for editing
+                        }),
                     }
                 );
 

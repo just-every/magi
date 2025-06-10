@@ -1638,11 +1638,15 @@ function parseWebSearchResults(
             }
         }
 
-        console.log(`[parseWebSearchResults] Parsed ${results.length} design results`);
+        console.log(
+            `[parseWebSearchResults] Parsed ${results.length} design results`
+        );
         return results.slice(0, limit);
-
     } catch (error) {
-        console.error('[parseWebSearchResults] Error parsing search results:', error);
+        console.error(
+            '[parseWebSearchResults] Error parsing search results:',
+            error
+        );
         return [];
     }
 }

@@ -201,7 +201,7 @@ export class ClaudeCodeProvider implements ModelProvider {
     async *createResponseStream(
         messages: ResponseInput,
         model: string,
-        agent: Agent,
+        agent: Agent
     ): AsyncGenerator<ProviderStreamEvent> {
         const messageId = uuidv4();
 

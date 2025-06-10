@@ -20,9 +20,7 @@ import {
     getProcessProjectIds,
     getProcessProjectPorts,
 } from '../../utils/project_utils.js';
-import {
-    Agent,ResponseInput 
-} from '@just-every/ensemble';
+import { Agent, ResponseInput } from '@just-every/ensemble';
 
 /**
  * Create the frontend agent for specialized React/Next.js implementation

@@ -18,7 +18,6 @@ export const CLAUDE_MAX_HEIGHT = 1120;
 export const GEMINI_MAX_WIDTH = 1024;
 export const GEMINI_MAX_HEIGHT = 1536;
 
-
 /**
  * Convert an image buffer to base64 data URL format
  *

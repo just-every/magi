@@ -12,7 +12,7 @@ import {
     Agent,
     ResponseInput,
     ToolFunction,
-    createToolFunction, 
+    createToolFunction,
 } from '@just-every/ensemble';
 // Import BrowserAction type, session getter, and BrowserStatusPayload
 import { getAgentBrowserSession, BrowserAction } from './browser_session.js'; // Assuming BrowserAction is exported from here

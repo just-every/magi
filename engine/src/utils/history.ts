@@ -5,14 +5,14 @@
  * across sessions.
  */
 import {
-    Agent,ResponseInput,
+    Agent,
+    ResponseInput,
     ResponseInputItem,
     ResponseInputFunctionCall,
     ResponseInputFunctionCallOutput,
     ResponseInputMessage,
     ResponseThinkingMessage,
     ResponseOutputMessage,
-
 } from '@just-every/ensemble';
 // Temporary workaround - setDelayInterrupted is not exported from mind
 // This is used to interrupt thought delays when needed

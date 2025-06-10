@@ -25,9 +25,7 @@ import {
     getProcessProjectIds,
     getProcessProjectPorts,
 } from '../../utils/project_utils.js';
-import {
-    Agent,ResponseInput 
-} from '@just-every/ensemble';
+import { Agent, ResponseInput } from '@just-every/ensemble';
 
 /**
  * Create the design agent for specialized UI design tasks

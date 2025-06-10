@@ -25,7 +25,7 @@ vi.mock('@just-every/ensemble', () => ({
     }))
 }));
 
-vi.mock('@just-every/mind', () => ({
+vi.mock('../interfaces/mech.js', () => ({
     quick_llm_call: vi.fn().mockResolvedValue(JSON.stringify({
         run_id: 'test_run',
         context: 'Test design context',
@@ -43,7 +43,10 @@ vi.mock('@just-every/mind', () => ({
             medium: 'Medium judge criteria', 
             high: 'High judge criteria'
         }
-    }))
+    })),
+    Agent: vi.fn(),
+    runMECH: vi.fn(),
+    runMECHStreaming: vi.fn()
 }));
 
 vi.mock('../design-search.js', () => ({
@@ -57,6 +60,11 @@ vi.mock('../utils/grid-judge.js', () => ({
 }));
 
 vi.mock('fs', () => ({
+    default: {
+        existsSync: vi.fn().mockReturnValue(true),
+        mkdirSync: vi.fn(),
+        writeFileSync: vi.fn()
+    },
     existsSync: vi.fn().mockReturnValue(true),
     mkdirSync: vi.fn(),
     writeFileSync: vi.fn()

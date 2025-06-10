@@ -12,11 +12,7 @@ import {
     createQuickAgent,
 } from '../magi_agents/index.js';
 import { ModelClassID } from '../types/shared-types.js';
-import {
-    Agent,
-    ResponseInput,
-    AgentDefinition,
-} from '@just-every/ensemble';
+import { Agent, ResponseInput, AgentDefinition } from '@just-every/ensemble';
 /**
  * Make a quick LLM call and return the result as a string
  *

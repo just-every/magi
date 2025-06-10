@@ -11,7 +11,7 @@ import {
     MessageEvent,
 } from '@just-every/ensemble';
 import { get_working_dir, log_llm_request } from '../utils/file_utils.js';
-import { runPty, PtyRunOptions } from '../utils/run_pty.js';
+import { runPty } from '../utils/run_pty.js';
 
 // Define interface for parsing Codex CLI JSON output
 interface CodexContentPart {
@@ -89,7 +89,9 @@ export class CodexProvider implements ModelProvider {
                     onLine: (line: string) => {
                         // Look for the warning prompt about running outside a git repo
                         if (line.includes('Do you want to continue?')) {
-                            console.log('[CodexProvider] Detected warning prompt, auto-responding with "y"');
+                            console.log(
+                                '[CodexProvider] Detected warning prompt, auto-responding with "y"'
+                            );
                             // Send "y" after delay - this was working before
                             setTimeout(() => write('y'), 2000);
                         }

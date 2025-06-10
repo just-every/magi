@@ -291,7 +291,7 @@ async function copyTemplateToProject(
 
         // Copy files recursively using cp -r
         await execPromise(`cp -r ${sourcePath}/* ${projectPath}/`);
-        
+
         // Copy hidden files, but exclude . and .. to avoid copying parent directory
         // Use find to get only actual hidden files, not . and ..
         await execPromise(

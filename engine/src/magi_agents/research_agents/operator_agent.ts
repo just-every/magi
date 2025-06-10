@@ -6,9 +6,7 @@ import { createOperatorAgent, startTime } from '../operator_agent.js';
 import { MAGI_CONTEXT } from '../constants.js';
 import { getSearchTools } from '../../utils/search_utils.js';
 import { get_output_dir } from '../../utils/file_utils.js';
-import {
-    Agent,ResponseInput
-} from '@just-every/ensemble';
+import { Agent, ResponseInput } from '@just-every/ensemble';
 import { runningToolTracker } from '../../utils/running_tool_tracker.js';
 import { dateFormat, readableTime } from '../../utils/date_tools.js';
 import { getThoughtDelay } from '@just-every/task';

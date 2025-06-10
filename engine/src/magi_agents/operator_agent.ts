@@ -137,7 +137,7 @@ When you are done, please use the task_complete(result) tool to report that the 
                 agent.model
             );
         },
-        onToolResult: async (result) => {
+        onToolResult: async result => {
             await addHistory(
                 {
                     id: result.toolCall.id,

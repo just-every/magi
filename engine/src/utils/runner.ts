@@ -37,7 +37,6 @@ class TimeoutError extends Error {
     }
 }
 
-
 /**
  * Agent runner class for executing agents with tools
  */
@@ -104,13 +103,17 @@ export class Runner {
         agent: Agent,
         input?: string,
         conversationHistory: ResponseInput = [],
-        communicationManager?: any, // Add optional communicationManager parameter
+        communicationManager?: any // Add optional communicationManager parameter
     ): Promise<string> {
         try {
             const messageItems: ResponseInput = [...conversationHistory];
 
             if (input) {
-                messageItems.push({ type: 'message', role: 'user', content: input });
+                messageItems.push({
+                    type: 'message',
+                    role: 'user',
+                    content: input,
+                });
             }
 
             let fullResponse = '';
@@ -134,10 +137,10 @@ export class Runner {
             const stream = ensembleRequest(messageItems, agent);
             for await (const event of stream) {
                 const eventType = event.type as StreamEventType;
-                if(eventType === 'response_output') {
+                if (eventType === 'response_output') {
                     messageItems.push((event as ResponseOutputEvent).message);
                 }
-                if(eventType === 'message_complete') {
+                if (eventType === 'message_complete') {
                     fullResponse = (event as MessageEvent).content;
                 }
             }
@@ -150,7 +153,6 @@ export class Runner {
             throw error; // Re-throw other errors
         }
     }
-
 
     /**
      * Reorders messages iteratively to ensure that every 'function_call' message
@@ -324,7 +326,8 @@ export class Runner {
     ): Promise<string | undefined> {
         // Use the ensemble's getModelFromClass to select a model
         // If modelClass is provided, use it; otherwise use the agent's modelClass or 'standard' as default
-        const classToUse = modelClass || agent.modelClass || ('standard' as ModelClassID);
+        const classToUse =
+            modelClass || agent.modelClass || ('standard' as ModelClassID);
         return getModelFromClass(classToUse);
     }
 }

@@ -56,7 +56,9 @@ export async function getAllProjectIds(): Promise<string[]> {
         const result = await db.query(
             'SELECT project_id FROM projects ORDER BY project_id'
         );
-        return result.rows.length > 0 ? result.rows.map(row => row.project_id) : ['none'];
+        return result.rows.length > 0
+            ? result.rows.map(row => row.project_id)
+            : ['none'];
     } catch (error) {
         console.error('Error getting project IDs:', error);
         return ['none'];
