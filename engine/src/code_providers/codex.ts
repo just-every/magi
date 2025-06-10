@@ -90,15 +90,8 @@ export class CodexProvider implements ModelProvider {
                         // Look for the warning prompt about running outside a git repo
                         if (line.includes('Do you want to continue?')) {
                             console.log('[CodexProvider] Detected warning prompt, auto-responding with "y"');
-                            // Send "y" with multiple newline variations for compatibility
-                            setTimeout(() => {
-                                write('y\r\n');
-                                setTimeout(() => write('\r'), 50);
-                                setTimeout(() => write('\n'), 100);
-                                setTimeout(() => write('\x1b\r'), 150);
-                                setTimeout(() => write('\x1b\n'), 200);
-                                setTimeout(() => write('\x1b\n\r'), 250);
-                            }, 2000);
+                            // Send "y" after delay - this was working before
+                            setTimeout(() => write('y'), 2000);
                         }
                     },
                 }
