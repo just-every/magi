@@ -291,8 +291,11 @@ async function copyTemplateToProject(
 
         // Copy files recursively using cp -r
         await execPromise(`cp -r ${sourcePath}/* ${projectPath}/`);
+        
+        // Copy hidden files, but exclude . and .. to avoid copying parent directory
+        // Use find to get only actual hidden files, not . and ..
         await execPromise(
-            `cp -r ${sourcePath}/.* ${projectPath}/ 2>/dev/null || true`
+            `find ${sourcePath} -maxdepth 1 -name '.*' ! -name '.' ! -name '..' -exec cp -r {} ${projectPath}/ \\; 2>/dev/null || true`
         );
 
         // Replace placeholders in .md files and project_map.json

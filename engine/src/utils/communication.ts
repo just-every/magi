@@ -275,8 +275,7 @@ export class CommunicationManager {
      * Send a message to the controller
      */
     sendMessage(message: MagiMessage): void {
-        console.log('[COMMUNICATION] sendMessage called:', message.event.type, 'connected:', this.connected);
-        
+
         // Always add to history (except in test mode and delta)
         if (
             !this.testMode &&
@@ -499,8 +498,6 @@ export function sendStreamEvent(event: StreamingEvent): void {
         event: event,
     };
 
-    console.log('[COMMUNICATION] sendStreamEvent called:', event.type, 'processId:', message.processId);
-    
     if (communicationManager) {
         communicationManager.sendMessage(message);
     } else {
