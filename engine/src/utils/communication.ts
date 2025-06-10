@@ -47,9 +47,25 @@ pauseController.on('paused', () => {
 });
 
 pauseController.on('resumed', () => {
-    // Send "Please continue" with the extra characters to resume execution
-    sendToAllPtyProcesses('Please continue\x1b\n\r');
-    console.log('[Communication] Sent resume signal to all code providers');
+    // Send "Please continue" with different variations to ensure compatibility
+    // Try multiple variations as different terminals/shells may respond differently
+    sendToAllPtyProcesses('Please continue\r\n');
+    setTimeout(() => {
+        sendToAllPtyProcesses('\r');
+    }, 50);
+    setTimeout(() => {
+        sendToAllPtyProcesses('\n');
+    }, 100);
+    setTimeout(() => {
+        sendToAllPtyProcesses('\x1b\r');
+    }, 150);
+    setTimeout(() => {
+        sendToAllPtyProcesses('\x1b\n');
+    }, 200);
+    setTimeout(() => {
+        sendToAllPtyProcesses('\x1b\n\r');
+    }, 250);
+    console.log('[Communication] Sent resume signal with multiple newline variations to all code providers');
 });
 
 export class CommunicationManager {

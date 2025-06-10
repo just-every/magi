@@ -204,7 +204,13 @@ export function runPty(
                 `[runPty] Requesting graceful exit via ${exitCommand} for message ${messageId}`
             );
             try {
-                ptyProcess.write(`${exitCommand}\x1b\n\r`);
+                // Try multiple newline variations for better compatibility
+                ptyProcess.write(`${exitCommand}\r\n`);
+                setTimeout(() => ptyProcess.write('\r'), 50);
+                setTimeout(() => ptyProcess.write('\n'), 100);
+                setTimeout(() => ptyProcess.write('\x1b\r'), 150);
+                setTimeout(() => ptyProcess.write('\x1b\n'), 200);
+                setTimeout(() => ptyProcess.write('\x1b\n\r'), 250);
             } catch (e) {
                 console.warn(
                     `[runPty] Error sending ${exitCommand} command:`,
@@ -722,7 +728,13 @@ export function runPty(
 
         if (ptyProcess) {
             try {
-                ptyProcess.write(`${exitCommand}\x1b\n\r`);
+                // Try multiple newline variations for better compatibility
+                ptyProcess.write(`${exitCommand}\r\n`);
+                setTimeout(() => ptyProcess.write('\r'), 50);
+                setTimeout(() => ptyProcess.write('\n'), 100);
+                setTimeout(() => ptyProcess.write('\x1b\r'), 150);
+                setTimeout(() => ptyProcess.write('\x1b\n'), 200);
+                setTimeout(() => ptyProcess.write('\x1b\n\r'), 250);
                 setTimeout(() => {
                     if (activePtyProcesses.has(ptyProcess)) {
                         try {
