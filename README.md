@@ -1,9 +1,12 @@
 # MAGI System
 
-> **M**ostly
-> **A**utonomous
-> **G**enerative
-> **I**ntelligence
+> **M**ostly **A**utonomous **G**enerative **I**ntelligence
+
+An ensemble autonomous AI framework designed to solve complex tasks with minimal human intervention.
+
+[![GitHub Actions](https://github.com/just-every/magi/workflows/Release/badge.svg)](https://github.com/just-every/magi/actions)
+
+## Overview
 
 The MAGI System (pronounced "MAH-jeye") is an ensemble autonomous AI framework designed to solve tasks with almost no human intervention.
 
@@ -15,29 +18,40 @@ A core principal of MAGI is self-improvement. By being Open Source and using git
 
 Think of Magi like a co-worker. She might make some mistakes, but she learns from them and improves over time. She is not perfect, but she is getting better every day.
 
+## Features
+
+- 🤖 **Multi-Agent System** - Specialized agents for code, browser, search, shell, and reasoning
+- 🔄 **Ensemble LLM** - Automatic model rotation and fallback across providers
+- 🧠 **Meta-cognition** - Self-reflection and strategy adjustment
+- 🛠️ **Tool Integration** - Browser automation, code execution, web search
+- 📊 **Cost Tracking** - Real-time monitoring of API usage and costs
+- 🔌 **Custom Tools** - Agents can create and modify tools at runtime
+- 🐳 **Containerized** - Isolated Docker environments for each agent
+- 🎯 **Fault Tolerant** - Graceful error recovery and retry mechanisms
+
 ## Architecture Overview
 
 Magi consists of four core components:
 
-• **Controller Service** (`controller/`)
-  - Node.js (TypeScript) Express backend + Socket.IO
-  - React/HTML/CSS frontend (UI at http://localhost:3010)
-  - Manages Docker agent containers via Dockerode
+### Controller Service (`controller/`)
+- Node.js (TypeScript) Express backend + Socket.IO
+- React/HTML/CSS frontend (UI at http://localhost:3010)
+- Manages Docker agent containers via Dockerode
 
-• **Magi Agents** (`engine/`)
-  - TypeScript runtime executing chain-of-thought loops
-  - Tool integrations: browser automation (CDP), shell, web search, code execution
-  - Runs in isolated Docker containers (`magi-engine` image)
-  - Supports multiple LLM providers with fallback and cost tracking
+### Magi Agents (`engine/`)
+- TypeScript runtime executing chain-of-thought loops
+- Tool integrations: browser automation (CDP), shell, web search, code execution
+- Runs in isolated Docker containers (`magi-engine` image)
+- Supports multiple LLM providers with fallback and cost tracking
 
-• **Browser Bridge** (`host/`)
-  - CLI to launch/kill/toggle Chrome via DevTools Protocol
-  - Manages user-data directories, profile cloning and merging
-  - Commands: `npm run browser:start|status|kill|toggle|clone-profile|merge-profile`
+### Browser Bridge (`host/`)
+- CLI to launch/kill/toggle Chrome via DevTools Protocol
+- Manages user-data directories, profile cloning and merging
+- Commands: `npm run browser:start|status|kill|toggle|clone-profile|merge-profile`
 
-• **Shared Database** (`db/`)
-  - PostgreSQL + pgvector for history, memory, and usage tracking
-  - Migrations in `db/migrations`, auto-run on controller startup
+### Shared Database (`db/`)
+- PostgreSQL + pgvector for history, memory, and usage tracking
+- Migrations in `db/migrations`, auto-run on controller startup
 
 ## Installation
 
@@ -175,7 +189,7 @@ npm install          # First time only
 
 See `controller/README.dev.md` and `engine/README.dev.md` for detailed local development guides.
 
-## Key Features
+## Advanced Features
 
 - **Multi-Provider Support**: Works with OpenAI, Claude, Google Gemini, and other LLM providers
 - **Fallback Mechanism**: Automatically falls back to alternative models when rate limits are encountered
@@ -212,6 +226,33 @@ The system includes a comprehensive testing suite using Playwright:
 - **E2E Tests**: End-to-end tests of system components
 
 The testing framework includes a specialized test provider (`test_provider.ts`) that simulates various LLM behaviors without requiring real API calls.
+
+## Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch (`feat/your-feature`)
+3. Follow conventional commits
+4. Add tests for new functionality
+5. Submit a pull request
+
+See our contributing guidelines for more details.
+
+## Troubleshooting
+
+### Common Issues
+
+- **Docker not running**: Ensure Docker Desktop is running
+- **Port conflicts**: Check ports 3010 (UI) and 5432 (PostgreSQL)
+- **API key errors**: Verify your `.env` file has valid keys
+- **Chrome not found**: Run `npm run browser:start` to launch Chrome
+
+### Getting Help
+
+- Check the [documentation](docs/)
+- Open an [issue](https://github.com/just-every/magi/issues)
+- Join our [Discord community](https://discord.gg/justevery)
 
 ## License
 

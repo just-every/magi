@@ -113,9 +113,47 @@ docker compose up -d   # spin up Postgres & pgvector
 - **Browser Bridge** - CLI to launch/kill/toggle Chrome via DevTools Protocol
 - **Shared Database** - PostgreSQL + pgvector for history, memory, and usage tracking
 
-## Imports & Layered Memory
-@docs/MECH.md
-@docs/CUSTOM_TOOLS.md
-@docs/TESTING.md
-@docs/TODO.md
-@POSTGRES.md
+## Pre-Commit Requirements
+
+**IMPORTANT**: Always run these commands before committing:
+
+```bash
+npm test          # Run unit tests
+npm run lint      # Check linting
+npm run build     # Ensure all packages build
+```
+
+Only commit if all commands succeed without errors.
+
+## TypeScript Configuration
+
+- Workspaces with shared tsconfig
+- Strict mode enabled in most packages
+- Path aliases for clean imports
+- ES modules with proper extensions
+
+## Troubleshooting
+
+### Common Issues
+
+- **Docker errors**: Ensure Docker Desktop is running
+- **Port conflicts**: Check 3010 (UI) and 5432 (DB) are free
+- **Chrome issues**: Run `npm run browser:kill` to cleanup
+- **Build failures**: Try `npm run clean` then rebuild
+
+### Debug Mode
+
+Enable verbose logging:
+```bash
+DEBUG=magi:* npm run dev
+```
+
+## Additional Documentation
+
+The following files contain detailed information about specific aspects:
+
+- `docs/MECH.md` - Meta-cognition and model selection system
+- `docs/CUSTOM_TOOLS.md` - Dynamic tool creation and management
+- `docs/TESTING.md` - Testing framework and strategies
+- `docs/TODO.md` - Roadmap and planned features
+- `POSTGRES.md` - Database setup and management
