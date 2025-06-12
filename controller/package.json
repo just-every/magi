@@ -48,7 +48,6 @@
         "marked": "^15.0.12",
         "micromatch": "^4.0.8",
         "node-telegram-bot-api": "^0.66.0",
-        "openai": "^5.2.0",
         "pg": "^8.16.0",
         "proper-lockfile": "^4.1.2",
         "react": "^19.1.0",

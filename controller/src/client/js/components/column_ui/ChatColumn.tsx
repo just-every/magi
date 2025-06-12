@@ -10,6 +10,13 @@ import CostDisplay from '../ui/CostDisplay'; // Import CostDisplay
 import StatusDisplay from '../ui/StatusDisplay'; // Import StatusDisplay
 import { parseMarkdown } from '../utils/MarkdownUtils';
 
+interface VoiceOption {
+    id: string;
+    name: string;
+    provider: 'openai' | 'elevenlabs' | 'gemini';
+    description?: string;
+}
+
 // Helper function to check if a URL points to an image
 // const isImageUrl = (url: string): boolean => {
 //     try {
@@ -49,6 +56,9 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
     const [isMultiline, setIsMultiline] = useState(false);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const [isFirstProcess, setIsFirstProcess] = useState(processes.size === 0);
+    const [voices, setVoices] = useState<VoiceOption[]>([]);
+    const [currentVoiceId, setCurrentVoiceId] = useState<string>('');
+    const [isLoadingVoices, setIsLoadingVoices] = useState(false);
 
     const coreProcess = coreProcessId
         ? (processes.get(coreProcessId) as ProcessData | undefined)
@@ -64,6 +74,45 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
             inputRef.current.focus();
         }
     }, [isFirstProcess]);
+
+    // Fetch available voices
+    useEffect(() => {
+        const fetchVoices = async () => {
+            setIsLoadingVoices(true);
+            try {
+                const response = await fetch('/api/voices');
+                const data = await response.json();
+                if (data.success) {
+                    setVoices(data.voices);
+                    setCurrentVoiceId(data.currentVoice);
+                }
+            } catch (error) {
+                console.error('Failed to fetch voices:', error);
+            } finally {
+                setIsLoadingVoices(false);
+            }
+        };
+        fetchVoices();
+    }, []);
+
+    // Handle voice change
+    const handleVoiceChange = async (voiceId: string) => {
+        try {
+            const response = await fetch('/api/voices/current', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ voiceId }),
+            });
+            const data = await response.json();
+            if (data.success) {
+                setCurrentVoiceId(voiceId);
+            }
+        } catch (error) {
+            console.error('Failed to update voice:', error);
+        }
+    };
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -221,6 +270,125 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                             {isAudioEnabled ? 'Mute' : 'Play'}
                         </button>
                     </div>
+
+                    {/* Voice Selection Dropdown */}
+                    {isAudioEnabled && (
+                        <div className="mt-3">
+                            <div className="d-flex align-items-center">
+                                <span className="fw-bold me-2">
+                                    Voice Selection:
+                                </span>
+                                {voices.length === 0 && !isLoadingVoices ? (
+                                    <span className="text-muted">
+                                        No voice providers configured
+                                    </span>
+                                ) : (
+                                    <select
+                                        className="form-select form-select-sm"
+                                        value={currentVoiceId}
+                                        onChange={e =>
+                                            handleVoiceChange(e.target.value)
+                                        }
+                                        disabled={
+                                            isLoadingVoices ||
+                                            voices.length === 0
+                                        }
+                                        style={{ maxWidth: '300px' }}
+                                    >
+                                        {isLoadingVoices ? (
+                                            <option>Loading voices...</option>
+                                        ) : voices.length === 0 ? (
+                                            <option>No voices available</option>
+                                        ) : (
+                                            <>
+                                                {/* Only show optgroups for providers that have voices */}
+                                                {voices.some(
+                                                    v => v.provider === 'openai'
+                                                ) && (
+                                                    <optgroup label="OpenAI">
+                                                        {voices
+                                                            .filter(
+                                                                v =>
+                                                                    v.provider ===
+                                                                    'openai'
+                                                            )
+                                                            .map(voice => (
+                                                                <option
+                                                                    key={
+                                                                        voice.id
+                                                                    }
+                                                                    value={
+                                                                        voice.id
+                                                                    }
+                                                                >
+                                                                    {voice.name}
+                                                                    {voice.description &&
+                                                                        ` - ${voice.description}`}
+                                                                </option>
+                                                            ))}
+                                                    </optgroup>
+                                                )}
+                                                {voices.some(
+                                                    v =>
+                                                        v.provider ===
+                                                        'elevenlabs'
+                                                ) && (
+                                                    <optgroup label="ElevenLabs">
+                                                        {voices
+                                                            .filter(
+                                                                v =>
+                                                                    v.provider ===
+                                                                    'elevenlabs'
+                                                            )
+                                                            .map(voice => (
+                                                                <option
+                                                                    key={
+                                                                        voice.id
+                                                                    }
+                                                                    value={
+                                                                        voice.id
+                                                                    }
+                                                                >
+                                                                    {voice.name}
+                                                                    {voice.description &&
+                                                                        ` - ${voice.description}`}
+                                                                </option>
+                                                            ))}
+                                                    </optgroup>
+                                                )}
+                                                {voices.some(
+                                                    v => v.provider === 'gemini'
+                                                ) && (
+                                                    <optgroup label="Gemini">
+                                                        {voices
+                                                            .filter(
+                                                                v =>
+                                                                    v.provider ===
+                                                                    'gemini'
+                                                            )
+                                                            .map(voice => (
+                                                                <option
+                                                                    key={
+                                                                        voice.id
+                                                                    }
+                                                                    value={
+                                                                        voice.id
+                                                                    }
+                                                                >
+                                                                    {voice.name}
+                                                                    {voice.description &&
+                                                                        ` - ${voice.description}`}
+                                                                </option>
+                                                            ))}
+                                                    </optgroup>
+                                                )}
+                                            </>
+                                        )}
+                                    </select>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     <div className="d-flex justify-content-between align-items-center mt-3">
                         <div>

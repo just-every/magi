@@ -25,6 +25,8 @@ import { ensureMigrations } from './utils/db_migrations';
 import { syncLocalCustomTools } from './utils/custom_tool_sync';
 import customToolsRoutes from './routes/custom_tools';
 import prEventsRoutes from './routes/pr_events';
+import patchesRoutes from './routes/patches';
+import voiceRoutes from './routes/voice';
 import * as fs from 'fs';
 
 /**
@@ -113,6 +115,8 @@ async function main(): Promise<void> {
     app.use(express.json()); // For parsing application/json
     app.use('/api/custom-tools', customToolsRoutes);
     app.use('/api/pr-events', prEventsRoutes);
+    app.use('/api/patches', patchesRoutes);
+    app.use(voiceRoutes);
 
     // Expose the PR events manager for route handlers to use
     (app as any).prEventsManager = serverManager.getPrEventsManager();

@@ -476,6 +476,7 @@ function ensureAllEnvVars(): void {
         { key: 'OPENAI_API_KEY' },
         { key: 'ANTHROPIC_API_KEY' },
         { key: 'GOOGLE_API_KEY' },
+        { key: 'ELEVENLABS_API_KEY' },
         { key: 'XAI_API_KEY' },
         { key: 'DEEPSEEK_API_KEY' },
         { key: 'BRAVE_API_KEY' },
@@ -604,6 +605,12 @@ function promptForMissingKeys(): void {
             prompt: 'Enter your Google API Key (press Enter to skip): ',
             infoUrl: 'https://makersuite.google.com/app/apikey',
             description: 'Google API key for Gemini models',
+        },
+        {
+            key: 'ELEVENLABS_API_KEY',
+            prompt: 'Enter your ElevenLabs API Key (press Enter to skip): ',
+            infoUrl: 'https://elevenlabs.io/app/settings/api-keys',
+            description: 'ElevenLabs API key for TTS voices',
         },
         {
             key: 'XAI_API_KEY',
@@ -856,6 +863,10 @@ function saveEnvFile(): void {
             {
                 key: 'GOOGLE_API_KEY',
                 comment: '# Google API key for Gemini models',
+            },
+            {
+                key: 'ELEVENLABS_API_KEY',
+                comment: '# ElevenLabs API key for TTS voices',
             },
             { key: 'XAI_API_KEY', comment: '# X.AI API key for Grok models' },
             { key: 'DEEPSEEK_API_KEY', comment: '# DeepSeek API key' },
