@@ -140,6 +140,7 @@ export class ProcessManager {
 
             if (!this.coreProcessId) {
                 this.coreProcessId = processId;
+                console.log(`[ProcessManager] Set core process ID to: ${processId}`);
             }
 
             const status = 'running';
@@ -693,7 +694,7 @@ export class ProcessManager {
         console.log(`Found ${containers.length} existing MAGI containers`);
 
         for (const container of containers) {
-            const { id, containerId, command } = container;
+            const { id, containerId, command, isCore } = container;
 
             // Skip if we're already tracking this process
             if (this.processes[id]) {
@@ -701,12 +702,21 @@ export class ProcessManager {
                 continue;
             }
 
+            // Set the core process ID if this is the core container
+            if (isCore && !this.coreProcessId) {
+                console.log(`[ProcessManager] Identified ${id} as the core MAGI process from existing containers`);
+                this.coreProcessId = id;
+            }
+
             console.log(
-                `Resuming monitoring of container ${containerId} with ID ${id}`
+                `Resuming monitoring of container ${containerId} with ID ${id}${isCore ? ' (CORE)' : ''}`
             );
 
             // Generate colors for the process
             const colors = generateProcessColors();
+
+            // Get the proper name for the process
+            const processName = isCore ? process.env.AI_NAME || 'MAGI Core' : undefined;
 
             // Set up process tracking
             this.processes[id] = {
@@ -716,6 +726,14 @@ export class ProcessManager {
                 logs: ['Connecting to secure MAGI container...'],
                 containerId,
                 colors,
+                agentProcess: isCore ? {
+                    processId: id,
+                    name: processName || 'MAGI Core',
+                    command,
+                    status: 'running',
+                    started: new Date(),
+                    tool: 'research' as ProcessToolType, // Core process doesn't have a specific tool type
+                } : undefined,
             };
 
             // Set up log monitoring for the container
@@ -940,12 +958,12 @@ export class ProcessManager {
         try {
             if (patchId) {
                 // Import patch manager utilities
-                const { 
-                    getPatchesWithRiskAssessment, 
+                const {
+                    getPatchesWithRiskAssessment,
                     applyPatch,
-                    analyzePatchConflicts 
+                    analyzePatchConflicts,
                 } = await import('../utils/patch_manager.js');
-                
+
                 // New patch-based workflow
                 console.log(
                     `[process-manager] Patch #${patchId} created for ${projectId}`
@@ -954,7 +972,7 @@ export class ProcessManager {
                 // Get patch with risk assessment
                 const patches = await getPatchesWithRiskAssessment(projectId);
                 const patch = patches.find(p => p.id === patchId);
-                
+
                 if (!patch) {
                     throw new Error(`Patch #${patchId} not found`);
                 }
@@ -980,7 +998,7 @@ export class ProcessManager {
                     console.log(
                         `[process-manager] Auto-merging patch #${patchId} (risk: ${patch.riskAssessment.riskLevel})`
                     );
-                    
+
                     // Get project path
                     const projectPath = path.join(
                         '/magi_output',
@@ -988,20 +1006,23 @@ export class ProcessManager {
                         'projects',
                         projectId
                     );
-                    
+
                     // Check for conflicts first
-                    const conflictCheck = await analyzePatchConflicts(patchId, projectPath);
-                    
+                    const conflictCheck = await analyzePatchConflicts(
+                        patchId,
+                        projectPath
+                    );
+
                     if (conflictCheck.hasConflicts) {
                         console.log(
                             `[process-manager] Cannot auto-merge patch #${patchId} - conflicts detected`
                         );
-                        
+
                         this.updateProcess(
                             processId,
                             `[git] Patch #${patchId} has conflicts and requires manual resolution: ${conflictCheck.suggestion}`
                         );
-                        
+
                         // Emit conflict event
                         this.io.emit('patch_conflict', {
                             processId,
@@ -1014,20 +1035,24 @@ export class ProcessManager {
                         console.log(
                             `[process-manager] Patch #${patchId} check failed with non-conflict error: ${conflictCheck.error}`
                         );
-                        
+
                         // Still try to apply the patch, as the error might be benign
-                        const result = await applyPatch(patchId, projectPath, true);
-                        
+                        const result = await applyPatch(
+                            patchId,
+                            projectPath,
+                            true
+                        );
+
                         if (result.success) {
                             console.log(
                                 `[process-manager] Successfully auto-merged patch #${patchId} despite check error`
                             );
-                            
+
                             this.updateProcess(
                                 processId,
                                 `[git] Patch #${patchId} auto-merged successfully (commit: ${result.mergeCommitSha})`
                             );
-                            
+
                             // Emit patch applied event
                             this.io.emit('patch_applied', {
                                 processId,
@@ -1039,7 +1064,7 @@ export class ProcessManager {
                             console.error(
                                 `[process-manager] Failed to auto-merge patch #${patchId}: ${result.error}`
                             );
-                            
+
                             this.updateProcess(
                                 processId,
                                 `[git] Failed to auto-merge patch #${patchId}: ${result.error}`
@@ -1047,18 +1072,22 @@ export class ProcessManager {
                         }
                     } else {
                         // Apply the patch
-                        const result = await applyPatch(patchId, projectPath, true);
-                        
+                        const result = await applyPatch(
+                            patchId,
+                            projectPath,
+                            true
+                        );
+
                         if (result.success) {
                             console.log(
                                 `[process-manager] Successfully auto-merged patch #${patchId}`
                             );
-                            
+
                             this.updateProcess(
                                 processId,
                                 `[git] Patch #${patchId} auto-merged successfully (commit: ${result.mergeCommitSha})`
                             );
-                            
+
                             // Emit patch applied event
                             this.io.emit('patch_applied', {
                                 processId,
@@ -1071,7 +1100,7 @@ export class ProcessManager {
                             console.error(
                                 `[process-manager] Failed to auto-merge patch #${patchId}: ${result.error}`
                             );
-                            
+
                             this.updateProcess(
                                 processId,
                                 `[git] Failed to auto-merge patch #${patchId}: ${result.error}`
@@ -1082,7 +1111,7 @@ export class ProcessManager {
                     console.log(
                         `[process-manager] Patch #${patchId} requires manual review (risk: ${patch.riskAssessment.riskLevel})`
                     );
-                    
+
                     // Log reasons for manual review
                     if (patch.riskAssessment.reasons.length > 0) {
                         this.updateProcess(
@@ -1094,7 +1123,7 @@ export class ProcessManager {
 
                 return true;
             } else {
-               throw new Error('No patch ID provided');
+                throw new Error('No patch ID provided');
             }
         } catch (error) {
             console.error(

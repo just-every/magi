@@ -113,9 +113,7 @@ export async function bootstrapProjectsOnce(pm: ProcessManager): Promise<void> {
 
     // Prepare project paths for command message
     const projectPaths = unreadyIds
-        .map(
-            id => `${id} (located at /app/projects/${id})`
-        )
+        .map(id => `${id} (located at /app/projects/${id})`)
         .join(', ');
 
     // Register a completion handler to mark all projects as ready when analysis completes

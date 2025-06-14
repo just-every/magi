@@ -16,10 +16,15 @@ interface VersionManagerProps {
     onClose: () => void;
 }
 
-export const VersionManager: React.FC<VersionManagerProps> = ({ isOpen, onClose }) => {
-    const socket = useSocket();
+export const VersionManager: React.FC<VersionManagerProps> = ({
+    isOpen,
+    onClose,
+}) => {
+    const { socket } = useSocket();
     const [versions, setVersions] = useState<MagiVersion[]>([]);
-    const [currentVersion, setCurrentVersion] = useState<MagiVersion | null>(null);
+    const [currentVersion, setCurrentVersion] = useState<MagiVersion | null>(
+        null
+    );
     const [loading, setLoading] = useState(false);
     const [updateProgress, setUpdateProgress] = useState<{
         version?: string;
@@ -27,7 +32,9 @@ export const VersionManager: React.FC<VersionManagerProps> = ({ isOpen, onClose 
         status?: string;
         error?: string;
     }>({});
-    const [selectedStrategy, setSelectedStrategy] = useState<'rolling' | 'immediate' | 'graceful'>('rolling');
+    const [selectedStrategy, setSelectedStrategy] = useState<
+        'rolling' | 'immediate' | 'graceful'
+    >('rolling');
 
     useEffect(() => {
         if (isOpen) {
@@ -39,7 +46,7 @@ export const VersionManager: React.FC<VersionManagerProps> = ({ isOpen, onClose 
         if (!socket) return;
 
         // Listen for version update events
-        socket.on('version:update:start', (data) => {
+        socket.on('version:update:start', data => {
             setUpdateProgress({
                 version: data.version,
                 strategy: data.strategy,
@@ -47,14 +54,14 @@ export const VersionManager: React.FC<VersionManagerProps> = ({ isOpen, onClose 
             });
         });
 
-        socket.on('version:update:container', (data) => {
+        socket.on('version:update:container', data => {
             setUpdateProgress(prev => ({
                 ...prev,
                 status: `Updating container ${data.processId}`,
             }));
         });
 
-        socket.on('version:update:complete', (data) => {
+        socket.on('version:update:complete', data => {
             setUpdateProgress({
                 version: data.version,
                 status: 'complete',
@@ -63,7 +70,7 @@ export const VersionManager: React.FC<VersionManagerProps> = ({ isOpen, onClose 
             fetchVersions();
         });
 
-        socket.on('version:update:error', (data) => {
+        socket.on('version:update:error', data => {
             setUpdateProgress({
                 version: data.version,
                 status: 'error',
@@ -121,7 +128,11 @@ export const VersionManager: React.FC<VersionManagerProps> = ({ isOpen, onClose 
     };
 
     const handleRollback = async (version: string) => {
-        if (!confirm(`Rollback to version ${version}? This will restart all containers.`)) {
+        if (
+            !confirm(
+                `Rollback to version ${version}? This will restart all containers.`
+            )
+        ) {
             return;
         }
 
@@ -174,7 +185,9 @@ export const VersionManager: React.FC<VersionManagerProps> = ({ isOpen, onClose 
             <div className="version-manager">
                 <div className="version-manager-header">
                     <h2>Version Management</h2>
-                    <button className="close-button" onClick={onClose}>×</button>
+                    <button className="close-button" onClick={onClose}>
+                        ×
+                    </button>
                 </div>
 
                 <div className="version-manager-content">
@@ -186,9 +199,13 @@ export const VersionManager: React.FC<VersionManagerProps> = ({ isOpen, onClose 
                                 <h3>Current Version</h3>
                                 {currentVersion ? (
                                     <div className="version-info">
-                                        <span className="version-tag">{currentVersion.version}</span>
+                                        <span className="version-tag">
+                                            {currentVersion.version}
+                                        </span>
                                         <span className="version-date">
-                                            {new Date(currentVersion.date).toLocaleDateString()}
+                                            {new Date(
+                                                currentVersion.date
+                                            ).toLocaleDateString()}
                                         </span>
                                     </div>
                                 ) : (
@@ -198,23 +215,41 @@ export const VersionManager: React.FC<VersionManagerProps> = ({ isOpen, onClose 
 
                             <div className="update-strategy">
                                 <h3>Update Strategy</h3>
-                                <select 
-                                    value={selectedStrategy} 
-                                    onChange={(e) => setSelectedStrategy(e.target.value as any)}
+                                <select
+                                    value={selectedStrategy}
+                                    onChange={e =>
+                                        setSelectedStrategy(
+                                            e.target
+                                                .value as
+                                                | 'rolling'
+                                                | 'immediate'
+                                                | 'graceful'
+                                        )
+                                    }
                                 >
-                                    <option value="rolling">Rolling Update (one at a time)</option>
-                                    <option value="immediate">Immediate Update (all at once)</option>
-                                    <option value="graceful">Graceful Update (wait for tasks)</option>
+                                    <option value="rolling">
+                                        Rolling Update (one at a time)
+                                    </option>
+                                    <option value="immediate">
+                                        Immediate Update (all at once)
+                                    </option>
+                                    <option value="graceful">
+                                        Graceful Update (wait for tasks)
+                                    </option>
                                 </select>
                             </div>
 
                             {updateProgress.status && (
-                                <div className={`update-progress ${updateProgress.status === 'error' ? 'error' : ''}`}>
+                                <div
+                                    className={`update-progress ${updateProgress.status === 'error' ? 'error' : ''}`}
+                                >
                                     <h3>Update Progress</h3>
                                     <div>Version: {updateProgress.version}</div>
                                     <div>Status: {updateProgress.status}</div>
                                     {updateProgress.error && (
-                                        <div className="error-message">{updateProgress.error}</div>
+                                        <div className="error-message">
+                                            {updateProgress.error}
+                                        </div>
                                     )}
                                 </div>
                             )}
@@ -222,19 +257,23 @@ export const VersionManager: React.FC<VersionManagerProps> = ({ isOpen, onClose 
                             <div className="version-list">
                                 <div className="version-list-header">
                                     <h3>Available Versions</h3>
-                                    <button className="create-tag-button" onClick={handleCreateTag}>
+                                    <button
+                                        className="create-tag-button"
+                                        onClick={handleCreateTag}
+                                    >
                                         Create Tag
                                     </button>
                                 </div>
                                 <div className="versions">
-                                    {versions.map((version) => (
-                                        <div 
-                                            key={version.version} 
+                                    {versions.map(version => (
+                                        <div
+                                            key={version.version}
                                             className={`version-item ${version.active ? 'active' : ''}`}
                                         >
                                             <div className="version-details">
                                                 <span className="version-tag">
-                                                    {version.tag || version.version}
+                                                    {version.tag ||
+                                                        version.version}
                                                 </span>
                                                 {version.description && (
                                                     <span className="version-description">
@@ -242,21 +281,31 @@ export const VersionManager: React.FC<VersionManagerProps> = ({ isOpen, onClose 
                                                     </span>
                                                 )}
                                                 <span className="version-date">
-                                                    {new Date(version.date).toLocaleDateString()}
+                                                    {new Date(
+                                                        version.date
+                                                    ).toLocaleDateString()}
                                                 </span>
                                             </div>
                                             <div className="version-actions">
                                                 {!version.active && (
                                                     <>
-                                                        <button 
+                                                        <button
                                                             className="update-button"
-                                                            onClick={() => handleUpdate(version.version)}
+                                                            onClick={() =>
+                                                                handleUpdate(
+                                                                    version.version
+                                                                )
+                                                            }
                                                         >
                                                             Update
                                                         </button>
-                                                        <button 
+                                                        <button
                                                             className="rollback-button"
-                                                            onClick={() => handleRollback(version.version)}
+                                                            onClick={() =>
+                                                                handleRollback(
+                                                                    version.version
+                                                                )
+                                                            }
                                                         >
                                                             Rollback
                                                         </button>

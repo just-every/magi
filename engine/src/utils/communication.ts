@@ -155,31 +155,38 @@ export class CommunicationManager {
                     // Check if this is a welcome message with port information
                     if (message.type === 'connect') {
                         const commandMessage = message as CommandMessage;
-                        if (
-                            commandMessage.args &&
-                            commandMessage.args.controllerPort
-                        ) {
-                            const newPortRaw =
-                                commandMessage.args.controllerPort;
+                        if (commandMessage.args) {
+                            // Handle controller port
+                            if (commandMessage.args.controllerPort) {
+                                const newPortRaw =
+                                    commandMessage.args.controllerPort;
 
-                            // Check if newPortRaw is a string or number before assigning
-                            if (
-                                typeof newPortRaw === 'string' ||
-                                typeof newPortRaw === 'number'
-                            ) {
-                                const newPort = String(newPortRaw); // Convert number to string if necessary
+                                // Check if newPortRaw is a string or number before assigning
+                                if (
+                                    typeof newPortRaw === 'string' ||
+                                    typeof newPortRaw === 'number'
+                                ) {
+                                    const newPort = String(newPortRaw); // Convert number to string if necessary
 
-                                // If port has changed, update our stored port for future reconnections
-                                if (newPort !== this.controllerPort) {
-                                    console.log(
-                                        `Controller port changed from ${this.controllerPort} to ${newPort}`
+                                    // If port has changed, update our stored port for future reconnections
+                                    if (newPort !== this.controllerPort) {
+                                        console.log(
+                                            `Controller port changed from ${this.controllerPort} to ${newPort}`
+                                        );
+                                        this.controllerPort = newPort;
+                                    }
+                                } else if (newPortRaw !== undefined) {
+                                    console.warn(
+                                        `Received non-string/number controllerPort: ${typeof newPortRaw}`
                                     );
-                                    this.controllerPort = newPort;
                                 }
-                            } else if (newPortRaw !== undefined) {
-                                console.warn(
-                                    `Received non-string/number controllerPort: ${typeof newPortRaw}`
-                                );
+                            }
+                            
+                            // Handle core process ID
+                            if (commandMessage.args.coreProcessId) {
+                                const coreProcessId = commandMessage.args.coreProcessId;
+                                console.log(`[Communication] Received core process ID: ${coreProcessId}`);
+                                processTracker.setCoreProcessId(coreProcessId);
                             }
                         }
                         return;

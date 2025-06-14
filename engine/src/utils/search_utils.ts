@@ -4,9 +4,11 @@
  * This module provides tools for web searching and information gathering.
  */
 
-import { web_search as webSearchLib, getSearchTools as getSearchToolsLib } from '@just-every/search';
+import {
+    web_search as webSearchLib,
+    getSearchTools as getSearchToolsLib,
+} from '@just-every/search';
 import { ToolFunction } from '@just-every/ensemble';
-
 
 /**
  * Perform a web search and get results

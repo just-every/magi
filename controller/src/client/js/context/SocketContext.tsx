@@ -378,7 +378,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
             setProcesses(prevProcesses => {
                 const newProcesses = new Map(prevProcesses);
-                
+
                 // Use the imported MagiMessage structure
                 const data = event.message;
                 const streamingEvent = data.event;
@@ -387,7 +387,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     (streamingEvent as { timestamp?: string }).timestamp ||
                     new Date().toISOString();
                 const eventType = streamingEvent.type;
-                
+
                 // Handle audio_stream events even for non-existent processes (e.g., voice previews)
                 if (eventType === 'audio_stream' && isAudioEnabled) {
                     const audioEvent = streamingEvent as AudioEvent;
@@ -396,14 +396,14 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                             pcmParameters: audioEvent.pcmParameters
                                 ? {
                                       sampleRate:
-                                          audioEvent.pcmParameters
-                                              .sampleRate || 44100,
+                                          audioEvent.pcmParameters.sampleRate ||
+                                          44100,
                                       channels:
-                                          audioEvent.pcmParameters
-                                              .channels || 1,
+                                          audioEvent.pcmParameters.channels ||
+                                          1,
                                       bitDepth:
-                                          audioEvent.pcmParameters
-                                              .bitDepth || 16,
+                                          audioEvent.pcmParameters.bitDepth ||
+                                          16,
                                   }
                                 : undefined,
                             data: audioEvent.data || '',
@@ -413,7 +413,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     });
                     return newProcesses; // No state update needed
                 }
-                
+
                 const process = newProcesses.get(event.id) as
                     | ProcessData
                     | undefined;

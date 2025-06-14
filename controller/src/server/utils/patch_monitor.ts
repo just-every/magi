@@ -1,6 +1,6 @@
 /**
  * Patch Monitoring and Anomaly Detection Module
- * 
+ *
  * Provides real-time monitoring and anomaly detection for patch operations
  */
 
@@ -8,7 +8,11 @@ import { getDB } from './db.js';
 import { EventEmitter } from 'events';
 
 export interface PatchAnomalyEvent {
-    type: 'high_volume' | 'unusual_pattern' | 'repeated_failure' | 'suspicious_content';
+    type:
+        | 'high_volume'
+        | 'unusual_pattern'
+        | 'repeated_failure'
+        | 'suspicious_content';
     severity: 'low' | 'medium' | 'high' | 'critical';
     details: string;
     recommendation: string;
@@ -27,7 +31,9 @@ export class PatchMonitor extends EventEmitter {
     private readonly thresholds = {
         maxPatchesPerHour: parseInt(process.env.MAX_PATCHES_PER_HOUR || '50'),
         maxFailureRate: parseFloat(process.env.MAX_FAILURE_RATE || '0.3'),
-        maxUserPatchesPerHour: parseInt(process.env.MAX_USER_PATCHES_PER_HOUR || '20'),
+        maxUserPatchesPerHour: parseInt(
+            process.env.MAX_USER_PATCHES_PER_HOUR || '20'
+        ),
     };
 
     constructor() {
@@ -41,7 +47,7 @@ export class PatchMonitor extends EventEmitter {
 
         // Reset hourly metrics
         setInterval(() => this.resetHourlyMetrics(), 60 * 60 * 1000);
-        
+
         // Run anomaly detection every 5 minutes
         setInterval(() => this.detectAnomalies(), 5 * 60 * 1000);
     }
@@ -56,7 +62,7 @@ export class PatchMonitor extends EventEmitter {
         patchContent?: string
     ): void {
         const hour = new Date().toISOString().substring(0, 13);
-        
+
         // Update patches per hour
         const hourKey = `${projectId}:${hour}`;
         this.metrics.patchesPerHour.set(
@@ -113,7 +119,8 @@ export class PatchMonitor extends EventEmitter {
                 const key = `${projectId}:${name}`;
                 this.metrics.suspiciousPatterns.set(
                     key,
-                    (this.metrics.suspiciousPatterns.get(key) || 0) + matches.length
+                    (this.metrics.suspiciousPatterns.get(key) || 0) +
+                        matches.length
                 );
             }
         }
@@ -127,13 +134,17 @@ export class PatchMonitor extends EventEmitter {
 
         // Check patch volume
         for (const [key, count] of this.metrics.patchesPerHour) {
-            if (key.endsWith(hour) && count > this.thresholds.maxPatchesPerHour) {
+            if (
+                key.endsWith(hour) &&
+                count > this.thresholds.maxPatchesPerHour
+            ) {
                 const [projectId] = key.split(':');
                 this.emit('anomaly', {
                     type: 'high_volume',
                     severity: 'high',
                     details: `Project ${projectId} has ${count} patches in the last hour`,
-                    recommendation: 'Review patch sources and consider temporary rate limiting',
+                    recommendation:
+                        'Review patch sources and consider temporary rate limiting',
                     timestamp: new Date(),
                     data: { projectId, count },
                 } as PatchAnomalyEvent);
@@ -143,14 +154,16 @@ export class PatchMonitor extends EventEmitter {
         // Check failure rates
         for (const [projectId, stats] of this.metrics.failureRate) {
             const total = stats.success + stats.failed;
-            if (total > 10) { // Only check if we have enough data
+            if (total > 10) {
+                // Only check if we have enough data
                 const failureRate = stats.failed / total;
                 if (failureRate > this.thresholds.maxFailureRate) {
                     this.emit('anomaly', {
                         type: 'repeated_failure',
                         severity: 'medium',
                         details: `Project ${projectId} has ${Math.round(failureRate * 100)}% failure rate`,
-                        recommendation: 'Investigate patch compatibility issues',
+                        recommendation:
+                            'Investigate patch compatibility issues',
                         timestamp: new Date(),
                         data: { projectId, failureRate, stats },
                     } as PatchAnomalyEvent);
@@ -160,7 +173,10 @@ export class PatchMonitor extends EventEmitter {
 
         // Check user activity
         for (const [key, count] of this.metrics.userActivity) {
-            if (key.endsWith(hour) && count > this.thresholds.maxUserPatchesPerHour) {
+            if (
+                key.endsWith(hour) &&
+                count > this.thresholds.maxUserPatchesPerHour
+            ) {
                 const [userId] = key.split(':');
                 this.emit('anomaly', {
                     type: 'high_volume',
@@ -198,7 +214,7 @@ export class PatchMonitor extends EventEmitter {
      */
     private async checkDatabaseAnomalies(): Promise<void> {
         const client = await getDB();
-        
+
         try {
             // Check for patches from same source with different content
             const duplicateCheck = await client.query(`
@@ -240,7 +256,6 @@ export class PatchMonitor extends EventEmitter {
                     data: row,
                 } as PatchAnomalyEvent);
             }
-
         } catch (error) {
             console.error('Error checking database anomalies:', error);
         } finally {
@@ -253,7 +268,7 @@ export class PatchMonitor extends EventEmitter {
      */
     private resetHourlyMetrics(): void {
         const currentHour = new Date().toISOString().substring(0, 13);
-        
+
         // Clean up old hourly data
         for (const key of this.metrics.patchesPerHour.keys()) {
             if (!key.endsWith(currentHour)) {
@@ -320,7 +335,7 @@ export class PatchMonitor extends EventEmitter {
         // Aggregate suspicious patterns
         for (const [key, count] of this.metrics.suspiciousPatterns) {
             const [, pattern] = key.split(':');
-            summary.suspiciousPatterns[pattern] = 
+            summary.suspiciousPatterns[pattern] =
                 (summary.suspiciousPatterns[pattern] || 0) + count;
         }
 
@@ -341,7 +356,7 @@ export const patchMonitor = new PatchMonitor();
 // Set up anomaly handling
 patchMonitor.on('anomaly', (event: PatchAnomalyEvent) => {
     console.warn('[PATCH ANOMALY]', event);
-    
+
     // Here you could:
     // - Send alerts to administrators
     // - Automatically increase rate limits

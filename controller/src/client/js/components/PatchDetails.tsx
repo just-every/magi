@@ -3,9 +3,15 @@ import type { Patch } from './PatchesViewer';
 
 interface PatchDetailsProps {
     patch: Patch;
+    projectId?: string;
+    processId?: string;
 }
 
-const PatchDetails: React.FC<PatchDetailsProps> = ({ patch }) => {
+const PatchDetails: React.FC<PatchDetailsProps> = ({
+    patch,
+    projectId,
+    processId,
+}) => {
     const [isApplying, setIsApplying] = useState(false);
     const [actionResult, setActionResult] = useState<{
         success: boolean;
@@ -50,7 +56,8 @@ const PatchDetails: React.FC<PatchDetailsProps> = ({ patch }) => {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    projectPath: `/magi_output/projects/${patch.project_id}`,
+                    projectId: projectId || patch.project_id,
+                    processId: processId || patch.process_id,
                 }),
             });
 
@@ -105,10 +112,17 @@ const PatchDetails: React.FC<PatchDetailsProps> = ({ patch }) => {
             <div className="patch-details-header">
                 <h3>Patch #{patch.id}</h3>
                 <div className="patch-meta">
-                    <span className="patch-project">{patch.project_id}</span>
-                    <span className="patch-branch">{patch.branch_name}</span>
+                    <span className="patch-project">
+                        Project: {patch.project_id}
+                    </span>
+                    <span className="patch-process">
+                        Process: {patch.process_id}
+                    </span>
+                    <span className="patch-branch">
+                        Branch: {patch.branch_name}
+                    </span>
                     <span className="patch-date">
-                        {new Date(patch.created_at).toLocaleString()}
+                        Created: {new Date(patch.created_at).toLocaleString()}
                     </span>
                 </div>
             </div>
@@ -125,6 +139,52 @@ const PatchDetails: React.FC<PatchDetailsProps> = ({ patch }) => {
                 <h4>Commit Message</h4>
                 <pre>{patch.commit_message}</pre>
             </div>
+
+            {patch.riskAssessment && (
+                <div className="patch-risk-assessment">
+                    <h4>Security Assessment</h4>
+                    <div className="risk-info">
+                        <div className="risk-level-badge">
+                            <span
+                                className={`badge badge-risk-${patch.riskAssessment.riskLevel}`}
+                            >
+                                {patch.riskAssessment.riskLevel.toUpperCase()}{' '}
+                                RISK
+                            </span>
+                            <span className="risk-score">
+                                Score:{' '}
+                                {(patch.riskAssessment.riskScore * 100).toFixed(
+                                    0
+                                )}
+                                %
+                            </span>
+                        </div>
+                        <div className="risk-details">
+                            <p className="risk-recommendation">
+                                {patch.riskAssessment.recommendation}
+                            </p>
+                            {patch.riskAssessment.reasons.length > 0 && (
+                                <div className="risk-reasons">
+                                    <h5>Risk Factors:</h5>
+                                    <ul>
+                                        {patch.riskAssessment.reasons.map(
+                                            (reason, index) => (
+                                                <li key={index}>{reason}</li>
+                                            )
+                                        )}
+                                    </ul>
+                                </div>
+                            )}
+                            {patch.riskAssessment.canAutoMerge && (
+                                <p className="auto-merge-info">
+                                    ✓ This patch is eligible for automatic
+                                    merging
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {patch.metrics && (
                 <div className="patch-stats">
@@ -144,6 +204,12 @@ const PatchDetails: React.FC<PatchDetailsProps> = ({ patch }) => {
                             </span>
                         </span>
                         <span>Total Changes: {patch.metrics.totalLines}</span>
+                        {patch.metrics.score !== undefined && (
+                            <span>
+                                Complexity Score:{' '}
+                                {(patch.metrics.score * 100).toFixed(0)}%
+                            </span>
+                        )}
                     </div>
                 </div>
             )}
@@ -349,6 +415,101 @@ const PatchDetails: React.FC<PatchDetailsProps> = ({ patch }) => {
                 .btn:disabled {
                     opacity: 0.65;
                     cursor: not-allowed;
+                }
+
+                .patch-risk-assessment {
+                    background-color: #f8f9fa;
+                    padding: 1rem;
+                    border-radius: 0.5rem;
+                    border: 1px solid #dee2e6;
+                }
+
+                .risk-info {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1rem;
+                }
+
+                .risk-level-badge {
+                    display: flex;
+                    align-items: center;
+                    gap: 1rem;
+                }
+
+                .badge-risk-low {
+                    background-color: #28a745;
+                    color: white;
+                    padding: 0.5rem 1rem;
+                    border-radius: 0.25rem;
+                    font-weight: bold;
+                }
+
+                .badge-risk-moderate {
+                    background-color: #ffc107;
+                    color: #000;
+                    padding: 0.5rem 1rem;
+                    border-radius: 0.25rem;
+                    font-weight: bold;
+                }
+
+                .badge-risk-high {
+                    background-color: #dc3545;
+                    color: white;
+                    padding: 0.5rem 1rem;
+                    border-radius: 0.25rem;
+                    font-weight: bold;
+                }
+
+                .badge-risk-critical {
+                    background-color: #343a40;
+                    color: white;
+                    padding: 0.5rem 1rem;
+                    border-radius: 0.25rem;
+                    font-weight: bold;
+                }
+
+                .risk-score {
+                    font-size: 0.875rem;
+                    color: #6c757d;
+                }
+
+                .risk-recommendation {
+                    font-weight: 500;
+                    color: #495057;
+                    margin: 0;
+                }
+
+                .risk-reasons {
+                    background-color: white;
+                    padding: 0.75rem;
+                    border-radius: 0.25rem;
+                    border: 1px solid #e9ecef;
+                }
+
+                .risk-reasons h5 {
+                    margin-top: 0;
+                    margin-bottom: 0.5rem;
+                    font-size: 0.875rem;
+                    color: #6c757d;
+                }
+
+                .risk-reasons ul {
+                    margin: 0;
+                    padding-left: 1.5rem;
+                }
+
+                .risk-reasons li {
+                    color: #6c757d;
+                    font-size: 0.875rem;
+                }
+
+                .auto-merge-info {
+                    color: #28a745;
+                    font-weight: 500;
+                    margin: 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.25rem;
                 }
             `}</style>
         </div>

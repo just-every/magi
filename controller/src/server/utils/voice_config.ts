@@ -8,7 +8,6 @@ export interface VoiceOption {
 }
 
 export const VOICE_OPTIONS: VoiceOption[] = [
-
     // ElevenLabs Voices
     {
         id: 'elevenlabs-rachel',

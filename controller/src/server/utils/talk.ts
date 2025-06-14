@@ -113,11 +113,7 @@ export async function talk(
         };
 
         // Generate voice stream
-        const stream = ensembleVoice(
-            input,
-            agent,
-            voiceOptions
-        );
+        const stream = ensembleVoice(input, agent, voiceOptions);
 
         let chunkCount = 0;
         let hasSeenFirstChunk = false;
@@ -127,13 +123,16 @@ export async function talk(
             if (event.type === 'audio_stream') {
                 // Log for debugging
                 if (!hasSeenFirstChunk || event.pcmParameters) {
-                    console.log(`[Server] Audio stream event for ${processId}:`, {
-                        hasData: !!event.data,
-                        dataLength: event.data?.length,
-                        hasPcmParameters: !!event.pcmParameters,
-                        chunkIndex: event.chunkIndex,
-                        isFinalChunk: event.isFinalChunk
-                    });
+                    console.log(
+                        `[Server] Audio stream event for ${processId}:`,
+                        {
+                            hasData: !!event.data,
+                            dataLength: event.data?.length,
+                            hasPcmParameters: !!event.pcmParameters,
+                            chunkIndex: event.chunkIndex,
+                            isFinalChunk: event.isFinalChunk,
+                        }
+                    );
                     hasSeenFirstChunk = true;
                 }
 
@@ -148,7 +147,10 @@ export async function talk(
                 chunkCount++;
             } else if (event.type === 'cost_update') {
                 // Forward the cost_update event directly
-                communicationManager.handleModelUsage(processId, event as CostUpdateEvent);
+                communicationManager.handleModelUsage(
+                    processId,
+                    event as CostUpdateEvent
+                );
             }
         }
 

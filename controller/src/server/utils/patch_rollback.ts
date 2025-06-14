@@ -1,12 +1,16 @@
 /**
  * Patch Rollback System
- * 
+ *
  * Provides automatic rollback capabilities for problematic patches
  */
 
 import { execSync } from 'child_process';
 import { getDB } from './db.js';
-import { execGitSafe, logAuditEvent, validateProjectPath } from './patch_security.js';
+import {
+    execGitSafe,
+    logAuditEvent,
+    validateProjectPath,
+} from './patch_security.js';
 import { patchMonitor } from './patch_monitor.js';
 
 export interface RollbackResult {
@@ -115,11 +119,7 @@ export async function rollbackPatch(
         ]);
 
         // Perform the rollback
-        await execGitSafe(projectPath, [
-            'reset',
-            '--hard',
-            rollbackTag,
-        ]);
+        await execGitSafe(projectPath, ['reset', '--hard', rollbackTag]);
 
         // Create a revert commit for audit trail
         const revertMessage = `Revert patch #${patchId}: ${options.reason}`;
@@ -181,7 +181,6 @@ export async function rollbackPatch(
             success: true,
             rollbackCommitSha: revertCommit.trim(),
         };
-
     } catch (error) {
         console.error('Rollback failed:', error);
 
@@ -220,7 +219,7 @@ async function cleanupOldRollbackTags(
         ]);
 
         const rollbackTags = tags.trim().split('\n').filter(Boolean);
-        
+
         // Keep only the most recent tag
         if (rollbackTags.length > 1) {
             const tagsToDelete = rollbackTags.slice(0, -1);
@@ -246,7 +245,7 @@ export class AutomaticRollbackService {
 
     constructor() {
         // Monitor for anomalies that might trigger rollback
-        patchMonitor.on('anomaly', async (event) => {
+        patchMonitor.on('anomaly', async event => {
             if (event.severity === 'critical' && event.data?.patchId) {
                 await this.evaluateRollback(event.data.patchId, event.details);
             }
@@ -256,16 +255,13 @@ export class AutomaticRollbackService {
     /**
      * Evaluate if a patch should be rolled back
      */
-    async evaluateRollback(
-        patchId: number,
-        reason: string
-    ): Promise<void> {
+    async evaluateRollback(patchId: number, reason: string): Promise<void> {
         const client = await getDB();
 
         try {
             // Get patch details
             const patchResult = await client.query(
-                `SELECT * FROM patches WHERE id = $1 AND status = 'applied'`,
+                "SELECT * FROM patches WHERE id = $1 AND status = 'applied'",
                 [patchId]
             );
 
@@ -393,15 +389,15 @@ export class AutomaticRollbackService {
 
                 const errorCount = parseInt(errorCheck.rows[0].error_count);
                 if (errorCount > 5) {
-                    issues.push(`High error rate: ${errorCount} errors in 10 minutes`);
+                    issues.push(
+                        `High error rate: ${errorCount} errors in 10 minutes`
+                    );
                 }
-
             } finally {
                 client.release();
             }
 
             // Add more health checks here
-
         } catch (error) {
             issues.push(`Health check error: ${error.message}`);
         }

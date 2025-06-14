@@ -272,7 +272,7 @@ export async function attemptAutoResolve(
 
                 // Mark original patch as superseded
                 await client.query(
-                    `UPDATE patches SET status = 'superseded' WHERE id = $1`,
+                    "UPDATE patches SET status = 'superseded' WHERE id = $1",
                     [patchId]
                 );
 

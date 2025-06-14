@@ -182,13 +182,17 @@ export async function create_project(
 
             const listener = async (message: any) => {
                 if (resolved) return; // Ignore if already resolved
-                
-                console.log(`[create_project] Received message type: ${message.type}`);
-                
+
+                console.log(
+                    `[create_project] Received message type: ${message.type}`
+                );
+
                 if (message.type === 'project_update') {
                     const projectMessage = message as ProjectMessage;
-                    console.log(`[create_project] Project update for: ${projectMessage.project_id} (waiting for: ${project_id})`);
-                    
+                    console.log(
+                        `[create_project] Project update for: ${projectMessage.project_id} (waiting for: ${project_id})`
+                    );
+
                     if (projectMessage.project_id === project_id) {
                         resolved = true;
                         cleanup();
@@ -215,9 +219,15 @@ export async function create_project(
                 // Remove the listener
                 if (listenerAttached) {
                     try {
-                        const index = communicationManager['commandListeners'].indexOf(listener);
+                        const index =
+                            communicationManager['commandListeners'].indexOf(
+                                listener
+                            );
                         if (index > -1) {
-                            communicationManager['commandListeners'].splice(index, 1);
+                            communicationManager['commandListeners'].splice(
+                                index,
+                                1
+                            );
                         }
                     } catch (err) {
                         console.error('Error removing listener:', err);
@@ -228,27 +238,34 @@ export async function create_project(
             // Add the listener
             communicationManager.onCommand(listener);
             listenerAttached = true;
-            console.log(`[create_project] Listener attached for project: ${project_id}`);
+            console.log(
+                `[create_project] Listener attached for project: ${project_id}`
+            );
 
             // NOW send the create event (after listener is attached)
-            console.log(`[create_project] Sending project_create event for: ${project_id}`);
+            console.log(
+                `[create_project] Sending project_create event for: ${project_id}`
+            );
             sendStreamEvent({
                 type: 'project_create',
                 project_id: project_id,
             });
 
             // Set up timeout
-            timeoutHandle = setTimeout(() => {
-                if (!resolved) {
-                    resolved = true;
-                    cleanup();
-                    reject(
-                        new Error(
-                            `Timeout waiting for project '${project_id}' to be created (5 minutes)`
-                        )
-                    );
-                }
-            }, 5 * 60 * 1000); // 5 minute timeout
+            timeoutHandle = setTimeout(
+                () => {
+                    if (!resolved) {
+                        resolved = true;
+                        cleanup();
+                        reject(
+                            new Error(
+                                `Timeout waiting for project '${project_id}' to be created (5 minutes)`
+                            )
+                        );
+                    }
+                },
+                5 * 60 * 1000
+            ); // 5 minute timeout
         });
 
         // Wait for the project to be created

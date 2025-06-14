@@ -205,17 +205,15 @@ async function prepareGitRepository(
         // This avoids issues with worktree paths that reference /external/host
         // which is not accessible from engine containers
         console.log('Creating self-contained git clone for engine access');
-        
+
         // Use shallow clone to avoid transferring full history
         await execPromise(
             `git clone --depth 1 --no-single-branch "${hostPath}" "${outputPath}"`
         );
-        
+
         // Create and checkout a new branch for this process
-        await execPromise(
-            `git -C "${outputPath}" checkout -b ${branchName}`
-        );
-        
+        await execPromise(`git -C "${outputPath}" checkout -b ${branchName}`);
+
         // Set the remote to point back to the host repository
         await execPromise(
             `git -C "${outputPath}" remote set-url origin "${hostPath}"`
@@ -605,17 +603,24 @@ export async function runDockerContainer(
         const attachStdout = process.env.ATTACH_CONTAINER_STDOUT === 'true';
 
         // Determine the image version to use
-        const imageVersion = options.version || process.env.MAGI_VERSION || 'latest';
+        const imageVersion =
+            options.version || process.env.MAGI_VERSION || 'latest';
         const imageName = `magi-engine:${imageVersion}`;
+
+        // Add a label to identify the core process
+        const isCore = options.coreProcessId === processId;
+        const coreLabel = isCore ? '--label magi.core=true' : '';
 
         // Create the docker run command, removing -d if we want to attach stdout
         const dockerRunCommand = `docker run ${attachStdout ? '' : '-d'} --rm --name ${containerName} \
+      ${coreLabel} \
       -e PROCESS_ID=${processId} \
       -e HOST_HOSTNAME=${hostName} \
       -e CONTROLLER_PORT=${serverPort} \
       -e TZ=${hostTimezone} \
       -e PROCESS_PROJECTS=${gitProjects.join(',')} \
       -e MAGI_VERSION=${imageVersion} \
+      -e IS_CORE_PROCESS=${isCore ? 'true' : 'false'} \
       ${
           options.projectPorts
               ? `-e PROJECT_PORTS=${Object.entries(options.projectPorts)
@@ -809,12 +814,12 @@ export function monitorContainerLogs(
  * @returns Promise resolving to an array of objects containing container info
  */
 export async function getRunningMagiContainers(): Promise<
-    { id: string; containerId: string; command: string }[]
+    { id: string; containerId: string; command: string; isCore?: boolean }[]
 > {
     try {
         // Get list of running containers with name starting with 'task-'
         const { stdout } = await execPromise(
-            "docker ps -a --filter 'name=task-' --filter 'status=running' --format '{{.ID}}|{{.Names}}|{{.Command}}'"
+            "docker ps -a --filter 'name=task-' --filter 'status=running' --format '{{.ID}}|{{.Names}}|{{.Command}}|{{.Label \"magi.core\"}}'"
         );
 
         if (!stdout.trim()) {
@@ -827,7 +832,7 @@ export async function getRunningMagiContainers(): Promise<
                 .trim()
                 .split('\n')
                 .map(line => {
-                    const [containerId, name, command] = line.split('|');
+                    const [containerId, name, command, coreLabel] = line.split('|');
 
                     // Extract process ID from name (remove 'task-' prefix)
                     const id = name.replace('task-', '');
@@ -842,6 +847,7 @@ export async function getRunningMagiContainers(): Promise<
                         id,
                         containerId,
                         command: originalCommand,
+                        isCore: coreLabel === 'true',
                     };
                 })
                 // Filter out system containers that aren't MAGI LLM process containers

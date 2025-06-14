@@ -91,11 +91,10 @@ function endProcess(exit: number, result?: string): void {
                 type: 'process_terminated',
                 error: result,
             });
-        }
-        else {
+        } else {
             comm.send({
                 type: 'process_done',
-                output: result
+                output: result,
             });
         }
     } else {
@@ -439,7 +438,10 @@ async function main(): Promise<void> {
 
                 for await (const event of runTaskStream) {
                     // Collect response_output events for history
-                    if (event.type === 'response_output' && 'content' in event) {
+                    if (
+                        event.type === 'response_output' &&
+                        'content' in event
+                    ) {
                         const content = (event as any).content;
                         if (typeof content === 'string' && content) {
                             responseHistory.push(content);
@@ -457,12 +459,14 @@ async function main(): Promise<void> {
                         // Send process_updated event with history
                         sendComms({
                             type: 'process_updated',
-                            history: responseHistory.slice(-10).map((content) => ({
-                                role: 'assistant' as const,
-                                content: content,
-                                type: 'message' as const,
-                                status: 'completed' as const
-                            })),
+                            history: responseHistory
+                                .slice(-10)
+                                .map(content => ({
+                                    role: 'assistant' as const,
+                                    content: content,
+                                    type: 'message' as const,
+                                    status: 'completed' as const,
+                                })),
                             output: responseHistory.slice(-5).join('\n\n'), // Last 5 responses as output
                         });
                         lastUpdateTime = now;
@@ -492,11 +496,11 @@ async function main(): Promise<void> {
                 // Send final update when task completes
                 sendComms({
                     type: 'process_updated',
-                    history: responseHistory.slice(-10).map((content) => ({
+                    history: responseHistory.slice(-10).map(content => ({
                         role: 'assistant' as const,
                         content: content,
                         type: 'message' as const,
-                        status: 'completed' as const
+                        status: 'completed' as const,
                     })),
                     output: responseHistory.slice(-5).join('\n\n'),
                 });
@@ -520,12 +524,19 @@ async function main(): Promise<void> {
                 const project_ids = getProcessProjectIds();
                 // Parallelize patch generation for all projects
                 if (project_ids.length > 0) {
-                    console.log(`[magi] Generating patches for ${project_ids.length} projects...`);
+                    console.log(
+                        `[magi] Generating patches for ${project_ids.length} projects...`
+                    );
                     await Promise.all(
                         project_ids.map(project_id =>
-                            planAndCommitChanges(agent, project_id).catch(err => {
-                                console.error(`[magi] Failed to generate patch for ${project_id}:`, err);
-                            })
+                            planAndCommitChanges(agent, project_id).catch(
+                                err => {
+                                    console.error(
+                                        `[magi] Failed to generate patch for ${project_id}:`,
+                                        err
+                                    );
+                                }
+                            )
                         )
                     );
                 }

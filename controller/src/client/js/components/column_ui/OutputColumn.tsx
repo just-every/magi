@@ -53,7 +53,11 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
     if (selectedPatch) {
         return (
             <div className="output-column h-100 overflow-auto p-3">
-                <PatchDetails patch={selectedPatch} />
+                <PatchDetails 
+                    patch={selectedPatch} 
+                    projectId={selectedPatch.project_id}
+                    processId={selectedPatch.process_id}
+                />
             </div>
         );
     }
@@ -282,13 +286,16 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                                 <i className="bi bi-code me-1"></i>{' '}
                                 {truncate(command, 200)}
                             </div>
-                            {process.projectIds && process.projectIds.length > 0 && (
-                                <div className="mt-2">
-                                    <i className="bi bi-folder-symlink me-1"></i>{' '}
-                                    {process.projectIds.length === 1 ? 'Project' : 'Projects'}:{' '}
-                                    {process.projectIds.join(', ')}
-                                </div>
-                            )}
+                            {process.projectIds &&
+                                process.projectIds.length > 0 && (
+                                    <div className="mt-2">
+                                        <i className="bi bi-folder-symlink me-1"></i>{' '}
+                                        {process.projectIds.length === 1
+                                            ? 'Project'
+                                            : 'Projects'}
+                                        : {process.projectIds.join(', ')}
+                                    </div>
+                                )}
                         </div>
                     </div>
                 </div>

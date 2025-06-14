@@ -54,7 +54,10 @@ export const COMMON_WARNINGS = `IMPORTANT WARNINGS:
 export function getProjectsContext(): string {
     const projectIds = getProcessProjectIds();
     const projectPorts = getProcessProjectPorts();
-    const startingDir = projectIds.length > 0 ? `/app/projects/${projectIds[0]}` : get_output_dir();
+    const startingDir =
+        projectIds.length > 0
+            ? `/app/projects/${projectIds[0]}`
+            : get_output_dir();
     const portText = Object.keys(projectPorts).length
         ? `\nProject services currently active:${Object.entries(projectPorts)
               .map(([id, port]) => `\n- ${id}: http://localhost:${port}`)

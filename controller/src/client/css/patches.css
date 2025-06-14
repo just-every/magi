@@ -169,6 +169,41 @@
     background-color: #fefefe;
 }
 
+.badge-info {
+    color: #0c5460;
+    background-color: #d1ecf1;
+}
+
+.badge-dark {
+    color: #fff;
+    background-color: #343a40;
+}
+
+/* Risk level badges */
+.badge-risk-low {
+    background-color: #28a745;
+    color: white;
+}
+
+.badge-risk-moderate {
+    background-color: #ffc107;
+    color: #000;
+}
+
+.badge-risk-high {
+    background-color: #dc3545;
+    color: white;
+}
+
+.badge-risk-critical {
+    background-color: #343a40;
+    color: white;
+}
+
+.ml-1 {
+    margin-left: 0.25rem;
+}
+
 /* Button styles */
 .btn-sm {
     padding: 0.25rem 0.5rem;
@@ -185,6 +220,21 @@
 .btn-sm:hover {
     background-color: #5a6268;
     border-color: #545b62;
+}
+
+.btn-sm.btn-primary {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.btn-sm.btn-primary:hover {
+    background-color: #0056b3;
+    border-color: #004085;
+}
+
+.btn-sm:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
 }
 
 /* Alert styles */

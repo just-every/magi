@@ -38,13 +38,19 @@ export async function planAndCommitChanges(
         let mainBranch = 'main';
         try {
             // Check if 'main' exists, otherwise use 'master'
-            execSync(`git -C "${projectPath}" rev-parse --verify main`, { stdio: 'pipe' });
+            execSync(`git -C "${projectPath}" rev-parse --verify main`, {
+                stdio: 'pipe',
+            });
         } catch (e) {
             try {
-                execSync(`git -C "${projectPath}" rev-parse --verify master`, { stdio: 'pipe' });
+                execSync(`git -C "${projectPath}" rev-parse --verify master`, {
+                    stdio: 'pipe',
+                });
                 mainBranch = 'master';
             } catch (e2) {
-                console.warn(`[commit-planner] Could not find main or master branch`);
+                console.warn(
+                    `[commit-planner] Could not find main or master branch`
+                );
             }
         }
 
@@ -56,7 +62,9 @@ export async function planAndCommitChanges(
                 { encoding: 'utf8' }
             ).trim();
         } catch (e) {
-            console.warn(`[commit-planner] Could not determine current branch, using '${mainBranch}'`);
+            console.warn(
+                `[commit-planner] Could not determine current branch, using '${mainBranch}'`
+            );
         }
 
         // Check if there are commits on the current branch that aren't on main/master
@@ -71,17 +79,21 @@ export async function planAndCommitChanges(
                 if (commitList) {
                     hasExistingCommits = true;
                     commitCount = commitList.split('\n').filter(Boolean).length;
-                    console.log(`[commit-planner] Found ${commitCount} existing commits on branch ${currentBranch}`);
+                    console.log(
+                        `[commit-planner] Found ${commitCount} existing commits on branch ${currentBranch}`
+                    );
                 }
             } catch (e) {
-                console.log(`[commit-planner] Could not compare with ${mainBranch} branch`);
+                console.log(
+                    `[commit-planner] Could not compare with ${mainBranch} branch`
+                );
             }
         }
 
         // If there are existing commits, generate a patch from them
         if (hasExistingCommits) {
-            console.log(`[commit-planner] Creating patch from existing commits...`);
-            
+            console.log('[commit-planner] Creating patch from existing commits...');
+
             // Get the commit messages
             let commitMessages = '';
             try {
@@ -90,7 +102,9 @@ export async function planAndCommitChanges(
                     { encoding: 'utf8' }
                 ).trim();
             } catch (e) {
-                console.error(`[commit-planner] Failed to get commit messages: ${e}`);
+                console.error(
+                    `[commit-planner] Failed to get commit messages: ${e}`
+                );
             }
 
             // Generate patch from the commits
@@ -102,18 +116,21 @@ export async function planAndCommitChanges(
                 );
 
                 if (!patchContent.trim()) {
-                    console.log(`[commit-planner] Generated patch is empty`);
+                    console.log('[commit-planner] Generated patch is empty');
                     return;
                 }
             } catch (e) {
-                console.error(`[commit-planner] Failed to generate patch from commits: ${e}`);
+                console.error(
+                    `[commit-planner] Failed to generate patch from commits: ${e}`
+                );
                 return;
             }
 
             // Use the existing commit messages as the patch description
-            const commitMessage = commitCount > 1 
-                ? `Combined ${commitCount} commits from branch ${currentBranch}\n\n${commitMessages}`
-                : commitMessages || `Changes from branch ${currentBranch}`;
+            const commitMessage =
+                commitCount > 1
+                    ? `Combined ${commitCount} commits from branch ${currentBranch}\n\n${commitMessages}`
+                    : commitMessages || `Changes from branch ${currentBranch}`;
 
             // Calculate metrics from the existing commits
             let metrics = null;
@@ -121,25 +138,31 @@ export async function planAndCommitChanges(
                 const numstat = execSync(
                     `git -C "${projectPath}" diff --numstat ${mainBranch}..HEAD`,
                     { encoding: 'utf8' }
-                ).trim().split('\n').filter(Boolean);
-                
+                )
+                    .trim()
+                    .split('\n')
+                    .filter(Boolean);
+
                 let totalAdds = 0;
                 let totalDels = 0;
-                
+
                 for (const line of numstat) {
                     const [adds, dels] = line.split('\t');
                     totalAdds += parseInt(adds) || 0;
                     totalDels += parseInt(dels) || 0;
                 }
-                
+
                 metrics = {
                     filesChanged: numstat.length,
                     totalLines: totalAdds + totalDels,
                     additions: totalAdds,
-                    deletions: totalDels
+                    deletions: totalDels,
                 };
             } catch (err) {
-                console.warn('[commit-planner] Failed to compute metrics:', err);
+                console.warn(
+                    '[commit-planner] Failed to compute metrics:',
+                    err
+                );
             }
 
             // Save patch to database
@@ -150,7 +173,14 @@ export async function planAndCommitChanges(
                     (process_id, project_id, branch_name, commit_message, patch_content, metrics, status)
                     VALUES ($1, $2, $3, $4, $5, $6, 'pending')
                     RETURNING id`,
-                    [processId, projectId, currentBranch, commitMessage, patchContent, metrics]
+                    [
+                        processId,
+                        projectId,
+                        currentBranch,
+                        commitMessage,
+                        patchContent,
+                        metrics,
+                    ]
                 );
 
                 const patchId = result.rows[0].id;
@@ -170,7 +200,9 @@ export async function planAndCommitChanges(
                     timestamp: new Date().toISOString(),
                 });
 
-                console.log(`[commit-planner] Patch #${patchId} created successfully from existing commits for ${projectId}`);
+                console.log(
+                    `[commit-planner] Patch #${patchId} created successfully from existing commits for ${projectId}`
+                );
             } finally {
                 client.release();
             }
@@ -246,14 +278,20 @@ Do NOT actually commit the changes - just stage them and provide the message.`,
 
         // Check if there were no meaningful changes
         if (response.includes('[no-changes]')) {
-            console.log(`[commit-planner] No meaningful changes to commit for ${projectId}`);
+            console.log(
+                `[commit-planner] No meaningful changes to commit for ${projectId}`
+            );
             return;
         }
 
         // Extract commit message from response
-        const commitMessageMatch = response.match(/\[commit-message\]\s*([\s\S]+?)$/);
+        const commitMessageMatch = response.match(
+            /\[commit-message\]\s*([\s\S]+?)$/
+        );
         if (!commitMessageMatch) {
-            console.error(`[commit-planner] Could not extract commit message from response`);
+            console.error(
+                `[commit-planner] Could not extract commit message from response`
+            );
             return;
         }
         const commitMessage = commitMessageMatch[1].trim();
@@ -266,9 +304,11 @@ Do NOT actually commit the changes - just stage them and provide the message.`,
                 `git -C "${projectPath}" diff --cached --name-only`,
                 { encoding: 'utf8' }
             ).trim();
-            
+
             if (!stagedFiles) {
-                console.log(`[commit-planner] No changes were staged by the agent`);
+                console.log(
+                    `[commit-planner] No changes were staged by the agent`
+                );
                 return;
             }
 
@@ -279,7 +319,7 @@ Do NOT actually commit the changes - just stage them and provide the message.`,
             );
 
             if (!patchContent.trim()) {
-                console.log(`[commit-planner] Generated patch is empty`);
+                console.log('[commit-planner] Generated patch is empty');
                 return;
             }
         } catch (e) {
@@ -294,27 +334,33 @@ Do NOT actually commit the changes - just stage them and provide the message.`,
             const fileList = execSync(
                 `git -C "${projectPath}" diff --cached --name-only`,
                 { encoding: 'utf8' }
-            ).trim().split('\n').filter(Boolean);
-            
+            )
+                .trim()
+                .split('\n')
+                .filter(Boolean);
+
             const numstat = execSync(
                 `git -C "${projectPath}" diff --cached --numstat`,
                 { encoding: 'utf8' }
-            ).trim().split('\n').filter(Boolean);
-            
+            )
+                .trim()
+                .split('\n')
+                .filter(Boolean);
+
             let totalAdds = 0;
             let totalDels = 0;
-            
+
             for (const line of numstat) {
                 const [adds, dels] = line.split('\t');
                 totalAdds += parseInt(adds) || 0;
                 totalDels += parseInt(dels) || 0;
             }
-            
+
             metrics = {
                 filesChanged: fileList.length,
                 totalLines: totalAdds + totalDels,
                 additions: totalAdds,
-                deletions: totalDels
+                deletions: totalDels,
             };
         } catch (err) {
             console.warn('[commit-planner] Failed to compute metrics:', err);
@@ -329,7 +375,14 @@ Do NOT actually commit the changes - just stage them and provide the message.`,
                 (process_id, project_id, branch_name, commit_message, patch_content, metrics, status)
                 VALUES ($1, $2, $3, $4, $5, $6, 'pending')
                 RETURNING id`,
-                [processId, projectId, currentBranch, commitMessage, patchContent, metrics]
+                [
+                    processId,
+                    projectId,
+                    currentBranch,
+                    commitMessage,
+                    patchContent,
+                    metrics,
+                ]
             );
 
             const patchId = result.rows[0].id;
@@ -349,7 +402,9 @@ Do NOT actually commit the changes - just stage them and provide the message.`,
                 timestamp: new Date().toISOString(),
             });
 
-            console.log(`[commit-planner] Patch #${patchId} created successfully for ${projectId}`);
+            console.log(
+                `[commit-planner] Patch #${patchId} created successfully for ${projectId}`
+            );
         } finally {
             client.release();
         }
@@ -358,7 +413,9 @@ Do NOT actually commit the changes - just stage them and provide the message.`,
         try {
             execSync(`git -C "${projectPath}" reset`, { stdio: 'pipe' });
         } catch (e) {
-            console.warn(`[commit-planner] Failed to reset staged changes: ${e}`);
+            console.warn(
+                `[commit-planner] Failed to reset staged changes: ${e}`
+            );
         }
     } catch (error) {
         console.error(

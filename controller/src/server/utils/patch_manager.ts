@@ -238,7 +238,9 @@ export async function applyPatch(
                 });
             } catch (applyError) {
                 // If normal apply fails, try with --3way for better merge handling
-                console.log(`[patch-manager] Normal apply failed, trying 3-way merge`);
+                console.log(
+                    '[patch-manager] Normal apply failed, trying 3-way merge'
+                );
                 execSync(`git -C "${projectPath}" apply --3way "${tmpFile}"`, {
                     stdio: 'pipe',
                 });
@@ -255,9 +257,12 @@ export async function applyPatch(
                 .trim()
                 .substring(0, 1000);
             const commitMessage = `${sanitizedMessage}\n\nApplied patch #${patchId}`;
-            
+
             // Use safer approach to avoid command injection
-            const commitFile = path.join('/tmp', `commit-msg-${patchId}-${Date.now()}.txt`);
+            const commitFile = path.join(
+                '/tmp',
+                `commit-msg-${patchId}-${Date.now()}.txt`
+            );
             fs.writeFileSync(commitFile, commitMessage, { mode: 0o600 });
             try {
                 execSync(`git -C "${projectPath}" commit -F "${commitFile}"`, {
@@ -431,7 +436,10 @@ export async function analyzePatchConflicts(
 
         // Create temporary patch file with random name
         const randomId = crypto.randomBytes(16).toString('hex');
-        const tmpFile = path.join('/tmp', `patch-${patchId}-check-${randomId}.patch`);
+        const tmpFile = path.join(
+            '/tmp',
+            `patch-${patchId}-check-${randomId}.patch`
+        );
         fs.writeFileSync(tmpFile, patch.patch_content, { mode: 0o600 });
 
         try {
@@ -451,26 +459,40 @@ export async function analyzePatchConflicts(
             console.log('[patch-manager] Git apply check failed:', errorOutput);
 
             // Check if this is actually a conflict vs other types of errors
-            const isActualConflict = errorOutput.includes('patch does not apply') || 
-                                   errorOutput.includes('does not match index') ||
-                                   errorOutput.includes('already exists in working directory');
-            
+            const isActualConflict =
+                errorOutput.includes('patch does not apply') ||
+                errorOutput.includes('does not match index') ||
+                errorOutput.includes('already exists in working directory');
+
             // Check for other common non-conflict errors
             const isPermissionError = errorOutput.includes('Permission denied');
-            const isFormatError = errorOutput.includes('corrupt patch') || 
-                                errorOutput.includes('malformed patch');
-            const isPathError = errorOutput.includes('No such file or directory');
-            const isEmptyRepoError = errorOutput.includes('does not exist in index');
+            const isFormatError =
+                errorOutput.includes('corrupt patch') ||
+                errorOutput.includes('malformed patch');
+            const isPathError = errorOutput.includes(
+                'No such file or directory'
+            );
+            const isEmptyRepoError = errorOutput.includes(
+                'does not exist in index'
+            );
 
             // If it's not a real conflict, return false
-            if (!isActualConflict && (isPermissionError || isFormatError || isPathError || isEmptyRepoError)) {
-                console.log('[patch-manager] Patch application failed due to non-conflict error');
+            if (
+                !isActualConflict &&
+                (isPermissionError ||
+                    isFormatError ||
+                    isPathError ||
+                    isEmptyRepoError)
+            ) {
+                console.log(
+                    '[patch-manager] Patch application failed due to non-conflict error'
+                );
                 if (fs.existsSync(tmpFile)) {
                     fs.unlinkSync(tmpFile);
                 }
-                return { 
+                return {
                     hasConflicts: false,
-                    error: errorOutput
+                    error: errorOutput,
                 };
             }
 

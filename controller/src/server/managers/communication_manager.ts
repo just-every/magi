@@ -233,6 +233,7 @@ export class CommunicationManager {
                     args: {
                         timestamp: new Date().toISOString(),
                         controllerPort: serverPort,
+                        coreProcessId: this.processManager.coreProcessId,
                     },
                 };
 

@@ -117,7 +117,10 @@ async function main(): Promise<void> {
     app.use('/api/custom-tools', customToolsRoutes);
     app.use('/api/pr-events', prEventsRoutes);
     app.use('/api/patches', patchesRoutes);
-    app.use('/api/versions', createVersionRoutes(serverManager.getVersionManager()));
+    app.use(
+        '/api/versions',
+        createVersionRoutes(serverManager.getVersionManager())
+    );
     app.use(voiceRoutes);
 
     // Expose the PR events manager for route handlers to use

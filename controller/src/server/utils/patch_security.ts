@@ -1,6 +1,6 @@
 /**
  * Patch Security Module
- * 
+ *
  * Provides security utilities and validations for the patch management system
  */
 
@@ -75,7 +75,12 @@ export function validateProjectPath(
     }
 
     // Ensure the resulting path is within bounds
-    const projectPath = path.join('/magi_output', processId, 'projects', projectId);
+    const projectPath = path.join(
+        '/magi_output',
+        processId,
+        'projects',
+        projectId
+    );
     const normalizedPath = path.normalize(projectPath);
 
     if (!normalizedPath.startsWith('/magi_output/')) {
@@ -93,7 +98,7 @@ export async function createSecureTempFile(
     suffix: string = '.patch'
 ): Promise<{ path: string; cleanup: () => void }> {
     const tmpDir = '/tmp/magi-patches';
-    
+
     // Create directory with restricted permissions
     if (!fs.existsSync(tmpDir)) {
         fs.mkdirSync(tmpDir, { mode: 0o700, recursive: true });
@@ -152,9 +157,10 @@ export function sanitizeCommitMessage(message: string): string {
 /**
  * Validate patch content for security issues
  */
-export function validatePatchContent(
-    patchContent: string
-): { valid: boolean; issues: string[] } {
+export function validatePatchContent(patchContent: string): {
+    valid: boolean;
+    issues: string[];
+} {
     const issues: string[] = [];
     const lines = patchContent.split('\n');
 
@@ -162,9 +168,19 @@ export function validatePatchContent(
     const suspiciousPatterns = [
         { pattern: /\0/, message: 'Null bytes detected' },
         { pattern: /\.\.\//g, message: 'Path traversal attempts detected' },
-        { pattern: /^diff --git a\/\.\./m, message: 'Patch targets parent directory' },
-        { pattern: /\bpassword\s*=\s*["'][^"']+["']/i, message: 'Hardcoded password detected' },
-        { pattern: /\b(?:api[_-]?key|secret[_-]?key|private[_-]?key)\s*=\s*["'][^"']+["']/i, message: 'API key detected' },
+        {
+            pattern: /^diff --git a\/\.\./m,
+            message: 'Patch targets parent directory',
+        },
+        {
+            pattern: /\bpassword\s*=\s*["'][^"']+["']/i,
+            message: 'Hardcoded password detected',
+        },
+        {
+            pattern:
+                /\b(?:api[_-]?key|secret[_-]?key|private[_-]?key)\s*=\s*["'][^"']+["']/i,
+            message: 'API key detected',
+        },
     ];
 
     for (const { pattern, message } of suspiciousPatterns) {
@@ -174,7 +190,8 @@ export function validatePatchContent(
     }
 
     // Check patch size
-    if (patchContent.length > 5 * 1024 * 1024) { // 5MB
+    if (patchContent.length > 5 * 1024 * 1024) {
+        // 5MB
         issues.push('Patch too large (>5MB)');
     }
 
@@ -213,13 +230,16 @@ export interface AuditLogEntry {
  */
 export async function logAuditEvent(entry: AuditLogEntry): Promise<void> {
     const logDir = '/magi_output/audit-logs';
-    
+
     // Create directory if it doesn't exist
     if (!fs.existsSync(logDir)) {
         fs.mkdirSync(logDir, { recursive: true, mode: 0o700 });
     }
 
-    const logFile = path.join(logDir, `patch-audit-${new Date().toISOString().split('T')[0]}.jsonl`);
+    const logFile = path.join(
+        logDir,
+        `patch-audit-${new Date().toISOString().split('T')[0]}.jsonl`
+    );
     const logEntry = JSON.stringify(entry) + '\n';
 
     // Append to log file
@@ -345,8 +365,10 @@ export function checkUserPermission(
     projectId: string
 ): boolean {
     // Check project access
-    if (userPermissions.projectIds.length > 0 && 
-        !userPermissions.projectIds.includes(projectId)) {
+    if (
+        userPermissions.projectIds.length > 0 &&
+        !userPermissions.projectIds.includes(projectId)
+    ) {
         return false;
     }
 
