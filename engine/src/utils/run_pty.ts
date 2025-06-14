@@ -182,16 +182,16 @@ export function runPty(
         let ptyExited = false;
         let ptyError: Error | null = null;
         let processingStarted = startSignal ? false : true; // Skip the "start signal" logic if not provided
+        
+        // --- Delta Batching Logic Variables (moved up for closure access) ---
+        let deltaBuffer = '';
+        let batchTimerId: NodeJS.Timeout | null = null;
+        let currentBatchTimeoutValue: number | null = null;
 
         // --- Sliding Window History for Deduplication ---
         const historySize = 10;
         const recentHistory: string[] = [];
         const recentHistorySet = new Set<string>();
-
-        // --- Delta Batching Logic Variables ---
-        let deltaBuffer = '';
-        let batchTimerId: NodeJS.Timeout | null = null;
-        let currentBatchTimeoutValue: number | null = null;
 
         // --- Console Output Buffering ---
         const consoleBuffers = new Map<string, DeltaBuffer>();
@@ -261,9 +261,21 @@ export function runPty(
             const now = Date.now();
             silenceTimeoutId = setTimeout(() => {
                 if (ptyExited) return; // Don't timeout if the PTY has already exited
+                
+                // Don't timeout if we have buffered data waiting to be yielded
+                if (deltaBuffer.length > 0 || lineBuffer.length > 0) {
+                    console.log(
+                        `[runPty] Silence timeout reached but data is buffered (delta: ${deltaBuffer.length}, line: ${lineBuffer.length}). Resetting timeout.`
+                    );
+                    resetSilenceTimeout();
+                    return;
+                }
 
                 console.error(
                     `[runPty] PTY process timed out after ${silenceTimeoutMs}ms of silence for message ${messageId}. Requesting graceful exit.`
+                );
+                console.error(
+                    `[runPty] Timeout details: deltaBuffer.length=${deltaBuffer.length}, lineBuffer.length=${lineBuffer.length}, processingStarted=${processingStarted}`
                 );
 
                 ptyError = new Error(
@@ -329,6 +341,9 @@ export function runPty(
                     break;
                 }
             }
+            
+            // Reset silence timeout when setting batch timer
+            resetSilenceTimeout();
 
             if (applicableTimeout === null) {
                 console.warn(
@@ -518,6 +533,9 @@ export function runPty(
                                         deltaBuffer += contentChunk;
                                         // Update last yielded line for next dedupe check
                                         lastYieldedLine = trimmedLine;
+                                        
+                                        // Reset silence timeout when buffering content
+                                        resetSilenceTimeout();
 
                                         // --- Update Sliding Window History ---
                                         recentHistory.push(trimmedLine);

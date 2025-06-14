@@ -514,7 +514,7 @@ export class ClaudeCodeProvider implements ModelProvider {
                 startSignal: isProcessingStartSignal,
                 onTokenProgress: updateLiveTokenEstimate,
                 onLine: lineHook,
-                silenceTimeoutMs: 5000,
+                silenceTimeoutMs: 30000, // Increased from 5s to 30s to prevent premature timeouts
                 env: {
                     ...process.env,
                     DISABLE_AUTOUPDATER: '1',
