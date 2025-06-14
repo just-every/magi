@@ -150,6 +150,7 @@ export interface ProcessData {
     pendingConsoleEvents: Map<string, ConsoleEvent[]>;
     pendingDesignEvents: Map<string, DesignEvent[]>;
     pendingMessages: Map<string, PartialClientMessage[]>;
+    projectIds?: string[]; // List of git repositories this process has access to
 }
 
 // Create the context with a default value
@@ -300,6 +301,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     colors: event.colors,
                     logs: '',
                     name: event.name,
+                    projectIds: event.projectIds,
                     agent: {
                         agent_id: undefined, // Explicitly set as undefined initially
                         name: event.name,

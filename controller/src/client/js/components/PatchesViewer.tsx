@@ -2,6 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useSocket } from '../context/SocketContext';
 
 // Types for Patches
+export interface PatchRiskAssessment {
+    riskLevel: 'low' | 'moderate' | 'high' | 'critical';
+    riskScore: number;
+    canAutoMerge: boolean;
+    reasons: string[];
+    recommendation: string;
+}
+
 export interface Patch {
     id: number;
     process_id: string;
@@ -14,12 +22,15 @@ export interface Patch {
         totalLines: number;
         additions: number;
         deletions: number;
+        score?: number;
     };
     status: 'pending' | 'applied' | 'rejected' | 'superseded';
     created_at: string;
     applied_at: string | null;
     applied_by: string | null;
     rejection_reason: string | null;
+    merge_commit_sha?: string | null;
+    riskAssessment?: PatchRiskAssessment;
 }
 
 interface PatchesViewerProps {
@@ -35,6 +46,7 @@ const PatchesViewer: React.FC<PatchesViewerProps> = ({
     const [selectedPatch, setSelectedPatch] = useState<Patch | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
+    const [applyingPatch, setApplyingPatch] = useState<number | null>(null);
     const { socket } = useSocket();
 
     // Fetch patches on component mount and when socket events occur
@@ -46,11 +58,18 @@ const PatchesViewer: React.FC<PatchesViewerProps> = ({
             socket.on('patch_created', fetchPatches);
             socket.on('patch_applied', fetchPatches);
             socket.on('patch_rejected', fetchPatches);
+            socket.on('patch_conflict', data => {
+                setError(
+                    `Patch #${data.patchId} has conflicts: ${data.suggestion}`
+                );
+                fetchPatches();
+            });
 
             return () => {
                 socket.off('patch_created');
                 socket.off('patch_applied');
                 socket.off('patch_rejected');
+                socket.off('patch_conflict');
             };
         }
     }, [socket]);
@@ -114,13 +133,72 @@ const PatchesViewer: React.FC<PatchesViewerProps> = ({
         }
     };
 
+    // Apply a patch manually
+    const applyPatch = async (patch: Patch) => {
+        setApplyingPatch(patch.id);
+        setError(null);
+
+        try {
+            const response = await fetch(`/api/patches/${patch.id}/apply`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    projectId: patch.project_id,
+                    processId: patch.process_id,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                await fetchPatches();
+            } else {
+                setError(data.error || 'Failed to apply patch');
+            }
+        } catch (error) {
+            console.error('Error applying patch:', error);
+            setError('An error occurred while applying the patch');
+        } finally {
+            setApplyingPatch(null);
+        }
+    };
+
+    // Render risk level badge
+    const renderRiskLevel = (riskLevel?: string) => {
+        if (!riskLevel) return null;
+
+        const riskClasses = {
+            low: 'badge-success',
+            moderate: 'badge-warning',
+            high: 'badge-danger',
+            critical: 'badge-dark',
+        };
+
+        return (
+            <span
+                className={`badge ${riskClasses[riskLevel] || 'badge-light'}`}
+            >
+                {riskLevel} risk
+            </span>
+        );
+    };
+
     // Simple renderer for status badge
-    const renderStatus = (status: Patch['status']) => {
+    const renderStatus = (
+        status: Patch['status'],
+        appliedBy?: string | null
+    ) => {
         switch (status) {
             case 'pending':
                 return <span className="badge badge-warning">Pending</span>;
             case 'applied':
-                return <span className="badge badge-success">Applied</span>;
+                return (
+                    <span className="badge badge-success">
+                        Applied {appliedBy === 'auto-merge' ? '(auto)' : ''}
+                    </span>
+                );
             case 'rejected':
                 return <span className="badge badge-danger">Rejected</span>;
             case 'superseded':
@@ -218,6 +296,7 @@ const PatchesViewer: React.FC<PatchesViewerProps> = ({
                                 <th>Project</th>
                                 <th>Branch</th>
                                 <th>Message</th>
+                                <th>Risk</th>
                                 <th>Changes</th>
                                 <th>Created</th>
                                 <th>Status</th>
@@ -241,6 +320,16 @@ const PatchesViewer: React.FC<PatchesViewerProps> = ({
                                     <td className="patch-message-cell">
                                         {patch.commit_message.split('\n')[0]}
                                     </td>
+                                    <td>
+                                        {renderRiskLevel(
+                                            patch.riskAssessment?.riskLevel
+                                        )}
+                                        {patch.riskAssessment?.canAutoMerge && (
+                                            <span className="badge badge-info ml-1">
+                                                Auto
+                                            </span>
+                                        )}
+                                    </td>
                                     <td className="patch-stats-cell">
                                         {patch.metrics && (
                                             <>
@@ -255,7 +344,12 @@ const PatchesViewer: React.FC<PatchesViewerProps> = ({
                                         )}
                                     </td>
                                     <td>{formatDate(patch.created_at)}</td>
-                                    <td>{renderStatus(patch.status)}</td>
+                                    <td>
+                                        {renderStatus(
+                                            patch.status,
+                                            patch.applied_by
+                                        )}
+                                    </td>
                                     <td>
                                         <button
                                             className="btn-sm"
@@ -266,6 +360,25 @@ const PatchesViewer: React.FC<PatchesViewerProps> = ({
                                         >
                                             View
                                         </button>
+                                        {patch.status === 'pending' &&
+                                            !patch.riskAssessment
+                                                ?.canAutoMerge && (
+                                                <button
+                                                    className="btn-sm btn-primary ml-1"
+                                                    onClick={e => {
+                                                        e.stopPropagation();
+                                                        applyPatch(patch);
+                                                    }}
+                                                    disabled={
+                                                        applyingPatch ===
+                                                        patch.id
+                                                    }
+                                                >
+                                                    {applyingPatch === patch.id
+                                                        ? 'Applying...'
+                                                        : 'Merge'}
+                                                </button>
+                                            )}
                                     </td>
                                 </tr>
                             ))}

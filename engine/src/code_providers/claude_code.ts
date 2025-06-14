@@ -192,7 +192,7 @@ function isProcessingStartSignal(line: string): boolean {
  */
 export class ClaudeCodeProvider implements ModelProvider {
     provider_id = 'claude-code';
-    
+
     /**
      * Generates a response by executing the Claude Code CLI tool and streaming its output.
      *
@@ -507,10 +507,6 @@ export class ClaudeCodeProvider implements ModelProvider {
             });
 
             // 3. Define runPty options
-            // For PatchAgent, increase timeout to 60s as it needs to analyze git diffs
-            const isPatchAgent = agent.name === 'PatchAgent';
-            const timeoutMs = isPatchAgent ? 60000 : 30000;
-            console.log(`[ClaudeCodeProvider] Setting up runPty with silenceTimeoutMs: ${timeoutMs} for message ${messageId} (agent: ${agent.name})`);
             const ptyOpts: PtyRunOptions = {
                 cwd,
                 messageId,
@@ -518,7 +514,7 @@ export class ClaudeCodeProvider implements ModelProvider {
                 startSignal: isProcessingStartSignal,
                 onTokenProgress: updateLiveTokenEstimate,
                 onLine: lineHook,
-                silenceTimeoutMs: timeoutMs, // 60s for PatchAgent, 30s for others
+                silenceTimeoutMs: 30000, // 30 seconds for all agents
                 env: {
                     ...process.env,
                     DISABLE_AUTOUPDATER: '1',

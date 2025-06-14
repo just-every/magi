@@ -587,6 +587,7 @@ export interface ProcessCreateEvent {
         bgColor: string; // Background color (rgba)
         textColor: string; // Text color (rgba)
     };
+    projectIds?: string[]; // List of git repositories this process has access to
 }
 
 /**

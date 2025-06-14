@@ -38,6 +38,9 @@ const DEFAULT_EXIT_COMMAND = '/exit';
 // Map to store custom exit commands for each PTY
 const ptyExitCommands = new Map<pty.IPty, string>();
 
+// Global pause state for all silence timeouts
+let pausedState = false;
+
 // Map to store silence timeout handlers and remaining time when paused
 interface TimeoutInfo {
     timeoutId: NodeJS.Timeout | null;
@@ -46,7 +49,6 @@ interface TimeoutInfo {
     messageId: string;
 }
 const activeSilenceTimeouts = new Map<string, TimeoutInfo>();
-let pausedState = false;
 
 /**
  * Register global exit hooks to ensure all PTY processes are terminated
@@ -161,8 +163,10 @@ export function runPty(
     const env = options.env || process.env;
     const cols = options.cols || 80;
     const rows = options.rows || 60;
-    const silenceTimeoutMs = options.silenceTimeoutMs || 5000;
-    console.log(`[runPty] Configured silence timeout: ${silenceTimeoutMs}ms for message ${messageId} (options.silenceTimeoutMs = ${options.silenceTimeoutMs})`);
+    const silenceTimeoutMs = options.silenceTimeoutMs ?? 5000;
+    console.log(
+        `[runPty] Configured silence timeout: ${silenceTimeoutMs}ms for message ${messageId} (options.silenceTimeoutMs = ${options.silenceTimeoutMs})`
+    );
     const batchTiers = options.batch?.tiers || DEFAULT_BATCH_TIERS;
     const noiseFilter = options.noiseFilter || (() => false);
     const startSignal = options.startSignal;
@@ -187,7 +191,7 @@ export function runPty(
         let ptyExited = false;
         let ptyError: Error | null = null;
         let processingStarted = startSignal ? false : true; // Skip the "start signal" logic if not provided
-        
+
         // --- Delta Batching Logic Variables (moved up for closure access) ---
         let deltaBuffer = '';
         let batchTimerId: NodeJS.Timeout | null = null;
@@ -254,16 +258,34 @@ export function runPty(
         const resetSilenceTimeout = () => {
             if (silenceTimeoutId) clearTimeout(silenceTimeoutId);
 
-            // Don't start a new timeout if we're paused
+            // Check if globally paused
             if (pausedState) {
                 silenceTimeoutId = null;
                 return;
             }
 
             const now = Date.now();
+
+            // Update lastActivity in the tracking map
+            const timeoutInfo = activeSilenceTimeouts.get(messageId);
+            if (timeoutInfo) {
+                timeoutInfo.lastActivity = now;
+                timeoutInfo.remainingTime = silenceTimeoutMs;
+            }
             silenceTimeoutId = setTimeout(() => {
                 if (ptyExited) return; // Don't timeout if the PTY has already exited
-                
+
+                // Check the time since we set this timeout - if data was received recently, reset
+                const timeSinceReset = Date.now() - now;
+                if (timeSinceReset < silenceTimeoutMs - 100) {
+                    // This timeout fired too early, something is wrong
+                    console.warn(
+                        `[runPty] Silence timeout fired early (after ${timeSinceReset}ms, expected ${silenceTimeoutMs}ms). Resetting.`
+                    );
+                    resetSilenceTimeout();
+                    return;
+                }
+
                 // Don't timeout if we have buffered data waiting to be yielded
                 if (deltaBuffer.length > 0 || lineBuffer.length > 0) {
                     console.log(
@@ -282,14 +304,22 @@ export function runPty(
                     return;
                 }
 
-                // For long-running processes like PatchAgent, give extra grace period
-                const isLongRunningCommand = command === 'claude' && silenceTimeoutMs >= 30000;
-                if (isLongRunningCommand && !processingStarted) {
-                    console.log(
-                        `[runPty] Long-running command hasn't started processing yet. Extending timeout.`
-                    );
-                    resetSilenceTimeout();
-                    return;
+                // For long-running processes, be more lenient
+                const isLongRunningCommand =
+                    command === 'claude' && silenceTimeoutMs >= 30000;
+                if (isLongRunningCommand) {
+                    // Check if we've been actively processing recently
+                    const info = activeSilenceTimeouts.get(messageId);
+                    if (
+                        info &&
+                        Date.now() - info.lastActivity < silenceTimeoutMs
+                    ) {
+                        console.log(
+                            `[runPty] Long-running command still active (last activity ${Date.now() - info.lastActivity}ms ago). Extending timeout.`
+                        );
+                        resetSilenceTimeout();
+                        return;
+                    }
                 }
 
                 console.error(
@@ -307,7 +337,7 @@ export function runPty(
                 activeSilenceTimeouts.delete(messageId);
             }, silenceTimeoutMs);
 
-            // Track this timeout in our map
+            // Track this timeout in our map - update lastActivity
             activeSilenceTimeouts.set(messageId, {
                 timeoutId: silenceTimeoutId,
                 remainingTime: silenceTimeoutMs,
@@ -362,9 +392,6 @@ export function runPty(
                     break;
                 }
             }
-            
-            // Reset silence timeout when setting batch timer
-            resetSilenceTimeout();
 
             if (applicableTimeout === null) {
                 console.warn(
@@ -411,14 +438,16 @@ export function runPty(
             } as MessageEvent;
 
             // Create a Promise to manage PTY process completion/failure
-            const completionPromise = new Promise<void>((resolve, reject) => {
+            const completionPromise = new Promise<void>(resolve => {
                 try {
                     console.log(
                         `[runPty] Spawning PTY: ${command} ${args.map(a => (a.length > 50 ? a.substring(0, 50) + '...' : a)).join(' ')}`
                     );
-                    
+
                     // Log environment for debugging
-                    console.log(`[runPty] UV_USE_IO_URING=${env.UV_USE_IO_URING || 'not set'}`);
+                    console.log(
+                        `[runPty] UV_USE_IO_URING=${env.UV_USE_IO_URING || 'not set'}`
+                    );
 
                     ptyProcess = pty.spawn(command, args, {
                         name: 'xterm-color',
@@ -441,6 +470,7 @@ export function runPty(
                     // Handle data from the PTY process
                     ptyProcess.onData((data: string) => {
                         try {
+                            // Reset silence timeout immediately when any data is received
                             resetSilenceTimeout();
 
                             // Buffer raw console output and emit coalesced chunks
@@ -458,8 +488,6 @@ export function runPty(
                                     }) as ConsoleEvent
                             )) {
                                 eventQueue.push(ev);
-                                // Also reset silence timeout when console events are emitted
-                                resetSilenceTimeout();
                             }
 
                             const rawChunk = data.toString();
@@ -470,6 +498,11 @@ export function runPty(
                             const lines = lineBuffer.split('\n');
                             // Keep the last part (potentially incomplete line) in the buffer
                             lineBuffer = lines.pop() || '';
+
+                            // Reset timeout again after processing chunk (we're still actively receiving data)
+                            if (lines.length > 0 || lineBuffer.length > 0) {
+                                resetSilenceTimeout();
+                            }
 
                             // Process each complete line
                             for (const line of lines) {
@@ -484,8 +517,6 @@ export function runPty(
                                 // Invoke onLine callback if provided
                                 if (onLine) {
                                     onLine(trimmedLine);
-                                    // Reset silence timeout when we process a line via onLine
-                                    resetSilenceTimeout();
                                 }
 
                                 // Check for [complete] signal to initiate graceful exit sequence
@@ -554,9 +585,6 @@ export function runPty(
                                         deltaBuffer += contentChunk;
                                         // Update last yielded line for next dedupe check
                                         lastYieldedLine = trimmedLine;
-                                        
-                                        // Reset silence timeout when buffering content
-                                        resetSilenceTimeout();
 
                                         // --- Update Sliding Window History ---
                                         recentHistory.push(trimmedLine);
@@ -612,13 +640,17 @@ export function runPty(
                                 signal ? ` (signal ${signal})` : ''
                             } for message ${messageId}.`
                         );
-                        
+
                         // Log more details about the exit
                         if (signal) {
-                            console.log(`[runPty] Process terminated by signal: ${signal}`);
+                            console.log(
+                                `[runPty] Process terminated by signal: ${signal}`
+                            );
                             // SIGHUP has signal number 1
                             if (signal === 1) {
-                                console.warn(`[runPty] SIGHUP (signal 1) detected - likely io_uring PTY bug. Ensure UV_USE_IO_URING=0 is set.`);
+                                console.warn(
+                                    '[runPty] SIGHUP (signal 1) detected - likely io_uring PTY bug. Ensure UV_USE_IO_URING=0 is set.'
+                                );
                             }
                         }
                         ptyExited = true;
@@ -688,7 +720,9 @@ export function runPty(
                         if (ptyError) {
                             resolve(); // Resolve, let generator handle ptyError flag
                         } else if (successExitCodes.includes(exitCode)) {
-                            console.log(`[runPty] PTY process exited with acceptable code ${exitCode} for message ${messageId}`);
+                            console.log(
+                                `[runPty] PTY process exited with acceptable code ${exitCode} for message ${messageId}`
+                            );
                             resolve(); // Success
                         } else {
                             // PTY exited with non-zero code without a prior error flag set
@@ -838,11 +872,20 @@ export function runPty(
 }
 
 /**
- * Pause all active silence timeouts
+ * Pause all silence timeouts globally
  */
-function pauseAllSilenceTimeouts(): void {
+export function pauseAllSilenceTimeouts(): void {
+    if (pausedState) {
+        console.log('[runPty] Already in paused state, skipping pause');
+        return;
+    }
+
     pausedState = true;
     const now = Date.now();
+
+    console.log(
+        `[runPty] Pausing all silence timeouts (${activeSilenceTimeouts.size} active)`
+    );
 
     for (const [messageId, info] of activeSilenceTimeouts) {
         if (info.timeoutId) {
@@ -852,18 +895,31 @@ function pauseAllSilenceTimeouts(): void {
             const elapsed = now - info.lastActivity;
             info.remainingTime = Math.max(0, info.remainingTime - elapsed);
             console.log(
-                `[runPty] Paused silence timeout for message ${messageId}, remaining time: ${info.remainingTime}ms`
+                `[runPty] Paused timeout for message ${messageId}, elapsed: ${elapsed}ms, remaining: ${info.remainingTime}ms`
+            );
+        } else {
+            console.log(
+                `[runPty] Timeout for message ${messageId} was already cleared`
             );
         }
     }
 }
 
 /**
- * Resume all paused silence timeouts
+ * Resume all silence timeouts globally
  */
-function resumeAllSilenceTimeouts(): void {
+export function resumeAllSilenceTimeouts(): void {
+    if (!pausedState) {
+        console.log('[runPty] Not in paused state, skipping resume');
+        return;
+    }
+
     pausedState = false;
     const now = Date.now();
+
+    console.log(
+        `[runPty] Resuming all silence timeouts (${activeSilenceTimeouts.size} active)`
+    );
 
     for (const [messageId, info] of activeSilenceTimeouts) {
         if (!info.timeoutId && info.remainingTime > 0) {
@@ -893,8 +949,17 @@ function resumeAllSilenceTimeouts(): void {
                 activeSilenceTimeouts.delete(messageId);
             }, info.remainingTime);
             console.log(
-                `[runPty] Resumed silence timeout for message ${messageId}, will timeout in ${info.remainingTime}ms`
+                `[runPty] Resumed timeout for message ${messageId}, will timeout in ${info.remainingTime}ms`
             );
+        } else if (info.timeoutId) {
+            console.log(
+                `[runPty] Timeout for message ${messageId} already has an active timer`
+            );
+        } else if (info.remainingTime <= 0) {
+            console.log(
+                `[runPty] Timeout for message ${messageId} has no remaining time, removing`
+            );
+            activeSilenceTimeouts.delete(messageId);
         }
     }
 }
@@ -910,10 +975,10 @@ export function sendToAllPtyProcesses(command: string): void {
 
     // Check if this is a pause or resume command
     if (command === '\x1b\x1b') {
-        // Pause command - also pause timeouts
+        // Pause command - pause all timeouts globally
         pauseAllSilenceTimeouts();
     } else if (command.startsWith('Please continue')) {
-        // Resume command - also resume timeouts
+        // Resume command - resume all timeouts globally
         resumeAllSilenceTimeouts();
     }
 
@@ -923,5 +988,36 @@ export function sendToAllPtyProcesses(command: string): void {
         } catch (e) {
             console.warn('[runPty] Error sending command to PTY process:', e);
         }
+    }
+}
+
+/**
+ * Send a command to a specific PTY process by messageId
+ * Used for pausing/resuming individual code providers
+ */
+export function sendToPtyProcess(messageId: string, command: string): void {
+    const ptyProcess = ptyMap.get(messageId);
+    if (!ptyProcess) {
+        console.warn(`[runPty] No PTY process found for message ${messageId}`);
+        return;
+    }
+
+    console.log(
+        `[runPty] Sending command to PTY process for message ${messageId}: ${JSON.stringify(command)}`
+    );
+
+    // Check if this is a pause or resume command
+    if (command === '\x1b\x1b') {
+        // Pause command - pause all timeouts globally
+        pauseAllSilenceTimeouts();
+    } else if (command.startsWith('Please continue')) {
+        // Resume command - resume all timeouts globally
+        resumeAllSilenceTimeouts();
+    }
+
+    try {
+        ptyProcess.write(command);
+    } catch (e) {
+        console.warn('[runPty] Error sending command to PTY process:', e);
     }
 }

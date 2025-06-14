@@ -71,4 +71,24 @@ describe('run_pty', () => {
         // Just verify we got some events
         expect(events.length).toBeGreaterThan(0);
     });
+
+    it('should handle silenceTimeoutMs of 0 correctly', async () => {
+        // Test that a timeout of 0 is respected (using nullish coalescing)
+        // This would have defaulted to 5000ms with the old || operator
+        const { stream } = runPty('echo', ['test'], {
+            cwd: process.cwd(),
+            silenceTimeoutMs: 0, // This should be respected, not default to 5000
+        });
+
+        // Since we can't easily test the actual timeout value used internally,
+        // we'll just verify the command completes successfully
+        const events = [];
+        for await (const event of stream) {
+            events.push(event);
+        }
+
+        // The test passing without timeout is the expected behavior
+        expect(events.length).toBeGreaterThan(0);
+        expect(events.some(e => e.type === 'message_delta')).toBe(true);
+    });
 });

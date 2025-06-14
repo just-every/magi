@@ -33,6 +33,7 @@ export interface DockerRunOptions {
     coreProcessId?: string;
     projectIds?: string[]; // Array of git repositories to clone and mount
     projectPorts?: Record<string, string>; // Mapping of projectId -> port
+    version?: string; // Specific version to run
 }
 
 /**
@@ -603,6 +604,10 @@ export async function runDockerContainer(
         // Check if we should attach stdout instead of running in detached mode
         const attachStdout = process.env.ATTACH_CONTAINER_STDOUT === 'true';
 
+        // Determine the image version to use
+        const imageVersion = options.version || process.env.MAGI_VERSION || 'latest';
+        const imageName = `magi-engine:${imageVersion}`;
+
         // Create the docker run command, removing -d if we want to attach stdout
         const dockerRunCommand = `docker run ${attachStdout ? '' : '-d'} --rm --name ${containerName} \
       -e PROCESS_ID=${processId} \
@@ -610,6 +615,7 @@ export async function runDockerContainer(
       -e CONTROLLER_PORT=${serverPort} \
       -e TZ=${hostTimezone} \
       -e PROCESS_PROJECTS=${gitProjects.join(',')} \
+      -e MAGI_VERSION=${imageVersion} \
       ${
           options.projectPorts
               ? `-e PROJECT_PORTS=${Object.entries(options.projectPorts)
@@ -624,7 +630,7 @@ export async function runDockerContainer(
       -v /etc/timezone:/etc/timezone:ro \
       -v /etc/localtime:/etc/localtime:ro \
       --network magi_magi-network \
-      magi-engine:latest \
+      ${imageName} \
       --tool ${tool || 'none'} \
       --base64 "${base64Command}"`;
 

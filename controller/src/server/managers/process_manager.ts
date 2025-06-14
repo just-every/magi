@@ -5,6 +5,7 @@
  */
 import { ChildProcess } from 'child_process';
 import { Server } from 'socket.io';
+import path from 'path';
 import {
     ProcessStatus,
     ProcessCreateEvent,
@@ -171,6 +172,7 @@ export class ProcessManager {
                 command,
                 status,
                 colors,
+                projectIds: agentProcess?.projectIds,
             } as ProcessCreateEvent);
 
             // Start Docker container and command execution
@@ -937,25 +939,158 @@ export class ProcessManager {
 
         try {
             if (patchId) {
+                // Import patch manager utilities
+                const { 
+                    getPatchesWithRiskAssessment, 
+                    applyPatch,
+                    analyzePatchConflicts 
+                } = await import('../utils/patch_manager.js');
+                
                 // New patch-based workflow
                 console.log(
                     `[process-manager] Patch #${patchId} created for ${projectId}`
                 );
 
-                // Emit patch created event to UI
+                // Get patch with risk assessment
+                const patches = await getPatchesWithRiskAssessment(projectId);
+                const patch = patches.find(p => p.id === patchId);
+                
+                if (!patch) {
+                    throw new Error(`Patch #${patchId} not found`);
+                }
+
+                // Emit patch created event to UI with risk assessment
                 this.io.emit('patch_created', {
                     processId,
                     projectId,
                     patchId,
                     branch,
                     message,
+                    riskAssessment: patch.riskAssessment,
                 });
 
-                // Log to the process logs
+                // Log to the process logs with risk info
                 this.updateProcess(
                     processId,
-                    `[git] Patch #${patchId} created for project ${projectId} on branch ${branch}`
+                    `[git] Patch #${patchId} created for project ${projectId} on branch ${branch} - Risk: ${patch.riskAssessment.riskLevel} (${patch.riskAssessment.recommendation})`
                 );
+
+                // Check if we should auto-merge
+                if (patch.riskAssessment.canAutoMerge) {
+                    console.log(
+                        `[process-manager] Auto-merging patch #${patchId} (risk: ${patch.riskAssessment.riskLevel})`
+                    );
+                    
+                    // Get project path
+                    const projectPath = path.join(
+                        '/magi_output',
+                        processId,
+                        'projects',
+                        projectId
+                    );
+                    
+                    // Check for conflicts first
+                    const conflictCheck = await analyzePatchConflicts(patchId, projectPath);
+                    
+                    if (conflictCheck.hasConflicts) {
+                        console.log(
+                            `[process-manager] Cannot auto-merge patch #${patchId} - conflicts detected`
+                        );
+                        
+                        this.updateProcess(
+                            processId,
+                            `[git] Patch #${patchId} has conflicts and requires manual resolution: ${conflictCheck.suggestion}`
+                        );
+                        
+                        // Emit conflict event
+                        this.io.emit('patch_conflict', {
+                            processId,
+                            projectId,
+                            patchId,
+                            conflictFiles: conflictCheck.conflictFiles,
+                            suggestion: conflictCheck.suggestion,
+                        });
+                    } else if (conflictCheck.error) {
+                        console.log(
+                            `[process-manager] Patch #${patchId} check failed with non-conflict error: ${conflictCheck.error}`
+                        );
+                        
+                        // Still try to apply the patch, as the error might be benign
+                        const result = await applyPatch(patchId, projectPath, true);
+                        
+                        if (result.success) {
+                            console.log(
+                                `[process-manager] Successfully auto-merged patch #${patchId} despite check error`
+                            );
+                            
+                            this.updateProcess(
+                                processId,
+                                `[git] Patch #${patchId} auto-merged successfully (commit: ${result.mergeCommitSha})`
+                            );
+                            
+                            // Emit patch applied event
+                            this.io.emit('patch_applied', {
+                                processId,
+                                projectId,
+                                patchId,
+                                mergeCommitSha: result.mergeCommitSha,
+                            });
+                        } else {
+                            console.error(
+                                `[process-manager] Failed to auto-merge patch #${patchId}: ${result.error}`
+                            );
+                            
+                            this.updateProcess(
+                                processId,
+                                `[git] Failed to auto-merge patch #${patchId}: ${result.error}`
+                            );
+                        }
+                    } else {
+                        // Apply the patch
+                        const result = await applyPatch(patchId, projectPath, true);
+                        
+                        if (result.success) {
+                            console.log(
+                                `[process-manager] Successfully auto-merged patch #${patchId}`
+                            );
+                            
+                            this.updateProcess(
+                                processId,
+                                `[git] Patch #${patchId} auto-merged successfully (commit: ${result.mergeCommitSha})`
+                            );
+                            
+                            // Emit patch applied event
+                            this.io.emit('patch_applied', {
+                                processId,
+                                projectId,
+                                patchId,
+                                mergeCommitSha: result.mergeCommitSha,
+                                autoMerged: true,
+                            });
+                        } else {
+                            console.error(
+                                `[process-manager] Failed to auto-merge patch #${patchId}: ${result.error}`
+                            );
+                            
+                            this.updateProcess(
+                                processId,
+                                `[git] Failed to auto-merge patch #${patchId}: ${result.error}`
+                            );
+                        }
+                    }
+                } else {
+                    console.log(
+                        `[process-manager] Patch #${patchId} requires manual review (risk: ${patch.riskAssessment.riskLevel})`
+                    );
+                    
+                    // Log reasons for manual review
+                    if (patch.riskAssessment.reasons.length > 0) {
+                        this.updateProcess(
+                            processId,
+                            `[git] Risk factors: ${patch.riskAssessment.reasons.join(', ')}`
+                        );
+                    }
+                }
 
                 return true;
             } else {

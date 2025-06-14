@@ -24,6 +24,7 @@ import {
     updateServerVersion,
 } from './env_store';
 import { ProcessManager } from './process_manager';
+import { VersionManager } from './version_manager';
 import { execPromise } from '../utils/docker_commands';
 import { cleanupAllContainers } from './container_manager';
 import { saveUsedColors } from './color_manager';
@@ -112,6 +113,7 @@ export class ServerManager {
     private wss = new WebSocket.Server({ noServer: true });
     private liveReloadClients = new Set<WebSocket>();
     private processManager: ProcessManager;
+    private versionManager: VersionManager;
     private communicationManager: CommunicationManager;
     private prEventsManager: PREventsManager;
     private bootstrapRan = false;
@@ -128,6 +130,13 @@ export class ServerManager {
      */
     getPrEventsManager(): PREventsManager {
         return this.prEventsManager;
+    }
+
+    /**
+     * Get the version manager instance
+     */
+    getVersionManager(): VersionManager {
+        return this.versionManager;
     }
     private cleanupInProgress = false;
     private isSystemPaused = false;
@@ -147,6 +156,9 @@ export class ServerManager {
             : path.join(__dirname, '../../../..');
 
         this.processManager = new ProcessManager(this.io);
+
+        // Initialize the version manager
+        this.versionManager = new VersionManager(this.io, this.processManager);
 
         // Initialize the communication manager before setting up WebSockets
         this.communicationManager = new CommunicationManager(

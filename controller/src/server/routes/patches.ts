@@ -2,25 +2,31 @@
  * API routes for managing git patches
  */
 import { Router, Request, Response } from 'express';
-import { getDB } from '../utils/db';
+import path from 'path';
+import { getDB } from '../utils/db.js';
+import {
+    getPatchesWithRiskAssessment,
+    applyPatch,
+    analyzePatchConflicts,
+    processPendingPatches,
+} from '../utils/patch_manager.js';
+import {
+    suggestConflictResolution,
+    attemptAutoResolve,
+    createConflictResolutionTask,
+} from '../utils/conflict_resolver.js';
 
 const router = Router();
 
-// Get all patches
+// Get all patches with risk assessment
 router.get('/', async (req: Request, res: Response) => {
-    const client = await getDB();
     try {
-        const result = await client.query(
-            `SELECT id, process_id, project_id, branch_name, commit_message, 
-                    metrics, status, created_at, applied_at, applied_by
-             FROM patches 
-             ORDER BY created_at DESC 
-             LIMIT 100`
-        );
+        const { projectId } = req.query;
+        const patches = await getPatchesWithRiskAssessment(projectId as string);
 
         res.json({
             success: true,
-            data: result.rows,
+            data: patches,
         });
     } catch (error) {
         console.error('Error fetching patches:', error);
@@ -28,8 +34,6 @@ router.get('/', async (req: Request, res: Response) => {
             success: false,
             error: 'Failed to fetch patches',
         });
-    } finally {
-        client.release();
     }
 });
 
@@ -66,81 +70,116 @@ router.get('/:id', async (req: Request, res: Response) => {
     }
 });
 
-// Apply a patch
+// Apply a patch (manual merge)
 router.post('/:id/apply', async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { projectPath } = req.body;
+    const { projectId, processId } = req.body;
 
-    if (!projectPath) {
+    if (!projectId || !processId) {
         return res.status(400).json({
             success: false,
-            error: 'projectPath is required',
+            error: 'projectId and processId are required',
         });
     }
 
-    const client = await getDB();
+    // Validate IDs to prevent path traversal
+    const validIdPattern = /^[a-zA-Z0-9_-]+$/;
+    if (!validIdPattern.test(processId) || !validIdPattern.test(projectId)) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid ID format',
+        });
+    }
+
     try {
-        // Get the patch content
-        const patchResult = await client.query(
-            "SELECT * FROM patches WHERE id = $1 AND status = 'pending'",
-            [id]
+        const patchId = parseInt(id);
+        const projectPath = path.join(
+            '/magi_output',
+            processId,
+            'projects',
+            projectId
         );
 
-        if (patchResult.rows.length === 0) {
-            return res.status(404).json({
+        // Check for conflicts first
+        const conflictCheck = await analyzePatchConflicts(patchId, projectPath);
+
+        if (conflictCheck.hasConflicts) {
+            return res.status(409).json({
                 success: false,
-                error: 'Patch not found or already applied',
+                error: 'Patch has conflicts',
+                conflicts: conflictCheck.conflictFiles,
+                suggestion: conflictCheck.suggestion,
             });
         }
 
-        const patch = patchResult.rows[0];
+        // Apply the patch
+        const result = await applyPatch(patchId, projectPath, false);
 
-        // Apply the patch using git apply
-        const { execSync } = require('child_process');
-        try {
-            // Write patch to temporary file
-            const fs = require('fs');
-            const path = require('path');
-            const tmpFile = path.join('/tmp', `patch-${id}.patch`);
-            fs.writeFileSync(tmpFile, patch.patch_content);
-
-            // Apply the patch
-            execSync(`git -C "${projectPath}" apply "${tmpFile}"`, {
-                stdio: 'pipe',
-            });
-
-            // Clean up temp file
-            fs.unlinkSync(tmpFile);
-
-            // Update patch status in database
-            await client.query(
-                `UPDATE patches 
-                 SET status = 'applied', 
-                     applied_at = NOW(), 
-                     applied_by = $2
-                 WHERE id = $1`,
-                [id, 'user'] // TODO: Get actual user from session
-            );
-
+        if (result.success) {
             res.json({
                 success: true,
                 message: 'Patch applied successfully',
+                mergeCommitSha: result.mergeCommitSha,
             });
-        } catch (error) {
-            console.error(`Error applying patch ${id}:`, error);
+        } else {
             res.status(500).json({
                 success: false,
-                error: `Failed to apply patch: ${error.message}`,
+                error: result.error || 'Failed to apply patch',
             });
         }
     } catch (error) {
-        console.error(`Error processing patch ${id}:`, error);
+        console.error(`Error applying patch ${id}:`, error);
         res.status(500).json({
             success: false,
-            error: 'Failed to process patch',
+            error: `Failed to apply patch: ${error.message}`,
         });
-    } finally {
-        client.release();
+    }
+});
+
+// Check patch conflicts
+router.post('/:id/check-conflicts', async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { projectId, processId } = req.body;
+
+    if (!projectId || !processId) {
+        return res.status(400).json({
+            success: false,
+            error: 'projectId and processId are required',
+        });
+    }
+
+    // Validate IDs to prevent path traversal
+    const validIdPattern = /^[a-zA-Z0-9_-]+$/;
+    if (!validIdPattern.test(processId) || !validIdPattern.test(projectId)) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid ID format',
+        });
+    }
+
+    try {
+        const patchId = parseInt(id);
+        const projectPath = path.join(
+            '/magi_output',
+            processId,
+            'projects',
+            projectId
+        );
+
+        const conflictCheck = await analyzePatchConflicts(patchId, projectPath);
+
+        res.json({
+            success: true,
+            hasConflicts: conflictCheck.hasConflicts,
+            conflictFiles: conflictCheck.conflictFiles,
+            suggestion: conflictCheck.suggestion,
+        });
+    } catch (error) {
+        console.error(`Error checking conflicts for patch ${id}:`, error);
+        res.status(500).json({
+            success: false,
+            error: `Failed to check conflicts: ${error.message}`,
+        });
     }
 });
 
@@ -173,5 +212,165 @@ router.post('/:id/reject', async (req: Request, res: Response) => {
         client.release();
     }
 });
+
+// Process pending patches for auto-merge
+router.post('/process-pending', async (req: Request, res: Response) => {
+    const { projectId } = req.body;
+
+    try {
+        const result = await processPendingPatches(projectId);
+
+        res.json({
+            success: true,
+            ...result,
+        });
+    } catch (error) {
+        console.error('Error processing pending patches:', error);
+        res.status(500).json({
+            success: false,
+            error: `Failed to process pending patches: ${error.message}`,
+        });
+    }
+});
+
+// Get conflict resolution suggestions
+router.post(
+    '/:id/conflict-suggestions',
+    async (req: Request, res: Response) => {
+        const { id } = req.params;
+        const { projectId, processId, conflictFiles } = req.body;
+
+        if (!projectId || !processId || !conflictFiles) {
+            return res.status(400).json({
+                success: false,
+                error: 'projectId, processId, and conflictFiles are required',
+            });
+        }
+
+        try {
+            const patchId = parseInt(id);
+            const projectPath = path.join(
+                '/magi_output',
+                processId,
+                'projects',
+                projectId
+            );
+
+            const suggestions = await suggestConflictResolution(
+                patchId,
+                projectPath,
+                conflictFiles
+            );
+
+            res.json({
+                success: true,
+                suggestions,
+            });
+        } catch (error) {
+            console.error(
+                `Error getting conflict suggestions for patch ${id}:`,
+                error
+            );
+            res.status(500).json({
+                success: false,
+                error: `Failed to get suggestions: ${error.message}`,
+            });
+        }
+    }
+);
+
+// Attempt automatic conflict resolution
+router.post('/:id/auto-resolve', async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { projectId, processId } = req.body;
+
+    if (!projectId || !processId) {
+        return res.status(400).json({
+            success: false,
+            error: 'projectId and processId are required',
+        });
+    }
+
+    // Validate IDs to prevent path traversal
+    const validIdPattern = /^[a-zA-Z0-9_-]+$/;
+    if (!validIdPattern.test(processId) || !validIdPattern.test(projectId)) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid ID format',
+        });
+    }
+
+    try {
+        const patchId = parseInt(id);
+        const projectPath = path.join(
+            '/magi_output',
+            processId,
+            'projects',
+            projectId
+        );
+
+        const result = await attemptAutoResolve(patchId, projectPath);
+
+        if (result.success) {
+            res.json({
+                success: true,
+                message: 'Conflicts resolved automatically',
+                newPatchId: result.newPatchId,
+            });
+        } else {
+            res.status(409).json({
+                success: false,
+                error: result.error || 'Auto-resolution failed',
+            });
+        }
+    } catch (error) {
+        console.error(`Error auto-resolving patch ${id}:`, error);
+        res.status(500).json({
+            success: false,
+            error: `Failed to auto-resolve: ${error.message}`,
+        });
+    }
+});
+
+// Create conflict resolution task for agent
+router.post(
+    '/:id/create-resolution-task',
+    async (req: Request, res: Response) => {
+        const { id } = req.params;
+        const { projectId, conflictFiles, strategy } = req.body;
+
+        if (!projectId || !conflictFiles || !strategy) {
+            return res.status(400).json({
+                success: false,
+                error: 'projectId, conflictFiles, and strategy are required',
+            });
+        }
+
+        try {
+            const patchId = parseInt(id);
+
+            const taskDescription = await createConflictResolutionTask(
+                patchId,
+                projectId,
+                conflictFiles,
+                strategy
+            );
+
+            res.json({
+                success: true,
+                taskDescription,
+            });
+        } catch (error) {
+            console.error(
+                `Error creating resolution task for patch ${id}:`,
+                error
+            );
+            res.status(500).json({
+                success: false,
+                error: `Failed to create task: ${error.message}`,
+            });
+        }
+    }
+);
 
 export default router;
