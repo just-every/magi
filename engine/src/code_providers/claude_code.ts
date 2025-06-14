@@ -191,6 +191,8 @@ function isProcessingStartSignal(line: string): boolean {
  * Streams responses in real-time using the run_pty utility.
  */
 export class ClaudeCodeProvider implements ModelProvider {
+    provider_id = 'claude-code';
+    
     /**
      * Generates a response by executing the Claude Code CLI tool and streaming its output.
      *
@@ -518,6 +520,7 @@ export class ClaudeCodeProvider implements ModelProvider {
                     DISABLE_AUTOUPDATER: '1',
                 },
                 emitComplete: false, // Provider will decide when to emit complete event
+                successExitCodes: [0, 1], // Claude CLI may exit with code 1 in some cases, treat as success
             };
 
             // 4. Run Claude CLI command via run_pty utility
