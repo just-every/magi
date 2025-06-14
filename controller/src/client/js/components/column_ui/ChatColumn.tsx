@@ -9,6 +9,7 @@ import TextareaAutosize from 'react-textarea-autosize'; // Import TextareaAutosi
 import CostDisplay from '../ui/CostDisplay'; // Import CostDisplay
 import StatusDisplay from '../ui/StatusDisplay'; // Import StatusDisplay
 import { parseMarkdown } from '../utils/MarkdownUtils';
+import { AudioPlayer } from '../../utils/AudioUtils';
 
 interface VoiceOption {
     id: string;
@@ -59,6 +60,7 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
     const [voices, setVoices] = useState<VoiceOption[]>([]);
     const [currentVoiceId, setCurrentVoiceId] = useState<string>('');
     const [isLoadingVoices, setIsLoadingVoices] = useState(false);
+    const [isPlayingPreview, setIsPlayingPreview] = useState(false);
 
     const coreProcess = coreProcessId
         ? (processes.get(coreProcessId) as ProcessData | undefined)
@@ -98,6 +100,10 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
     // Handle voice change
     const handleVoiceChange = async (voiceId: string) => {
         try {
+            // Ensure AudioContext is initialized before playing preview
+            await AudioPlayer.getInstance().initAudioContext();
+
+            // First, update the current voice
             const response = await fetch('/api/voices/current', {
                 method: 'POST',
                 headers: {
@@ -108,6 +114,31 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
             const data = await response.json();
             if (data.success) {
                 setCurrentVoiceId(voiceId);
+
+                // Then, play a preview of the new voice
+                try {
+                    setIsPlayingPreview(true);
+                    const previewResponse = await fetch('/api/voices/preview', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ voiceId }),
+                    });
+                    const previewData = await previewResponse.json();
+                    if (!previewData.success) {
+                        console.error(
+                            'Failed to preview voice:',
+                            previewData.error
+                        );
+                    }
+                    // Preview audio will play for a short time
+                    setTimeout(() => setIsPlayingPreview(false), 3000);
+                } catch (previewError) {
+                    console.error('Error playing voice preview:', previewError);
+                    setIsPlayingPreview(false);
+                    // Don't fail the voice change if preview fails
+                }
             }
         } catch (error) {
             console.error('Failed to update voice:', error);
@@ -278,6 +309,12 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                 <span className="fw-bold me-2">
                                     Voice Selection:
                                 </span>
+                                {isPlayingPreview && (
+                                    <span className="text-primary me-2">
+                                        <i className="bi bi-volume-up-fill"></i>{' '}
+                                        Playing preview...
+                                    </span>
+                                )}
                                 {voices.length === 0 && !isLoadingVoices ? (
                                     <span className="text-muted">
                                         No voice providers configured
@@ -289,6 +326,10 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                         onChange={e =>
                                             handleVoiceChange(e.target.value)
                                         }
+                                        onMouseDown={() => {
+                                            // Ensure AudioContext is initialized when user interacts with dropdown
+                                            AudioPlayer.getInstance().initAudioContext();
+                                        }}
                                         disabled={
                                             isLoadingVoices ||
                                             voices.length === 0
@@ -302,32 +343,6 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                         ) : (
                                             <>
                                                 {/* Only show optgroups for providers that have voices */}
-                                                {voices.some(
-                                                    v => v.provider === 'openai'
-                                                ) && (
-                                                    <optgroup label="OpenAI">
-                                                        {voices
-                                                            .filter(
-                                                                v =>
-                                                                    v.provider ===
-                                                                    'openai'
-                                                            )
-                                                            .map(voice => (
-                                                                <option
-                                                                    key={
-                                                                        voice.id
-                                                                    }
-                                                                    value={
-                                                                        voice.id
-                                                                    }
-                                                                >
-                                                                    {voice.name}
-                                                                    {voice.description &&
-                                                                        ` - ${voice.description}`}
-                                                                </option>
-                                                            ))}
-                                                    </optgroup>
-                                                )}
                                                 {voices.some(
                                                     v =>
                                                         v.provider ===
@@ -365,6 +380,32 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                                                 v =>
                                                                     v.provider ===
                                                                     'gemini'
+                                                            )
+                                                            .map(voice => (
+                                                                <option
+                                                                    key={
+                                                                        voice.id
+                                                                    }
+                                                                    value={
+                                                                        voice.id
+                                                                    }
+                                                                >
+                                                                    {voice.name}
+                                                                    {voice.description &&
+                                                                        ` - ${voice.description}`}
+                                                                </option>
+                                                            ))}
+                                                    </optgroup>
+                                                )}
+                                                {voices.some(
+                                                    v => v.provider === 'openai'
+                                                ) && (
+                                                    <optgroup label="OpenAI">
+                                                        {voices
+                                                            .filter(
+                                                                v =>
+                                                                    v.provider ===
+                                                                    'openai'
                                                             )
                                                             .map(voice => (
                                                                 <option

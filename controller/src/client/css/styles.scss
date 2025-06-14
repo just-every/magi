@@ -2,6 +2,9 @@
 @import 'bootstrap/dist/css/bootstrap.css';
 @import 'bootstrap-icons/font/bootstrap-icons.css';
 
+/* Import component styles */
+@import './patches.css';
+
 /* Default theme styling */
 :root {
     --bs-primary: #00a2ff;

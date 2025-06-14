@@ -19,6 +19,7 @@ function createProviderAdapter(
     provider: MagiModelProvider
 ): EnsembleModelProvider {
     return {
+        provider_id: provider.provider_id,
         async *createResponseStream(
             messages: any,
             model: string,

@@ -220,13 +220,10 @@ const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
                                                     process.status as ProcessStatus
                                                 )
                                             ) {
-                                                // For completed filter, only show completed workers
+                                                // For completed filter, show ALL workers of completed processes
+                                                // This ensures we can review all historic agents
                                                 if (showCompletedOnly) {
-                                                    return (
-                                                        worker.statusEvent
-                                                            ?.status ===
-                                                        'completed'
-                                                    );
+                                                    return true;
                                                 }
                                                 // For active filter, show all workers of active processes
                                                 return true;

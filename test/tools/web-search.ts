@@ -30,7 +30,7 @@ const engines = [
   'sonar-deep-research'
 ];
 
-import { web_search } from '../../engine/src/utils/search_utils.js';
+import { web_search } from '@just-every/search';
 
 export default async function webSearchTest(options: ToolsOptions = {}): Promise<ToolResult> {
   const { verbose = false, engine } = options;
@@ -54,7 +54,7 @@ export default async function webSearchTest(options: ToolsOptions = {}): Promise
       const startTime = Date.now();
 
       // Call web_search directly with the correct parameter order
-      const result = await web_search('{random_agent_id}', 'openai', `Please provide a list of up to ${numResults} URLs for the most popular sites matching \"customer support homepage\". Please return the results in JSON format [{url: 'https://...', title: 'Example Site'}, ...]. Only respond with the JSON, and not other text of comments.`, numResults);
+      const result = await web_search('{random_agent_id}', engine, `Please provide a list of up to ${numResults} URLs for the most popular sites matching \"customer support homepage\". Please return the results in JSON format [{url: 'https://...', title: 'Example Site'}, ...]. Only respond with the JSON, and not other text of comments.`, numResults);
 
       // Calculate the time taken
       const timeTaken = Date.now() - startTime;
@@ -176,7 +176,7 @@ export default async function webSearchTest(options: ToolsOptions = {}): Promise
         // Measure the time taken for the search
         const startTime = Date.now();
 
-        // Call web_search with the correct parameter order
+        // Call web_search with the correct parameter order (no inject_agent_id for backward compatibility)
         const result = await web_search(engineName, query, numResults);
 
         // Calculate the time taken

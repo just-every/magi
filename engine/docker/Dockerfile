@@ -5,9 +5,7 @@ FROM node:23-slim AS latest-versions
 
 RUN set -e; \
     npm view @anthropic-ai/claude-code  dist-tags.latest  > /tmp/CLAUDE_VER && \
-    npm view @openai/codex              dist-tags.latest  > /tmp/CODEX_VER && \
-    npm view @just-every/ensemble       dist-tags.latest  > /tmp/ENSEMBLE_VER && \
-    npm view @just-every/task           dist-tags.latest  > /tmp/TASK_VER
+    npm view @openai/codex              dist-tags.latest  > /tmp/CODEX_VER
 
 ###############################################################################
 # Stage 1 – Build the application's dependencies
@@ -87,8 +85,6 @@ COPY --from=builder --chown=${USER_NAME}:${GROUP_NAME} /build/node_modules ./nod
 ########################################################################
 COPY --from=latest-versions /tmp/CLAUDE_VER /tmp/
 COPY --from=latest-versions /tmp/CODEX_VER  /tmp/
-COPY --from=latest-versions /tmp/ENSEMBLE_VER /tmp/
-COPY --from=latest-versions /tmp/TASK_VER /tmp/
 
 RUN --mount=type=cache,target=/root/.npm \
     set -e; \

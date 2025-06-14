@@ -365,7 +365,7 @@ export function getProcessTools(): ToolFunction[] {
                         (getExternalProjectIds().includes('magi')
                             ? ' Include "magi" to provide access to your code.'
                             : '') +
-                        ' The task will have access to these files at /magi_output/{taskId}/projects/{project}. Their default branch will be "task/{taskId}". If you provide only one project, that will be their working directory when they start (otherwise it will be /magi_output/{taskId}/working)\nNote: ONLY INCLUDE PROJECTS THE TASK NEEDS as an entire copy of the project is made for each task. For large projects this take 10+ seconds.',
+                        ' The task will have access to these files at /app/projects/{project_id}. Their default branch will be "task/{taskId}". If you provide only one project, that will be their working directory when they start (otherwise it will be /magi_output/{taskId}/working)\nNote: ONLY INCLUDE PROJECTS THE TASK NEEDS as an entire copy of the project is made for each task. For large projects this take 10+ seconds.',
                     type: 'array',
                     items: {
                         type: 'string',

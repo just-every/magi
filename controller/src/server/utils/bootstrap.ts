@@ -114,7 +114,7 @@ export async function bootstrapProjectsOnce(pm: ProcessManager): Promise<void> {
     // Prepare project paths for command message
     const projectPaths = unreadyIds
         .map(
-            id => `${id} (located at /magi_output/${processId}/projects/${id})`
+            id => `${id} (located at /app/projects/${id})`
         )
         .join(', ');
 

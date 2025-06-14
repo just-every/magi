@@ -149,11 +149,27 @@ Note: Failed to generate summary - ${error}`;
         const processId: string = eventMessage.processId;
         let process = this.processes.get(processId);
         if (!process) {
-            console.error(
-                `taskId ${processId} not being tracked`,
+            console.warn(
+                `taskId ${processId} not being tracked, creating placeholder process`,
                 eventMessage
             );
-            return;
+            
+            // Create a placeholder process for this unknown process
+            // This can happen if the process was started by another overseer instance
+            // or if there was a timing issue with process registration
+            process = {
+                processId: processId,
+                started: new Date(),
+                status: 'started',
+                tool: 'unknown' as any,
+                name: 'Unknown Process',
+                command: 'Process started outside of current tracking context',
+                projectIds: undefined,
+                output: '',
+                error: '',
+                history: []
+            };
+            this.processes.set(processId, process);
         }
 
         if (

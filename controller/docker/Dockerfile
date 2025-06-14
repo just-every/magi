@@ -1,12 +1,3 @@
-###############################################################################
-# Stage 0 – Grab current `latest` tag numbers (runs quickly, every build)
-###############################################################################
-FROM node:23-slim AS latest-versions
-
-RUN set -e; \
-    npm view @just-every/ensemble       dist-tags.latest  > /tmp/ENSEMBLE_VER && \
-    npm view @just-every/task           dist-tags.latest  > /tmp/MIND_VER
-
 # --- Build Stage ---
 FROM node:23-slim AS builder
 
@@ -72,10 +63,6 @@ WORKDIR /app
 # This provides all dependencies separate from the mounted code
 COPY --from=builder --chown=${USER_NAME}:${GROUP_NAME} /build/node_modules ./node_modules
 # Ensemble package is now installed from npm
-
-# Copy version files to force rebuild when packages update
-COPY --from=latest-versions /tmp/ENSEMBLE_VER /tmp/
-COPY --from=latest-versions /tmp/MIND_VER /tmp/
 
 # Copy the application source code
 # Changes here will invalidate cache from this point onwards

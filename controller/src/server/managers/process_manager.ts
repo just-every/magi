@@ -16,7 +16,6 @@ import {
 } from '../../types/index';
 import { execPromise } from '../utils/docker_commands';
 import { generateProcessColors } from './color_manager';
-import { pushBranchAndOpenPR } from '../utils/git_push';
 import { PREventsManager } from './pr_events_manager';
 import {
     isDockerAvailable,
@@ -928,31 +927,40 @@ export class ProcessManager {
         processId: string,
         projectId: string,
         branch: string,
-        message: string
+        message: string,
+        patchId?: number
     ): Promise<boolean> {
         console.log(
-            `[process-manager] Handling pull request ready for ${projectId} from process ${processId}`
+            `[process-manager] Handling pull request ready for ${projectId} from process ${processId}` +
+                (patchId ? ` with patch #${patchId}` : '')
         );
 
         try {
-            const result = await pushBranchAndOpenPR(
-                processId,
-                projectId,
-                branch,
-                message,
-                this.prEventsManager
-            );
-            console.log(
-                `[process-manager] Pull request ${result ? 'pushed successfully' : 'failed'} for ${projectId}`
-            );
+            if (patchId) {
+                // New patch-based workflow
+                console.log(
+                    `[process-manager] Patch #${patchId} created for ${projectId}`
+                );
 
-            // Log to the process logs
-            this.updateProcess(
-                processId,
-                `[git] Branch ${branch} for project ${projectId} ${result ? 'pushed successfully' : 'failed to push'}`
-            );
+                // Emit patch created event to UI
+                this.io.emit('patch_created', {
+                    processId,
+                    projectId,
+                    patchId,
+                    branch,
+                    message,
+                });
 
-            return result;
+                // Log to the process logs
+                this.updateProcess(
+                    processId,
+                    `[git] Patch #${patchId} created for project ${projectId} on branch ${branch}`
+                );
+
+                return true;
+            } else {
+               throw new Error('No patch ID provided');
+            }
         } catch (error) {
             console.error(
                 '[process-manager] Error handling pull request:',
@@ -962,7 +970,7 @@ export class ProcessManager {
             // Log to the process logs
             this.updateProcessWithError(
                 processId,
-                `Failed to push git changes: ${error instanceof Error ? error.message : String(error)}`
+                `Failed to handle git changes: ${error instanceof Error ? error.message : String(error)}`
             );
 
             return false;

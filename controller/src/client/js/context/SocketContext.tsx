@@ -376,12 +376,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
             setProcesses(prevProcesses => {
                 const newProcesses = new Map(prevProcesses);
-                const process = newProcesses.get(event.id) as
-                    | ProcessData
-                    | undefined;
-
-                if (!process) return newProcesses;
-
+                
                 // Use the imported MagiMessage structure
                 const data = event.message;
                 const streamingEvent = data.event;
@@ -390,6 +385,38 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     (streamingEvent as { timestamp?: string }).timestamp ||
                     new Date().toISOString();
                 const eventType = streamingEvent.type;
+                
+                // Handle audio_stream events even for non-existent processes (e.g., voice previews)
+                if (eventType === 'audio_stream' && isAudioEnabled) {
+                    const audioEvent = streamingEvent as AudioEvent;
+                    handleAudioMessage({
+                        event: {
+                            pcmParameters: audioEvent.pcmParameters
+                                ? {
+                                      sampleRate:
+                                          audioEvent.pcmParameters
+                                              .sampleRate || 44100,
+                                      channels:
+                                          audioEvent.pcmParameters
+                                              .channels || 1,
+                                      bitDepth:
+                                          audioEvent.pcmParameters
+                                              .bitDepth || 16,
+                                  }
+                                : undefined,
+                            data: audioEvent.data || '',
+                            chunkIndex: audioEvent.chunkIndex || 0,
+                            isFinalChunk: audioEvent.isFinalChunk || false,
+                        },
+                    });
+                    return newProcesses; // No state update needed
+                }
+                
+                const process = newProcesses.get(event.id) as
+                    | ProcessData
+                    | undefined;
+
+                if (!process) return newProcesses;
 
                 function updateAgent(
                     values: Record<string, unknown>,
@@ -706,34 +733,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                 }
 
                 // Handle different event types
-                if (eventType === 'audio_stream') {
-                    // Process audio data event for browser playback
-                    if (isAudioEnabled) {
-                        // Convert optional parameters to required ones for the AudioUtils handler
-                        const audioEvent = streamingEvent as AudioEvent;
-                        handleAudioMessage({
-                            event: {
-                                pcmParameters: audioEvent.pcmParameters
-                                    ? {
-                                          sampleRate:
-                                              audioEvent.pcmParameters
-                                                  .sampleRate || 44100,
-                                          channels:
-                                              audioEvent.pcmParameters
-                                                  .channels || 1,
-                                          bitDepth:
-                                              audioEvent.pcmParameters
-                                                  .bitDepth || 16,
-                                      }
-                                    : undefined,
-                                data: audioEvent.data || '',
-                                chunkIndex: audioEvent.chunkIndex || 0,
-                                isFinalChunk: audioEvent.isFinalChunk || false,
-                            },
-                        });
-                    }
-                    return newProcesses; // No need to update the process state
-                } else if (
+                if (
                     eventType === 'command_start' ||
                     eventType === 'connected'
                 ) {

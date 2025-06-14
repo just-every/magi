@@ -32,6 +32,7 @@
     "dependencies": {
         "@just-every/ensemble": "^0.2.35",
         "@just-every/task": "^0.2.5",
+        "@modelcontextprotocol/sdk": "^1.12.2",
         "@types/bootstrap": "^5.2.10",
         "@types/pg": "^8.15.4",
         "@xterm/addon-fit": "^0.10.0",

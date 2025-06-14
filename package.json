@@ -65,6 +65,7 @@
         "@google/genai": "^1.4.0",
         "@just-every/ensemble": "^0.2.35",
         "@just-every/task": "^0.2.5",
+        "@just-every/search": "^1.0.1",
         "@types/pg": "^8.15.4",
         "canvas": "^3.1.0",
         "chrome-launcher": "^1.2.0",

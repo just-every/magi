@@ -117,8 +117,11 @@ class RunningToolTracker extends EventEmitter {
             );
         }
 
-        // Remove from tracking
-        this.functions.delete(id);
+        // Keep in tracking for a short time so wait_for_running_tool can see the final status
+        // Remove after 30 seconds to prevent memory leaks
+        setTimeout(() => {
+            this.functions.delete(id);
+        }, 30_000);
 
         return true;
     }
@@ -152,8 +155,11 @@ class RunningToolTracker extends EventEmitter {
             agent.historyThread
         );
 
-        // Remove from tracking
-        this.functions.delete(id);
+        // Keep in tracking for a short time so wait_for_running_tool can see the final status
+        // Remove after 30 seconds to prevent memory leaks
+        setTimeout(() => {
+            this.functions.delete(id);
+        }, 30_000);
 
         return true;
     }
@@ -189,7 +195,12 @@ class RunningToolTracker extends EventEmitter {
             `RunningTool ${fn.name} (id: ${id}) terminated`
         );
 
-        // Keep in the map for reference
+        // Keep in tracking for a short time so wait_for_running_tool can see the final status
+        // Remove after 30 seconds to prevent memory leaks
+        setTimeout(() => {
+            this.functions.delete(id);
+        }, 30_000);
+
         return true;
     }
 

@@ -607,7 +607,8 @@ export class CommunicationManager {
                     gitPullRequest.processId,
                     gitPullRequest.projectId,
                     gitPullRequest.branch,
-                    gitPullRequest.message
+                    gitPullRequest.message,
+                    gitPullRequest.patchId
                 );
             } catch (error) {
                 console.error('Error handling git_pull_request:', error);

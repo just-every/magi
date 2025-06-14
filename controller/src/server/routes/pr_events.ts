@@ -80,7 +80,6 @@ router.post('/:id/revert', async (req: any, res: any) => {
         const userId = req.body.userId || (req as any).user?.email || 'Unknown';
 
         // Resolve project path
-        // This assumes the same structure as used in git_push.ts
         const projectPath = path.join(
             '/magi_output',
             event.process_id,

@@ -256,6 +256,7 @@ export interface GitPullRequestEvent extends StreamEvent {
     branch: string;
     message: string;
     timestamp: string;
+    patchId?: number;  // ID of the patch in the database
 }
 
 /**

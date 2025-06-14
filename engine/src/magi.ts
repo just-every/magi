@@ -35,6 +35,7 @@ import {
 } from './utils/communication.js';
 import { move_to_working_dir, set_file_test_mode } from './utils/file_utils.js';
 import { costTracker } from './utils/cost_tracker.js';
+import { planAndCommitChanges } from './utils/commit_planner.js';
 import {
     Agent,
     ProviderStreamEvent,
@@ -74,29 +75,31 @@ function parseCommandLineArgs() {
     return values;
 }
 
-function endProcess(exit: number, error?: string): void {
-    if (exit > 0 && !error) {
-        error = 'Exited with error';
+function endProcess(exit: number, result?: string): void {
+    if (exit > 0 && !result) {
+        result = 'Exited with error';
     }
+    console.log(`\n**endProcess** ${result}`);
     if (hasCommunicationManager()) {
         const comm = getCommunicationManager();
-        if (error) {
-            console.error(`\n**Fatal Error** ${error}`);
-            if (exit > 0)
-                comm.send({
-                    type: 'error',
-                    error: `\n**Fatal Error** ${error}`,
-                });
+        if (exit > 0) {
+            comm.send({
+                type: 'error',
+                error: `\n**Fatal Error** ${result}`,
+            });
+            comm.send({
+                type: 'process_terminated',
+                error: result,
+            });
         }
-        comm.send({
-            type: 'process_terminated',
-            error,
-        });
+        else {
+            comm.send({
+                type: 'process_done',
+                output: result
+            });
+        }
     } else {
         console.error('\n**endProcess() with no communication manager**');
-        if (error) {
-            console.error(`\n**Fatal Error** ${error}`);
-        }
     }
 
     costTracker.printSummary();
@@ -139,9 +142,19 @@ export async function spawnThought(
     await addHumanMessage(command, thread);
 
     // Only modify the clone, leaving the original untouched
-    agent.model = await Runner.rotateModel(agent, 'writing');
+    delete agent.model;
+    agent.modelClass = 'reasoning_mini';
     agent.historyThread = thread;
     agent.maxToolCallRoundsPerTurn = 1;
+
+    // Set the talk to tool to force a response
+    const person = process.env.YOUR_NAME || 'User';
+    const talkToolName = `talk to ${person}`.toLowerCase().replaceAll(' ', '_');
+    agent.modelSettings = agent.modelSettings || {};
+    agent.modelSettings.tool_choice = {
+        type: 'function',
+        function: { name: talkToolName },
+    };
 
     sendComms({
         type: 'agent_status',
@@ -313,9 +326,15 @@ async function main(): Promise<void> {
         return endProcess(1, 'Either --prompt or --base64 must be provided');
     }
 
-    // Move to working directory in /magi_output
+    // Move to working directory
     const projects = getProcessProjectIds();
-    move_to_working_dir(projects.length > 0 ? `projects/${projects[0]}` : '');
+    if (projects.length > 0) {
+        // Change to the project directory
+        process.chdir(`/app/projects/${projects[0]}`);
+    } else {
+        // Use the default working directory
+        move_to_working_dir();
+    }
 
     // Initialize database connection
     if (!(await initDatabase())) {
@@ -389,6 +408,19 @@ async function main(): Promise<void> {
             let taskCompleted = false;
             let error: string | undefined;
 
+            // History tracking for process updates
+            const responseHistory: string[] = [];
+            let loopCount = 0;
+            let lastUpdateTime = Date.now();
+
+            // Calculate update frequency - faster at start, slower over time
+            const getUpdateInterval = (count: number): number => {
+                if (count < 5) return 5000; // 5 seconds for first 5 loops
+                if (count < 10) return 10000; // 10 seconds for next 5
+                if (count < 20) return 20000; // 20 seconds for next 10
+                return 30000; // 30 seconds after that
+            };
+
             // If a custom model is provided, temporarily update the agent's model
             const originalModel = agent.model;
             if (args.model) {
@@ -406,19 +438,68 @@ async function main(): Promise<void> {
                 const runTaskStream = runTask(agent, promptText);
 
                 for await (const event of runTaskStream) {
+                    // Collect response_output events for history
+                    if (event.type === 'response_output' && 'content' in event) {
+                        const content = (event as any).content;
+                        if (typeof content === 'string' && content) {
+                            responseHistory.push(content);
+                            // Keep only the last 20 responses
+                            if (responseHistory.length > 20) {
+                                responseHistory.shift();
+                            }
+                        }
+                    }
+
+                    // Check if it's time to send an update
+                    const now = Date.now();
+                    const updateInterval = getUpdateInterval(loopCount);
+                    if (now - lastUpdateTime >= updateInterval) {
+                        // Send process_updated event with history
+                        sendComms({
+                            type: 'process_updated',
+                            history: responseHistory.slice(-10).map((content) => ({
+                                role: 'assistant' as const,
+                                content: content,
+                                type: 'message' as const,
+                                status: 'completed' as const
+                            })),
+                            output: responseHistory.slice(-5).join('\n\n'), // Last 5 responses as output
+                        });
+                        lastUpdateTime = now;
+                        loopCount++;
+                    }
+
                     // Check for task completion or error
                     if (event.type === 'tool_start' && 'tool_call' in event) {
-                        const toolName = event.tool_call.function.name;
-                        if (
-                            toolName === 'task_complete' ||
-                            toolName === 'task_fatal_error'
-                        ) {
-                            taskCompleted = true;
+                        const toolCall = (event as any).tool_call;
+                        if (toolCall && toolCall.function) {
+                            const toolName = toolCall.function.name;
+                            if (
+                                toolName === 'task_complete' ||
+                                toolName === 'task_fatal_error'
+                            ) {
+                                taskCompleted = true;
+                            }
                         }
                     } else if (event.type === 'error' && 'error' in event) {
-                        error = event.error;
+                        const errorMessage = (event as any).error;
+                        if (typeof errorMessage === 'string') {
+                            error = errorMessage;
+                        }
                     }
                 }
+
+                // Send final update when task completes
+                sendComms({
+                    type: 'process_updated',
+                    history: responseHistory.slice(-10).map((content) => ({
+                        role: 'assistant' as const,
+                        content: content,
+                        type: 'message' as const,
+                        status: 'completed' as const
+                    })),
+                    output: responseHistory.slice(-5).join('\n\n'),
+                });
 
                 // Log task completion with timing
                 const durationSec = (Date.now() - startTime) / 1000;
@@ -434,6 +515,19 @@ async function main(): Promise<void> {
                 // Restore original model if it was changed
                 if (args.model && originalModel) {
                     agent.model = originalModel;
+                }
+
+                const project_ids = getProcessProjectIds();
+                // Parallelize patch generation for all projects
+                if (project_ids.length > 0) {
+                    console.log(`[magi] Generating patches for ${project_ids.length} projects...`);
+                    await Promise.all(
+                        project_ids.map(project_id =>
+                            planAndCommitChanges(agent, project_id).catch(err => {
+                                console.error(`[magi] Failed to generate patch for ${project_id}:`, err);
+                            })
+                        )
+                    );
                 }
             }
         } else {
@@ -464,14 +558,7 @@ async function main(): Promise<void> {
             status: 'process_done',
         });
 
-        if (args.tool && args.tool !== 'none') {
-            return endProcess(0, 'Task run completed.');
-        }
-
-        if (args.test) {
-            // For tests we terminate after the first run
-            return endProcess(0, 'Test run completed.');
-        }
+        return endProcess(0, 'Task run completed.');
     } catch (error) {
         return endProcess(1, `Failed to process command: ${error}`);
     }

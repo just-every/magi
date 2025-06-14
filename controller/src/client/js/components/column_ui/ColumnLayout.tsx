@@ -4,9 +4,7 @@ import { useSocket } from '../../context/SocketContext';
 import ChatColumn from './ChatColumn';
 import ProcessTreeColumn from './ProcessTreeColumn';
 import OutputColumn from './OutputColumn';
-import PullRequestFailures, {
-    PullRequestFailure,
-} from '../PullRequestFailures';
+import PatchesViewer, { Patch } from '../PatchesViewer';
 import CustomToolsViewer, { CustomTool } from '../CustomToolsViewer';
 
 interface ColumnLayoutProps {}
@@ -19,8 +17,7 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
         'tasks' | 'code' | 'tools' | 'complete'
     >('tasks');
     const [selectedTool, setSelectedTool] = useState<CustomTool | null>(null);
-    const [selectedFailure, setSelectedFailure] =
-        useState<PullRequestFailure | null>(null);
+    const [selectedPatch, setSelectedPatch] = useState<Patch | null>(null);
 
     useEffect(() => {
         // Focus input when visible
@@ -34,7 +31,7 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
             setSelectedTool(null);
         }
         if (middleTab !== 'code') {
-            setSelectedFailure(null);
+            setSelectedPatch(null);
         }
     }, [middleTab]);
 
@@ -125,10 +122,10 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                                 ]}
                             />
                         ) : middleTab === 'code' ? (
-                            <PullRequestFailures
+                            <PatchesViewer
                                 compact
-                                onSelectFailure={failure => {
-                                    setSelectedFailure(failure);
+                                onSelectPatch={patch => {
+                                    setSelectedPatch(patch);
                                     setSelectedItemId(null);
                                 }}
                             />
@@ -161,7 +158,7 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                     <OutputColumn
                         selectedItemId={selectedItemId}
                         selectedTool={selectedTool}
-                        selectedFailure={selectedFailure}
+                        selectedPatch={selectedPatch}
                     />
                 </div>
             </div>

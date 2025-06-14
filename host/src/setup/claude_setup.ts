@@ -50,7 +50,7 @@ export async function setupClaudeAuth(): Promise<boolean> {
       ln -sf /claude_shared/.claude.json /home/magi_user/.claude.json && \\
       ls -la /home/magi_user/ | grep claude && \\
       ls -la /claude_shared/ && \\
-      claude --dangerously-skip-permissions
+      exec claude --dangerously-skip-permissions
     `;
 
         const containerIdResult = await new Promise<string>(

@@ -162,6 +162,7 @@ export function runPty(
     const cols = options.cols || 80;
     const rows = options.rows || 60;
     const silenceTimeoutMs = options.silenceTimeoutMs || 5000;
+    console.log(`[runPty] Configured silence timeout: ${silenceTimeoutMs}ms for message ${messageId} (options.silenceTimeoutMs = ${options.silenceTimeoutMs})`);
     const batchTiers = options.batch?.tiers || DEFAULT_BATCH_TIERS;
     const noiseFilter = options.noiseFilter || (() => false);
     const startSignal = options.startSignal;
@@ -171,6 +172,10 @@ export function runPty(
         options.emitComplete !== undefined ? options.emitComplete : true;
     const exitCommand = options.exitCommand || DEFAULT_EXIT_COMMAND;
     const successExitCodes = options.successExitCodes || [0];
+
+    // Queue to pass events from PTY callbacks/timers to the generator loop
+    // Moved outside the generator to be accessible to timeout handlers
+    const eventQueue: StreamingEvent[] = [];
 
     // Create an async generator to yield StreamingEvent objects
     const stream = (async function* () {
@@ -195,9 +200,6 @@ export function runPty(
 
         // --- Console Output Buffering ---
         const consoleBuffers = new Map<string, DeltaBuffer>();
-
-        // Queue to pass events from PTY callbacks/timers to the generator loop
-        const eventQueue: StreamingEvent[] = [];
 
         // --- PTY Silence Timeout Variables ---
         let silenceTimeoutId: NodeJS.Timeout | null = null;
@@ -271,11 +273,30 @@ export function runPty(
                     return;
                 }
 
+                // Check if there are pending events in the queue
+                if (eventQueue.length > 0) {
+                    console.log(
+                        `[runPty] Silence timeout reached but event queue has ${eventQueue.length} pending events. Resetting timeout.`
+                    );
+                    resetSilenceTimeout();
+                    return;
+                }
+
+                // For long-running processes like PatchAgent, give extra grace period
+                const isLongRunningCommand = command === 'claude' && silenceTimeoutMs >= 30000;
+                if (isLongRunningCommand && !processingStarted) {
+                    console.log(
+                        `[runPty] Long-running command hasn't started processing yet. Extending timeout.`
+                    );
+                    resetSilenceTimeout();
+                    return;
+                }
+
                 console.error(
                     `[runPty] PTY process timed out after ${silenceTimeoutMs}ms of silence for message ${messageId}. Requesting graceful exit.`
                 );
                 console.error(
-                    `[runPty] Timeout details: deltaBuffer.length=${deltaBuffer.length}, lineBuffer.length=${lineBuffer.length}, processingStarted=${processingStarted}`
+                    `[runPty] Timeout details: deltaBuffer.length=${deltaBuffer.length}, lineBuffer.length=${lineBuffer.length}, processingStarted=${processingStarted}, eventQueue.length=${eventQueue.length}`
                 );
 
                 ptyError = new Error(

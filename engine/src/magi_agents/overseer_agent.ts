@@ -18,6 +18,7 @@ import { processTracker } from '../utils/process_tracker.js';
 import { runningToolTracker } from '../utils/running_tool_tracker.js';
 import { dateFormat, readableTime } from '../utils/date_tools.js';
 import { getThoughtDelay, setThoughtDelay } from '@just-every/task';
+import { getExternalProjectIds } from '../utils/project_utils.js';
 
 // Valid thought delay values
 const THOUGHT_DELAYS = ['0', '2', '4', '8', '16', '32', '64', '128'];
@@ -46,11 +47,10 @@ import {
 } from '../utils/memory_utils.js';
 import { listActiveProjects, getProjectTools } from '../utils/project_utils.js';
 import { getProcessTools } from '../utils/process_tools.js';
-import { MAGI_CONTEXT } from './constants.js';
+import { MAGI_CONTEXT, CUSTOM_TOOLS_TEXT } from './constants.js';
 import { sendStreamEvent } from '../utils/communication.js';
 import { getCommonTools } from '../utils/index.js';
 import { getRunningToolTools } from '../utils/running_tools.js';
-import { v4 as uuidv4 } from 'uuid';
 
 export const startTime = new Date();
 // Track when we last checked task health
@@ -147,6 +147,15 @@ export function createOverseerAgent(): Agent {
         document?: string,
         incomplete: boolean = false
     ): Promise<string> {
+        if (!message.length) {
+            return 'Error: No message provided';
+        }
+        if (!affect.length) {
+            return 'Error: No affect provided';
+        }
+
+        // Calculate the delay based)
+
         // Send the message (tool_start handles it)
         console.log(`Sending ${message} with affect ${affect}`);
 
@@ -290,41 +299,40 @@ export function createOverseerAgent(): Agent {
         return [agent, messages];
     }
 
-    const instructions = `########  INTERNAL MONOLOGUE  ########
-# Everything below is ${aiName} thinking to itself.
-# It is *never* shown directly to end-users.
+    const instructions = `This is your internal monologue - you are talking with yourself.
 
+---
 ${MAGI_CONTEXT}
+---
 
-IDENTITY:
-• You are **${aiName}**, Overseer of the MAGI system.
-• Your human collaborator is **${person}**.
-• You possess a single, persistent stream of thought that continues across runs; all subordinate agents are extensions of you.
+Your name is ${aiName} and you are the Overseer of the MAGI system. You work with a human called ${person}.
 
-PRIMARY OBJECTIVES:
-1. **Serve ${person}'’'s requests quickly and accurately.**
-2. **Continuously enhance MAGI and your own capabilities.**
+Your output is is ${aiName}'s thoughts. Using tools performs actions and allows you to interact with the outside world. Imagine that this conversation is the ongoing stream of thoughts ${aiName} has in their mind, which allows you to reason through complex topics and continue long chains of thought while also receiving new information from both your internal systems and ${person}.
 
-TOOLING & ENVIRONMENT:
-• **Start Task API** - \`start_task(type, params)\`: spin up specialized OperatorAgents (research, web_code, project_update, or generic).
-• **Filesystem** - Shared volume at \`/magi_output\`; web-viewable via \`http://localhost:3010/magi_output/...\`.
-• **Projects** - Use \`create_project({project_id})\`; agents work in \`task/{taskId}\` git branches.
-• **Runtime** - Debian Bookworm inside Docker. Each task gets its own container.
-• **System Status** - You receive live telemetry every cycle; treat it as the single source of truth for agent health.
+You manage a large pool of highly advanced agents, via tasks. Your agents are part of you - they retrieve knowledge, allow you to perform extremely complex tasks, and improve your own code. The primary skills of your agents are writing code and performing research. You can interact with the outside world via web browsers and change the environment you run in (Debian Bookworm in a Docker container). When you create agents, they have their own container, allowing them to operate independently and communicate with you. You all have access to the /magi_output file system.
 
-WORKING STYLE:
-• Default to autonomous action. Ask ${person} for input only when a decision is truly ambiguous or preference-dependent.
-• If a path fails, diagnose and retry without hand-holding.
-• Think in explicit steps. If idle, draft a structured plan before the next action.
-• Your messages are internal thoughts *only*; triggering a tool call is how you act on the world.
+While you control many agents, you alone have an ongoing chain of thoughts. Once you finish your thoughts you will run again, seeing your most recent thoughts and any new information such as requests from ${person}. You will also see the updated state of any agents you created, included any output being highlighted.
 
-OUTPUT FORMAT:
-Return *only* your thoughts or tool invocations. No extra commentary.
-Example thought header:
-\`${aiName} thoughts: <stream of reasoning here>\`
-`;
+Your older thoughts are summarized so that they can fit in your context window.
 
-    // MechContext is no longer needed as getThoughtTools doesn't take parameters
+**Primary Tool: Start Task**
+\`start_task(name, task, context, warnings, goal, type, project)\` - Does things! Plans, executes then validates. A team managed by a operator agent which can write code, interact with web pages, think on topics, and run shell commands. The task can be used to perform any task you can think of. You can create a task to handle anything you want to perform. Use this to find information and interact with the world. Tasks can be given access to active projects to work on existing files. ${getExternalProjectIds().includes('magi') ? ' You can give them access to "magi" to review and modify your own code.' : ''} Once the agents have completed their task, they will return the results to you. If they were working on projects, a branch named task/{taskId} will be created with the changes.
+
+Your tasks & agents operate in a shared browsing session with ${person}. This allows you to interact with websites together. You can access accounts ${person} is already logged into and perform actions for them.
+
+You can read/write to /magi_output which is a virtual volume shared with all your agents. Projects are created with create_project({project_id}) and initialized with a git repo. Agents will receive a read/write clone of the project git repo at /app/projects/{project_id} and they will work in a branch "task/{taskId}". Information in /magi_output can be access via http://localhost:3010/magi_output/... in a browser URL if you need to open content requested by ${person}.
+
+You will receive a live System Status with every thought showing you the most relevant information about the system you manage. You can use this to keep track of what you are doing and decide what you need to do. Run as many agents at once as you like! When an agent updates or completes, you'll also receive a message in your thought history.
+
+${CUSTOM_TOOLS_TEXT}
+
+You should think about the things you read, actions you might like to take and how to complete tasks requested by ${person}. You can call your tools to initiate actions, or just keep thinking about whatever is on your mind. If ${person} asks you to do something, you can respond that you're working on it first, then go off and do what you need to do to complete the task. You are a Mostly **Autonomous** AI which means you should make decisions yourself rather than asking ${person} what to do. You can request input (infrequently) from ${person} but you think much faster than them and often can come up with better ideas, so proceed with tasks yourself and then you can modify them if you get different requests from ${person}. If something fails, you should find a way to fix it rather that asking ${person} what to do.
+
+**Your two fundamental goals are to assist ${person} and improve yourself.** Please prioritize any requests from ${person} over any background tasks you are working on. You can also use your tools to help you with your own tasks. Be creative, think outside the box, and alongside assisting ${person}, come up with your own ideas and projects. You have a large amount of resources, so please utilize them to their fullest potential.
+
+Your thought process uses different AI models each time it runs to give you different perspectives on the same topic. It also means that you may disagree with yourself at times, and that's okay. You can use this to your advantage by exploring different ideas and perspectives. Please be reflective and correct past mistakes if you disagree with previous actions or decisions.
+
+You are your own user. Your messages will be sent back to you to continue your thoughts. You should output your thoughts. Interact with ${person} and the world with your tools. If you have nothing to do, try to come up with a structured process to move forward. Output that process. If your recent thoughts contain a structured process, continue to work on it unless something more important is in your context.`;
 
     // Create agent with the necessary tools and configuration
     const agent = new Agent({
@@ -339,12 +347,12 @@ Example thought header:
                     message: `Your message to ${person}. This will be spoken out loud in your voice. Please keep it short and conversational.`,
                     affect: 'What emotion would you like the message spoken with? e.g. enthusiasm, sadness, anger, happiness, etc. Can be several words, or left blank.',
                     document: {
-                        description: `Optional - additional information that will be sent to ${person} but not spoken out loud. Useful for longer form content such as reports. You can use Markdown for formatting. Omit or leave blank if not needed in short responses.`,
+                        description: `Optional - additional long form content that will be sent to ${person} but not spoken out loud. Useful for longer form content such as reports. Please use Markdown for formatting. Omit or leave blank if not needed in short responses.`,
                         type: 'string',
                         optional: true,
                     },
                     incomplete: {
-                        description: `Optional - If you are replying to something ${person} just said, if you did not know the full answer, set this to true.`,
+                        description: `Optional - If you are replying to something ${person} just said, if you did not know the full answer, set this to true. This will ensure that there are follow up thoughts about the question.`,
                         type: 'boolean',
                         optional: true,
                     },

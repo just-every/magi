@@ -15,8 +15,8 @@ import BrowserDisplay from '../ui/BrowserDisplay';
 import ConsoleDisplay from '../ui/ConsoleDisplay';
 import DesignDisplay from '../ui/DesignDisplay';
 import type { CustomTool } from '../CustomToolsViewer';
-import PullRequestFailureDetails from '../PullRequestFailureDetails';
-import type { PullRequestFailure } from '../PullRequestFailures';
+import PatchDetails from '../PatchDetails';
+import type { Patch } from '../PatchesViewer';
 import {
     ScreenshotEvent,
     ConsoleEvent,
@@ -26,13 +26,13 @@ import {
 interface OutputColumnProps {
     selectedItemId: string | null;
     selectedTool?: CustomTool | null;
-    selectedFailure?: PullRequestFailure | null;
+    selectedPatch?: Patch | null;
 }
 
 const OutputColumn: React.FC<OutputColumnProps> = ({
     selectedItemId,
     selectedTool,
-    selectedFailure,
+    selectedPatch,
 }) => {
     const { coreProcessId, processes, terminateProcess } = useSocket();
     if (selectedTool) {
@@ -50,10 +50,10 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
         );
     }
 
-    if (selectedFailure) {
+    if (selectedPatch) {
         return (
             <div className="output-column h-100 overflow-auto p-3">
-                <PullRequestFailureDetails failure={selectedFailure} />
+                <PatchDetails patch={selectedPatch} />
             </div>
         );
     }

@@ -75,6 +75,7 @@ export class CodexProvider implements ModelProvider {
             );
 
             // Run Codex CLI via run_pty
+            console.log(`[CodexProvider] Setting up runPty with silenceTimeoutMs: 30000 for message ${messageId}`);
             const { stream, write } = runPty(
                 'codex',
                 [
