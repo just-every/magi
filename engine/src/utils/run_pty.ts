@@ -117,6 +117,8 @@ export interface PtyRunOptions {
     emitComplete?: boolean;
     /** What command should we use to exit (default: /exit) */
     exitCommand?: string;
+    /** Array of exit codes to treat as successful (default: [0]) */
+    successExitCodes?: number[];
 }
 
 /**
@@ -168,6 +170,7 @@ export function runPty(
     const emitComplete =
         options.emitComplete !== undefined ? options.emitComplete : true;
     const exitCommand = options.exitCommand || DEFAULT_EXIT_COMMAND;
+    const successExitCodes = options.successExitCodes || [0];
 
     // Create an async generator to yield StreamingEvent objects
     const stream = (async function* () {
@@ -377,6 +380,9 @@ export function runPty(
                     console.log(
                         `[runPty] Spawning PTY: ${command} ${args.map(a => (a.length > 50 ? a.substring(0, 50) + '...' : a)).join(' ')}`
                     );
+                    
+                    // Log environment for debugging
+                    console.log(`[runPty] UV_USE_IO_URING=${env.UV_USE_IO_URING || 'not set'}`);
 
                     ptyProcess = pty.spawn(command, args, {
                         name: 'xterm-color',
@@ -567,6 +573,15 @@ export function runPty(
                                 signal ? ` (signal ${signal})` : ''
                             } for message ${messageId}.`
                         );
+                        
+                        // Log more details about the exit
+                        if (signal) {
+                            console.log(`[runPty] Process terminated by signal: ${signal}`);
+                            // SIGHUP has signal number 1
+                            if (signal === 1) {
+                                console.warn(`[runPty] SIGHUP (signal 1) detected - likely io_uring PTY bug. Ensure UV_USE_IO_URING=0 is set.`);
+                            }
+                        }
                         ptyExited = true;
                         activePtyProcesses.delete(ptyProcess);
                         // Clean up the ptyMap and exit command map
@@ -633,7 +648,8 @@ export function runPty(
                         // Resolve or reject the completion promise based on outcome
                         if (ptyError) {
                             resolve(); // Resolve, let generator handle ptyError flag
-                        } else if (exitCode === 0) {
+                        } else if (successExitCodes.includes(exitCode)) {
+                            console.log(`[runPty] PTY process exited with acceptable code ${exitCode} for message ${messageId}`);
                             resolve(); // Success
                         } else {
                             // PTY exited with non-zero code without a prior error flag set
@@ -642,7 +658,7 @@ export function runPty(
                             }.`;
                             console.error(`[runPty] ${errorMsg}`);
                             ptyError = new Error(errorMsg);
-                            reject(ptyError);
+                            resolve(); // Resolve, let generator handle ptyError flag instead of rejecting
                         }
                     });
                 } catch (spawnError: any) {
@@ -660,7 +676,7 @@ export function runPty(
                         batchTimerId = null;
                         currentBatchTimeoutValue = null;
                     }
-                    reject(spawnError);
+                    resolve(); // Resolve, let generator handle ptyError flag instead of rejecting
                 }
             });
 

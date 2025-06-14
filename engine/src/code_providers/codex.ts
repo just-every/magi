@@ -24,6 +24,8 @@ interface CodexContentPart {
  * processing JSON-like lines to extract output_text for the final result.
  */
 export class CodexProvider implements ModelProvider {
+    provider_id = 'codex';
+    
     async *createResponseStream(
         messages: ResponseInput,
         model: string, // e.g., 'codex'
@@ -86,6 +88,7 @@ export class CodexProvider implements ModelProvider {
                     silenceTimeoutMs: 30000, // Codex can be slower, give it more time
                     emitComplete: false, // We'll emit our own message_complete
                     exitCommand: 'q', // Exit command for Codex CLI
+                    successExitCodes: [0, 1], // Codex exits with code 1 when 'q' is sent, treat as success
                     onLine: (line: string) => {
                         // Look for the warning prompt about running outside a git repo
                         if (line.includes('Do you want to continue?')) {
