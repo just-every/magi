@@ -35,6 +35,9 @@ const ptyMap = new Map<string, pty.IPty>();
 // Default exit command that can be overridden by individual PTY processes
 const DEFAULT_EXIT_COMMAND = '/exit';
 
+// Default string to detect input vs output
+const DEFAULT_PROMPT_SEPARATOR = '--==--==--';
+
 // Map to store custom exit commands for each PTY
 const ptyExitCommands = new Map<pty.IPty, string>();
 
@@ -103,6 +106,8 @@ export interface PtyRunOptions {
     rows?: number;
     /** Function to filter out noise lines from the output */
     noiseFilter?: (line: string, tokenCb?: (n: number) => void) => boolean;
+    /** What text separates input from output? */
+    promptSeparator?: string;
     /** Function to detect when the actual processing/output has started */
     startSignal?: (line: string) => boolean;
     /** Callback for token progress updates */
@@ -115,8 +120,6 @@ export interface PtyRunOptions {
     messageId?: string;
     /** Optional callback for each processed line */
     onLine?: (line: string) => void;
-    /** Whether to emit a message_complete event (default: true) */
-    emitComplete?: boolean;
     /** What command should we use to exit (default: /exit) */
     exitCommand?: string;
     /** Array of exit codes to treat as successful (default: [0]) */
@@ -169,13 +172,17 @@ export function runPty(
     );
     const batchTiers = options.batch?.tiers || DEFAULT_BATCH_TIERS;
     const noiseFilter = options.noiseFilter || (() => false);
-    const startSignal = options.startSignal;
+    const promptSeparator = options.promptSeparator || DEFAULT_PROMPT_SEPARATOR;
+    const startSignal =
+        options.startSignal ||
+        ((line: string): boolean => {
+            if (line.includes(promptSeparator)) return true;
+            return false;
+        });
     const onTokenProgress = options.onTokenProgress;
     const onLine = options.onLine;
-    const emitComplete =
-        options.emitComplete !== undefined ? options.emitComplete : true;
     const exitCommand = options.exitCommand || DEFAULT_EXIT_COMMAND;
-    const successExitCodes = options.successExitCodes || [0];
+    const successExitCodes = options.successExitCodes || [0, 1];
 
     // Queue to pass events from PTY callbacks/timers to the generator loop
     // Moved outside the generator to be accessible to timeout handlers
@@ -437,6 +444,9 @@ export function runPty(
                 order: deltaPosition++,
             } as MessageEvent;
 
+            args[args.length - 1] =
+                args[args.length - 1] + `\n\n${promptSeparator}`;
+
             // Create a Promise to manage PTY process completion/failure
             const completionPromise = new Promise<void>(resolve => {
                 try {
@@ -499,14 +509,12 @@ export function runPty(
                             // Keep the last part (potentially incomplete line) in the buffer
                             lineBuffer = lines.pop() || '';
 
-                            // Reset timeout again after processing chunk (we're still actively receiving data)
-                            if (lines.length > 0 || lineBuffer.length > 0) {
-                                resetSilenceTimeout();
-                            }
-
                             // Process each complete line
                             for (const line of lines) {
+                                resetSilenceTimeout();
+
                                 const trimmedLine = line.trim();
+                                if (!trimmedLine.length) continue;
 
                                 // Special handling for Claude's summary separator
                                 if (trimmedLine === '------') {
@@ -516,7 +524,7 @@ export function runPty(
 
                                 // Invoke onLine callback if provided
                                 if (onLine) {
-                                    onLine(trimmedLine);
+                                    onLine(line);
                                 }
 
                                 // Check for [complete] signal to initiate graceful exit sequence
@@ -533,6 +541,51 @@ export function runPty(
                                     );
                                     requestExit();
                                     continue;
+                                }
+
+                                // Process line only if processing has started
+                                if (
+                                    processingStarted &&
+                                    !noiseFilter(trimmedLine, onTokenProgress)
+                                ) {
+                                    let shouldBuffer = true;
+
+                                    // --- Deduplication Logic ---
+                                    // Avoid exact consecutive duplicates
+                                    if (line === lastYieldedLine) {
+                                        shouldBuffer = false;
+                                    }
+                                    // Avoid recent duplicates using the sliding window history
+                                    if (
+                                        shouldBuffer &&
+                                        recentHistorySet.has(line)
+                                    ) {
+                                        shouldBuffer = false;
+                                    }
+
+                                    if (shouldBuffer) {
+                                        // Add newline back for structure within the buffer
+                                        const contentChunk = line;
+                                        // Append valid, non-duplicate content to the batch buffer
+                                        deltaBuffer += contentChunk;
+                                        // Update last yielded line for next dedupe check
+                                        lastYieldedLine = line;
+
+                                        // --- Update Sliding Window History ---
+                                        recentHistory.push(line);
+                                        recentHistorySet.add(line);
+                                        // Maintain history size
+                                        if (
+                                            recentHistory.length > historySize
+                                        ) {
+                                            const oldestLine =
+                                                recentHistory.shift()!;
+                                            recentHistorySet.delete(oldestLine);
+                                        }
+
+                                        // Start or adjust batch timer
+                                        startBatchTimer();
+                                    }
                                 }
 
                                 // --- Skip until start signal logic ---
@@ -555,51 +608,6 @@ export function runPty(
                                     } else {
                                         // Skip noise lines before processing starts
                                         continue;
-                                    }
-                                }
-
-                                // Process line only if processing has started
-                                if (
-                                    processingStarted &&
-                                    !noiseFilter(trimmedLine, onTokenProgress)
-                                ) {
-                                    let shouldBuffer = true;
-
-                                    // --- Deduplication Logic ---
-                                    // Avoid exact consecutive duplicates
-                                    if (trimmedLine === lastYieldedLine) {
-                                        shouldBuffer = false;
-                                    }
-                                    // Avoid recent duplicates using the sliding window history
-                                    if (
-                                        shouldBuffer &&
-                                        recentHistorySet.has(trimmedLine)
-                                    ) {
-                                        shouldBuffer = false;
-                                    }
-
-                                    if (shouldBuffer) {
-                                        // Add newline back for structure within the buffer
-                                        const contentChunk = trimmedLine + '\n';
-                                        // Append valid, non-duplicate content to the batch buffer
-                                        deltaBuffer += contentChunk;
-                                        // Update last yielded line for next dedupe check
-                                        lastYieldedLine = trimmedLine;
-
-                                        // --- Update Sliding Window History ---
-                                        recentHistory.push(trimmedLine);
-                                        recentHistorySet.add(trimmedLine);
-                                        // Maintain history size
-                                        if (
-                                            recentHistory.length > historySize
-                                        ) {
-                                            const oldestLine =
-                                                recentHistory.shift()!;
-                                            recentHistorySet.delete(oldestLine);
-                                        }
-
-                                        // Start or adjust batch timer
-                                        startBatchTimer();
                                     }
                                 }
                             }
@@ -772,14 +780,6 @@ export function runPty(
             // Determine final state
             if (ptyError && !String(ptyError).includes('timed out')) {
                 throw ptyError;
-            } else if (emitComplete) {
-                // Process finished (either successfully or via timeout), emit complete if desired
-                yield {
-                    type: 'message_complete',
-                    message_id: messageId,
-                    content: '', // This will be filled by the caller if needed
-                    order: deltaPosition++,
-                } as MessageEvent;
             }
         } catch (error: unknown) {
             console.error(

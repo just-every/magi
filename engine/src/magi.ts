@@ -116,7 +116,8 @@ function endProcess(exit: number, result?: string): void {
  */
 export async function spawnThought(
     args: Record<string, unknown>,
-    command: string
+    command: string,
+    structuredContent?: any
 ): Promise<void> {
     if (args.agent !== 'overseer') {
         // If destination is not overseer, it must have come from the overseer
@@ -138,7 +139,7 @@ export async function spawnThought(
 
     // Create a separate history thread for this thought
     const thread: ResponseInput = [];
-    await addHumanMessage(command, thread);
+    await addHumanMessage(command, thread, undefined, structuredContent);
 
     // Only modify the clone, leaving the original untouched
     delete agent.model;
@@ -369,7 +370,11 @@ async function main(): Promise<void> {
                     `Processing user command: ${commandMessage.command}`
                 );
 
-                await spawnThought(args, commandMessage.command);
+                await spawnThought(
+                    args,
+                    commandMessage.command,
+                    commandMessage.content
+                );
             }
         });
 

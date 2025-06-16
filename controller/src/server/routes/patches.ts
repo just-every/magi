@@ -4,6 +4,7 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import { getDB } from '../utils/db.js';
+import { getProject } from '../utils/db_utils.js';
 import {
     getPatchesWithRiskAssessment,
     applyPatch,
@@ -93,12 +94,9 @@ router.post('/:id/apply', async (req: Request, res: Response) => {
 
     try {
         const patchId = parseInt(id);
-        const projectPath = path.join(
-            '/magi_output',
-            processId,
-            'projects',
-            projectId
-        );
+
+        // Get project details to determine path
+        const projectPath = path.join('/external/host', projectId);
 
         // Check for conflicts first
         const conflictCheck = await analyzePatchConflicts(patchId, projectPath);
@@ -159,12 +157,9 @@ router.post('/:id/check-conflicts', async (req: Request, res: Response) => {
 
     try {
         const patchId = parseInt(id);
-        const projectPath = path.join(
-            '/magi_output',
-            processId,
-            'projects',
-            projectId
-        );
+
+        // Get project details to determine path
+        const projectPath = path.join('/external/host', projectId);
 
         const conflictCheck = await analyzePatchConflicts(patchId, projectPath);
 
@@ -191,8 +186,8 @@ router.post('/:id/reject', async (req: Request, res: Response) => {
     const client = await getDB();
     try {
         await client.query(
-            `UPDATE patches 
-             SET status = 'rejected', 
+            `UPDATE patches
+             SET status = 'rejected',
                  rejection_reason = $2
              WHERE id = $1`,
             [id, reason || 'Rejected by user']
@@ -249,12 +244,9 @@ router.post(
 
         try {
             const patchId = parseInt(id);
-            const projectPath = path.join(
-                '/magi_output',
-                processId,
-                'projects',
-                projectId
-            );
+
+            // Get project details to determine path
+            const projectPath = path.join('/external/host', projectId);
 
             const suggestions = await suggestConflictResolution(
                 patchId,
@@ -302,12 +294,8 @@ router.post('/:id/auto-resolve', async (req: Request, res: Response) => {
 
     try {
         const patchId = parseInt(id);
-        const projectPath = path.join(
-            '/magi_output',
-            processId,
-            'projects',
-            projectId
-        );
+
+        const projectPath = path.join('/external/host', projectId);
 
         const result = await attemptAutoResolve(patchId, projectPath);
 

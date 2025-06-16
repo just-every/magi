@@ -164,7 +164,7 @@ export class VersionManager {
         try {
             // Check if we're in a git repository
             const inGitRepo = await this.isInGitRepository();
-            
+
             if (inGitRepo && version !== 'latest') {
                 // Checkout the specific version
                 await execPromise(`git checkout ${version}`);
@@ -354,7 +354,6 @@ export class VersionManager {
         containerIds: string[],
         version: string
     ): Promise<void> {
-
         // Mark containers for graceful shutdown
         for (const processId of containerIds) {
             this.io.emit('version:update:graceful', {

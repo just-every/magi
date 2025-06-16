@@ -31,6 +31,11 @@ import {
     runProjectContainers,
 } from './container_manager';
 import { CommunicationManager } from './communication_manager';
+import {
+    analyzePatchConflicts,
+    applyPatch,
+    updatePatchStatus,
+} from '../utils/patch_manager';
 
 /**
  * Process data interface
@@ -140,7 +145,9 @@ export class ProcessManager {
 
             if (!this.coreProcessId) {
                 this.coreProcessId = processId;
-                console.log(`[ProcessManager] Set core process ID to: ${processId}`);
+                console.log(
+                    `[ProcessManager] Set core process ID to: ${processId}`
+                );
             }
 
             const status = 'running';
@@ -704,7 +711,9 @@ export class ProcessManager {
 
             // Set the core process ID if this is the core container
             if (isCore && !this.coreProcessId) {
-                console.log(`[ProcessManager] Identified ${id} as the core MAGI process from existing containers`);
+                console.log(
+                    `[ProcessManager] Identified ${id} as the core MAGI process from existing containers`
+                );
                 this.coreProcessId = id;
             }
 
@@ -716,7 +725,9 @@ export class ProcessManager {
             const colors = generateProcessColors();
 
             // Get the proper name for the process
-            const processName = isCore ? process.env.AI_NAME || 'MAGI Core' : undefined;
+            const processName = isCore
+                ? process.env.AI_NAME || 'MAGI Core'
+                : undefined;
 
             // Set up process tracking
             this.processes[id] = {
@@ -726,14 +737,16 @@ export class ProcessManager {
                 logs: ['Connecting to secure MAGI container...'],
                 containerId,
                 colors,
-                agentProcess: isCore ? {
-                    processId: id,
-                    name: processName || 'MAGI Core',
-                    command,
-                    status: 'running',
-                    started: new Date(),
-                    tool: 'research' as ProcessToolType, // Core process doesn't have a specific tool type
-                } : undefined,
+                agentProcess: isCore
+                    ? {
+                          processId: id,
+                          name: processName || 'MAGI Core',
+                          command,
+                          status: 'running',
+                          started: new Date(),
+                          tool: 'research' as ProcessToolType, // Core process doesn't have a specific tool type
+                      }
+                    : undefined,
             };
 
             // Set up log monitoring for the container
@@ -999,13 +1012,8 @@ export class ProcessManager {
                         `[process-manager] Auto-merging patch #${patchId} (risk: ${patch.riskAssessment.riskLevel})`
                     );
 
-                    // Get project path
-                    const projectPath = path.join(
-                        '/magi_output',
-                        processId,
-                        'projects',
-                        projectId
-                    );
+                    // Determine project path based on whether it's generated or external
+                    const projectPath = path.join('/external/host', projectId);
 
                     // Check for conflicts first
                     const conflictCheck = await analyzePatchConflicts(
@@ -1033,41 +1041,76 @@ export class ProcessManager {
                         });
                     } else if (conflictCheck.error) {
                         console.log(
-                            `[process-manager] Patch #${patchId} check failed with non-conflict error: ${conflictCheck.error}`
+                            `[process-manager] Patch #${patchId} check failed with error: ${conflictCheck.error}`
                         );
 
-                        // Still try to apply the patch, as the error might be benign
-                        const result = await applyPatch(
-                            patchId,
-                            projectPath,
-                            true
-                        );
-
-                        if (result.success) {
+                        // Check if it's an empty repository
+                        if (conflictCheck.isEmptyRepo) {
                             console.log(
-                                `[process-manager] Successfully auto-merged patch #${patchId} despite check error`
+                                `[process-manager] Empty repository detected for patch #${patchId} - requires manual intervention`
                             );
 
                             this.updateProcess(
                                 processId,
-                                `[git] Patch #${patchId} auto-merged successfully (commit: ${result.mergeCommitSha})`
+                                `[git] Patch #${patchId} cannot be applied to empty repository - manual intervention required`
                             );
 
-                            // Emit patch applied event
-                            this.io.emit('patch_applied', {
+                            // Update patch status to failed
+                            await updatePatchStatus(
+                                patchId,
+                                'failed',
+                                conflictCheck.error
+                            );
+
+                            // Emit patch error event
+                            this.io.emit('patch_error', {
                                 processId,
                                 projectId,
                                 patchId,
-                                mergeCommitSha: result.mergeCommitSha,
+                                error: 'Empty repository - cannot apply patch',
+                                requiresManualIntervention: true,
                             });
-                        } else {
+                        } else if (conflictCheck.requiresManualIntervention) {
                             console.error(
-                                `[process-manager] Failed to auto-merge patch #${patchId}: ${result.error}`
+                                `[process-manager] Patch #${patchId} requires manual intervention: ${conflictCheck.error}`
                             );
 
                             this.updateProcess(
                                 processId,
-                                `[git] Failed to auto-merge patch #${patchId}: ${result.error}`
+                                `[git] Patch #${patchId} failed: ${conflictCheck.error}`
+                            );
+
+                            // Update patch status to failed
+                            await updatePatchStatus(
+                                patchId,
+                                'failed',
+                                conflictCheck.error
+                            );
+
+                            // Emit patch error event
+                            this.io.emit('patch_error', {
+                                processId,
+                                projectId,
+                                patchId,
+                                error: conflictCheck.error,
+                                requiresManualIntervention: true,
+                            });
+                        } else {
+                            // Unknown error - do not attempt to apply
+                            console.error(
+                                `[process-manager] Patch #${patchId} check failed with unknown error: ${conflictCheck.error}`
+                            );
+
+                            this.updateProcess(
+                                processId,
+                                `[git] Patch #${patchId} check failed: ${conflictCheck.error}`
+                            );
+
+                            // Update patch status to failed
+                            await updatePatchStatus(
+                                patchId,
+                                'failed',
+                                conflictCheck.error
                             );
                         }
                     } else {

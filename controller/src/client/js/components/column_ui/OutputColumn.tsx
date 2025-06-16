@@ -53,8 +53,8 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
     if (selectedPatch) {
         return (
             <div className="output-column h-100 overflow-auto p-3">
-                <PatchDetails 
-                    patch={selectedPatch} 
+                <PatchDetails
+                    patch={selectedPatch}
                     projectId={selectedPatch.project_id}
                     processId={selectedPatch.process_id}
                 />

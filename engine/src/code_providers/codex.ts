@@ -10,13 +10,66 @@ import {
     ProviderStreamEvent,
     MessageEvent,
 } from '@just-every/ensemble';
-import { get_working_dir, log_llm_request } from '../utils/file_utils.js';
+import { log_llm_request } from '../utils/file_utils.js';
 import { runPty } from '../utils/run_pty.js';
 
 // Define interface for parsing Codex CLI JSON output
 interface CodexContentPart {
     type: string;
     text?: string;
+}
+
+/**
+ * Helper function to filter out known noise patterns from the interactive CLI output.
+ *
+ * **WARNING:** This function is highly dependent on the specific output format of the
+ * current 'claude' CLI version. Changes to UI elements, status messages, prompts, etc.,
+ * in future CLI versions may require this function to be updated.
+ *
+ * @param line - A single line of text (after ANSI stripping and trimming).
+ * @param tokenCb - Optional callback to receive detected token counts from status lines
+ * @returns True if the line is considered noise, false otherwise.
+ */
+function isNoiseLine(line: string, tokenCb?: (n: number) => void): boolean {
+    if (!line) return true; // Skip empty lines
+
+    // --- Filtering based on observed output ---
+    // NOTE: These patterns might break with future CLI updates.
+
+    // UI Borders/Elements
+    if (line.startsWith('╭') || line.startsWith('│') || line.startsWith('╰'))
+        return true;
+
+    if (line.startsWith('ctrl+c to exit')) return true;
+
+    // If none of the noise patterns matched, it's considered useful content
+    return false;
+}
+
+/**
+ * Checks if a line indicates the start of the actual processing/response phase,
+ * after the initial prompt echo or setup messages.
+ *
+ * **WARNING:** This function relies on specific "start signals" observed in the
+ * current 'claude' CLI output. If these signals change in future versions,
+ * the logic for skipping the initial prompt echo might fail.
+ *
+ * @param line - A single line of text (after ANSI stripping and trimming).
+ * @returns True if the line signals processing start, false otherwise.
+ */
+function isProcessingStartSignal(line: string): boolean {
+    // NOTE: These patterns might break with future CLI updates.
+    // Add patterns that reliably appear only *after* the initial prompt/setup output
+    if (/^\s*\p{S}\s*\w+…/u.test(line)) return true;
+    if (
+        line.startsWith('● ') ||
+        line.startsWith('╭') ||
+        line.startsWith('│') ||
+        line.startsWith('╰')
+    )
+        return true; // Lines starting with ● often indicate actions/tasks
+    if (line.startsWith('Task(')) return true; // Task descriptions
+    return false;
 }
 
 /**
@@ -61,9 +114,7 @@ export class CodexProvider implements ModelProvider {
 
             // Log the request
             const cwd =
-                agent.cwd && agent.cwd.trim()
-                    ? agent.cwd
-                    : get_working_dir() || process.cwd();
+                agent.cwd && agent.cwd.trim() ? agent.cwd : process.cwd();
 
             log_llm_request(agent.agent_id, 'openai', model, {
                 prompt,
@@ -81,17 +132,20 @@ export class CodexProvider implements ModelProvider {
             const { stream, write } = runPty(
                 'codex',
                 [
-                    '--full-auto',
-                    '--dangerously-auto-approve-everything',
+                    '--profile="o3"',
                     prompt,
                 ],
                 {
                     cwd,
                     messageId,
+                    env: {
+                        ...process.env,
+                        CODEX_RUST: '1',
+                        CODEX_UNSAFE_ALLOW_NO_SANDBOX: '1',
+                    },
+                    noiseFilter: isNoiseLine,
                     silenceTimeoutMs: 30000, // Codex can be slower, give it more time
-                    emitComplete: false, // We'll emit our own message_complete
-                    exitCommand: 'q', // Exit command for Codex CLI
-                    successExitCodes: [0, 1], // Codex exits with code 1 when 'q' is sent, treat as success
+                    exitCommand: '/quit', // Exit command for Codex CLI
                     onLine: (line: string) => {
                         // Look for the warning prompt about running outside a git repo
                         if (line.includes('Do you want to continue?')) {

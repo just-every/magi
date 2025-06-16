@@ -152,6 +152,21 @@ export class CommunicationManager {
                     ) as ServerMessage;
                     console.log('Received command:', message);
 
+                    // Notify all command listeners IN PARALLEL
+                    const results = await Promise.allSettled(
+                        this.commandListeners.map(listener => listener(message))
+                    );
+
+                    // Log any listener errors without stopping processing of others
+                    for (const result of results) {
+                        if (result?.status === 'rejected') {
+                            console.error(
+                                'Error in command listener:',
+                                result.reason
+                            );
+                        }
+                    }
+
                     // Check if this is a welcome message with port information
                     if (message.type === 'connect') {
                         const commandMessage = message as CommandMessage;
@@ -181,11 +196,14 @@ export class CommunicationManager {
                                     );
                                 }
                             }
-                            
+
                             // Handle core process ID
                             if (commandMessage.args.coreProcessId) {
-                                const coreProcessId = commandMessage.args.coreProcessId;
-                                console.log(`[Communication] Received core process ID: ${coreProcessId}`);
+                                const coreProcessId =
+                                    commandMessage.args.coreProcessId;
+                                console.log(
+                                    `[Communication] Received core process ID: ${coreProcessId}`
+                                );
                                 processTracker.setCoreProcessId(coreProcessId);
                             }
                         }
@@ -236,19 +254,6 @@ export class CommunicationManager {
                             );
                         }
                         return;
-                    }
-
-                    // Notify all command listeners SEQUENTIALLY
-                    for (const listener of this.commandListeners) {
-                        // Use for...of
-                        try {
-                            // Await the listener execution. This catches BOTH sync and async errors
-                            // from the listener promise.
-                            await listener(message);
-                        } catch (err: unknown) {
-                            console.error('Error in command listener:', err);
-                            // Decide if one listener failing should stop processing others
-                        }
                     }
                 } catch (err: unknown) {
                     console.error('Error parsing message:', err);

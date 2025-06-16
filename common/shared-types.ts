@@ -883,6 +883,7 @@ export interface CommandMessage extends ServerMessage {
         sourceProcessId?: string; // Added for process-to-process communication
         [key: string]: any;
     };
+    content?: any; // For structured content (images, files, etc.)
 }
 
 export interface ProjectMessage extends ServerMessage {

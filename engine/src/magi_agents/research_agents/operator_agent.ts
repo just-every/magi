@@ -7,7 +7,7 @@ import { MAGI_CONTEXT } from '../constants.js';
 import { getSearchTools } from '../../utils/search_utils.js';
 import { get_output_dir } from '../../utils/file_utils.js';
 import { Agent, ResponseInput } from '@just-every/ensemble';
-import { runningToolTracker } from '../../utils/running_tool_tracker.js';
+import { runningToolTracker } from '@just-every/ensemble';
 import { dateFormat, readableTime } from '../../utils/date_tools.js';
 import { getThoughtDelay } from '@just-every/task';
 
@@ -60,7 +60,11 @@ Depth mode: ${depth}. Save all output files in ${outputDir}.`;
                 role: 'developer',
                 content: `=== Operator Status ===\n\nCurrent Time: ${dateFormat()}\nYour Running Time: ${readableTime(
                     new Date().getTime() - startTime.getTime()
-                )}\nYour Thought Delay: ${getThoughtDelay()} seconds\n\nActive Tools:\n${runningToolTracker.listActive()}\nOutput Directory: ${outputDir}\nDepth Mode: ${depth}`,
+                )}\nYour Thought Delay: ${getThoughtDelay()} seconds\n\nActive Tools:\n${(() => {
+    const tools = runningToolTracker.getAllRunningTools();
+    if (tools.length === 0) return 'No running tools.';
+    return tools.map(t => `- ${t.toolName} (${t.id}) by ${t.agentName}`).join('\n');
+})()}\nOutput Directory: ${outputDir}\nDepth Mode: ${depth}`,
             });
             return [agent, messages];
         },

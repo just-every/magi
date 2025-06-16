@@ -11,47 +11,8 @@ export async function setupClaudeAuth(): Promise<boolean> {
     console.log('Setting up Claude authentication...');
 
     try {
-        const volumeExistsResult = await new Promise<string>(
-            (resolve, reject) => {
-                exec(
-                    'docker volume ls --filter name=claude_credentials --format "{{.Name}}"',
-                    (error, stdout) => {
-                        if (error) {
-                            reject(error);
-                            return;
-                        }
-                        resolve(stdout.trim());
-                    }
-                );
-            }
-        );
-
-        if (!volumeExistsResult) {
-            console.log('Creating shared claude_credentials volume...');
-            await new Promise<void>((resolve, reject) => {
-                exec('docker volume create claude_credentials', error => {
-                    if (error) {
-                        reject(error);
-                        return;
-                    }
-                    resolve();
-                });
-            });
-        }
-
         // Setup command to create directories and symlinks in the container before running claude
-        const setupCmd = `
-      mkdir -p /claude_shared/.claude && \\
-      touch /claude_shared/.claude.json && \\
-      chmod -R 777 /claude_shared && \\
-      rm -rf /home/magi_user/.claude && \\
-      rm -f /home/magi_user/.claude.json && \\
-      ln -sf /claude_shared/.claude /home/magi_user/.claude && \\
-      ln -sf /claude_shared/.claude.json /home/magi_user/.claude.json && \\
-      ls -la /home/magi_user/ | grep claude && \\
-      ls -la /claude_shared/ && \\
-      exec claude --dangerously-skip-permissions --debug
-    `;
+        const setupCmd = `exec claude --dangerously-skip-permissions --debug`;
 
         const containerIdResult = await new Promise<string>(
             (resolve, reject) => {

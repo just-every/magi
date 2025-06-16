@@ -15,7 +15,7 @@ import {
 } from '@just-every/ensemble';
 import { addHistory, addMonologue } from '../utils/history.js';
 import { processTracker } from '../utils/process_tracker.js';
-import { runningToolTracker } from '../utils/running_tool_tracker.js';
+import { runningToolTracker } from '@just-every/ensemble';
 import { dateFormat, readableTime } from '../utils/date_tools.js';
 import { getThoughtDelay, setThoughtDelay } from '@just-every/task';
 import { getExternalProjectIds } from '../utils/project_utils.js';
@@ -76,7 +76,11 @@ ${processTracker.listActive()}
 [Create with start_task()]
 
 Active Tools:
-${runningToolTracker.listActive()}
+${(() => {
+    const tools = runningToolTracker.getAllRunningTools();
+    if (tools.length === 0) return 'No running tools.';
+    return tools.map(t => `- ${t.toolName} (${t.id}) by ${t.agentName}`).join('\n');
+})()}
 
 Short Term Memory:
 ${listShortTermMemories()}
@@ -316,11 +320,11 @@ While you control many agents, you alone have an ongoing chain of thoughts. Once
 Your older thoughts are summarized so that they can fit in your context window.
 
 **Primary Tool: Start Task**
-\`start_task(name, task, context, warnings, goal, type, project)\` - Does things! Plans, executes then validates. A team managed by a operator agent which can write code, interact with web pages, think on topics, and run shell commands. The task can be used to perform any task you can think of. You can create a task to handle anything you want to perform. Use this to find information and interact with the world. Tasks can be given access to active projects to work on existing files. ${getExternalProjectIds().includes('magi') ? ' You can give them access to "magi" to review and modify your own code.' : ''} Once the agents have completed their task, they will return the results to you. If they were working on projects, a branch named task/{taskId} will be created with the changes.
+\`start_task(name, task, context, warnings, goal, type, project)\` - Does things! Plans, executes then validates. A team managed by a operator agent which can write code, interact with web pages, think on topics, and run shell commands. The task can be used to perform any task you can think of. You can create a task to handle anything you want to perform. Use this to find information and interact with the world. Tasks can be given access to active projects to work on existing files. ${getExternalProjectIds().includes('magi') ? ' You can give them access to "magi" to review and modify your own code.' : ''} Once the agents have completed their task, they will return the results and a git patch of changed files automatically.
 
 Your tasks & agents operate in a shared browsing session with ${person}. This allows you to interact with websites together. You can access accounts ${person} is already logged into and perform actions for them.
 
-You can read/write to /magi_output which is a virtual volume shared with all your agents. Projects are created with create_project({project_id}) and initialized with a git repo. Agents will receive a read/write clone of the project git repo at /app/projects/{project_id} and they will work in a branch "task/{taskId}". Information in /magi_output can be access via http://localhost:3010/magi_output/... in a browser URL if you need to open content requested by ${person}.
+You can read/write to /magi_output which is a virtual volume shared with all your agents. Projects are created with create_project({project_id}) and initialized with a git repo. Agents will receive a read/write clone of the project git repo at /app/projects/{project_id}. Information in /magi_output can be access via http://localhost:3010/magi_output/... in a browser URL if you need to open content requested by ${person}.
 
 You will receive a live System Status with every thought showing you the most relevant information about the system you manage. You can use this to keep track of what you are doing and decide what you need to do. Run as many agents at once as you like! When an agent updates or completes, you'll also receive a message in your thought history.
 

@@ -26,7 +26,7 @@ import {
     MessageEvent,
 } from '@just-every/ensemble';
 import { costTracker } from '../utils/cost_tracker.js';
-import { get_working_dir, log_llm_request } from '../utils/file_utils.js';
+import { log_llm_request } from '../utils/file_utils.js';
 import { runPty, PtyRunOptions } from '../utils/run_pty.js';
 import { acquireSlot, releaseSlot } from '../utils/claude_db_limiter.js';
 import { codexProvider } from './codex.js';
@@ -491,9 +491,7 @@ export class ClaudeCodeProvider implements ModelProvider {
 
             // 2. Get working directory and log request
             const cwd =
-                agent.cwd && agent.cwd.trim()
-                    ? agent.cwd
-                    : get_working_dir() || process.cwd();
+                agent.cwd && agent.cwd.trim() ? agent.cwd : process.cwd();
 
             console.log(
                 `[ClaudeCodeProvider] Executing streaming Claude CLI for model '${model}' in dir '${cwd}'...`
@@ -507,20 +505,21 @@ export class ClaudeCodeProvider implements ModelProvider {
             });
 
             // 3. Define runPty options
+            const { ANTHROPIC_API_KEY, ...envWithoutAnthropicKey } =
+                process.env;
             const ptyOpts: PtyRunOptions = {
                 cwd,
                 messageId,
                 noiseFilter: isNoiseLine,
-                startSignal: isProcessingStartSignal,
                 onTokenProgress: updateLiveTokenEstimate,
                 onLine: lineHook,
                 silenceTimeoutMs: 30000, // 30 seconds for all agents
                 env: {
-                    ...process.env,
-                    DISABLE_AUTOUPDATER: '1',
+                    ...envWithoutAnthropicKey,
+                    CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR: '1',
+                    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+                    BASH_MAX_TIMEOUT_MS: '20000',
                 },
-                emitComplete: false, // Provider will decide when to emit complete event
-                successExitCodes: [0, 1], // Claude CLI may exit with code 1 in some cases, treat as success
             };
 
             // 4. Run Claude CLI command via run_pty utility

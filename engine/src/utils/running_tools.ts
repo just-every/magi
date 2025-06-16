@@ -1,8 +1,7 @@
 /**
  * Tools for managing running functions
  */
-import { createToolFunction } from '@just-every/ensemble';
-import { runningToolTracker } from './running_tool_tracker.js';
+import { createToolFunction, runningToolTracker } from '@just-every/ensemble';
 import { sendStreamEvent } from './communication.js'; // Added import
 
 /**
@@ -12,7 +11,23 @@ import { sendStreamEvent } from './communication.js'; // Added import
  * @returns The status of the function
  */
 async function inspect_running_tool(runningToolId: string): Promise<string> {
-    return runningToolTracker.getStatus(runningToolId);
+    const tool = runningToolTracker.getRunningTool(runningToolId);
+    if (!tool) {
+        return `RunningTool with ID ${runningToolId} not found.`;
+    }
+    
+    const duration = Date.now() - tool.startTime;
+    let status = 'running';
+    if (tool.completed) status = 'completed';
+    else if (tool.failed) status = 'failed';
+    else if (tool.timedOut) status = 'timed out';
+    
+    return `RunningTool ${tool.toolName} (ID: ${runningToolId})
+Status: ${status}
+Agent: ${tool.agentName}
+Duration: ${Math.round(duration / 1000)}s
+${tool.result ? `Result: ${tool.result}` : ''}
+${tool.error ? `Error: ${tool.error}` : ''}`;
 }
 
 /**
@@ -34,6 +49,20 @@ async function wait_for_running_tool(
     let lastHeartbeatTime = Date.now();
     let finalResult = ''; // To store the final message
 
+    // Create an AbortController if none provided
+    const abortController = new AbortController();
+    const effectiveAbortSignal = abort_signal || abortController.signal;
+    
+    // Register this wait operation as a running tool so it can be interrupted
+    const waitToolId = `wait-tool-${runningToolId}-${Date.now()}`;
+    const waitTool = runningToolTracker.addRunningTool(
+        waitToolId,
+        'wait_for_running_tool',
+        'system',
+        JSON.stringify({ runningToolId, timeout })
+    );
+    waitTool.abortController = abortController;
+
     // Send start event
     sendStreamEvent({
         type: 'tool_wait_start',
@@ -48,32 +77,27 @@ async function wait_for_running_tool(
         // Could have finished extremely quickly or never existed.
         return `Error: Running tool with ID ${runningToolId} not found or already finished before waiting began.`;
     }
-    if (initialTool.status !== 'running') {
+    if (initialTool.completed || initialTool.failed) {
         // Already finished before we started waiting
-        switch (initialTool.status) {
-            case 'completed':
-                return (
-                    initialTool.output ??
-                    `Tool ${runningToolId} completed (status checked before wait).`
-                );
-            case 'failed':
-                return (
-                    initialTool.error ??
-                    `Tool ${runningToolId} failed (status checked before wait).`
-                );
-            case 'terminated':
-                return `Tool ${runningToolId} was terminated (status checked before wait).`;
-            default:
-                return `Tool ${runningToolId} has unexpected status '${initialTool.status}' before waiting began.`;
+        if (initialTool.completed) {
+            return (
+                initialTool.result ??
+                `Tool ${runningToolId} completed (status checked before wait).`
+            );
+        } else if (initialTool.failed) {
+            return (
+                initialTool.error ??
+                `Tool ${runningToolId} failed (status checked before wait).`
+            );
         }
     }
 
     // Polling loop
     while (Date.now() - startTime < timeoutMs) {
         // Check if the operation was aborted
-        if (abort_signal?.aborted) {
-            const abortReason = (abort_signal as any)?.reason
-                ? ` Reason: ${(abort_signal as any)?.reason}.`
+        if (effectiveAbortSignal.aborted) {
+            const abortReason = (effectiveAbortSignal as any)?.reason
+                ? ` Reason: ${(effectiveAbortSignal as any)?.reason}.`
                 : '';
             finalResult = `Wait for running tool ${runningToolId} was aborted.${abortReason}`;
             // Send stream event indicating abort
@@ -95,23 +119,20 @@ async function wait_for_running_tool(
             break; // Exit loop
         }
 
-        switch (tool.status) {
-            case 'completed':
-                finalResult =
-                    tool.output ??
-                    `Running tool ${runningToolId} completed. Check system messages for output.`;
-                break; // Exit loop
-            case 'failed':
-                finalResult =
-                    tool.error ??
-                    `Running tool ${runningToolId} failed. Check system messages for error details.`;
-                break; // Exit loop
-            case 'terminated':
-                finalResult = `Running tool ${runningToolId} was terminated.`;
-                break; // Exit loop
-            case 'running':
-                // Send heartbeat if needed
-                if (Date.now() - lastHeartbeatTime > TOOL_HEARTBEAT_MS) {
+        if (tool.completed) {
+            finalResult =
+                tool.result ??
+                `Running tool ${runningToolId} completed. Check system messages for output.`;
+            break; // Exit loop
+        } else if (tool.failed) {
+            finalResult =
+                tool.error ??
+                `Running tool ${runningToolId} failed. Check system messages for error details.`;
+            break; // Exit loop
+        } else {
+            // Still running
+            // Send heartbeat if needed
+            if (Date.now() - lastHeartbeatTime > TOOL_HEARTBEAT_MS) {
                     sendStreamEvent({
                         type: 'tool_waiting',
                         runningToolId,
@@ -159,22 +180,14 @@ async function wait_for_running_tool(
                     // throw error;
                 }
                 continue; // Continue loop
-            default:
-                // Should not happen with defined statuses
-                console.error(
-                    `Unexpected status '${tool.status}' for tool ${runningToolId}`
-                );
-                finalResult = `Error: Encountered unexpected status '${tool.status}' for tool ${runningToolId}.`;
-                break; // Exit loop
         }
-        // If we reached here, the status was not 'running', so break the loop
-        break;
     }
 
     // If the loop finished due to timeout
     if (!finalResult) {
-        const finalStatus = runningToolTracker.getStatus(runningToolId); // Get last known status for context
-        finalResult = `Tool ${runningToolId} did not complete within the ${timeout} second timeout. It might still be running.\nLast known status:\n${finalStatus}`;
+        const tool = runningToolTracker.getRunningTool(runningToolId);
+        const finalStatus = tool ? `Still running after ${Math.round((Date.now() - tool.startTime) / 1000)}s` : 'Tool no longer found';
+        finalResult = `Tool ${runningToolId} did not complete within the ${timeout} second timeout. It might still be running.\nLast known status: ${finalStatus}`;
     }
 
     // Send completion event
@@ -182,12 +195,19 @@ async function wait_for_running_tool(
         type: 'tool_wait_complete',
         runningToolId,
         result: finalResult,
-        finalStatus:
-            runningToolTracker.getRunningTool(runningToolId)?.status ??
-            'unknown',
+        finalStatus: (() => {
+            const tool = runningToolTracker.getRunningTool(runningToolId);
+            if (!tool) return 'unknown';
+            if (tool.completed) return 'completed';
+            if (tool.failed) return 'failed';
+            return 'running';
+        })(),
         timestamp: new Date().toISOString(),
     });
 
+    // Clean up: mark the wait tool as completed
+    runningToolTracker.completeRunningTool(waitToolId, finalResult, null as any);
+    
     return finalResult;
 }
 
@@ -198,13 +218,8 @@ async function wait_for_running_tool(
  * @returns Success or failure message
  */
 async function terminate_running_tool(runningToolId: string): Promise<string> {
-    const success =
-        await runningToolTracker.terminateRunningTool(runningToolId);
-    if (success) {
-        return `RunningTool with ID ${runningToolId} was successfully terminated.`;
-    } else {
-        return `Could not terminate RunningTool with ID ${runningToolId}. It may not exist or is not in a running state.`;
-    }
+    runningToolTracker.abortRunningTool(runningToolId);
+    return `Sent abort signal to RunningTool with ID ${runningToolId}. The tool will terminate if it's still running.`;
 }
 
 /**

@@ -832,7 +832,8 @@ export async function getRunningMagiContainers(): Promise<
                 .trim()
                 .split('\n')
                 .map(line => {
-                    const [containerId, name, command, coreLabel] = line.split('|');
+                    const [containerId, name, command, coreLabel] =
+                        line.split('|');
 
                     // Extract process ID from name (remove 'task-' prefix)
                     const id = name.replace('task-', '');

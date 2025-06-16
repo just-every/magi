@@ -10,6 +10,7 @@ import CostDisplay from '../ui/CostDisplay'; // Import CostDisplay
 import StatusDisplay from '../ui/StatusDisplay'; // Import StatusDisplay
 import { parseMarkdown } from '../utils/MarkdownUtils';
 import { AudioPlayer } from '../../utils/AudioUtils';
+import MessageContent from '../ui/MessageContent';
 
 interface VoiceOption {
     id: string;
@@ -56,11 +57,17 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
     const [command, setCommand] = useState('');
     const [isMultiline, setIsMultiline] = useState(false);
     const inputRef = useRef<HTMLTextAreaElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [isFirstProcess, setIsFirstProcess] = useState(processes.size === 0);
     const [voices, setVoices] = useState<VoiceOption[]>([]);
     const [currentVoiceId, setCurrentVoiceId] = useState<string>('');
     const [isLoadingVoices, setIsLoadingVoices] = useState(false);
     const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+    const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+    const [isDragging, setIsDragging] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState<Map<string, number>>(
+        new Map()
+    );
 
     const coreProcess = coreProcessId
         ? (processes.get(coreProcessId) as ProcessData | undefined)
@@ -188,21 +195,60 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
         setIsMultiline(command.includes('\n'));
     }, [command]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         if (e.preventDefault) e.preventDefault();
 
-        if (command.trim()) {
+        if (command.trim() || attachedFiles.length > 0) {
+            // Always create structured content
+            const content = [];
+            
+            // Add text content if any
+            const textContent = command.trim();
+            if (textContent) {
+                content.push({
+                    type: 'input_text',
+                    text: textContent,
+                });
+            }
+
+            // Handle file attachments if any
+            if (attachedFiles.length > 0) {
+                // Upload files first
+                const uploadedFiles = await uploadFiles(attachedFiles);
+
+                // Add file/image content
+                for (const fileInfo of uploadedFiles) {
+                    if (fileInfo.type.startsWith('image/')) {
+                        content.push({
+                            type: 'input_image',
+                            detail: 'high',
+                            image_url: fileInfo.url,
+                        });
+                    } else {
+                        content.push({
+                            type: 'input_file',
+                            filename: fileInfo.filename,
+                            file_id: fileInfo.fileId,
+                        });
+                    }
+                }
+            }
+
+            // Always send as structured content
+            const messageContent = JSON.stringify({ contentArray: content });
+
             if (coreProcessId) {
-                sendCoreCommand(command); // Send to existing core process
+                sendCoreCommand(messageContent); // Send to existing core process
             } else {
                 // If somehow no core process exists, maybe start a new one?
                 // Or display an error? For now, let's try starting one.
                 console.warn(
                     'No core process found, attempting to start a new one with the command.'
                 );
-                runCommand(command);
+                runCommand(messageContent);
             }
             setCommand('');
+            setAttachedFiles([]);
             setIsMultiline(false);
             if (inputRef.current) {
                 inputRef.current.style.height = 'auto'; // Reset height after submit
@@ -216,6 +262,95 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
             if (e.preventDefault) e.preventDefault();
             handleSubmit(e);
         }
+    };
+
+    // File upload handlers
+    const uploadFiles = async (
+        files: File[]
+    ): Promise<
+        Array<{ url: string; filename: string; fileId: string; type: string }>
+    > => {
+        const uploadedFiles = [];
+
+        for (const file of files) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                setUploadProgress(prev => new Map(prev).set(file.name, 0));
+
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    uploadedFiles.push({
+                        url: data.url,
+                        filename: file.name,
+                        fileId: data.fileId,
+                        type: file.type,
+                    });
+                }
+
+                setUploadProgress(prev => {
+                    const newMap = new Map(prev);
+                    newMap.delete(file.name);
+                    return newMap;
+                });
+            } catch (error) {
+                console.error('Error uploading file:', error);
+                setUploadProgress(prev => {
+                    const newMap = new Map(prev);
+                    newMap.delete(file.name);
+                    return newMap;
+                });
+            }
+        }
+
+        return uploadedFiles;
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        setAttachedFiles(prev => [...prev, ...files]);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
+    const removeFile = (index: number) => {
+        setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+    };
+
+    // Drag and drop handlers
+    const handleDragEnter = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.currentTarget === e.target) {
+            setIsDragging(false);
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+
+        const files = Array.from(e.dataTransfer.files);
+        setAttachedFiles(prev => [...prev, ...files]);
     };
 
     return (
@@ -534,19 +669,11 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                             textAlign: 'left',
                                         }}
                                     >
-                                        {toolCallMessage
-                                            ? toolCallMessage.command
-                                            : typeof message.content ===
-                                                'string'
-                                              ? message.content
-                                              : typeof message.content ===
-                                                  'object'
-                                                ? JSON.stringify(
-                                                      message.content,
-                                                      null,
-                                                      2
-                                                  )
-                                                : String(message.content)}
+                                        {toolCallMessage ? (
+                                            toolCallMessage.command
+                                        ) : (
+                                            <MessageContent content={message.content} />
+                                        )}
                                     </div>
                                 </div>
                                 {document}
@@ -559,14 +686,59 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
             {/* Chat Input */}
             <div className="mt-auto pt-3">
                 <form onSubmit={handleSubmit}>
-                    <div className="input-group">
+                    {/* File attachments display */}
+                    {attachedFiles.length > 0 && (
+                        <div className="mb-2">
+                            <div className="d-flex flex-wrap gap-2">
+                                {attachedFiles.map((file, index) => (
+                                    <div
+                                        key={index}
+                                        className="badge bg-secondary d-flex align-items-center gap-1"
+                                    >
+                                        <i
+                                            className={`bi ${file.type.startsWith('image/') ? 'bi-image' : 'bi-file-earmark'}`}
+                                        ></i>
+                                        <span
+                                            className="text-truncate"
+                                            style={{ maxWidth: '150px' }}
+                                        >
+                                            {file.name}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            className="btn-close btn-close-white ms-1"
+                                            style={{ fontSize: '0.7rem' }}
+                                            onClick={() => removeFile(index)}
+                                            aria-label="Remove file"
+                                        ></button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <div
+                        className={`input-group ${isDragging ? 'border-primary' : ''}`}
+                        onDragEnter={handleDragEnter}
+                        onDragLeave={handleDragLeave}
+                        onDragOver={handleDragOver}
+                        onDrop={handleDrop}
+                        style={{
+                            borderWidth: isDragging ? '2px' : '1px',
+                            borderStyle: isDragging ? 'dashed' : 'solid',
+                            borderRadius: '0.375rem',
+                            transition: 'all 0.2s',
+                        }}
+                    >
                         <TextareaAutosize
                             id="chat-command-input"
                             className={`form-control chat-col-input py-2 px-3 ${isMultiline ? 'multiline' : ''}`}
                             placeholder={
-                                isFirstProcess
-                                    ? 'Start task...'
-                                    : `Talk${agentName ? ' to ' + agentName : ''}...`
+                                isDragging
+                                    ? 'Drop files here...'
+                                    : isFirstProcess
+                                      ? 'Start task...'
+                                      : `Talk${agentName ? ' to ' + agentName : ''}...`
                             }
                             value={command}
                             onChange={e => setCommand(e.target.value)}
@@ -575,8 +747,42 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                             autoComplete="off"
                             minRows={2}
                             maxRows={10}
+                            style={{ border: 'none' }}
+                        />
+                        <button
+                            type="button"
+                            className="btn btn-outline-secondary"
+                            onClick={() => fileInputRef.current?.click()}
+                            title="Attach files"
+                        >
+                            <i className="bi bi-paperclip"></i>
+                        </button>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            multiple
+                            onChange={handleFileSelect}
+                            style={{ display: 'none' }}
+                            accept="*/*"
                         />
                     </div>
+
+                    {/* Upload progress indicators */}
+                    {uploadProgress.size > 0 && (
+                        <div className="mt-2">
+                            {Array.from(uploadProgress.entries()).map(
+                                ([filename, progress]) => (
+                                    <div
+                                        key={filename}
+                                        className="text-muted small"
+                                    >
+                                        <i className="bi bi-upload me-1"></i>
+                                        Uploading {filename}... {progress}%
+                                    </div>
+                                )
+                            )}
+                        </div>
+                    )}
                 </form>
             </div>
         </div>

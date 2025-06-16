@@ -286,11 +286,22 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                 const newProcesses = new Map(prevProcesses);
 
                 // Create initial user message from the command
+                // Parse command if it's structured content
+                let messageContent: any = event.command;
+                try {
+                    const parsed = JSON.parse(event.command);
+                    if (parsed.contentArray && Array.isArray(parsed.contentArray)) {
+                        messageContent = parsed.contentArray;
+                    }
+                } catch (e) {
+                    // Not JSON, use as-is
+                }
+                
                 const initialMessage: ClientMessage = {
                     id: generateId(),
                     processId: event.id,
                     type: 'user',
-                    content: event.command,
+                    content: messageContent,
                     timestamp: new Date().toISOString(),
                 };
 
@@ -1222,11 +1233,22 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     | undefined;
 
                 if (process) {
+                    // Parse command if it's structured content
+                    let messageContent: any = command;
+                    try {
+                        const parsed = JSON.parse(command);
+                        if (parsed.contentArray && Array.isArray(parsed.contentArray)) {
+                            messageContent = parsed.contentArray;
+                        }
+                    } catch (e) {
+                        // Not JSON, use as-is
+                    }
+                    
                     const userMessage: ClientMessage = {
                         id: generateId(),
                         processId: processId,
                         type: 'user',
-                        content: command,
+                        content: messageContent,
                         timestamp: new Date().toISOString(),
                     };
                     process.agent!.messages.push(userMessage);

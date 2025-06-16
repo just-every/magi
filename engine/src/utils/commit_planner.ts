@@ -49,7 +49,7 @@ export async function planAndCommitChanges(
                 mainBranch = 'master';
             } catch (e2) {
                 console.warn(
-                    `[commit-planner] Could not find main or master branch`
+                    '[commit-planner] Could not find main or master branch'
                 );
             }
         }
@@ -92,7 +92,9 @@ export async function planAndCommitChanges(
 
         // If there are existing commits, generate a patch from them
         if (hasExistingCommits) {
-            console.log('[commit-planner] Creating patch from existing commits...');
+            console.log(
+                '[commit-planner] Creating patch from existing commits...'
+            );
 
             // Get the commit messages
             let commitMessages = '';
@@ -276,25 +278,37 @@ Do NOT actually commit the changes - just stage them and provide the message.`,
             agent.agent_id
         );
 
-        // Check if there were no meaningful changes
-        if (response.includes('[no-changes]')) {
+        // Search for markers from the end of the response to avoid false positives from thinking section
+        const lastNoChangesIndex = response.lastIndexOf('[no-changes]');
+        const lastCommitMessageIndex = response.lastIndexOf('[commit-message]');
+
+        // Check if [no-changes] appears after [commit-message] (or if commit-message doesn't exist)
+        if (lastNoChangesIndex > lastCommitMessageIndex) {
             console.log(
                 `[commit-planner] No meaningful changes to commit for ${projectId}`
             );
             return;
         }
 
-        // Extract commit message from response
-        const commitMessageMatch = response.match(
-            /\[commit-message\]\s*([\s\S]+?)$/
-        );
-        if (!commitMessageMatch) {
+        // Extract commit message from response - search from the last occurrence
+        if (lastCommitMessageIndex === -1) {
             console.error(
-                `[commit-planner] Could not extract commit message from response`
+                '[commit-planner] Could not find [commit-message] marker in response'
             );
             return;
         }
-        const commitMessage = commitMessageMatch[1].trim();
+
+        // Extract everything after the last [commit-message] marker
+        const commitMessageText = response
+            .substring(lastCommitMessageIndex + '[commit-message]'.length)
+            .trim();
+        if (!commitMessageText) {
+            console.error(
+                '[commit-planner] Empty commit message after [commit-message] marker'
+            );
+            return;
+        }
+        const commitMessage = commitMessageText;
 
         // Generate the patch from staged changes
         let patchContent = '';
@@ -307,7 +321,7 @@ Do NOT actually commit the changes - just stage them and provide the message.`,
 
             if (!stagedFiles) {
                 console.log(
-                    `[commit-planner] No changes were staged by the agent`
+                    '[commit-planner] No changes were staged by the agent'
                 );
                 return;
             }

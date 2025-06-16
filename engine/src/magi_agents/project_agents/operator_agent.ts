@@ -19,7 +19,7 @@ import {
 import { getProcessProjectIds } from '../../utils/project_utils.js';
 import { createOperatorAgent, startTime } from '../operator_agent.js';
 import { dateFormat, readableTime } from '../../utils/date_tools.js';
-import { runningToolTracker } from '../../utils/running_tool_tracker.js';
+import { runningToolTracker } from '@just-every/ensemble';
 import { getThoughtDelay } from '@just-every/task';
 import { getRunningToolTools } from '../../utils/running_tools.js';
 
@@ -311,7 +311,11 @@ Your Running Time: ${readableTime(new Date().getTime() - startTime.getTime())}
 Your Thought Delay: ${getThoughtDelay()} seconds
 
 Active Tools:
-${runningToolTracker.listActive()}`,
+${(() => {
+    const tools = runningToolTracker.getAllRunningTools();
+    if (tools.length === 0) return 'No running tools.';
+    return tools.map(t => `- ${t.toolName} (${t.id}) by ${t.agentName}`).join('\n');
+})()}`,
             });
 
             // Add the system status to the messages

@@ -34,10 +34,10 @@ class ProcessTracker {
         if (this.coreProcessId && processId === this.coreProcessId) {
             return true;
         }
-        
+
         const currentProcessId = global.process.env.PROCESS_ID;
         const isCore = global.process.env.IS_CORE_PROCESS === 'true';
-        
+
         if (processId === currentProcessId && isCore) {
             // Store it for future reference
             if (!this.coreProcessId) {
@@ -45,7 +45,7 @@ class ProcessTracker {
             }
             return true;
         }
-        
+
         return false;
     }
 
@@ -186,7 +186,9 @@ Note: Failed to generate summary - ${error}`;
             // Check if this is the current core process
             if (this.isCoreProcess(processId)) {
                 // This is the core process, don't create a placeholder
-                console.log(`[ProcessTracker] Ignoring event for core process ${processId}`);
+                console.log(
+                    `[ProcessTracker] Ignoring event for core process ${processId}`
+                );
                 return;
             }
 
@@ -282,13 +284,15 @@ Note: Failed to generate summary - ${error}`;
      */
     listActive(): string {
         // Filter out the core process and terminated tasks
-        const activeTasks = Array.from(this.processes.entries()).filter(([id, agentProcess]) => {
-            // Skip if terminated
-            if (agentProcess.status === 'terminated') return false;
-            // Skip if this is the core process
-            if (this.isCoreProcess(id)) return false;
-            return true;
-        });
+        const activeTasks = Array.from(this.processes.entries()).filter(
+            ([id, agentProcess]) => {
+                // Skip if terminated
+                if (agentProcess.status === 'terminated') return false;
+                // Skip if this is the core process
+                if (this.isCoreProcess(id)) return false;
+                return true;
+            }
+        );
 
         if (activeTasks.length === 0) {
             return '- No tasks';

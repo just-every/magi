@@ -26,7 +26,7 @@ import {
     AgentDefinition,
 } from '@just-every/ensemble';
 import { dateFormat, readableTime } from '../utils/date_tools.js';
-import { runningToolTracker } from '../utils/running_tool_tracker.js';
+import { runningToolTracker } from '@just-every/ensemble';
 import { listActiveProjects } from '../utils/project_utils.js';
 import { getThoughtDelay } from '@just-every/task';
 import { getImageGenerationTools } from '../utils/image_generation.js';
@@ -46,7 +46,11 @@ Your Projects:
 ${await listActiveProjects()}
 
 Active Tools:
-${runningToolTracker.listActive()}`;
+${(() => {
+    const tools = runningToolTracker.getAllRunningTools();
+    if (tools.length === 0) return 'No running tools.';
+    return tools.map(t => `- ${t.toolName} (${t.id}) by ${t.agentName}`).join('\n');
+})()}`;
 
     // Add the system status to the messages
     messages.push({

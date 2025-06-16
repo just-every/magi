@@ -219,8 +219,7 @@ export const VersionManager: React.FC<VersionManagerProps> = ({
                                     value={selectedStrategy}
                                     onChange={e =>
                                         setSelectedStrategy(
-                                            e.target
-                                                .value as
+                                            e.target.value as
                                                 | 'rolling'
                                                 | 'immediate'
                                                 | 'graceful'

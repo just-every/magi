@@ -6,6 +6,7 @@ import * as React from 'react';
 import { ClientMessage } from '../../context/SocketContext';
 import { parseMarkdown } from '../utils/MarkdownUtils';
 import { getDeltaMessageContent } from '../utils/ProcessBoxUtils';
+import MessageContent from '../ui/MessageContent';
 
 interface AssistantMessageProps {
     message: ClientMessage;
@@ -38,7 +39,11 @@ const AssistantMessage: React.FC<AssistantMessageProps> = ({
                 )}
             </div>
             <div className={bubbleClass} style={{ color: `rgba(${rgb} / 1)` }}>
-                <div dangerouslySetInnerHTML={parseMarkdown(displayContent)} />
+                {typeof displayContent === 'string' ? (
+                    <div dangerouslySetInnerHTML={parseMarkdown(displayContent)} />
+                ) : (
+                    <MessageContent content={displayContent} />
+                )}
             </div>
         </div>
     );
