@@ -14,10 +14,11 @@ if (!process.env.OPENAI_API_KEY) {
     dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 }
 
-import { parseArgs } from 'node:util';
 import { ServerMessage, CommandMessage } from './types/shared-types.js';
 import { ResponseInput } from '@just-every/ensemble';
 import { Runner } from './utils/runner.js';
+import { parseCLIArgs } from './cli.js';
+import { endProcess, setupShutdownHandlers } from './shutdown.js';
 import { createAgent } from './magi_agents/index.js';
 import {
     interruptWaiting,
@@ -44,6 +45,22 @@ import {
 import { runTask } from '@just-every/task';
 import { logger } from './utils/logger.js'; // Import the new logger
 
+// Create a logger using the ensemble_logger_bridge
+const consoleLogger = {
+    log: (message: string, ...args: any[]) => logger.info(message, { args }),
+    info: (message: string, ...args: any[]) => logger.info(message, { args }),
+    warn: (message: string, ...args: any[]) => logger.warn(message, { args }),
+    error: (message: string, ...args: any[]) => logger.error(message, { args }),
+    debug: (message: string, ...args: any[]) => logger.debug(message, { args }),
+};
+
+// Route console.* to logger
+console.log = consoleLogger.log;
+console.info = consoleLogger.info;
+console.warn = consoleLogger.warn;
+console.error = consoleLogger.error;
+console.debug = consoleLogger.debug;
+
 // Temporary workaround for runThoughtDelay - mind now handles delays internally
 async function runThoughtDelay(): Promise<void> {
     // Mind handles thought delays internally now, so this is a no-op
@@ -55,6 +72,47 @@ import { getProcessProjectIds } from './utils/project_utils.js';
 import { initDatabase } from './utils/db.js';
 import { ensureMemoryDirectories } from './utils/memory_utils.js';
 import { initializeEnsembleLogging } from './utils/ensemble_logger_bridge.js';
+
+/**
+ * Sanitize Claude messages by removing thinking blocks and ensuring proper structure.
+ * @param messages Array of messages to sanitize
+ * @returns Sanitized messages
+ */
+export function sanitizeClaudeMessages(messages: any[]): any[] {
+    return messages.map(message => {
+        if (typeof message.content === 'string') {
+            // Remove thinking blocks from string content
+            // Use a stack-based approach to handle nested blocks
+            let sanitized = message.content;
+            let result = '';
+            let depth = 0;
+            let i = 0;
+            
+            while (i < sanitized.length) {
+                if (sanitized.slice(i).startsWith('<thinking>')) {
+                    depth++;
+                    i += '<thinking>'.length;
+                } else if (sanitized.slice(i).startsWith('</thinking>')) {
+                    depth--;
+                    i += '</thinking>'.length;
+                } else {
+                    if (depth === 0) {
+                        result += sanitized[i];
+                    }
+                    i++;
+                }
+            }
+            return { ...message, content: result.trim() };
+        } else if (Array.isArray(message.content)) {
+            // Filter out thinking blocks from content arrays
+            const sanitized = message.content.filter(
+                (item: any) => !(item.type === 'text' && item.text?.includes('<thinking'))
+            );
+            return { ...message, content: sanitized };
+        }
+        return message;
+    });
+}
 
 /**
  * Handles uncaught exceptions and unhandled promise rejections.
@@ -214,31 +272,13 @@ function checkModelProviderApiKeys(): boolean {
     return hasValidKey;
 }
 
-// Function to send cost data to the controller
-async function sendCostData(): Promise<void> {
-    if (hasCommunicationManager()) {
-        const comm = getCommunicationManager();
-        const costs = costTracker.getCosts();
-        comm.send({ type: 'cost_data', data: costs });
-    }
-}
-
-async function endProcess(code: number = 0, message: string = 'Process ended'): Promise<void> {
-    logger.info('Ending process', { code, message }); // Use logger
-    await sendCostData();
-    process.exit(code);
-}
-
-// Add exit handlers to print cost summary and send cost data
-process.on('exit', code => endProcess(code, `Process exited with code ${code}`));
-process.on('SIGINT', () => endProcess(-1, 'Process interrupted by SIGINT'));
-process.on('SIGTERM', () => endProcess(-1, 'Process terminated by SIGTERM'));
 
 /**
  * Main execution function.
  */
 export async function main(): Promise<void> {
     setupErrorHandling(); // Initialize centralized error handling
+    setupShutdownHandlers(); // Set up shutdown handlers
 
     // Initialize the database
     await initDatabase();
@@ -250,32 +290,7 @@ export async function main(): Promise<void> {
     initializeEnsembleLogging();
 
     // Parse command line arguments
-    const { values } = parseArgs({
-        args: process.argv.slice(2),
-        options: {
-            // --loop: Run the agent in a continuous loop
-            loop: {
-                type: 'boolean',
-                short: 'l',
-                default: false,
-            },
-            // --model: Specify the model to use (e.g., 'anthropic/claude-3-opus-20240229')
-            model: {
-                type: 'string',
-                short: 'm',
-            },
-            // --no-check-keys: Skip API key checks for local development
-            'no-check-keys': {
-                type: 'boolean',
-                default: false,
-            },
-        },
-        allowPositionals: true,
-    });
-
-    const isLoop = values.loop;
-    const model = values.model as string | undefined;
-    const noCheckKeys = values['no-check-keys'] as boolean;
+    const { loop: isLoop, model, noCheckKeys } = parseCLIArgs();
 
     if (!noCheckKeys && !checkModelProviderApiKeys()) {
         logger.error('No valid model provider API key found. Please set OPENAI_API_KEY or ANTHROPIC_API_KEY or GOOGLE_API_KEY or XAI_API_KEY in your .env file.');
