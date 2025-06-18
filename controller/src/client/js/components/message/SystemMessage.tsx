@@ -24,16 +24,19 @@ const SystemMessage: React.FC<SystemMessageProps> = ({ message }) => {
                 className="message-group system-message"
                 key={message.message_id || message.id}
             >
-                <div
+                <pre
                     className={
                         'message-bubble alert mb-0 ' +
                         (message.type === 'error'
                             ? ' alert-danger'
                             : 'alert-secondary')
                     }
+                    style={
+                        {whiteSpace: 'pre-wrap'}
+                    }
                 >
-                    <div dangerouslySetInnerHTML={parseMarkdown(content)} />
-                </div>
+                    { content }
+                </pre>
             </div>
         );
     }
@@ -46,6 +49,11 @@ const SystemMessage: React.FC<SystemMessageProps> = ({ message }) => {
             <div className="message-header">
                 {message.agent?.model && (
                     <div className="message-model">{message.agent.model}</div>
+                )}
+                {message.title && (
+                    <div className="message-title">
+                        {message.title}
+                    </div>
                 )}
             </div>
             <div className="message-bubble assistant-bubble">

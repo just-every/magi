@@ -33,9 +33,9 @@ MECH is an advanced orchestration system for LLM agents that combines four key c
 
 ## Available Meta Tools
 
-- `setMetaFrequency({ frequency: number })`: Change how often meta-cognition runs.
+- `set_meta_frequency({ frequency: number })`: Change how often meta-cognition runs.
 - `setThoughtDelay({ delayMs: number })`: Adjust the delay between core thoughts.
-- `disableModel({ modelId: string })`: Temporarily remove a model from the rotation.
+- `disable_model({ modelId: string })`: Temporarily remove a model from the rotation.
 - `enableModel({ modelId: string })`: Re-enable a previously disabled model.
 - The meta-cognition agent can spawn new thoughts, which are merged back into the main history thread after completion.
 

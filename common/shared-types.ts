@@ -587,6 +587,8 @@ export interface ProcessCreateEvent {
         bgColor: string; // Background color (rgba)
         textColor: string; // Text color (rgba)
     };
+    isCore: boolean; // Is this the core process?
+    manager: string; // Name of the person/AI managing this process
     projectIds?: string[]; // List of git repositories this process has access to
 }
 

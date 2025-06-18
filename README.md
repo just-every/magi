@@ -5,6 +5,9 @@
 An ensemble autonomous AI framework designed to solve complex tasks with minimal human intervention.
 
 [![GitHub Actions](https://github.com/just-every/magi/workflows/Release/badge.svg)](https://github.com/just-every/magi/actions)
+[![CI/CD Build Status](https://github.com/just-every/magi/workflows/CI/CD%20Pipeline/badge.svg)](https://github.com/just-every/magi/actions?query=workflow%3A%22CI%2FCD+Pipeline%22)
+[![CI/CD Test Status](https://github.com/just-every/magi/workflows/CI/CD%20Pipeline/badge.svg)](https://github.com/just-every/magi/actions?query=workflow%3A%22CI%2FCD+Pipeline%22)
+<!-- Coverage badge will need a dedicated service like Codecov or Coveralls -->
 
 ## Overview
 

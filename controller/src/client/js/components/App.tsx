@@ -5,14 +5,11 @@ import { AudioPlayer } from '../utils/AudioUtils';
 // Import the UI layouts
 import ColumnLayout from './column_ui/ColumnLayout';
 import CanvasLayout from './canvas_ui/CanvasLayout';
-import { VersionManager } from './VersionManager';
 
 // Content component that uses socket context
 const AppContent: React.FC = () => {
     const [showLogs, setShowLogs] = useState<boolean>(false);
     const [activeProcess, setActiveProcess] = useState<string>('');
-    const [showVersionManager, setShowVersionManager] =
-        useState<boolean>(false);
     const { uiMode, toggleUIMode } = useSocket();
 
     useEffect(() => {
@@ -57,17 +54,6 @@ const AppContent: React.FC = () => {
                     magi
                 </h1>
                 <div className="ui-settings d-flex flex-row align-items-center gap-3">
-                    {/* Version Manager Button */}
-                    <button
-                        className="btn btn-sm btn-outline-secondary"
-                        onClick={() =>
-                            setShowVersionManager(!showVersionManager)
-                        }
-                        title="Version Management"
-                    >
-                        <i className="bi bi-git"></i>
-                    </button>
-
                     {/* UI Mode Toggle */}
                     <div
                         className="ui-mode-toggle d-flex flex-row align-items-center gap-2"
@@ -100,11 +86,6 @@ const AppContent: React.FC = () => {
                 )}
             </div>
 
-            {/* Version Manager Modal */}
-            <VersionManager
-                isOpen={showVersionManager}
-                onClose={() => setShowVersionManager(false)}
-            />
         </div>
     );
 };

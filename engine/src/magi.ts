@@ -58,6 +58,7 @@ import { initializeEnsembleLogging } from './utils/ensemble_logger_bridge.js';
 const person = process.env.YOUR_NAME || 'User';
 const talkToolName = `talk to ${person}`.toLowerCase().replaceAll(' ', '_');
 let primaryAgentId: string | undefined;
+let exitedCode: number | undefined;
 
 // Parse command line arguments
 function parseCommandLineArgs() {
@@ -76,6 +77,10 @@ function parseCommandLineArgs() {
 }
 
 function endProcess(exit: number, result?: string): void {
+    if (typeof exitedCode === "number" && exitedCode >= exit) {
+        return; // Already existed at this level
+    }
+    exitedCode = exit;
     if (exit > 0 && !result) {
         result = 'Exited with error';
     }
@@ -267,10 +272,10 @@ function checkModelProviderApiKeys(): boolean {
 // Add exit handlers to print cost summary and send cost data
 process.on('exit', code => endProcess(-1, `Process exited with code ${code}`));
 process.on('SIGINT', signal =>
-    endProcess(0, `Received SIGINT ${signal}, terminating...`)
+    endProcess(0, `Received ${signal}, terminating.`)
 );
 process.on('SIGTERM', signal =>
-    endProcess(0, `Received SIGTERM ${signal}, terminating...`)
+    endProcess(0, `Received ${signal}, terminating.`)
 );
 process.on('unhandledRejection', reason =>
     endProcess(-1, `Unhandled Rejection reason ${reason}`)
