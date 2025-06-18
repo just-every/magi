@@ -399,6 +399,18 @@ export interface ErrorEvent extends StreamEvent {
 }
 
 /**
+ * Log streaming event
+ */
+export interface LogEvent extends StreamEvent {
+    type: 'log';
+    level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'FATAL';
+    message: string;
+    timestamp: string;
+    context?: Record<string, any>;
+    data?: any;
+}
+
+/**
  * Audio streaming event
  */
 export interface AudioEvent extends StreamEvent {

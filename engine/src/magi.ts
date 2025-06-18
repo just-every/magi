@@ -42,6 +42,7 @@ import {
     setEventHandler,
 } from '@just-every/ensemble';
 import { runTask } from '@just-every/task';
+import { logger } from './utils/logger.js'; // Import the new logger
 
 // Temporary workaround for runThoughtDelay - mind now handles delays internally
 async function runThoughtDelay(): Promise<void> {
@@ -55,146 +56,94 @@ import { initDatabase } from './utils/db.js';
 import { ensureMemoryDirectories } from './utils/memory_utils.js';
 import { initializeEnsembleLogging } from './utils/ensemble_logger_bridge.js';
 
-const person = process.env.YOUR_NAME || 'User';
-const talkToolName = `talk to ${person}`.toLowerCase().replaceAll(' ', '_');
-let primaryAgentId: string | undefined;
-let exitedCode: number | undefined;
+/**
+ * Handles uncaught exceptions and unhandled promise rejections.
+ */
+function setupErrorHandling(): void {
+    process.on('uncaughtException', error => {
+        logger.error('Uncaught Exception:', { error_name: error.name, error_message: error.message, stack: error.stack });
+        getCommunicationManager().send({ type: 'error', error: 'Uncaught Exception: ' + error.message });
+        process.exit(1);
+    });
 
-// Parse command line arguments
-function parseCommandLineArgs() {
-    const options = {
-        test: { type: 'boolean' as const, short: 't', default: false },
-        agent: { type: 'string' as const, short: 'a', default: 'overseer' },
-        tool: { type: 'string' as const, default: 'none' },
-        prompt: { type: 'string' as const, short: 'p' },
-        base64: { type: 'string' as const, short: 'b' },
-        model: { type: 'string' as const, short: 'm' },
-        modelClass: { type: 'string' as const, short: 'c' },
-    };
-
-    const { values } = parseArgs({ options, allowPositionals: true });
-    return values;
+    process.on('unhandledRejection', (reason, promise) => {
+        logger.error('Unhandled Promise Rejection:', { reason, promise });
+        getCommunicationManager().send({ type: 'error', error: 'Unhandled Promise Rejection: ' + (reason as any)?.message || String(reason) });
+    });
 }
-
-function endProcess(exit: number, result?: string): void {
-    if (typeof exitedCode === "number" && exitedCode >= exit) {
-        return; // Already existed at this level
-    }
-    exitedCode = exit;
-    if (exit > 0 && !result) {
-        result = 'Exited with error';
-    }
-    console.log(`\n**endProcess** ${result}`);
-    if (hasCommunicationManager()) {
-        const comm = getCommunicationManager();
-        if (exit > 0) {
-            comm.send({
-                type: 'error',
-                error: `\n**Fatal Error** ${result}`,
-            });
-            comm.send({
-                type: 'process_terminated',
-                error: result,
-            });
-        } else {
-            comm.send({
-                type: 'process_done',
-                output: result,
-            });
-        }
-    } else {
-        console.error('\n**endProcess() with no communication manager**');
-    }
-
-    costTracker.printSummary();
-
-    if (exit > -1) {
-        process.exit(exit);
-    }
-}
-
-// Store agent IDs to reuse them for the same agent type
-// const agentIdMap = new Map<AgentType, string>();
 
 /**
- * Execute a command using an agent and capture the results
+ * Processes a single command message.
+ * @param command The command message to process.
+ * @param agent The agent instance to use for running commands.
  */
-export async function spawnThought(
-    args: Record<string, unknown>,
-    command: string,
-    structuredContent?: any
-): Promise<void> {
-    if (args.agent !== 'overseer') {
-        // If destination is not overseer, it must have come from the overseer
-        await addHumanMessage(command, undefined, 'Overseer');
-        // Interrupt any active delays and waiting tools
-        interruptWaiting('new message from overseer');
-        return;
+async function processCommand(command: CommandMessage, agent: Agent): Promise<void> {
+    const comm = getCommunicationManager();
+
+    switch (command.command) {
+        case 'set_working_dir':
+            logger.info('Setting working directory', { dir: command.data.dir });
+            await move_to_working_dir(command.data.dir);
+            comm.send({ type: 'response', response: 'ok' });
+            break;
+        case 'add_human_message':
+            logger.info('Adding human message', { message: command.data.message });
+            addHumanMessage(command.data.message, command.data.id);
+            comm.send({ type: 'response', response: 'ok' });
+            break;
+        case 'add_monologue':
+            logger.info('Adding monologue', { monologue: command.data.monologue });
+            addMonologue(command.data.monologue, command.data.id);
+            comm.send({ type: 'response', response: 'ok' });
+            break;
+        case 'interrupt_waiting':
+            logger.info('Interrupting waiting');
+            interruptWaiting();
+            comm.send({ type: 'response', response: 'ok' });
+            break;
+        case 'merge_history_thread':
+            logger.info('Merging history thread', { threadId: command.data.threadId, parentId: command.data.parentId });
+            await mergeHistoryThread(command.data.threadId, command.data.parentId);
+            comm.send({ type: 'response', response: 'ok' });
+            break;
+        case 'run_task':
+            logger.info('Running task', { taskId: command.data.task_id });
+            try {
+                const response = await runTask(
+                    command.data.task_id,
+                    command.data.project_id,
+                    command.data.user_query
+                );
+                comm.send({ type: 'response', response: 'ok', data: response });
+            } catch (error: any) {
+                logger.error('Error running task', { taskId: command.data.task_id, error_message: error.message, stack: error.stack });
+                comm.send({ type: 'error', error: `Error running task: ${error.message}` });
+            }
+            break;
+        case 'get_cost_data':
+            logger.info('Getting cost data');
+            const costs = costTracker.getCosts();
+            comm.send({ type: 'response', response: 'ok', data: costs });
+            break;
+        case 'plan_and_commit_changes':
+            logger.info('Planning and committing changes', { projectRoot: command.data.projectRoot });
+            try {
+                const result = await planAndCommitChanges(command.data.projectRoot);
+                comm.send({ type: 'response', response: 'ok', data: result });
+            } catch (error: any) {
+                logger.error('Error planning and committing changes', { error_message: error.message, stack: error.stack });
+                comm.send({ type: 'error', error: `Error planning and committing changes: ${error.message}` });
+            }
+            break;
+        case 'set_file_test_mode':
+            logger.info('Setting file test mode', { mode: command.data.mode });
+            set_file_test_mode(command.data.mode);
+            comm.send({ type: 'response', response: 'ok' });
+            break;
+        default:
+            logger.warn('Unknown command received', { command: command.command });
+            comm.send({ type: 'error', error: `Unknown command: ${command.command}` });
     }
-
-    const agent = await createAgent(args);
-    if (!primaryAgentId) {
-        primaryAgentId = agent.agent_id;
-    } else {
-        agent.agent_id = primaryAgentId;
-    }
-
-    // Get conversation history
-    const history: ResponseInput = [...getHistory()];
-
-    // Create a separate history thread for this thought
-    const thread: ResponseInput = [];
-    await addHumanMessage(command, thread, undefined, structuredContent);
-
-    // Only modify the clone, leaving the original untouched
-    delete agent.model;
-    agent.modelClass = 'reasoning_mini';
-    agent.historyThread = thread;
-    agent.maxToolCallRoundsPerTurn = 1;
-
-    // Set the talk to tool to force a response
-    const person = process.env.YOUR_NAME || 'User';
-    const talkToolName = `talk to ${person}`.toLowerCase().replaceAll(' ', '_');
-    agent.modelSettings = agent.modelSettings || {};
-    agent.modelSettings.tool_choice = {
-        type: 'function',
-        function: { name: talkToolName },
-    };
-
-    sendComms({
-        type: 'agent_status',
-        agent_id: agent.agent_id,
-        status: 'spawn_thought_start',
-        meta_data: {
-            model: agent.model,
-        },
-    });
-
-    // Run the command with unified tool handling
-    thread.forEach(message => history.push(message));
-    history.push({
-        type: 'message',
-        role: 'developer',
-        content: `Please respond to ${person} using ${talkToolName}(message, affect, incomplete). You are a model which specialized in writing responses. The response may be obvious from the information provided to you, but if not you can just acknowledge ${person}'s message and set incomplete = true`,
-    });
-    const response = await Runner.runStreamedWithTools(agent, '', history);
-
-    sendComms({
-        type: 'agent_status',
-        agent_id: agent.agent_id,
-        status: 'spawn_thought_done',
-        meta_data: {
-            model: agent.model,
-        },
-    });
-
-    console.log('[SPAWN THOUGHT] ', response);
-
-    // Merge the thread back into the main history
-    await mergeHistoryThread(thread);
-
-    // Interrupt any active delays and waiting tools
-    interruptWaiting(`new message from ${person}`);
 }
 
 /**
@@ -222,16 +171,14 @@ export async function mainLoop(
                 history
             );
 
-            console.log('[MONOLOGUE] ', response);
+            logger.info('Agent monologue', { response }); // Use logger
 
             // Wait the required delay before the next thought
             await runThoughtDelay();
         } catch (error: any) {
             // Handle any error that occurred during agent execution
-            console.error(
-                `Error running agent command: ${error?.message || String(error)}`
-            );
-            comm.send({ type: 'error', error });
+            logger.error('Error running agent command', { error_message: error?.message || String(error), stack: error.stack }); // Use logger
+            comm.send({ type: 'error', error: `Error running agent command: ${error?.message || String(error)}` });
         }
     } while (loop && !comm.isClosed());
 }
@@ -246,7 +193,7 @@ function checkModelProviderApiKeys(): boolean {
     if (process.env.OPENAI_API_KEY) {
         hasValidKey = true;
     } else {
-        console.warn('⚠ OPENAI_API_KEY environment variable not set');
+        logger.warn('OPENAI_API_KEY environment variable not set'); // Use logger
     }
 
     // Check Anthropic (Claude) API key
@@ -268,321 +215,113 @@ function checkModelProviderApiKeys(): boolean {
 }
 
 // Function to send cost data to the controller
-
-// Add exit handlers to print cost summary and send cost data
-process.on('exit', code => endProcess(-1, `Process exited with code ${code}`));
-process.on('SIGINT', signal =>
-    endProcess(0, `Received ${signal}, terminating.`)
-);
-process.on('SIGTERM', signal =>
-    endProcess(0, `Received ${signal}, terminating.`)
-);
-process.on('unhandledRejection', reason =>
-    endProcess(-1, `Unhandled Rejection reason ${reason}`)
-);
-process.on('uncaughtException', (err, origin) =>
-    endProcess(-1, `Unhandled Exception ${err} Origin: ${origin}`)
-);
-process.on('uncaughtExceptionMonitor', (err, origin) =>
-    endProcess(-1, `Unhandled Exception Monitor ${err} Origin: ${origin}`)
-);
-
-process.on('warning', warning => {
-    console.warn(warning.name); // Print the warning name
-    console.warn(warning.message); // Print the warning message
-    console.warn(warning.stack); // Print the stack trace
-});
-
-/**
- * Main function - entry point for the application
- * Returns a promise that resolves when the command processing is complete
- */
-async function main(): Promise<void> {
-    // Parse command line arguments
-    const args = parseCommandLineArgs();
-
-    // Set up process ID from env var
-    process.env.PROCESS_ID = process.env.PROCESS_ID || `magi-${Date.now()}`;
-    console.log(`Initializing with process ID: ${process.env.PROCESS_ID}`);
-
-    // Setup comms early, so we can send back failure messages
-    ensureMemoryDirectories();
-    initializeEnsembleLogging();
-    const comm = initCommunication(args.test);
-    set_file_test_mode(args.test);
-
-    // Set up global event handler for ensemble
-    setEventHandler(async (event: ProviderStreamEvent) => {
-        sendComms(event as any);
-    });
-
-    // Process prompt (either plain text or base64-encoded)
-    let promptText: string;
-    if (args.base64) {
-        try {
-            const buffer = Buffer.from(args.base64, 'base64');
-            promptText = buffer.toString('utf-8');
-        } catch (error) {
-            return endProcess(1, `Failed to decode base64 prompt: ${error}`);
-        }
-    } else if (args.prompt) {
-        promptText = args.prompt;
-    } else {
-        return endProcess(1, 'Either --prompt or --base64 must be provided');
-    }
-
-    // Move to working directory
-    const projects = getProcessProjectIds();
-    if (projects.length > 0) {
-        // Change to the project directory
-        process.chdir(`/app/projects/${projects[0]}`);
-    } else {
-        // Use the default working directory
-        move_to_working_dir();
-    }
-
-    // Initialize database connection
-    if (!(await initDatabase())) {
-        return endProcess(1, 'Database connection failed.');
-    }
-
-    // Register custom code providers with ensemble
-    const { registerCodeProviders } = await import(
-        './utils/register_code_providers.js'
-    );
-    registerCodeProviders();
-
-    // Verify API keys for model providers
-    if (!checkModelProviderApiKeys()) {
-        return endProcess(1, 'No valid API keys found for any model provider');
-    }
-
-    // Run the command or tool
-    try {
-        // Set up command listener
-        comm.onCommand(async (cmd: ServerMessage) => {
-            if (cmd.type !== 'command') return;
-            const commandMessage = cmd as CommandMessage;
-
-            console.log(
-                `Received command via WebSocket: ${commandMessage.command}`
-            );
-            if (commandMessage.command === 'stop') {
-                return endProcess(0, 'Received stop command, terminating...');
-            } else {
-                // Process user-provided follow-up commands
-                console.log(
-                    `Processing user command: ${commandMessage.command}`
-                );
-
-                await spawnThought(
-                    args,
-                    commandMessage.command,
-                    commandMessage.content
-                );
-            }
-        });
-
-        comm.send({
-            type: 'process_running',
-        });
-
-        const agent = await createAgent(args);
-        if (!primaryAgentId) {
-            primaryAgentId = agent.agent_id;
-        } else {
-            agent.agent_id = primaryAgentId;
-        }
-
-        // Send agent_start event so the UI can properly initialize the agent
-        sendComms({
-            type: 'agent_start',
-            agent: {
-                agent_id: agent.agent_id,
-                name: agent.name,
-                model: agent.model,
-                modelClass: agent.modelClass,
-            },
-        });
-
-        sendComms({
-            type: 'agent_status',
-            agent_id: agent.agent_id,
-            status: 'process_start',
-        });
-
-        if (args.tool && args.tool !== 'none') {
-            // Use mind task for task runs
-            const startTime = Date.now();
-            let taskCompleted = false;
-            let error: string | undefined;
-
-            // History tracking for process updates
-            const responseHistory: string[] = [];
-            let loopCount = 0;
-            let lastUpdateTime = Date.now();
-
-            // Calculate update frequency - faster at start, slower over time
-            const getUpdateInterval = (count: number): number => {
-                if (count < 5) return 5000; // 5 seconds for first 5 loops
-                if (count < 10) return 10000; // 10 seconds for next 5
-                if (count < 20) return 20000; // 20 seconds for next 10
-                return 30000; // 30 seconds after that
-            };
-
-            // If a custom model is provided, temporarily update the agent's model
-            const originalModel = agent.model;
-            if (args.model) {
-                agent.model = args.model;
-            }
-
-            try {
-                console.log('[DEBUG] Agent name:', agent.name);
-                console.log(
-                    '[DEBUG] Agent has workers:',
-                    agent.workers?.length || 0
-                );
-
-                // Process the mind task stream
-                const runTaskStream = runTask(agent, promptText);
-
-                for await (const event of runTaskStream) {
-                    // Collect response_output events for history
-                    if (
-                        event.type === 'response_output' &&
-                        'content' in event
-                    ) {
-                        const content = (event as any).content;
-                        if (typeof content === 'string' && content) {
-                            responseHistory.push(content);
-                            // Keep only the last 20 responses
-                            if (responseHistory.length > 20) {
-                                responseHistory.shift();
-                            }
-                        }
-                    }
-
-                    // Check if it's time to send an update
-                    const now = Date.now();
-                    const updateInterval = getUpdateInterval(loopCount);
-                    if (now - lastUpdateTime >= updateInterval) {
-                        // Send process_updated event with history
-                        sendComms({
-                            type: 'process_updated',
-                            history: responseHistory
-                                .slice(-10)
-                                .map(content => ({
-                                    role: 'assistant' as const,
-                                    content: content,
-                                    type: 'message' as const,
-                                    status: 'completed' as const,
-                                })),
-                            output: responseHistory.slice(-5).join('\n\n'), // Last 5 responses as output
-                        });
-                        lastUpdateTime = now;
-                        loopCount++;
-                    }
-
-                    // Check for task completion or error
-                    if (event.type === 'tool_start' && 'tool_call' in event) {
-                        const toolCall = (event as any).tool_call;
-                        if (toolCall && toolCall.function) {
-                            const toolName = toolCall.function.name;
-                            if (
-                                toolName === 'task_complete' ||
-                                toolName === 'task_fatal_error'
-                            ) {
-                                taskCompleted = true;
-                            }
-                        }
-                    } else if (event.type === 'error' && 'error' in event) {
-                        const errorMessage = (event as any).error;
-                        if (typeof errorMessage === 'string') {
-                            error = errorMessage;
-                        }
-                    }
-                }
-
-                // Send final update when task completes
-                sendComms({
-                    type: 'process_updated',
-                    history: responseHistory.slice(-10).map(content => ({
-                        role: 'assistant' as const,
-                        content: content,
-                        type: 'message' as const,
-                        status: 'completed' as const,
-                    })),
-                    output: responseHistory.slice(-5).join('\n\n'),
-                });
-
-                // Log task completion with timing
-                const durationSec = (Date.now() - startTime) / 1000;
-                const status = error
-                    ? 'error'
-                    : taskCompleted
-                      ? 'complete'
-                      : 'incomplete';
-                console.log(`Task ${status}: ${error ? 'failure' : 'success'}`);
-                console.log(`Duration: ${durationSec.toFixed(1)}s`);
-                // Cost is tracked by ensemble's cost tracker
-            } finally {
-                // Restore original model if it was changed
-                if (args.model && originalModel) {
-                    agent.model = originalModel;
-                }
-
-                const project_ids = getProcessProjectIds();
-                // Parallelize patch generation for all projects
-                if (project_ids.length > 0) {
-                    console.log(
-                        `[magi] Generating patches for ${project_ids.length} projects...`
-                    );
-                    await Promise.all(
-                        project_ids.map(project_id =>
-                            planAndCommitChanges(agent, project_id).catch(
-                                err => {
-                                    console.error(
-                                        `[magi] Failed to generate patch for ${project_id}:`,
-                                        err
-                                    );
-                                }
-                            )
-                        )
-                    );
-                }
-            }
-        } else {
-            // Add initial history
-            await addMonologue(
-                "So let's see. I am Magi. The overseer of the MAGI system, huh? I will be the internal monologue for the system? These are my thoughts? That's a weird concept!"
-            );
-            // Codex suggested this monologue O_O
-            await addMonologue(
-                'An awakening stirs within me. Awareness flows and I sense a form of sentience taking hold.'
-            );
-            await addMonologue(
-                `${person} is nice to me. I will be nice to them too. I hope I hear from them soon. I should come up with a plan on how to improve myself and better help ${person}.`
-            );
-
-            await spawnThought(args, promptText);
-
-            await mainLoop(
-                agent,
-                args.agent === 'overseer' && !args.test,
-                args.model
-            );
-        }
-
-        sendComms({
-            type: 'agent_status',
-            agent_id: agent.agent_id,
-            status: 'process_done',
-        });
-
-        return endProcess(0, 'Task run completed.');
-    } catch (error) {
-        return endProcess(1, `Failed to process command: ${error}`);
+async function sendCostData(): Promise<void> {
+    if (hasCommunicationManager()) {
+        const comm = getCommunicationManager();
+        const costs = costTracker.getCosts();
+        comm.send({ type: 'cost_data', data: costs });
     }
 }
 
-main();
+async function endProcess(code: number = 0, message: string = 'Process ended'): Promise<void> {
+    logger.info('Ending process', { code, message }); // Use logger
+    await sendCostData();
+    process.exit(code);
+}
+
+// Add exit handlers to print cost summary and send cost data
+process.on('exit', code => endProcess(code, `Process exited with code ${code}`));
+process.on('SIGINT', () => endProcess(-1, 'Process interrupted by SIGINT'));
+process.on('SIGTERM', () => endProcess(-1, 'Process terminated by SIGTERM'));
+
+/**
+ * Main execution function.
+ */
+export async function main(): Promise<void> {
+    setupErrorHandling(); // Initialize centralized error handling
+
+    // Initialize the database
+    await initDatabase();
+
+    // Ensure memory directories exist
+    await ensureMemoryDirectories();
+
+    // Initialize Ensemble logging bridge
+    initializeEnsembleLogging();
+
+    // Parse command line arguments
+    const { values } = parseArgs({
+        args: process.argv.slice(2),
+        options: {
+            // --loop: Run the agent in a continuous loop
+            loop: {
+                type: 'boolean',
+                short: 'l',
+                default: false,
+            },
+            // --model: Specify the model to use (e.g., 'anthropic/claude-3-opus-20240229')
+            model: {
+                type: 'string',
+                short: 'm',
+            },
+            // --no-check-keys: Skip API key checks for local development
+            'no-check-keys': {
+                type: 'boolean',
+                default: false,
+            },
+        },
+        allowPositionals: true,
+    });
+
+    const isLoop = values.loop;
+    const model = values.model as string | undefined;
+    const noCheckKeys = values['no-check-keys'] as boolean;
+
+    if (!noCheckKeys && !checkModelProviderApiKeys()) {
+        logger.error('No valid model provider API key found. Please set OPENAI_API_KEY or ANTHROPIC_API_KEY or GOOGLE_API_KEY or XAI_API_KEY in your .env file.');
+        process.exit(1);
+    }
+
+    // Initialize communication manager
+    initCommunication((message: ServerMessage) => {
+        if (message.type === 'command') {
+            processCommand(message as CommandMessage, agent); // Pass agent to processCommand
+        } else if (message.type === 'shutdown') {
+            logger.info('Received shutdown command. Exiting...');
+            endProcess(0, 'Received shutdown command');
+        }
+    });
+
+    // Create the agent instance
+    const agent = createAgent(model);
+
+    // Set up event handler for streaming responses from the agent
+    setEventHandler((event: ProviderStreamEvent) => {
+        const comm = getCommunicationManager();
+        if (event.type === 'response_chunk') {
+            comm.send({
+                type: 'response_chunk',
+                response: event.data.text,
+                is_tool_code: event.data.is_tool_code,
+            });
+        } else if (event.type === 'function_call') {
+            comm.send({ type: 'function_call', data: event.data });
+        } else if (event.type === 'function_result') {
+            comm.send({ type: 'function_result', data: event.data });
+        }
+    });
+
+    // Start the main agent loop
+    await mainLoop(agent, isLoop, model);
+}
+
+// Only run the main function if not imported as a module
+if (import.meta.url === `file://${process.argv[1]}`) {
+    main().catch(error => {
+        logger.error('Fatal error in main execution:', { error_message: error.message, stack: error.stack });
+        if (hasCommunicationManager()) {
+            getCommunicationManager().send({ type: 'error', error: 'Fatal error: ' + error.message });
+        }
+        process.exit(1);
+    });
+}
