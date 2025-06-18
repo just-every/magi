@@ -5,10 +5,20 @@
 import * as React from 'react';
 import { ToolResultMessage as ToolResultMessageType } from '../../context/SocketContext';
 import { getToolResultContent } from '../utils/ProcessBoxUtils';
+import { iconFromMessage } from '@components/utils/FormatUtils';
+/**
+ * ToolResultMessage Component
+ * Renders tool result messages
+ */
 
 interface ToolResultMessageProps {
     message: ToolResultMessageType;
     followsCall: boolean;
+    colors?: {
+        rgb: string;
+        bgColor: string;
+        textColor: string;
+    };
 }
 
 function prepareToolName(name: string): string {
@@ -19,12 +29,8 @@ function prepareToolName(name: string): string {
 const ToolResultMessage: React.FC<ToolResultMessageProps> = ({
     message,
     followsCall,
+    colors,
 }) => {
-    if (message.toolName.startsWith('talk_to_')) {
-        // Don't show talk results
-        return null;
-    }
-
     // Get the content and image path from the result
     let { content, imagePath } = getToolResultContent(message);
     const imageURL = imagePath;
@@ -51,7 +57,7 @@ const ToolResultMessage: React.FC<ToolResultMessageProps> = ({
                             </div>
                         )}
                         <div className="message-title">
-                            Tool {prepareToolName(message.toolName)} Result
+                            {iconFromMessage(message, colors.rgb)} {prepareToolName(message.toolName)} Result
                         </div>
                     </div>
                 )}

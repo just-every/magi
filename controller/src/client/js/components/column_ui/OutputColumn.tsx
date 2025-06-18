@@ -29,6 +29,72 @@ interface OutputColumnProps {
     selectedPatch?: Patch | null;
 }
 
+// Helper function to extract text from contentArray structure
+const extractTextFromCommand = (command: any): string => {
+    let text = '';
+
+    if (typeof command === 'string') {
+        // Try to parse it as JSON if it's a string
+        try {
+            const parsed = JSON.parse(command);
+            if (parsed.contentArray && Array.isArray(parsed.contentArray)) {
+                text = parsed.contentArray
+                    .map((item: any) => {
+                        if (item.type === 'input_text' && item.text) {
+                            return item.text;
+                        }
+                        return '';
+                    })
+                    .filter(Boolean)
+                    .join(' ');
+            } else {
+                text = command;
+            }
+        } catch {
+            // If parsing fails, use the original string
+            text = command;
+        }
+    } else if (command && command.contentArray && Array.isArray(command.contentArray)) {
+        // If it's already an object with contentArray
+        text = command.contentArray
+            .map((item: any) => {
+                if (item.type === 'input_text' && item.text) {
+                    return item.text;
+                }
+                return '';
+            })
+            .filter(Boolean)
+            .join(' ');
+    } else {
+        // Fallback to stringifying if we can't extract
+        text = typeof command === 'object' ? JSON.stringify(command) : String(command || '');
+    }
+
+    // Extract text after "Word:" pattern and get first sentence
+    const wordPattern = /\*\*(\w+):\*\*\s*(.+)/;
+    const match = text.match(wordPattern);
+
+    if (match) {
+        // Get the text after the pattern
+        const afterPattern = match[2];
+
+        // Find the first sentence (ends with . ! or ?)
+        const sentenceMatch = afterPattern.match(/^[^.!?]+[.!?]/);
+        if (sentenceMatch) {
+            text = sentenceMatch[0].trim();
+        } else {
+            // If no sentence ending found, take up to first newline or entire text
+            const newlineIndex = afterPattern.indexOf('\n');
+            text = newlineIndex > -1 ? afterPattern.substring(0, newlineIndex).trim() : afterPattern.trim();
+        }
+    }
+
+    // Remove backticks
+    text = text.replace(/`/g, '');
+
+    return text;
+};
+
 const OutputColumn: React.FC<OutputColumnProps> = ({
     selectedItemId,
     selectedTool,
@@ -264,7 +330,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                                 />
                                 {status}
                             </div>
-                            {status === 'running' && (
+                            {process.status === 'running' && (
                                 <div>
                                     <button
                                         className="btn btn-sm btn-outline-danger"
@@ -284,7 +350,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                             </div>
                             <div className="mt-2">
                                 <i className="bi bi-code me-1"></i>{' '}
-                                {truncate(command, 200)}
+                                {truncate(extractTextFromCommand(command), 200)}
                             </div>
                             {process.projectIds &&
                                 process.projectIds.length > 0 && (
@@ -473,7 +539,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                             />
                         )}
                         {tab === 'output' && (
-                            <MessageList messages={messages} />
+                            <MessageList messages={messages} colors={{rbg}} />
                         )}
                         {tab === 'llm' && (
                             <LogsViewer
@@ -696,7 +762,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                             />
                         )}
                         {tab === 'output' && (
-                            <MessageList messages={messages} />
+                            <MessageList messages={messages} colors={{rbg}} />
                         )}
                         {tab === 'llm' && selectedItem && (
                             <LogsViewer

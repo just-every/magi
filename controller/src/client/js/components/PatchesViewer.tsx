@@ -220,15 +220,15 @@ const PatchesViewer: React.FC<PatchesViewerProps> = ({
 
         if (pendingPatches.length === 0) {
             return (
-                <div className="compact-patches empty">
-                    <p className="text-muted">No pending patches</p>
+                <div className="compact-patches">
+                    <div className="middle-title">No patches</div>
                 </div>
             );
         }
 
         return (
             <div className="compact-patches">
-                <h4>Pending Patches ({pendingPatches.length})</h4>
+                <div className="middle-title">Patches ({pendingPatches.length})</div>
                 <ul className="compact-patches-list">
                     {pendingPatches.map(patch => (
                         <li
