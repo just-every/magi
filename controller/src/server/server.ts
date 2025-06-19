@@ -115,6 +115,12 @@ async function main(): Promise<void> {
     // Add API routes
     const app = serverManager.getExpressApp();
     app.use(express.json()); // For parsing application/json
+    
+    // Health check endpoint
+    app.get('/health', (req, res) => {
+        res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    });
+    
     app.use('/api/custom-tools', customToolsRoutes);
     app.use('/api/pr-events', prEventsRoutes);
     app.use('/api/patches', patchesRoutes);
