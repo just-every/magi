@@ -848,6 +848,10 @@ header {
         padding: 0.5em 0;
         font-size: 0.9em;
 
+        code {
+            color: rgb(194, 194, 194);
+        }
+
         & > ul {
             padding: 0.2em 2.5em !important;
             margin: 0 !important;

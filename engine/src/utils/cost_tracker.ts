@@ -102,6 +102,27 @@ class MagiCostTracker {
     reset(): void {
         ensembleCostTracker.reset();
     }
+
+    /**
+     * Get costs in CostUpdateData format
+     */
+    getCosts(): any {
+        return {
+            time: {
+                start: new Date().toISOString(),
+                now: new Date().toISOString()
+            },
+            cost: {
+                total: this.getTotalCost(),
+                last_min: 0 // This would need to be tracked separately
+            },
+            tokens: {
+                input: 0, // Would need to aggregate from usage data
+                output: 0 // Would need to aggregate from usage data
+            },
+            models: this.getCostsByModel()
+        };
+    }
 }
 
 // Export a singleton instance that wraps the Ensemble cost tracker

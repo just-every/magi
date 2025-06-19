@@ -156,12 +156,12 @@ async function processCommand(command: CommandMessage, agent: Agent): Promise<vo
             break;
         case 'interrupt_waiting':
             logger.info('Interrupting waiting');
-            interruptWaiting();
+            interruptWaiting(command.data?.reason || 'User interrupt');
             comm.send({ type: 'response', response: 'ok' });
             break;
         case 'merge_history_thread':
-            logger.info('Merging history thread', { threadId: command.data.threadId, parentId: command.data.parentId });
-            await mergeHistoryThread(command.data.threadId, command.data.parentId);
+            logger.info('Merging history thread', { thread: command.data.thread });
+            await mergeHistoryThread(command.data.thread);
             comm.send({ type: 'response', response: 'ok' });
             break;
         case 'run_task':
@@ -169,8 +169,7 @@ async function processCommand(command: CommandMessage, agent: Agent): Promise<vo
             try {
                 const response = await runTask(
                     command.data.task_id,
-                    command.data.project_id,
-                    command.data.user_query
+                    command.data.project_id
                 );
                 comm.send({ type: 'response', response: 'ok', data: response });
             } catch (error: any) {
@@ -184,9 +183,9 @@ async function processCommand(command: CommandMessage, agent: Agent): Promise<vo
             comm.send({ type: 'response', response: 'ok', data: costs });
             break;
         case 'plan_and_commit_changes':
-            logger.info('Planning and committing changes', { projectRoot: command.data.projectRoot });
+            logger.info('Planning and committing changes', { projectId: command.data.projectId });
             try {
-                const result = await planAndCommitChanges(command.data.projectRoot);
+                const result = await planAndCommitChanges(agent, command.data.projectId);
                 comm.send({ type: 'response', response: 'ok', data: result });
             } catch (error: any) {
                 logger.error('Error planning and committing changes', { error_message: error.message, stack: error.stack });
@@ -298,7 +297,8 @@ export async function main(): Promise<void> {
     }
 
     // Initialize communication manager
-    initCommunication((message: ServerMessage) => {
+    const comm = initCommunication();
+    comm.onCommand(async (message: ServerMessage) => {
         if (message.type === 'command') {
             processCommand(message as CommandMessage, agent); // Pass agent to processCommand
         } else if (message.type === 'shutdown') {
@@ -308,21 +308,23 @@ export async function main(): Promise<void> {
     });
 
     // Create the agent instance
-    const agent = createAgent(model);
+    const agent = await createAgent(model as unknown as Record<string, unknown>);
 
     // Set up event handler for streaming responses from the agent
     setEventHandler((event: ProviderStreamEvent) => {
         const comm = getCommunicationManager();
-        if (event.type === 'response_chunk') {
+        // Handle provider stream events and convert to our stream event types
+        const eventAny = event as any;
+        if ('type' in eventAny && eventAny.type === 'message_delta') {
             comm.send({
                 type: 'response_chunk',
-                response: event.data.text,
-                is_tool_code: event.data.is_tool_code,
+                response: eventAny.content || '',
+                is_tool_code: false,
             });
-        } else if (event.type === 'function_call') {
-            comm.send({ type: 'function_call', data: event.data });
-        } else if (event.type === 'function_result') {
-            comm.send({ type: 'function_result', data: event.data });
+        } else if ('type' in eventAny && eventAny.type === 'tool_use') {
+            comm.send({ type: 'function_call', data: eventAny });
+        } else if ('type' in eventAny && eventAny.type === 'tool_result') {
+            comm.send({ type: 'function_result', data: eventAny });
         }
     });
 
