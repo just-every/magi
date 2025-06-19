@@ -314,7 +314,10 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     id: generateId(),
                     processId: event.id,
                     type: 'user',
-                    content: typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent),
+                    content:
+                        typeof messageContent === 'string'
+                            ? messageContent
+                            : JSON.stringify(messageContent),
                     timestamp: new Date().toISOString(),
                     sender: event.manager,
                     ...(event.isCore === false && {
@@ -1278,7 +1281,10 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         id: generateId(),
                         processId: processId,
                         type: 'user',
-                        content: typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent),
+                        content:
+                            typeof messageContent === 'string'
+                                ? messageContent
+                                : JSON.stringify(messageContent),
                         timestamp: new Date().toISOString(),
                         sender: process.manager,
                         ...(process.isCore === false && {
