@@ -26,9 +26,17 @@ describe('Runner.runStreamedWithTools', () => {
 
         vi.mocked(Runner.runStreamedWithTools).mockResolvedValue(mockResponse);
 
-        const result = await Runner.runStreamedWithTools(mockAgent, mockPrompt, mockHistory);
+        const result = await Runner.runStreamedWithTools(
+            mockAgent,
+            mockPrompt,
+            mockHistory
+        );
 
-        expect(Runner.runStreamedWithTools).toHaveBeenCalledWith(mockAgent, mockPrompt, mockHistory);
+        expect(Runner.runStreamedWithTools).toHaveBeenCalledWith(
+            mockAgent,
+            mockPrompt,
+            mockHistory
+        );
         expect(result).toBe(mockResponse);
     });
 
@@ -40,7 +48,9 @@ describe('Runner.runStreamedWithTools', () => {
 
         vi.mocked(Runner.runStreamedWithTools).mockRejectedValue(mockError);
 
-        await expect(Runner.runStreamedWithTools(mockAgent, mockPrompt, mockHistory)).rejects.toThrow('Test error');
+        await expect(
+            Runner.runStreamedWithTools(mockAgent, mockPrompt, mockHistory)
+        ).rejects.toThrow('Test error');
     });
 });
 
@@ -49,7 +59,8 @@ describe('sanitizeClaudeMessages', () => {
         const messages = [
             {
                 role: 'assistant',
-                content: 'Here is my response <thinking>Internal thoughts</thinking> Final answer',
+                content:
+                    'Here is my response <thinking>Internal thoughts</thinking> Final answer',
             },
         ];
 
@@ -64,7 +75,8 @@ describe('sanitizeClaudeMessages', () => {
         const messages = [
             {
                 role: 'assistant',
-                content: 'Start <thinking>thought 1</thinking> middle <thinking>thought 2</thinking> end',
+                content:
+                    'Start <thinking>thought 1</thinking> middle <thinking>thought 2</thinking> end',
             },
         ];
 
@@ -79,7 +91,10 @@ describe('sanitizeClaudeMessages', () => {
                 role: 'assistant',
                 content: [
                     { type: 'text', text: 'Normal text' },
-                    { type: 'text', text: '<thinking>Internal thoughts</thinking>' },
+                    {
+                        type: 'text',
+                        text: '<thinking>Internal thoughts</thinking>',
+                    },
                     { type: 'text', text: 'More normal text' },
                 ],
             },
@@ -133,7 +148,8 @@ describe('sanitizeClaudeMessages', () => {
         const messages = [
             {
                 role: 'assistant',
-                content: 'Response <thinking>Outer <thinking>Inner</thinking> thought</thinking> done',
+                content:
+                    'Response <thinking>Outer <thinking>Inner</thinking> thought</thinking> done',
             },
         ];
 

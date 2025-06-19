@@ -110,17 +110,17 @@ class MagiCostTracker {
         return {
             time: {
                 start: new Date().toISOString(),
-                now: new Date().toISOString()
+                now: new Date().toISOString(),
             },
             cost: {
                 total: this.getTotalCost(),
-                last_min: 0 // This would need to be tracked separately
+                last_min: 0, // This would need to be tracked separately
             },
             tokens: {
                 input: 0, // Would need to aggregate from usage data
-                output: 0 // Would need to aggregate from usage data
+                output: 0, // Would need to aggregate from usage data
             },
-            models: this.getCostsByModel()
+            models: this.getCostsByModel(),
         };
     }
 }

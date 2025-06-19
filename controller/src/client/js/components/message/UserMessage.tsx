@@ -19,10 +19,12 @@ const UserMessage: React.FC<UserMessageProps> = ({ message }) => {
     return (
         <div className="message-group user-message" key={message.id}>
             <div className="message-header">
-                {message.sender && <span className="message-model">{message.sender}</span>}
-                {message.title && <div className="message-title">
-                    {message.title}
-                </div>}
+                {message.sender && (
+                    <span className="message-model">{message.sender}</span>
+                )}
+                {message.title && (
+                    <div className="message-title">{message.title}</div>
+                )}
             </div>
             <div className="message-bubble user-bubble">
                 <MessageContent content={message.content} />

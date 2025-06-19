@@ -54,7 +54,11 @@ const extractTextFromCommand = (command: any): string => {
             // If parsing fails, use the original string
             text = command;
         }
-    } else if (command && command.contentArray && Array.isArray(command.contentArray)) {
+    } else if (
+        command &&
+        command.contentArray &&
+        Array.isArray(command.contentArray)
+    ) {
         // If it's already an object with contentArray
         text = command.contentArray
             .map((item: any) => {
@@ -67,7 +71,10 @@ const extractTextFromCommand = (command: any): string => {
             .join(' ');
     } else {
         // Fallback to stringifying if we can't extract
-        text = typeof command === 'object' ? JSON.stringify(command) : String(command || '');
+        text =
+            typeof command === 'object'
+                ? JSON.stringify(command)
+                : String(command || '');
     }
 
     // Extract text after "Word:" pattern and get first sentence
@@ -85,7 +92,10 @@ const extractTextFromCommand = (command: any): string => {
         } else {
             // If no sentence ending found, take up to first newline or entire text
             const newlineIndex = afterPattern.indexOf('\n');
-            text = newlineIndex > -1 ? afterPattern.substring(0, newlineIndex).trim() : afterPattern.trim();
+            text =
+                newlineIndex > -1
+                    ? afterPattern.substring(0, newlineIndex).trim()
+                    : afterPattern.trim();
         }
     }
 
@@ -539,7 +549,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                             />
                         )}
                         {tab === 'output' && (
-                            <MessageList messages={messages} colors={{rbg}} />
+                            <MessageList messages={messages} colors={{ rbg }} />
                         )}
                         {tab === 'llm' && (
                             <LogsViewer
@@ -762,7 +772,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                             />
                         )}
                         {tab === 'output' && (
-                            <MessageList messages={messages} colors={{rbg}} />
+                            <MessageList messages={messages} colors={{ rbg }} />
                         )}
                         {tab === 'llm' && selectedItem && (
                             <LogsViewer

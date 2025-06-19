@@ -228,7 +228,9 @@ const PatchesViewer: React.FC<PatchesViewerProps> = ({
 
         return (
             <div className="compact-patches">
-                <div className="middle-title">Patches ({pendingPatches.length})</div>
+                <div className="middle-title">
+                    Patches ({pendingPatches.length})
+                </div>
                 <ul className="compact-patches-list">
                     {pendingPatches.map(patch => (
                         <li

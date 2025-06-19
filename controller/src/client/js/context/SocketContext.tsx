@@ -296,7 +296,10 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                 let messageContent: any = event.command;
                 try {
                     const parsed = JSON.parse(event.command);
-                    if (parsed.contentArray && Array.isArray(parsed.contentArray)) {
+                    if (
+                        parsed.contentArray &&
+                        Array.isArray(parsed.contentArray)
+                    ) {
                         messageContent = parsed.contentArray;
                     }
                 } catch (e) {
@@ -316,7 +319,13 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     content: messageContent,
                     timestamp: new Date().toISOString(),
                     sender: event.manager,
-                    ...(event.isCore === false && { title: extractTitle(typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent)) })
+                    ...(event.isCore === false && {
+                        title: extractTitle(
+                            typeof messageContent === 'string'
+                                ? messageContent
+                                : JSON.stringify(messageContent)
+                        ),
+                    }),
                 };
 
                 newProcesses.set(event.id, {
@@ -756,9 +765,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                 }
 
                 // Handle different event types
-                if (
-                    eventType === 'connected'
-                ) {
+                if (eventType === 'connected') {
                     // User message - already handled in process:create but good as a fallback
                     if ('command' in streamingEvent) {
                         const content = streamingEvent.command || '';
@@ -1259,7 +1266,10 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     let messageContent: any = command;
                     try {
                         const parsed = JSON.parse(command);
-                        if (parsed.contentArray && Array.isArray(parsed.contentArray)) {
+                        if (
+                            parsed.contentArray &&
+                            Array.isArray(parsed.contentArray)
+                        ) {
                             messageContent = parsed.contentArray;
                         }
                     } catch (e) {
@@ -1273,7 +1283,13 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         content: messageContent,
                         timestamp: new Date().toISOString(),
                         sender: process.manager,
-                        ...(process.isCore === false && { title: extractTitle(typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent)) })
+                        ...(process.isCore === false && {
+                            title: extractTitle(
+                                typeof messageContent === 'string'
+                                    ? messageContent
+                                    : JSON.stringify(messageContent)
+                            ),
+                        }),
                     };
                     process.agent!.messages.push(userMessage);
 

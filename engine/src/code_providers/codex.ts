@@ -131,10 +131,7 @@ export class CodexProvider implements ModelProvider {
             );
             const { stream, write } = runPty(
                 'codex',
-                [
-                    '--profile="o3"',
-                    prompt,
-                ],
+                ['--profile="o3"', prompt],
                 {
                     cwd,
                     messageId,

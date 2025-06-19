@@ -31,11 +31,9 @@ const SystemMessage: React.FC<SystemMessageProps> = ({ message }) => {
                             ? ' alert-danger'
                             : 'alert-secondary')
                     }
-                    style={
-                        {whiteSpace: 'pre-wrap'}
-                    }
+                    style={{ whiteSpace: 'pre-wrap' }}
                 >
-                    { content }
+                    {content}
                 </pre>
             </div>
         );
@@ -51,9 +49,7 @@ const SystemMessage: React.FC<SystemMessageProps> = ({ message }) => {
                     <div className="message-model">{message.agent.model}</div>
                 )}
                 {message.title && (
-                    <div className="message-title">
-                        {message.title}
-                    </div>
+                    <div className="message-title">{message.title}</div>
                 )}
             </div>
             <div className="message-bubble assistant-bubble">

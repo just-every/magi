@@ -57,7 +57,8 @@ const ToolResultMessage: React.FC<ToolResultMessageProps> = ({
                             </div>
                         )}
                         <div className="message-title">
-                            {iconFromMessage(message, colors.rgb)} {prepareToolName(message.toolName)} Result
+                            {iconFromMessage(message, colors.rgb)}{' '}
+                            {prepareToolName(message.toolName)} Result
                         </div>
                     </div>
                 )}

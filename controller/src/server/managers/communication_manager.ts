@@ -623,7 +623,10 @@ export class CommunicationManager {
                 typeof event.command === 'string' &&
                 event.command.trim().toLowerCase() === 'stop';
 
-            if(commandIsStop && event.targetProcessId === this.processManager.coreProcessId) {
+            if (
+                commandIsStop &&
+                event.targetProcessId === this.processManager.coreProcessId
+            ) {
                 this.sendMessage(
                     processId,
                     JSON.stringify({

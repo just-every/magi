@@ -67,7 +67,8 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
     const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
     const [isDragging, setIsDragging] = useState(false);
     const [inputFocus, setInputFocus] = useState(false);
-    const [showVersionManager, setShowVersionManager] = useState<boolean>(false);
+    const [showVersionManager, setShowVersionManager] =
+        useState<boolean>(false);
     const [uploadProgress, setUploadProgress] = useState<Map<string, number>>(
         new Map()
     );
@@ -426,7 +427,11 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                 <i
                                     className={`bi ${isAudioEnabled ? 'bi-volume-up-fill' : 'bi-x'} mx-2 ${isAudioEnabled ? 'text-primary' : 'text-dark'}`}
                                 />
-                                {isAudioEnabled ? (isPlayingPreview ? 'Playing Preview...' : 'Active') : 'Muted'}
+                                {isAudioEnabled
+                                    ? isPlayingPreview
+                                        ? 'Playing Preview...'
+                                        : 'Active'
+                                    : 'Muted'}
                             </span>
                         </div>
                         <button
@@ -584,9 +589,7 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                     <div className="d-flex justify-content-between align-items-center mt-3">
                         <div>
                             <span className="fw-bold me-2">Version:</span>
-                            <span>
-                                None
-                            </span>
+                            <span>None</span>
                         </div>
 
                         {/* Version Manager Button */}
@@ -605,8 +608,6 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                             onClose={() => setShowVersionManager(false)}
                         />
                     </div>
-
-
 
                     <div className="mt-4">
                         <StatusDisplay />
@@ -693,7 +694,9 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                         {toolCallMessage ? (
                                             toolCallMessage.command
                                         ) : (
-                                            <MessageContent content={message.content} />
+                                            <MessageContent
+                                                content={message.content}
+                                            />
                                         )}
                                     </div>
                                 </div>
@@ -751,7 +754,9 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                             borderRadius: '0.375rem',
                             transition: 'all 0.2s',
                             backgroundColor: '#fff',
-                            borderColor: inputFocus ? 'rgba(var(--bs-primary-rgb))' : '#fff',
+                            borderColor: inputFocus
+                                ? 'rgba(var(--bs-primary-rgb))'
+                                : '#fff',
                         }}
                     >
                         <div className="d-flex flex-column">
@@ -762,8 +767,8 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                     isDragging
                                         ? 'Drop files here...'
                                         : isFirstProcess
-                                        ? 'Start task...'
-                                        : `Talk${agentName ? ' to ' + agentName : ''}...`
+                                          ? 'Start task...'
+                                          : `Talk${agentName ? ' to ' + agentName : ''}...`
                                 }
                                 value={command}
                                 onChange={e => setCommand(e.target.value)}
@@ -778,14 +783,16 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                     border: 'none',
                                     resize: 'none',
                                     outline: 'none !important',
-                                    boxShadow: 'none'
+                                    boxShadow: 'none',
                                 }}
                             />
                             <div className="d-flex flex-row justify-content-end align-items-center gap-2 p-2">
                                 <button
                                     type="button"
                                     className="btn btn-outline-secondary border-0 rounded-circle"
-                                    onClick={() => fileInputRef.current?.click()}
+                                    onClick={() =>
+                                        fileInputRef.current?.click()
+                                    }
                                     title="Attach files"
                                 >
                                     <i className="bi bi-paperclip"></i>
@@ -793,7 +800,9 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                 <button
                                     type="button"
                                     className="btn btn-outline-secondary border-0 rounded-circle"
-                                    onClick={() => fileInputRef.current?.click()}
+                                    onClick={() =>
+                                        fileInputRef.current?.click()
+                                    }
                                     title="Voice chat"
                                 >
                                     <i className="bi bi-soundwave"></i>

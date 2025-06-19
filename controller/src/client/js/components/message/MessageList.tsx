@@ -96,7 +96,7 @@ const renderMessage = (
         rgb: string;
         bgColor: string;
         textColor: string;
-    },
+    }
 ) => {
     const lastMessage: ClientMessage | undefined =
         filteredMessages[index - 1] || undefined;

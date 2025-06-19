@@ -173,7 +173,10 @@ export class ProcessManager {
             this.io.emit('process:create', {
                 id: processId,
                 isCore: this.coreProcessId === processId,
-                manager: this.coreProcessId === processId ? process.env.PERSON_NAME : process.env.AI_NAME,
+                manager:
+                    this.coreProcessId === processId
+                        ? process.env.PERSON_NAME
+                        : process.env.AI_NAME,
                 name:
                     agentProcess?.name ||
                     (this.coreProcessId === processId

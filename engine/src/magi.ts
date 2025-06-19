@@ -83,11 +83,11 @@ export function sanitizeClaudeMessages(messages: any[]): any[] {
         if (typeof message.content === 'string') {
             // Remove thinking blocks from string content
             // Use a stack-based approach to handle nested blocks
-            let sanitized = message.content;
+            const sanitized = message.content;
             let result = '';
             let depth = 0;
             let i = 0;
-            
+
             while (i < sanitized.length) {
                 if (sanitized.slice(i).startsWith('<thinking>')) {
                     depth++;
@@ -106,7 +106,8 @@ export function sanitizeClaudeMessages(messages: any[]): any[] {
         } else if (Array.isArray(message.content)) {
             // Filter out thinking blocks from content arrays
             const sanitized = message.content.filter(
-                (item: any) => !(item.type === 'text' && item.text?.includes('<thinking'))
+                (item: any) =>
+                    !(item.type === 'text' && item.text?.includes('<thinking'))
             );
             return { ...message, content: sanitized };
         }
@@ -119,14 +120,26 @@ export function sanitizeClaudeMessages(messages: any[]): any[] {
  */
 function setupErrorHandling(): void {
     process.on('uncaughtException', error => {
-        logger.error('Uncaught Exception:', { error_name: error.name, error_message: error.message, stack: error.stack });
-        getCommunicationManager().send({ type: 'error', error: 'Uncaught Exception: ' + error.message });
+        logger.error('Uncaught Exception:', {
+            error_name: error.name,
+            error_message: error.message,
+            stack: error.stack,
+        });
+        getCommunicationManager().send({
+            type: 'error',
+            error: 'Uncaught Exception: ' + error.message,
+        });
         process.exit(1);
     });
 
     process.on('unhandledRejection', (reason, promise) => {
         logger.error('Unhandled Promise Rejection:', { reason, promise });
-        getCommunicationManager().send({ type: 'error', error: 'Unhandled Promise Rejection: ' + (reason as any)?.message || String(reason) });
+        getCommunicationManager().send({
+            type: 'error',
+            error:
+                'Unhandled Promise Rejection: ' + (reason as any)?.message ||
+                String(reason),
+        });
     });
 }
 
@@ -135,7 +148,10 @@ function setupErrorHandling(): void {
  * @param command The command message to process.
  * @param agent The agent instance to use for running commands.
  */
-async function processCommand(command: CommandMessage, agent: Agent): Promise<void> {
+async function processCommand(
+    command: CommandMessage,
+    agent: Agent
+): Promise<void> {
     const comm = getCommunicationManager();
 
     switch (command.command) {
@@ -145,12 +161,16 @@ async function processCommand(command: CommandMessage, agent: Agent): Promise<vo
             comm.send({ type: 'response', response: 'ok' });
             break;
         case 'add_human_message':
-            logger.info('Adding human message', { message: command.data.message });
+            logger.info('Adding human message', {
+                message: command.data.message,
+            });
             addHumanMessage(command.data.message, command.data.id);
             comm.send({ type: 'response', response: 'ok' });
             break;
         case 'add_monologue':
-            logger.info('Adding monologue', { monologue: command.data.monologue });
+            logger.info('Adding monologue', {
+                monologue: command.data.monologue,
+            });
             addMonologue(command.data.monologue, command.data.id);
             comm.send({ type: 'response', response: 'ok' });
             break;
@@ -160,7 +180,9 @@ async function processCommand(command: CommandMessage, agent: Agent): Promise<vo
             comm.send({ type: 'response', response: 'ok' });
             break;
         case 'merge_history_thread':
-            logger.info('Merging history thread', { thread: command.data.thread });
+            logger.info('Merging history thread', {
+                thread: command.data.thread,
+            });
             await mergeHistoryThread(command.data.thread);
             comm.send({ type: 'response', response: 'ok' });
             break;
@@ -173,8 +195,15 @@ async function processCommand(command: CommandMessage, agent: Agent): Promise<vo
                 );
                 comm.send({ type: 'response', response: 'ok', data: response });
             } catch (error: any) {
-                logger.error('Error running task', { taskId: command.data.task_id, error_message: error.message, stack: error.stack });
-                comm.send({ type: 'error', error: `Error running task: ${error.message}` });
+                logger.error('Error running task', {
+                    taskId: command.data.task_id,
+                    error_message: error.message,
+                    stack: error.stack,
+                });
+                comm.send({
+                    type: 'error',
+                    error: `Error running task: ${error.message}`,
+                });
             }
             break;
         case 'get_cost_data':
@@ -183,13 +212,24 @@ async function processCommand(command: CommandMessage, agent: Agent): Promise<vo
             comm.send({ type: 'response', response: 'ok', data: costs });
             break;
         case 'plan_and_commit_changes':
-            logger.info('Planning and committing changes', { projectId: command.data.projectId });
+            logger.info('Planning and committing changes', {
+                projectId: command.data.projectId,
+            });
             try {
-                const result = await planAndCommitChanges(agent, command.data.projectId);
+                const result = await planAndCommitChanges(
+                    agent,
+                    command.data.projectId
+                );
                 comm.send({ type: 'response', response: 'ok', data: result });
             } catch (error: any) {
-                logger.error('Error planning and committing changes', { error_message: error.message, stack: error.stack });
-                comm.send({ type: 'error', error: `Error planning and committing changes: ${error.message}` });
+                logger.error('Error planning and committing changes', {
+                    error_message: error.message,
+                    stack: error.stack,
+                });
+                comm.send({
+                    type: 'error',
+                    error: `Error planning and committing changes: ${error.message}`,
+                });
             }
             break;
         case 'set_file_test_mode':
@@ -198,8 +238,13 @@ async function processCommand(command: CommandMessage, agent: Agent): Promise<vo
             comm.send({ type: 'response', response: 'ok' });
             break;
         default:
-            logger.warn('Unknown command received', { command: command.command });
-            comm.send({ type: 'error', error: `Unknown command: ${command.command}` });
+            logger.warn('Unknown command received', {
+                command: command.command,
+            });
+            comm.send({
+                type: 'error',
+                error: `Unknown command: ${command.command}`,
+            });
     }
 }
 
@@ -234,8 +279,14 @@ export async function mainLoop(
             await runThoughtDelay();
         } catch (error: any) {
             // Handle any error that occurred during agent execution
-            logger.error('Error running agent command', { error_message: error?.message || String(error), stack: error.stack }); // Use logger
-            comm.send({ type: 'error', error: `Error running agent command: ${error?.message || String(error)}` });
+            logger.error('Error running agent command', {
+                error_message: error?.message || String(error),
+                stack: error.stack,
+            }); // Use logger
+            comm.send({
+                type: 'error',
+                error: `Error running agent command: ${error?.message || String(error)}`,
+            });
         }
     } while (loop && !comm.isClosed());
 }
@@ -271,7 +322,6 @@ function checkModelProviderApiKeys(): boolean {
     return hasValidKey;
 }
 
-
 /**
  * Main execution function.
  */
@@ -292,7 +342,9 @@ export async function main(): Promise<void> {
     const { loop: isLoop, model, noCheckKeys } = parseCLIArgs();
 
     if (!noCheckKeys && !checkModelProviderApiKeys()) {
-        logger.error('No valid model provider API key found. Please set OPENAI_API_KEY or ANTHROPIC_API_KEY or GOOGLE_API_KEY or XAI_API_KEY in your .env file.');
+        logger.error(
+            'No valid model provider API key found. Please set OPENAI_API_KEY or ANTHROPIC_API_KEY or GOOGLE_API_KEY or XAI_API_KEY in your .env file.'
+        );
         process.exit(1);
     }
 
@@ -308,7 +360,9 @@ export async function main(): Promise<void> {
     });
 
     // Create the agent instance
-    const agent = await createAgent(model as unknown as Record<string, unknown>);
+    const agent = await createAgent(
+        model as unknown as Record<string, unknown>
+    );
 
     // Set up event handler for streaming responses from the agent
     setEventHandler((event: ProviderStreamEvent) => {
@@ -335,9 +389,15 @@ export async function main(): Promise<void> {
 // Only run the main function if not imported as a module
 if (import.meta.url === `file://${process.argv[1]}`) {
     main().catch(error => {
-        logger.error('Fatal error in main execution:', { error_message: error.message, stack: error.stack });
+        logger.error('Fatal error in main execution:', {
+            error_message: error.message,
+            stack: error.stack,
+        });
         if (hasCommunicationManager()) {
-            getCommunicationManager().send({ type: 'error', error: 'Fatal error: ' + error.message });
+            getCommunicationManager().send({
+                type: 'error',
+                error: 'Fatal error: ' + error.message,
+            });
         }
         process.exit(1);
     });

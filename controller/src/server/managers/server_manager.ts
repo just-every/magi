@@ -1081,7 +1081,10 @@ export class ServerManager {
             socket.emit('process:create', {
                 id,
                 isCore: this.processManager.coreProcessId === id,
-                manager: this.processManager.coreProcessId === id ? process.env.PERSON_NAME : process.env.AI_NAME,
+                manager:
+                    this.processManager.coreProcessId === id
+                        ? process.env.PERSON_NAME
+                        : process.env.AI_NAME,
                 command: processData.command,
                 status: processData.status,
                 colors: processData.colors,

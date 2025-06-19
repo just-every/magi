@@ -6,7 +6,6 @@
  */
 
 import type {
-    ToolCall,
     ResponseInput,
     ResponseInputItem,
     ResponseInputFunctionCall,
@@ -24,18 +23,13 @@ import {
     getModelFromClass,
 } from '@just-every/ensemble';
 
-import { getCommunicationManager } from './communication.js';
+import {
+    getCommunicationManager,
+    hasCommunicationManager,
+} from './communication.js';
 import type { ResponseOutputEvent } from '@just-every/ensemble/dist/types/types.js';
 
-const EVENT_TIMEOUT_MS = 300000; // 5 min timeout for events
-
-// Define a specific error type for clarity
-class TimeoutError extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = 'TimeoutError';
-    }
-}
+// Removed unused EVENT_TIMEOUT_MS and TimeoutError
 
 /**
  * Agent runner class for executing agents with tools
@@ -117,10 +111,12 @@ export class Runner {
             }
 
             let fullResponse = '';
-            const comm = communicationManager || getCommunicationManager();
+            const comm =
+                communicationManager ||
+                (hasCommunicationManager() ? getCommunicationManager() : null);
 
             // Send agent_start event if this is a sub-agent (has parent_id)
-            if (agent.parent_id) {
+            if (agent.parent_id && comm) {
                 comm.send({
                     type: 'agent_start',
                     agent: {
