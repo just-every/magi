@@ -137,6 +137,12 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/magi_test
           
+      - name: Create Docker volumes
+        run: |
+          docker volume create claude_credentials
+          docker volume create magi_output
+          docker volume create custom_tools
+          
       - name: Run smoke tests
         run: |
           docker compose up -d
