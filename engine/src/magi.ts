@@ -15,7 +15,6 @@ if (!process.env.OPENAI_API_KEY) {
 }
 
 import { ServerMessage, CommandMessage } from './types/shared-types.js';
-import { ResponseInput } from '@just-every/ensemble';
 import { Runner } from './utils/runner.js';
 import { parseCLIArgs } from './cli.js';
 import { endProcess, setupShutdownHandlers } from './shutdown.js';
@@ -32,7 +31,6 @@ import {
     initCommunication,
     getCommunicationManager,
     hasCommunicationManager,
-    sendComms,
 } from './utils/communication.js';
 import { move_to_working_dir, set_file_test_mode } from './utils/file_utils.js';
 import { costTracker } from './utils/cost_tracker.js';
@@ -68,7 +66,6 @@ async function runThoughtDelay(): Promise<void> {
     // const delaySeconds = parseInt(getThoughtDelay());
     // await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
 }
-import { getProcessProjectIds } from './utils/project_utils.js';
 import { initDatabase } from './utils/db.js';
 import { ensureMemoryDirectories } from './utils/memory_utils.js';
 import { initializeEnsembleLogging } from './utils/ensemble_logger_bridge.js';
@@ -206,11 +203,12 @@ async function processCommand(
                 });
             }
             break;
-        case 'get_cost_data':
+        case 'get_cost_data': {
             logger.info('Getting cost data');
             const costs = costTracker.getCosts();
             comm.send({ type: 'response', response: 'ok', data: costs });
             break;
+        }
         case 'plan_and_commit_changes':
             logger.info('Planning and committing changes', {
                 projectId: command.data.projectId,
@@ -251,11 +249,7 @@ async function processCommand(
 /**
  * Execute a command using an agent and capture the results
  */
-export async function mainLoop(
-    agent: Agent,
-    loop: boolean,
-    model?: string
-): Promise<void> {
+export async function mainLoop(agent: Agent, loop: boolean): Promise<void> {
     const comm = getCommunicationManager();
 
     do {
@@ -383,7 +377,7 @@ export async function main(): Promise<void> {
     });
 
     // Start the main agent loop
-    await mainLoop(agent, isLoop, model);
+    await mainLoop(agent, isLoop);
 }
 
 // Only run the main function if not imported as a module

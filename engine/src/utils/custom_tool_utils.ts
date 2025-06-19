@@ -1187,7 +1187,7 @@ function prepareArguments(
     try {
         // Assume inputString is a JSON representation of the arguments object
         inputObj = JSON.parse(inputString);
-    } catch (e) {
+    } catch (_e) {
         // If inputString is not valid JSON:
         // If the function expects a single parameter, assume inputString is that direct value.
         if (paramNames.length === 1) {

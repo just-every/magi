@@ -8,7 +8,7 @@ import PatchesViewer, { Patch } from '../PatchesViewer';
 import CustomToolsViewer, { CustomTool } from '../CustomToolsViewer';
 import { PRIMARY_RGB } from '../../utils/constants';
 
-interface ColumnLayoutProps {}
+type ColumnLayoutProps = object;
 
 const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
     const { processes, coreProcessId, costData, isPaused, togglePauseState } =

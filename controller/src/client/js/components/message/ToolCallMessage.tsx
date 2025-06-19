@@ -1,14 +1,14 @@
 /**
- * ToolCallMessage Component – compact JSON‑first view (June 2025)
+ * ToolCallMessage Component - compact JSON-first view (June 2025)
  * ------------------------------------------------------------------
- * • Parameters are now shown ONLY as an interactive JSON tree.
- * • The tool/function name wraps the tree with "name(" … ")" lines so it
+ * - Parameters are now shown ONLY as an interactive JSON tree.
+ * - The tool/function name wraps the tree with "name(" ... ")" lines so it
  *   still reads like a function call.
- * • If params fail to parse as JSON, falls back to Markdown or plain text.
+ * - If params fail to parse as JSON, falls back to Markdown or plain text.
  * ------------------------------------------------------------------
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import type { FC } from 'react';
 
 // ── Libraries ────────────────────────────────────────────────────────────────
@@ -51,7 +51,7 @@ interface ToolCallMessageProps {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-const isMarkdowny = (s: string) => /[*_\[#`>|~-]/.test(s) && s.includes('\n');
+const isMarkdowny = (s: string) => /[*_[#`>|~-]/.test(s) && s.includes('\n');
 
 const titleify = (name: string) =>
     name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -66,7 +66,7 @@ function parseParams(raw: unknown): { obj: unknown | null; txt: string } {
             const parsed = JSON.parse(str);
             return { obj: parsed, txt: JSON.stringify(parsed, null, 2) };
         } catch {
-            /* ignore – fallback to string */
+            /* ignore - fallback to string */
         }
     }
     return { obj: null, txt: str };
@@ -87,16 +87,12 @@ const ToolCallMessage: FC<ToolCallMessageProps> = ({
 
     // Custom renderer for JSONTree string values → Markdown when useful
     // Custom renderer for JSONTree primitive values (string/number/boolean)
-    const valueRenderer = (
-        display: string,
-        value: unknown,
-        ...keyPath: (string | number)[]
-    ) => {
+    const valueRenderer = (display: string, value: unknown) => {
         if (typeof value !== 'string') return <>{display}</>;
 
         const trimmed = value.trim();
 
-        // 👉 Parse embedded JSON objects/arrays that are stored as strings
+        // Parse embedded JSON objects/arrays that are stored as strings
         const looksLikeJson =
             (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
             (trimmed.startsWith('[') && trimmed.endsWith(']'));
@@ -111,7 +107,13 @@ const ToolCallMessage: FC<ToolCallMessageProps> = ({
                         theme={theme}
                         shouldExpandNodeInitially={kp => kp.length < 6}
                         /* reuse the same renderer so nested strings also benefit */
-                        valueRenderer={valueRenderer as any}
+                        valueRenderer={
+                            valueRenderer as (
+                                display: string,
+                                value: unknown,
+                                ...keyPath: (string | number)[]
+                            ) => React.ReactNode
+                        }
                     />
                 );
             } catch {
@@ -119,7 +121,7 @@ const ToolCallMessage: FC<ToolCallMessageProps> = ({
             }
         }
 
-        // Render markdown if the string looks Markdown‑ish
+        // Render markdown if the string looks Markdown-ish
         if (isMarkdowny(value)) {
             return (
                 <ReactMarkdown
@@ -131,13 +133,13 @@ const ToolCallMessage: FC<ToolCallMessageProps> = ({
             );
         }
 
-        // Plain string fall‑back
+        // Plain string fall-back
         return <>{display}</>;
     };
 
     // Fallback visual when params are not an object
     const renderFallback = () => {
-        if (!paramsTxt) return null; // toolName() – no params
+        if (!paramsTxt) return null; // toolName() - no params
 
         if (isMarkdowny(paramsTxt)) {
             return (
@@ -174,7 +176,7 @@ const ToolCallMessage: FC<ToolCallMessageProps> = ({
                     </div>
                 </div>
 
-                {/* Function‑call wrapper */}
+                {/* Function-call wrapper */}
                 <div
                     className="tool-call-block"
                     style={{
@@ -183,7 +185,7 @@ const ToolCallMessage: FC<ToolCallMessageProps> = ({
                     }}
                 >
                     <div className="function-header">
-                        {`${message.toolName}`}&nbsp;(
+                        {`${message.toolName}`}(
                     </div>
 
                     {/* Parameters core */}

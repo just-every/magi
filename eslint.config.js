@@ -35,6 +35,14 @@ export default [
                 'error',
                 { allowDeclarations: true },
             ],
+            '@typescript-eslint/no-unused-vars': [
+                'error',
+                {
+                    argsIgnorePattern: '^_',
+                    varsIgnorePattern: '^_',
+                    caughtErrorsIgnorePattern: '^_',
+                },
+            ],
             'no-console': 'off',
             quotes: ['error', 'single', { avoidEscape: true }],
         },

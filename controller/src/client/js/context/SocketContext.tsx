@@ -239,8 +239,6 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
             setSystemStatus(systemStatus);
         });
 
-        setSystemStatus;
-
         // Handle pause state updates from the server
         socketInstance.on('pause_state_update', (pauseState: boolean) => {
             console.log(`Received pause_state_update: ${pauseState}`);
@@ -293,7 +291,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
                 // Create initial user message from the command
                 // Parse command if it's structured content
-                let messageContent: any = event.command;
+                let messageContent: unknown = event.command;
                 try {
                     const parsed = JSON.parse(event.command);
                     if (
@@ -302,7 +300,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     ) {
                         messageContent = parsed.contentArray;
                     }
-                } catch (e) {
+                } catch {
                     // Not JSON, use as-is
                 }
 
@@ -316,7 +314,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     id: generateId(),
                     processId: event.id,
                     type: 'user',
-                    content: messageContent,
+                    content: typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent),
                     timestamp: new Date().toISOString(),
                     sender: event.manager,
                     ...(event.isCore === false && {
@@ -792,8 +790,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                             toolParams = JSON.parse(
                                 toolCall.function.arguments
                             );
-                        } catch (e) {
-                            console.error('Error parsing tool arguments:', e);
+                        } catch (_e) {
+                            console.error('Error parsing tool arguments:', _e);
                         }
 
                         // Generate command representation for certain tool types
@@ -1263,7 +1261,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
                 if (process) {
                     // Parse command if it's structured content
-                    let messageContent: any = command;
+                    let messageContent: unknown = command;
                     try {
                         const parsed = JSON.parse(command);
                         if (
@@ -1272,7 +1270,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         ) {
                             messageContent = parsed.contentArray;
                         }
-                    } catch (e) {
+                    } catch {
                         // Not JSON, use as-is
                     }
 
@@ -1280,7 +1278,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         id: generateId(),
                         processId: processId,
                         type: 'user',
-                        content: messageContent,
+                        content: typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent),
                         timestamp: new Date().toISOString(),
                         sender: process.manager,
                         ...(process.isCore === false && {

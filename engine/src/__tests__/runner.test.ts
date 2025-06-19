@@ -8,7 +8,7 @@ vi.mock('@just-every/ensemble', async () => {
     const original = await vi.importActual('@just-every/ensemble');
     return {
         ...original,
-        ensembleRequest: vi.fn((messages, agent) => {
+        ensembleRequest: vi.fn((messages, _agent) => {
             capturedMessages = messages;
             // Return an async generator that yields a message_complete event
             return (async function* () {

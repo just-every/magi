@@ -149,7 +149,7 @@ export function sanitizeCommitMessage(message: string): string {
     // Remove any potentially dangerous characters
     // Allow: alphanumeric, space, common punctuation
     return message
-        .replace(/[^a-zA-Z0-9\s\-_.,!?:;()\[\]{}'"#@/]/g, '')
+        .replace(/[^a-zA-Z0-9\s\-_.,!?:;()[\]{}'"#@/]/g, '')
         .trim()
         .substring(0, 1000); // Limit length
 }

@@ -30,7 +30,7 @@ interface OutputColumnProps {
 }
 
 // Helper function to extract text from contentArray structure
-const extractTextFromCommand = (command: any): string => {
+const extractTextFromCommand = (command: unknown): string => {
     let text = '';
 
     if (typeof command === 'string') {
@@ -39,9 +39,16 @@ const extractTextFromCommand = (command: any): string => {
             const parsed = JSON.parse(command);
             if (parsed.contentArray && Array.isArray(parsed.contentArray)) {
                 text = parsed.contentArray
-                    .map((item: any) => {
-                        if (item.type === 'input_text' && item.text) {
-                            return item.text;
+                    .map((item: unknown) => {
+                        if (
+                            typeof item === 'object' &&
+                            item !== null &&
+                            'type' in item &&
+                            'text' in item &&
+                            (item as { type: string }).type === 'input_text' &&
+                            typeof (item as { text: unknown }).text === 'string'
+                        ) {
+                            return (item as { text: string }).text;
                         }
                         return '';
                     })
@@ -56,14 +63,22 @@ const extractTextFromCommand = (command: any): string => {
         }
     } else if (
         command &&
-        command.contentArray &&
-        Array.isArray(command.contentArray)
+        typeof command === 'object' &&
+        'contentArray' in command &&
+        Array.isArray((command as { contentArray: unknown }).contentArray)
     ) {
         // If it's already an object with contentArray
-        text = command.contentArray
-            .map((item: any) => {
-                if (item.type === 'input_text' && item.text) {
-                    return item.text;
+        text = (command as { contentArray: unknown[] }).contentArray
+            .map((item: unknown) => {
+                if (
+                    typeof item === 'object' &&
+                    item !== null &&
+                    'type' in item &&
+                    'text' in item &&
+                    (item as { type: string }).type === 'input_text' &&
+                    typeof (item as { text: unknown }).text === 'string'
+                ) {
+                    return (item as { text: string }).text;
                 }
                 return '';
             })

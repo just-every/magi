@@ -3,10 +3,7 @@
  * Renders messages from the AI assistant
  */
 import * as React from 'react';
-import {
-    ClientMessage,
-    type ToolResultMessage,
-} from '../../context/SocketContext';
+import { ClientMessage } from '../../context/SocketContext';
 import { parseMarkdown } from '../utils/MarkdownUtils';
 import MessageContent from '../ui/MessageContent';
 

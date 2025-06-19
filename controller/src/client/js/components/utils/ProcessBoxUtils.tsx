@@ -161,7 +161,9 @@ export const getToolResultContent = (
         if (jsonFormat) {
             resultContent = JSON.stringify(jsonFormat, null, 4);
         }
-    } catch (e) {}
+    } catch {
+        // Ignore parsing errors
+    }
 
     return { content: resultContent, imagePath };
 };

@@ -31,11 +31,7 @@ import {
     runProjectContainers,
 } from './container_manager';
 import { CommunicationManager } from './communication_manager';
-import {
-    analyzePatchConflicts,
-    applyPatch,
-    updatePatchStatus,
-} from '../utils/patch_manager';
+import { updatePatchStatus } from '../utils/patch_manager';
 
 /**
  * Process data interface
@@ -331,7 +327,7 @@ export class ProcessManager {
                     );
                     return;
                 }
-            } catch (e) {
+            } catch (_e) {
                 // Not valid JSON, continue as normal
             }
         }

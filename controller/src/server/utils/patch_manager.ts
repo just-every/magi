@@ -193,7 +193,7 @@ export function assessPatchRisk(patch: PatchData): PatchRiskAssessment {
 
     // Determine if patch can be auto-merged based on policy
     const policies = getMergePolicies();
-    const project = patch.project_id; // We'll need to fetch project details
+    // const project = patch.project_id; // We'll need to fetch project details
 
     let canAutoMerge = false;
     let recommendation = '';

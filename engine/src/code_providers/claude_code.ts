@@ -8,7 +8,7 @@
  *
  * --- IMPORTANT ---
  * This provider relies on parsing the unstructured text output of the 'claude' CLI tool.
- * Functions like `isNoiseLine`, `isProcessingStartSignal`, and the metadata extraction
+ * Functions like `isNoiseLine`, `_isProcessingStartSignal`, and the metadata extraction
  * in the handler code are based on observed patterns in the current CLI version.
  * Future updates to the 'claude' CLI tool may change its output format,
  * potentially breaking the filtering, start signal detection, or metadata parsing.
@@ -125,7 +125,7 @@ function isNoiseLine(line: string, tokenCb?: (n: number) => void): boolean {
         }
         return true;
     }
-    // Note: Thinking/Task/Call/Bash/Read lines are handled by isProcessingStartSignal or history dedupe
+    // Note: Thinking/Task/Call/Bash/Read lines are handled by _isProcessingStartSignal or history dedupe
     if (line === '⎿  Running…') return true; // Specific running message
     if (line.match(/^⎿\s*Read \d+ lines \(ctrl\+r to expand\)$/)) return true; // Matches "Read N lines..." status
 
@@ -171,7 +171,7 @@ function isNoiseLine(line: string, tokenCb?: (n: number) => void): boolean {
  * @param line - A single line of text (after ANSI stripping and trimming).
  * @returns True if the line signals processing start, false otherwise.
  */
-function isProcessingStartSignal(line: string): boolean {
+function _isProcessingStartSignal(line: string): boolean {
     // NOTE: These patterns might break with future CLI updates.
     // Add patterns that reliably appear only *after* the initial prompt/setup output
     if (/^\s*\p{S}\s*\w+…/u.test(line)) return true;
@@ -211,7 +211,7 @@ export class ClaudeCodeProvider implements ModelProvider {
         let slot = undefined;
         try {
             slot = await acquireSlot(messageId);
-        } catch (error) {
+        } catch {
             // Concurrency limit reached, fall back to Codex
             console.log(
                 `[ClaudeCodeProvider] Concurrency limit reached, falling back to Codex for message ${messageId}`
@@ -505,7 +505,7 @@ export class ClaudeCodeProvider implements ModelProvider {
             });
 
             // 3. Define runPty options
-            const { ANTHROPIC_API_KEY, ...envWithoutAnthropicKey } =
+            const { ANTHROPIC_API_KEY: _, ...envWithoutAnthropicKey } =
                 process.env;
             const ptyOpts: PtyRunOptions = {
                 cwd,

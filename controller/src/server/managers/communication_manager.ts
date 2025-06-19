@@ -862,7 +862,7 @@ export class CommunicationManager {
                     );
                     command = textContent ? textContent.text : '';
                 }
-            } catch (e) {
+            } catch (_e) {
                 // Not JSON, treat as regular text command
             }
 

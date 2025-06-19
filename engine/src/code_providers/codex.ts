@@ -30,7 +30,7 @@ interface CodexContentPart {
  * @param tokenCb - Optional callback to receive detected token counts from status lines
  * @returns True if the line is considered noise, false otherwise.
  */
-function isNoiseLine(line: string, tokenCb?: (n: number) => void): boolean {
+function isNoiseLine(line: string, _tokenCb?: (n: number) => void): boolean {
     if (!line) return true; // Skip empty lines
 
     // --- Filtering based on observed output ---
@@ -57,7 +57,7 @@ function isNoiseLine(line: string, tokenCb?: (n: number) => void): boolean {
  * @param line - A single line of text (after ANSI stripping and trimming).
  * @returns True if the line signals processing start, false otherwise.
  */
-function isProcessingStartSignal(line: string): boolean {
+function _isProcessingStartSignal(line: string): boolean {
     // NOTE: These patterns might break with future CLI updates.
     // Add patterns that reliably appear only *after* the initial prompt/setup output
     if (/^\s*\p{S}\s*\w+…/u.test(line)) return true;

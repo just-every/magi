@@ -4,7 +4,7 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import { getDB } from '../utils/db.js';
-import { getProject } from '../utils/db_utils.js';
+// import { getProject } from '../utils/db_utils.js';
 import {
     getPatchesWithRiskAssessment,
     applyPatch,

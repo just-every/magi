@@ -279,7 +279,7 @@ export function buildElementArray(
         if (href && baseUrl) {
             try {
                 href = new URL(href, baseUrl).toString();
-            } catch (e) {
+            } catch (_e) {
                 // console.warn(`[browser_helpers] Invalid URL encountered: ${href} with base ${baseUrl}`);
                 // Keep original href if URL parsing fails
             }

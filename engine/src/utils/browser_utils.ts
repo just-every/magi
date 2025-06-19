@@ -52,7 +52,7 @@ export async function navigate(
         // Check if URL is valid using the URL constructor
         new URL(url);
         isValidUrl = true;
-    } catch (e) {
+    } catch (_e) {
         // URL constructor will throw if the URL is invalid
         isValidUrl = false;
     }

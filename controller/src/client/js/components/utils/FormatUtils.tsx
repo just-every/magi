@@ -103,7 +103,7 @@ export const extractTitle = (content: string): string => {
 export const iconFromMessage = (
     message: ToolCallMessage | ToolResultMessage,
     rgb: string
-): ReactElement<any, any> => {
+): ReactElement => {
     const iconStyle = {
         height: '18px',
         verticalAlign: 'text-bottom',
@@ -114,7 +114,7 @@ export const iconFromMessage = (
         ? 'send_message'
         : message.toolName;
     if (!toolName) {
-        return null;
+        return null as unknown as ReactElement;
     }
     switch (toolName) {
         case 'CodeAgent':
@@ -312,5 +312,5 @@ export const iconFromMessage = (
             );
     }
 
-    return null;
+    return null as unknown as ReactElement;
 };

@@ -230,9 +230,7 @@ export async function executeToolInSandbox({
             context: context,
             importModuleDynamically: async (
                 specifier: string,
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 _referrer: any,
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 _importAttributes: any
             ) => {
                 // This handles dynamic import() calls within the tool code itself

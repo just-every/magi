@@ -7,7 +7,7 @@ import {
 import { getCommunicationManager, sendStreamEvent } from './communication.js'; // Added sendStreamEvent
 import { processTracker } from './process_tracker.js';
 import { dateFormat } from './date_tools.js';
-import { getAllProjectIds, getExternalProjectIds } from './project_utils.js';
+import { getAllProjectIds } from './project_utils.js';
 import { TASK_TYPE_DESCRIPTIONS } from '../magi_agents/constants.js';
 
 /**
@@ -325,7 +325,7 @@ async function wait_for_running_task(
                             { once: true }
                         );
                     });
-                } catch (error) {
+                } catch (_error) {
                     if (abort_signal?.aborted) {
                         finalResult = `Wait for task ${taskId} completed.`;
                         // Send stream event - using task_wait_complete type with aborted status
