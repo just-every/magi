@@ -7,7 +7,9 @@
 
 /* Default theme styling */
 :root {
+    --bs-primary-rgb: 0, 162, 255;
     --bs-primary: #00a2ff;
+    --bs-link-color: #00a2ff;
     --bs-code-color: #000000;
     /* Core colors */
     --bg-primary: #fff;
@@ -52,6 +54,28 @@
     --prompt-color: #000;
     --bs-border-color-translucent: rgb(238 238 238);
     --bs-border-color: rgb(238 238 238);
+}
+
+.nav-pills {
+    --bs-nav-pills-link-active-bg: var(--bs-primary) !important;
+}
+.form-check-input:checked {
+    background-color: var(--bs-primary) !important;
+    border-color: var(--bs-primary) !important;
+}
+
+.middle-ready {
+    font-size: 0.875rem;
+    padding: 2rem 0.5rem;
+    text-align: center;
+    background-color: rgba(var(--bs-primary-rgb), 0.05);
+    border-radius: 10px;
+}
+
+.middle-title {
+    font-size: 0.875rem;
+    margin-bottom: 0.75rem;
+    color: #333;
 }
 
 body {
@@ -582,7 +606,8 @@ header {
         .message-title {
             font-weight: 600;
             font-size: 1em;
-            margin-bottom: 0.6em;
+            margin-bottom: 0.4em;
+            margin-top: 0.3em;
         }
         margin-bottom: 0.4em;
     }
@@ -596,12 +621,8 @@ header {
         }
     }
 
-    .tool-call-command {
-        font-size: 0.8em;
-        padding: 1em 1.3em;
-        background-color: rgba(0, 0, 0, 0.05);
-
-        &.call-follows {
+    .tool-message.call-follows {
+        .tool-call-block {
             border-bottom-right-radius: 0 !important;
             border-bottom-left-radius: 0 !important;
         }
@@ -816,6 +837,51 @@ header {
 
 /* Tool call styling */
 .tool-bubble {
+    .message-header {
+        display: block;
+        margin-bottom: 0.5rem;
+    }
+
+    .tool-call-block {
+        border-radius: 0.5rem;
+        overflow: hidden;
+        padding: 0.5em 0;
+        font-size: 0.9em;
+
+        & > ul {
+            padding: 0.2em 2.5em !important;
+            margin: 0 !important;
+            font-size: unset;
+        }
+
+        ul {
+            li {
+                word-wrap: break-word !important;
+                word-break: break-word !important;
+                padding-left: 1.5em !important;
+                text-indent: -1em !important;
+                margin: 0em !important;
+                font-size: unset;
+            }
+        }
+
+        .function-header,
+        .function-footer {
+            padding: 0.5rem 1rem;
+            font-family: monospace;
+            font-size: unset;
+        }
+
+        .function-header {
+            padding-bottom: 0;
+            font-size: 0.9em;
+        }
+
+        .function-footer {
+            padding-top: 0;
+        }
+
+    }
 }
 
 .tool-call-header {

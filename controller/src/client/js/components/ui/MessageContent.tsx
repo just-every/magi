@@ -1,4 +1,9 @@
 import * as React from 'react';
+import { parseMarkdown } from '@components/utils/MarkdownUtils';
+/**
+ * UserMessage Component
+ * Renders messages from the user
+ */
 
 interface ContentItem {
     type: 'input_text' | 'input_image' | 'input_file';
@@ -25,9 +30,9 @@ const MessageContent: React.FC<MessageContentProps> = ({ content }) => {
         } catch (e) {
             // Not JSON, render as text
         }
-        
+
         // Regular string content
-        return <>{content}</>;
+        return <div dangerouslySetInnerHTML={parseMarkdown(content)} />;
     }
 
     // If content is an array of content items
@@ -37,13 +42,13 @@ const MessageContent: React.FC<MessageContentProps> = ({ content }) => {
                 {content.map((item, index) => {
                     if (item.type === 'input_text') {
                         return (
-                            <div key={index} className="mb-2">
+                            <div key={index}>
                                 {item.text}
                             </div>
                         );
                     } else if (item.type === 'input_image') {
                         return (
-                            <div key={index} className="mb-2">
+                            <div key={index}>
                                 <img
                                     src={item.image_url}
                                     alt="Uploaded image"
@@ -58,7 +63,7 @@ const MessageContent: React.FC<MessageContentProps> = ({ content }) => {
                         );
                     } else if (item.type === 'input_file') {
                         return (
-                            <div key={index} className="mb-2">
+                            <div key={index}>
                                 <div className="d-inline-flex align-items-center bg-light rounded p-2">
                                     <i className="bi bi-file-earmark me-2"></i>
                                     <span>{item.filename || item.file_id}</span>

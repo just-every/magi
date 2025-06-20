@@ -47,9 +47,11 @@ const CustomToolsViewer: React.FC<CustomToolsViewerProps> = ({
 
     return (
         <div className="custom-tools-viewer">
-            <h3>Custom Tools</h3>
-            {loading && <div>Loading...</div>}
+            {loading && <div className="middle-title">Loading...</div>}
             {error && <div className="alert alert-danger">{error}</div>}
+            {!loading && !error && !tools.length && (
+                <div className="middle-title">No tools have been created</div>
+            )}
             {!loading && !error && (
                 <div className="d-flex">
                     <ul

@@ -1072,7 +1072,7 @@ export class ServerManager {
 
         // Send current processes to the new client (excluding terminated)
         const processes = this.processManager.getAllProcesses();
-        Object.entries(processes).forEach(([id, process]) => {
+        Object.entries(processes).forEach(([id, processData]) => {
             console.log(
                 `Sending process ${id} state to new client ${clientId}`
             );
@@ -1080,13 +1080,15 @@ export class ServerManager {
             // First send the process creation event
             socket.emit('process:create', {
                 id,
-                command: process.command,
-                status: process.status,
-                colors: process.colors,
+                isCore: this.processManager.coreProcessId === id,
+                manager: this.processManager.coreProcessId === id ? process.env.PERSON_NAME : process.env.AI_NAME,
+                command: processData.command,
+                status: processData.status,
+                colors: processData.colors,
                 name:
-                    process.agentProcess?.name ||
+                    processData.agentProcess?.name ||
                     (id === this.processManager.coreProcessId
-                        ? global.process.env.AI_NAME
+                        ? process.env.AI_NAME
                         : id),
             });
 
@@ -1107,10 +1109,10 @@ export class ServerManager {
             }
 
             // Also send raw logs for compatibility
-            if (process.logs.length > 0) {
+            if (processData.logs.length > 0) {
                 socket.emit('process:logs', {
                     id,
-                    logs: process.logs.join('\n'),
+                    logs: processData.logs.join('\n'),
                 });
             }
         });
