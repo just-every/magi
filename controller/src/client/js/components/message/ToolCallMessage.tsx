@@ -18,36 +18,12 @@ import remarkGfm from "remark-gfm";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 import { ToolCallMessage as ToolCallMessageType } from "../../context/SocketContext";
-import { iconFromMessage } from "../utils/FormatUtils";
-
-const theme = {
-    base00: "#0c0d0e",
-    base01: "#2e2f30",
-    base02: "#515253",
-    base03: "#737475",
-    base04: "#959697",
-    base05: "#b7b8b9",
-    base06: "#dadbdc",
-    base07: "#fcfdfe", // Function title
-    base08: "#e31a1c",
-    base09: "#ff8900", // Numbers
-    base0A: "#dca060",
-    base0B: "#00b9ff", // Strings
-    base0C: "#80b1d3",
-    base0D: "#c2c2c2", // Headings
-    base0E: "#756bb1",
-    base0F: "#b15928",
-};
 
 interface ToolCallMessageProps {
-    message: ToolCallMessageType;
-    complete: boolean;
-    callFollows: boolean;
-    colors?: {
-        rgb: string;
-        bgColor: string;
-        textColor: string;
-    };
+  message: ToolCallMessageType;
+  rgb: string; // kept for upstream compatibility; unused here
+  complete: boolean;
+  callFollows: boolean;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -70,9 +46,14 @@ function parseParams(raw: unknown): { obj: unknown | null; txt: string } {
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
-const ToolCallMessage: FC<ToolCallMessageProps> = ({ message, complete, callFollows, colors }) => {
+const ToolCallMessage: FC<ToolCallMessageProps> = ({ message, rgb, complete, callFollows }) => {
   // Memoised params
   const { obj: paramsObj, txt: paramsTxt } = useMemo(() => parseParams(message.toolParams), [message.toolParams]);
+
+  // Dark‑mode flag (SSR‑safe)
+  const [isDark] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches
+  );
 
   // Custom renderer for JSONTree string values → Markdown when useful
   // Custom renderer for JSONTree primitive values (string/number/boolean)
@@ -93,8 +74,8 @@ const ToolCallMessage: FC<ToolCallMessageProps> = ({ message, complete, callFoll
           <JSONTree
             data={parsed}
             hideRoot
-            theme={theme}
-            shouldExpandNodeInitially={(kp) => kp.length < 6}
+            invertTheme={isDark}
+            shouldExpandNodeInitially={(kp) => kp.length < 2}
             /* reuse the same renderer so nested strings also benefit */
             valueRenderer={valueRenderer as any}
           />
@@ -141,31 +122,27 @@ const ToolCallMessage: FC<ToolCallMessageProps> = ({ message, complete, callFoll
         {/* Header */}
         <div className="message-header">
           {message.agent?.model && <span className="message-model">{message.agent.model}</span>}
-          <div className="message-title">
-            {iconFromMessage(message, colors.rgb)} {titleify(message.toolName)} {complete ? "" : "Running…"}
-          </div>
+          <span className="message-title">
+            {titleify(message.toolName)} {complete ? "" : "Running…"}
+          </span>
         </div>
 
         {/* Function‑call wrapper */}
-        <div className="tool-call-block"
-            style={{
-                backgroundColor: theme.base00,
-                color: theme.base07
-            }}>
-          <div className="function-header">{`${message.toolName}`}&nbsp;(</div>
+        <div className="tool-call-block font-mono text-sm">
+          <div className="function-header">{`${message.toolName}(`}</div>
 
-            {/* Parameters core */}
-            {paramsObj ? (
-                <JSONTree
-                data={paramsObj}
-                shouldExpandNodeInitially={(kp) => kp.length < 6}
-                valueRenderer={valueRenderer}
-                hideRoot
-                theme={theme}
-                />
-            ) : (
-                renderFallback()
-            )}
+          {/* Parameters core */}
+          {paramsObj ? (
+            <JSONTree
+              data={paramsObj}
+              shouldExpandNodeInitially={(kp) => kp.length < 2}
+              valueRenderer={valueRenderer}
+              hideRoot
+              invertTheme={isDark}
+            />
+          ) : (
+            renderFallback()
+          )}
 
           <div className="function-footer">)</div>
         </div>

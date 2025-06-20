@@ -625,7 +625,7 @@ export class CommunicationManager {
 
             if(commandIsStop && event.targetProcessId === this.processManager.coreProcessId) {
                 this.sendMessage(
-                    processId,
+                    this.processManager.coreProcessId,
                     JSON.stringify({
                         type: 'system_message',
                         message: 'Can not stop the core process.',

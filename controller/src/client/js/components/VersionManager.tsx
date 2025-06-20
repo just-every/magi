@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSocket } from '../../context/SocketContext';
+import { useSocket } from '../context/SocketContext';
 import './VersionManager.css';
 
 interface MagiVersion {

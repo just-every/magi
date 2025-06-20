@@ -22,7 +22,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
         <div className={className + ' collapsible-section mb-3'}>
             <div
                 className={
-                    'collapsible-header d-flex justify-content-between align-items-center p-3 bg-white cursor-pointer ' +
+                    'collapsible-header d-flex justify-content-between align-items-center p-3 bg-light cursor-pointer ' +
                     (isExpanded ? 'rounded-top' : 'rounded')
                 }
                 onClick={() => setIsExpanded(!isExpanded)}

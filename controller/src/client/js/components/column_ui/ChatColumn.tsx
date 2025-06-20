@@ -11,7 +11,6 @@ import StatusDisplay from '../ui/StatusDisplay'; // Import StatusDisplay
 import { parseMarkdown } from '../utils/MarkdownUtils';
 import { AudioPlayer } from '../../utils/AudioUtils';
 import MessageContent from '../ui/MessageContent';
-import { VersionManager } from '../ui/VersionManager';
 
 interface VoiceOption {
     id: string;
@@ -66,8 +65,6 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
     const [isPlayingPreview, setIsPlayingPreview] = useState(false);
     const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
     const [isDragging, setIsDragging] = useState(false);
-    const [inputFocus, setInputFocus] = useState(false);
-    const [showVersionManager, setShowVersionManager] = useState<boolean>(false);
     const [uploadProgress, setUploadProgress] = useState<Map<string, number>>(
         new Map()
     );
@@ -204,7 +201,7 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
         if (command.trim() || attachedFiles.length > 0) {
             // Always create structured content
             const content = [];
-
+            
             // Add text content if any
             const textContent = command.trim();
             if (textContent) {
@@ -426,7 +423,7 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                 <i
                                     className={`bi ${isAudioEnabled ? 'bi-volume-up-fill' : 'bi-x'} mx-2 ${isAudioEnabled ? 'text-primary' : 'text-dark'}`}
                                 />
-                                {isAudioEnabled ? (isPlayingPreview ? 'Playing Preview...' : 'Active') : 'Muted'}
+                                {isAudioEnabled ? 'Playing' : 'Muted'}
                             </span>
                         </div>
                         <button
@@ -444,6 +441,15 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                     {isAudioEnabled && (
                         <div className="mt-3">
                             <div className="d-flex align-items-center">
+                                <span className="fw-bold me-2">
+                                    Voice Selection:
+                                </span>
+                                {isPlayingPreview && (
+                                    <span className="text-primary me-2">
+                                        <i className="bi bi-volume-up-fill"></i>{' '}
+                                        Playing preview...
+                                    </span>
+                                )}
                                 {voices.length === 0 && !isLoadingVoices ? (
                                     <span className="text-muted">
                                         No voice providers configured
@@ -463,7 +469,7 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                             isLoadingVoices ||
                                             voices.length === 0
                                         }
-                                        style={{ maxWidth: '100%' }}
+                                        style={{ maxWidth: '300px' }}
                                     >
                                         {isLoadingVoices ? (
                                             <option>Loading voices...</option>
@@ -580,33 +586,6 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                             {isTelegramEnabled ? 'Mute' : 'Send'}
                         </button>
                     </div>
-
-                    <div className="d-flex justify-content-between align-items-center mt-3">
-                        <div>
-                            <span className="fw-bold me-2">Version:</span>
-                            <span>
-                                None
-                            </span>
-                        </div>
-
-                        {/* Version Manager Button */}
-                        <button
-                            className={`btn btn-sm btn-primary text-white`}
-                            onClick={() =>
-                                setShowVersionManager(!showVersionManager)
-                            }
-                        >
-                            Manage
-                        </button>
-
-                        {/* Version Manager Modal */}
-                        <VersionManager
-                            isOpen={showVersionManager}
-                            onClose={() => setShowVersionManager(false)}
-                        />
-                    </div>
-
-
 
                     <div className="mt-4">
                         <StatusDisplay />
@@ -739,76 +718,45 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                     )}
 
                     <div
-                        className={`${isDragging ? 'border-primary' : ''}`}
+                        className={`input-group ${isDragging ? 'border-primary' : ''}`}
                         onDragEnter={handleDragEnter}
                         onDragLeave={handleDragLeave}
                         onDragOver={handleDragOver}
                         onDrop={handleDrop}
-                        onClick={() => inputRef.current?.focus()}
                         style={{
                             borderWidth: isDragging ? '2px' : '1px',
                             borderStyle: isDragging ? 'dashed' : 'solid',
                             borderRadius: '0.375rem',
                             transition: 'all 0.2s',
-                            backgroundColor: '#fff',
-                            borderColor: inputFocus ? 'rgba(var(--bs-primary-rgb))' : '#fff',
                         }}
                     >
-                        <div className="d-flex flex-column">
-                            <TextareaAutosize
-                                id="chat-command-input"
-                                className={`form-control chat-col-input py-2 px-3 ${isMultiline ? 'multiline' : ''}`}
-                                placeholder={
-                                    isDragging
-                                        ? 'Drop files here...'
-                                        : isFirstProcess
-                                        ? 'Start task...'
-                                        : `Talk${agentName ? ' to ' + agentName : ''}...`
-                                }
-                                value={command}
-                                onChange={e => setCommand(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                onFocus={() => setInputFocus(true)}
-                                onBlur={() => setInputFocus(false)}
-                                ref={inputRef}
-                                autoComplete="off"
-                                minRows={1}
-                                maxRows={10}
-                                style={{
-                                    border: 'none',
-                                    resize: 'none',
-                                    outline: 'none !important',
-                                    boxShadow: 'none'
-                                }}
-                            />
-                            <div className="d-flex flex-row justify-content-end align-items-center gap-2 p-2">
-                                <button
-                                    type="button"
-                                    className="btn btn-outline-secondary border-0 rounded-circle"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    title="Attach files"
-                                >
-                                    <i className="bi bi-paperclip"></i>
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn btn-outline-secondary border-0 rounded-circle"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    title="Voice chat"
-                                >
-                                    <i className="bi bi-soundwave"></i>
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn btn-outline-secondary border-0 rounded-circle bg-primary text-white ms-1"
-                                    onClick={handleSubmit}
-                                    title="Send"
-                                >
-                                    <i className="bi bi-send-fill"></i>
-                                </button>
-                            </div>
-                        </div>
-
+                        <TextareaAutosize
+                            id="chat-command-input"
+                            className={`form-control chat-col-input py-2 px-3 ${isMultiline ? 'multiline' : ''}`}
+                            placeholder={
+                                isDragging
+                                    ? 'Drop files here...'
+                                    : isFirstProcess
+                                      ? 'Start task...'
+                                      : `Talk${agentName ? ' to ' + agentName : ''}...`
+                            }
+                            value={command}
+                            onChange={e => setCommand(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            ref={inputRef}
+                            autoComplete="off"
+                            minRows={2}
+                            maxRows={10}
+                            style={{ border: 'none' }}
+                        />
+                        <button
+                            type="button"
+                            className="btn btn-outline-secondary"
+                            onClick={() => fileInputRef.current?.click()}
+                            title="Attach files"
+                        >
+                            <i className="bi bi-paperclip"></i>
+                        </button>
                         <input
                             ref={fileInputRef}
                             type="file"

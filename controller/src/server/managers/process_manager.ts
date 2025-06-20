@@ -172,8 +172,6 @@ export class ProcessManager {
             // Notify all clients about the new process
             this.io.emit('process:create', {
                 id: processId,
-                isCore: this.coreProcessId === processId,
-                manager: this.coreProcessId === processId ? process.env.PERSON_NAME : process.env.AI_NAME,
                 name:
                     agentProcess?.name ||
                     (this.coreProcessId === processId
@@ -726,6 +724,11 @@ export class ProcessManager {
             // Generate colors for the process
             const colors = generateProcessColors();
 
+            // Get the proper name for the process
+            const processName = isCore
+                ? process.env.AI_NAME || 'MAGI Core'
+                : undefined;
+
             // Set up process tracking
             this.processes[id] = {
                 id,
@@ -737,7 +740,7 @@ export class ProcessManager {
                 agentProcess: isCore
                     ? {
                           processId: id,
-                          name: process.env.AI_NAME || 'Magi',
+                          name: processName || 'MAGI Core',
                           command,
                           status: 'running',
                           started: new Date(),

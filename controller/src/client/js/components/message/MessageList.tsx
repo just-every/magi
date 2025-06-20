@@ -59,7 +59,7 @@ const MessageList: React.FC<MessageListProps> = ({
     return (
         <div className="message-container">
             {filteredMessages.map((message, index) =>
-                renderMessage(message, filteredMessages, index, colors)
+                renderMessage(message, colors.rgb, filteredMessages, index)
             )}
             {renderTypingIndicator(isTyping, colors.textColor)}
         </div>
@@ -90,13 +90,9 @@ const renderTypingIndicator = (isTyping: boolean, textColor: string) => {
  */
 const renderMessage = (
     message: ClientMessage,
+    rgb: string,
     filteredMessages: ClientMessage[],
-    index: number,
-    colors?: {
-        rgb: string;
-        bgColor: string;
-        textColor: string;
-    },
+    index: number
 ) => {
     const lastMessage: ClientMessage | undefined =
         filteredMessages[index - 1] || undefined;
@@ -111,8 +107,8 @@ const renderMessage = (
                 <AssistantMessage
                     key={message.id}
                     message={message}
+                    rgb={rgb}
                     isLast={index === filteredMessages.length - 1}
-                    colors={colors}
                 />
             );
 
@@ -131,20 +127,20 @@ const renderMessage = (
                 }
             }
             const nextToolResultMessage =
-                nextMessage && nextMessage.type === 'tool_result'
+                nextMessage && nextMessage.type === 'tool_call'
                     ? (nextMessage as ToolResultMessageType)
                     : undefined;
             return (
                 <ToolCallMessage
                     key={toolCallMessage.id}
                     message={toolCallMessage}
+                    rgb={rgb}
                     complete={complete}
                     callFollows={
                         nextToolResultMessage &&
                         nextToolResultMessage.toolCallId ===
                             toolCallMessage.toolCallId
                     }
-                    colors={colors}
                 />
             );
         }
@@ -163,7 +159,6 @@ const renderMessage = (
                         lastToolCallMessage.toolCallId ===
                             toolResultMessage.toolCallId
                     }
-                    colors={colors}
                     message={toolResultMessage}
                 />
             );

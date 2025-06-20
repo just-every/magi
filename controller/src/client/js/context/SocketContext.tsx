@@ -25,7 +25,6 @@ import {
 // Comment out direct import - we'll use simpler approach to avoid TypeScript errors
 // import { ContainerConnection, MagiMessage } from '../../../server/managers/communication_manager';
 import { handleAudioMessage, stopAudio } from '../utils/AudioUtils';
-import { extractTitle } from '../components/utils/FormatUtils';
 
 // Define the type for the Socket.io socket
 // Using a basic interface for Socket.io instance
@@ -48,7 +47,6 @@ export interface PartialClientMessage {
         | 'tool_call'
         | 'tool_result'
         | 'error';
-    title?: string;
     content?: string;
     thinking_content?: string;
     timestamp?: string;
@@ -64,7 +62,6 @@ export interface PartialClientMessage {
 export interface ClientMessage {
     id: string; // Generated UUID for the message
     agent?: AgentData;
-    sender?: string; // e.g. Magi or person name for 'user' messages
     processId: string; // Process ID this message belongs to
     type:
         | 'user'
@@ -73,7 +70,6 @@ export interface ClientMessage {
         | 'tool_call'
         | 'tool_result'
         | 'error';
-    title?: string;
     content: string;
     thinking_content?: string;
     timestamp: string;
@@ -148,8 +144,6 @@ export interface ProcessData {
         bgColor: string;
         textColor: string;
     };
-    isCore: boolean; // Is this the core process?
-    manager: string; // Name of the person/AI managing this process
     logs: string;
     agent?: AgentData;
     pendingScreenshots: Map<string, ScreenshotEvent[]>;
@@ -302,21 +296,13 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                 } catch (e) {
                     // Not JSON, use as-is
                 }
-
-                // Set the core process ID if this is the first process created
-                if (event.isCore) {
-                    setCoreProcessId(event.id);
-                    console.log(`Setting core process ID to ${event.id}`);
-                }
-
+                
                 const initialMessage: ClientMessage = {
                     id: generateId(),
                     processId: event.id,
                     type: 'user',
                     content: messageContent,
                     timestamp: new Date().toISOString(),
-                    sender: event.manager,
-                    ...(event.isCore === false && { title: extractTitle(typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent)) })
                 };
 
                 newProcesses.set(event.id, {
@@ -324,8 +310,6 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     command: event.command,
                     status: event.status,
                     colors: event.colors,
-                    isCore: event.isCore,
-                    manager: event.manager,
                     logs: '',
                     name: event.name,
                     projectIds: event.projectIds,
@@ -341,6 +325,12 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     pendingDesignEvents: new Map<string, DesignEvent[]>(),
                     pendingMessages: new Map<string, PartialClientMessage[]>(),
                 });
+
+                // Set the core process ID if this is the first process created
+                if (newProcesses.size === 1 || !coreProcessId) {
+                    setCoreProcessId(event.id);
+                    console.log(`Setting core process ID to ${event.id}`);
+                }
 
                 return newProcesses;
             });
@@ -757,6 +747,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
                 // Handle different event types
                 if (
+                    eventType === 'command_start' ||
                     eventType === 'connected'
                 ) {
                     // User message - already handled in process:create but good as a fallback
@@ -764,7 +755,6 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         const content = streamingEvent.command || '';
                         if (
                             content &&
-                            typeof content === 'string' &&
                             !process.agent.messages.some(
                                 m => m.type === 'user' && m.content === content
                             )
@@ -1049,18 +1039,6 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         type: 'error',
                         content: errorMessage,
                     });
-                } else if (eventType === 'process_terminated') {
-                    addPartialMessage({
-                        type: 'system',
-                        title: 'Task Terminated',
-                        content: streamingEvent.error,
-                    });
-                } else if (eventType === 'process_done') {
-                    addPartialMessage({
-                        type: 'system',
-                        title: 'Task Done',
-                        content: streamingEvent.output,
-                    });
                 } else if (
                     eventType === 'agent_start' ||
                     eventType === 'agent_updated'
@@ -1265,15 +1243,13 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     } catch (e) {
                         // Not JSON, use as-is
                     }
-
+                    
                     const userMessage: ClientMessage = {
                         id: generateId(),
                         processId: processId,
                         type: 'user',
                         content: messageContent,
                         timestamp: new Date().toISOString(),
-                        sender: process.manager,
-                        ...(process.isCore === false && { title: extractTitle(typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent)) })
                     };
                     process.agent!.messages.push(userMessage);
 
