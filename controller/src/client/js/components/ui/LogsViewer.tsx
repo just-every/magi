@@ -204,7 +204,7 @@ const LogsViewer: React.FC<LogsViewerProps> = ({
                 return `${providerPart} (${timeAgo})`;
             }
             return fileName;
-        } catch {
+        } catch (e) {
             return fileName;
         }
     };

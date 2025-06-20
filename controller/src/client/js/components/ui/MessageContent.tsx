@@ -1,9 +1,4 @@
 import * as React from 'react';
-import { parseMarkdown } from '@components/utils/MarkdownUtils';
-/**
- * UserMessage Component
- * Renders messages from the user
- */
 
 interface ContentItem {
     type: 'input_text' | 'input_image' | 'input_file';
@@ -15,7 +10,7 @@ interface ContentItem {
 }
 
 interface MessageContentProps {
-    content: string | ContentItem[] | unknown;
+    content: string | ContentItem[] | any;
 }
 
 const MessageContent: React.FC<MessageContentProps> = ({ content }) => {
@@ -27,12 +22,12 @@ const MessageContent: React.FC<MessageContentProps> = ({ content }) => {
             if (parsed.contentArray && Array.isArray(parsed.contentArray)) {
                 return <MessageContent content={parsed.contentArray} />;
             }
-        } catch {
+        } catch (e) {
             // Not JSON, render as text
         }
-
+        
         // Regular string content
-        return <div dangerouslySetInnerHTML={parseMarkdown(content)} />;
+        return <>{content}</>;
     }
 
     // If content is an array of content items
@@ -41,10 +36,14 @@ const MessageContent: React.FC<MessageContentProps> = ({ content }) => {
             <div className="structured-content">
                 {content.map((item, index) => {
                     if (item.type === 'input_text') {
-                        return <div key={index}>{item.text}</div>;
+                        return (
+                            <div key={index} className="mb-2">
+                                {item.text}
+                            </div>
+                        );
                     } else if (item.type === 'input_image') {
                         return (
-                            <div key={index}>
+                            <div key={index} className="mb-2">
                                 <img
                                     src={item.image_url}
                                     alt="Uploaded image"
@@ -59,7 +58,7 @@ const MessageContent: React.FC<MessageContentProps> = ({ content }) => {
                         );
                     } else if (item.type === 'input_file') {
                         return (
-                            <div key={index}>
+                            <div key={index} className="mb-2">
                                 <div className="d-inline-flex align-items-center bg-light rounded p-2">
                                     <i className="bi bi-file-earmark me-2"></i>
                                     <span>{item.filename || item.file_id}</span>

@@ -4,7 +4,7 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import { getDB } from '../utils/db.js';
-// import { getProject } from '../utils/db_utils.js';
+import { getProject } from '../utils/db_utils.js';
 import {
     getPatchesWithRiskAssessment,
     applyPatch,
@@ -16,6 +16,10 @@ import {
     attemptAutoResolve,
     createConflictResolutionTask,
 } from '../utils/conflict_resolver.js';
+import { computeMetrics } from '../managers/commit_metrics.js';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+const execPromise = promisify(exec);
 
 const router = Router();
 
@@ -65,6 +69,162 @@ router.get('/:id', async (req: Request, res: Response) => {
         res.status(500).json({
             success: false,
             error: 'Failed to fetch patch',
+        });
+    } finally {
+        client.release();
+    }
+});
+
+// Get extended information for a patch
+router.get('/:id/extended', async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    const client = await getDB();
+    try {
+        // Get patch details
+        const patchResult = await client.query(
+            'SELECT * FROM patches WHERE id = $1',
+            [id]
+        );
+
+        if (patchResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Patch not found',
+            });
+        }
+
+        const patch = patchResult.rows[0];
+        const projectPath = path.join('/external/host', patch.project_id);
+
+        // Initialize extended info object
+        const extendedInfo: any = {};
+
+        // Get test results if available
+        try {
+            // Check if tests have been run for this patch
+            const testResult = await client.query(
+                `SELECT test_status, test_summary, test_details, created_at 
+                 FROM patch_test_results 
+                 WHERE patch_id = $1 
+                 ORDER BY created_at DESC 
+                 LIMIT 1`,
+                [id]
+            );
+
+            if (testResult.rows.length > 0) {
+                const test = testResult.rows[0];
+                extendedInfo.testResults = {
+                    status: test.test_status,
+                    summary: test.test_summary,
+                    details: test.test_details,
+                    timestamp: test.created_at,
+                };
+            }
+        } catch (_err) {
+            console.log('No test results table or data available');
+        }
+
+        // Get code quality metrics
+        try {
+            const metrics = await computeMetrics(projectPath);
+            extendedInfo.codeQualityMetrics = {
+                entropyNormalised: metrics.entropyNormalised,
+                churnRatio: metrics.churnRatio,
+                cyclomaticDelta: metrics.cyclomaticDelta,
+                developerUnfamiliarity: metrics.developerUnfamiliarity,
+                secretRegexHits: metrics.secretRegexHits,
+                apiSignatureEdits: metrics.apiSignatureEdits,
+                controlFlowEdits: metrics.controlFlowEdits,
+            };
+        } catch (err) {
+            console.error('Failed to compute code quality metrics:', err);
+        }
+
+        // Get affected files with detailed stats
+        try {
+            const { stdout: diffNumstat } = await execPromise(
+                `cd "${projectPath}" && git diff --numstat ${patch.base_commit || 'HEAD~1'} HEAD`,
+                { maxBuffer: 10 * 1024 * 1024 }
+            );
+
+            const affectedFiles = [];
+            const lines = diffNumstat.trim().split('\n').filter(Boolean);
+
+            for (const line of lines) {
+                const [adds, dels, filePath] = line.split('\t');
+                if (filePath) {
+                    // Get number of hunks for this file
+                    const { stdout: hunksOutput } = await execPromise(
+                        `cd "${projectPath}" && git diff -U0 ${patch.base_commit || 'HEAD~1'} HEAD -- "${filePath}" | grep -c "^@@" || true`,
+                        { maxBuffer: 1024 * 1024 }
+                    );
+
+                    affectedFiles.push({
+                        path: filePath,
+                        additions: adds === '-' ? 0 : parseInt(adds, 10),
+                        deletions: dels === '-' ? 0 : parseInt(dels, 10),
+                        hunks: parseInt(hunksOutput.trim()) || 0,
+                    });
+                }
+            }
+
+            extendedInfo.affectedFiles = affectedFiles;
+        } catch (err) {
+            console.error('Failed to get affected files:', err);
+        }
+
+        // Get PR description from process logs or patch message
+        try {
+            // Try to get PR description from process logs
+            const prDescResult = await client.query(
+                `SELECT message FROM process_logs 
+                 WHERE process_id = $1 
+                 AND message LIKE '%PR Description:%' 
+                 ORDER BY created_at DESC 
+                 LIMIT 1`,
+                [patch.process_id]
+            );
+
+            if (prDescResult.rows.length > 0) {
+                const prDescMatch = prDescResult.rows[0].message.match(
+                    /PR Description:\s*([\s\S]*?)(?=\n\n|$)/
+                );
+                if (prDescMatch) {
+                    extendedInfo.prDescription = prDescMatch[1].trim();
+                }
+            } else {
+                // Fallback to commit message if no PR description
+                extendedInfo.prDescription = patch.commit_message;
+            }
+        } catch (err) {
+            console.error('Failed to get PR description:', err);
+        }
+
+        // Get base and head commits
+        extendedInfo.baseCommit = patch.base_commit;
+        extendedInfo.headCommit = patch.head_commit;
+
+        // Check for conflicts
+        try {
+            const conflictAnalysis = await analyzePatchConflicts(
+                parseInt(id),
+                projectPath
+            );
+            extendedInfo.conflictAnalysis = conflictAnalysis;
+        } catch (err) {
+            console.error('Failed to analyze conflicts:', err);
+        }
+
+        res.json({
+            success: true,
+            data: extendedInfo,
+        });
+    } catch (error) {
+        console.error(`Error fetching extended info for patch ${id}:`, error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch extended patch information',
         });
     } finally {
         client.release();

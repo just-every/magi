@@ -158,7 +158,7 @@ const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
     // Render the tree structure
     const renderProcessTree = () => {
         if (processList.length === 0) {
-            return <div className="middle-ready">I'm ready! Let's start!</div>;
+            return null;
         }
 
         const processClass = 'process-item rounded py-2 px-3 mb-2';
@@ -179,7 +179,7 @@ const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
                                 className={`${processClass} ${process.id === coreProcessId ? '' : 'mt-4'} ${selectedItemId === process.id ? 'selected' : ''}`}
                                 style={{
                                     backgroundColor: `rgba(${process.id === coreProcessId ? PRIMARY_RGB : process.colors.rgb} / ${selectedItemId === process.id ? '0.1' : '0.08'})`,
-                                    border: `1px solid rgba(${process.id === coreProcessId ? PRIMARY_RGB : process.colors.rgb} / ${selectedItemId === process.id ? '0.5' : '0.05'})`,
+                                    border: `1px solid rgba(${process.id === coreProcessId ? PRIMARY_RGB : process.colors.rgb} / ${selectedItemId === process.id ? '1' : '0.05'})`,
                                 }}
                                 onClick={() => handleSelect(process.id)}
                             >

@@ -9,6 +9,7 @@ import { Agent } from '@just-every/ensemble';
 import { execSync } from 'child_process';
 import { sendStreamEvent } from './communication.js';
 import { quick_llm_call } from './llm_call_utils.js';
+import { get_output_dir } from './file_utils.js';
 import { getDB } from './db.js';
 // import { computeMetrics } from '../../controller/src/server/managers/commit_metrics.js';
 
@@ -40,13 +41,13 @@ export async function planAndCommitChanges(
             execSync(`git -C "${projectPath}" rev-parse --verify main`, {
                 stdio: 'pipe',
             });
-        } catch (_e) {
+        } catch (e) {
             try {
                 execSync(`git -C "${projectPath}" rev-parse --verify master`, {
                     stdio: 'pipe',
                 });
                 mainBranch = 'master';
-            } catch (_e2) {
+            } catch (e2) {
                 console.warn(
                     '[commit-planner] Could not find main or master branch'
                 );
@@ -60,7 +61,7 @@ export async function planAndCommitChanges(
                 `git -C "${projectPath}" rev-parse --abbrev-ref HEAD`,
                 { encoding: 'utf8' }
             ).trim();
-        } catch (_e) {
+        } catch (e) {
             console.warn(
                 `[commit-planner] Could not determine current branch, using '${mainBranch}'`
             );
@@ -82,7 +83,7 @@ export async function planAndCommitChanges(
                         `[commit-planner] Found ${commitCount} existing commits on branch ${currentBranch}`
                     );
                 }
-            } catch (_e) {
+            } catch (e) {
                 console.log(
                     `[commit-planner] Could not compare with ${mainBranch} branch`
                 );

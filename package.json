@@ -34,10 +34,7 @@
         "test:tool": "test/run-tool-docker.sh",
         "test:tools": "test/run-all-tools.sh",
         "test:js-tools": "test/run-js-tools.sh",
-        "update:all": "npm update && cd controller && npm update && cd ../engine && npm update && cd ..",
-        "db:migrate": "node-pg-migrate up --migrations-dir db/migrations",
-        "db:migrate:down": "node-pg-migrate down --migrations-dir db/migrations",
-        "db:create": "node-pg-migrate create --migrations-dir db/migrations"
+        "update:all": "npm update && cd controller && npm update && cd ../engine && npm update && cd .."
     },
     "repository": {
         "type": "git",

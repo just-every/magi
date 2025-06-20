@@ -198,10 +198,6 @@ export function runPty(
         let ptyExited = false;
         let ptyError: Error | null = null;
         let processingStarted = startSignal ? false : true; // Skip the "start signal" logic if not provided
-        // If silenceTimeoutMs is 0, always start processing immediately
-        if (silenceTimeoutMs === 0) {
-            processingStarted = true;
-        }
 
         // --- Delta Batching Logic Variables (moved up for closure access) ---
         let deltaBuffer = '';
@@ -271,12 +267,6 @@ export function runPty(
 
             // Check if globally paused
             if (pausedState) {
-                silenceTimeoutId = null;
-                return;
-            }
-
-            // If silenceTimeoutMs is 0, don't set up a timeout
-            if (silenceTimeoutMs === 0) {
                 silenceTimeoutId = null;
                 return;
             }
@@ -397,16 +387,6 @@ export function runPty(
                     batchTimerId = null;
                     currentBatchTimeoutValue = null;
                 }
-                return;
-            }
-
-            // If silenceTimeoutMs is 0, yield immediately without setTimeout
-            if (silenceTimeoutMs === 0) {
-                console.log(
-                    `[runPty] silenceTimeoutMs is 0, yielding buffered delta immediately (${deltaBuffer.length} chars) for message ${messageId}`
-                );
-                deltaBuffer += '\n'; // Add newline to separate from next delta
-                yieldBufferedDelta();
                 return;
             }
 

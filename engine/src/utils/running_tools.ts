@@ -15,13 +15,13 @@ async function inspect_running_tool(runningToolId: string): Promise<string> {
     if (!tool) {
         return `RunningTool with ID ${runningToolId} not found.`;
     }
-
+    
     const duration = Date.now() - tool.startTime;
     let status = 'running';
     if (tool.completed) status = 'completed';
     else if (tool.failed) status = 'failed';
     else if (tool.timedOut) status = 'timed out';
-
+    
     return `RunningTool ${tool.toolName} (ID: ${runningToolId})
 Status: ${status}
 Agent: ${tool.agentName}
@@ -52,7 +52,7 @@ async function wait_for_running_tool(
     // Create an AbortController if none provided
     const abortController = new AbortController();
     const effectiveAbortSignal = abort_signal || abortController.signal;
-
+    
     // Register this wait operation as a running tool so it can be interrupted
     const waitToolId = `wait-tool-${runningToolId}-${Date.now()}`;
     const waitTool = runningToolTracker.addRunningTool(
@@ -133,60 +133,60 @@ async function wait_for_running_tool(
             // Still running
             // Send heartbeat if needed
             if (Date.now() - lastHeartbeatTime > TOOL_HEARTBEAT_MS) {
-                sendStreamEvent({
-                    type: 'tool_waiting',
-                    runningToolId,
-                    elapsedSeconds: Math.round((Date.now() - startTime) / 1000),
-                    timestamp: new Date().toISOString(),
-                });
-                lastHeartbeatTime = Date.now();
-            }
-            // Still running, wait and check again
-            try {
-                await new Promise((resolve, reject) => {
-                    if (abort_signal?.aborted) {
-                        reject(new Error('Aborted before delay'));
-                        return;
-                    }
-                    const timerId = setTimeout(resolve, 500);
-                    abort_signal?.addEventListener(
-                        'abort',
-                        () => {
-                            clearTimeout(timerId);
-                            reject(new Error('Aborted during delay'));
-                        },
-                        { once: true }
-                    );
-                });
-            } catch (_error) {
-                if (abort_signal?.aborted) {
-                    const abortReason2 = (abort_signal as any)?.reason
-                        ? ` Reason: ${(abort_signal as any)?.reason}.`
-                        : '';
-                    finalResult = `Wait for running tool ${runningToolId} completed.${abortReason2}`;
-                    // Send stream event
                     sendStreamEvent({
-                        type: 'tool_wait_complete',
+                        type: 'tool_waiting',
                         runningToolId,
-                        result: finalResult,
-                        finalStatus: 'aborted',
+                        elapsedSeconds: Math.round(
+                            (Date.now() - startTime) / 1000
+                        ),
                         timestamp: new Date().toISOString(),
                     });
-                    break; // Exit the switch
+                    lastHeartbeatTime = Date.now();
                 }
-                // Re-throw if it's not an abort error, though unlikely here
-                // throw error;
-            }
-            continue; // Continue loop
+                // Still running, wait and check again
+                try {
+                    await new Promise((resolve, reject) => {
+                        if (abort_signal?.aborted) {
+                            reject(new Error('Aborted before delay'));
+                            return;
+                        }
+                        const timerId = setTimeout(resolve, 500);
+                        abort_signal?.addEventListener(
+                            'abort',
+                            () => {
+                                clearTimeout(timerId);
+                                reject(new Error('Aborted during delay'));
+                            },
+                            { once: true }
+                        );
+                    });
+                } catch (error) {
+                    if (abort_signal?.aborted) {
+                        const abortReason2 = (abort_signal as any)?.reason
+                            ? ` Reason: ${(abort_signal as any)?.reason}.`
+                            : '';
+                        finalResult = `Wait for running tool ${runningToolId} completed.${abortReason2}`;
+                        // Send stream event
+                        sendStreamEvent({
+                            type: 'tool_wait_complete',
+                            runningToolId,
+                            result: finalResult,
+                            finalStatus: 'aborted',
+                            timestamp: new Date().toISOString(),
+                        });
+                        break; // Exit the switch
+                    }
+                    // Re-throw if it's not an abort error, though unlikely here
+                    // throw error;
+                }
+                continue; // Continue loop
         }
     }
 
     // If the loop finished due to timeout
     if (!finalResult) {
         const tool = runningToolTracker.getRunningTool(runningToolId);
-        const finalStatus = tool
-            ? `Still running after ${Math.round((Date.now() - tool.startTime) / 1000)}s`
-            : 'Tool no longer found';
+        const finalStatus = tool ? `Still running after ${Math.round((Date.now() - tool.startTime) / 1000)}s` : 'Tool no longer found';
         finalResult = `Tool ${runningToolId} did not complete within the ${timeout} second timeout. It might still be running.\nLast known status: ${finalStatus}`;
     }
 
@@ -206,12 +206,8 @@ async function wait_for_running_tool(
     });
 
     // Clean up: mark the wait tool as completed
-    runningToolTracker.completeRunningTool(
-        waitToolId,
-        finalResult,
-        null as any
-    );
-
+    runningToolTracker.completeRunningTool(waitToolId, finalResult, null as any);
+    
     return finalResult;
 }
 

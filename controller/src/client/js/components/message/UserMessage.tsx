@@ -4,28 +4,28 @@
  */
 import * as React from 'react';
 import { ClientMessage } from '../../context/SocketContext';
+import { parseMarkdown } from '../utils/MarkdownUtils';
 import MessageContent from '../ui/MessageContent';
-/**
- * ProcessGrid Component
- * Renders the main grid view of all processes with zooming and panning capabilities
- */
 
 interface UserMessageProps {
     message: ClientMessage;
 }
 
 const UserMessage: React.FC<UserMessageProps> = ({ message }) => {
+    // For string content, use markdown parsing
+    if (typeof message.content === 'string') {
+        return (
+            <div className="message-group user-message" key={message.id}>
+                <div className="message-bubble user-bubble">
+                    <div dangerouslySetInnerHTML={parseMarkdown(message.content)} />
+                </div>
+            </div>
+        );
+    }
+
     // For structured content, use MessageContent component
     return (
         <div className="message-group user-message" key={message.id}>
-            <div className="message-header">
-                {message.sender && (
-                    <span className="message-model">{message.sender}</span>
-                )}
-                {message.title && (
-                    <div className="message-title">{message.title}</div>
-                )}
-            </div>
             <div className="message-bubble user-bubble">
                 <MessageContent content={message.content} />
             </div>

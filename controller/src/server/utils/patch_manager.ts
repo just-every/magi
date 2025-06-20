@@ -14,6 +14,7 @@ import { getDB } from './db.js';
 import { Metrics } from '../../types/index.js';
 import { getDefaultBranch } from './git_utils.js';
 import { getProject } from './db_utils.js';
+import { analyzePatchSecurity } from './patch_security_analyzer.js';
 
 /**
  * Update patch status in the database
@@ -90,6 +91,12 @@ export interface PatchRiskAssessment {
     canAutoMerge: boolean;
     reasons: string[];
     recommendation: string;
+    detailedAnalysis?: {
+        securityRisks: string[];
+        performanceRisks: string[];
+        architecturalRisks: string[];
+        testingRisks: string[];
+    };
 }
 
 /**
@@ -133,9 +140,19 @@ export function classifyRiskLevel(riskScore: number): RiskLevel {
 /**
  * Assess the risk of a patch based on its metrics and content
  */
-export function assessPatchRisk(patch: PatchData): PatchRiskAssessment {
+export async function assessPatchRisk(
+    patch: PatchData
+): Promise<PatchRiskAssessment> {
     const reasons: string[] = [];
     let riskScore = patch.metrics?.score || 0;
+
+    // Initialize detailed analysis
+    const detailedAnalysis = {
+        securityRisks: [] as string[],
+        performanceRisks: [] as string[],
+        architecturalRisks: [] as string[],
+        testingRisks: [] as string[],
+    };
 
     // Additional risk factors specific to patches
     const patchLines = patch.patch_content.split('\n');
@@ -148,42 +165,284 @@ export function assessPatchRisk(patch: PatchData): PatchRiskAssessment {
     if (totalChanges > 1000) {
         riskScore += 0.2;
         reasons.push('Very large patch (>1000 lines)');
+        detailedAnalysis.architecturalRisks.push(
+            'Large changes may indicate architectural changes that need careful review'
+        );
+        detailedAnalysis.testingRisks.push(
+            'Large patches are harder to test comprehensively'
+        );
     } else if (totalChanges > 500) {
         riskScore += 0.1;
         reasons.push('Large patch (>500 lines)');
+        detailedAnalysis.testingRisks.push(
+            'Significant changes require thorough testing'
+        );
     }
 
-    // Check for high-risk patterns in patch content
-    const dangerousPatterns = [
-        { pattern: /DROP\s+TABLE/i, reason: 'Contains DROP TABLE statement' },
-        { pattern: /TRUNCATE/i, reason: 'Contains TRUNCATE statement' },
-        { pattern: /rm\s+-rf/i, reason: 'Contains rm -rf command' },
-        { pattern: /sudo/i, reason: 'Contains sudo command' },
-        { pattern: /force\s+push/i, reason: 'Contains force push' },
-    ];
+    // Run AST-based security analysis
+    try {
+        const astAnalysis = await analyzePatchSecurity(patch.patch_content);
 
-    for (const { pattern, reason } of dangerousPatterns) {
-        if (pattern.test(patch.patch_content)) {
-            riskScore += 0.3;
-            reasons.push(reason);
+        // Process security risks from AST analysis
+        for (const risk of astAnalysis.securityRisks) {
+            // Map severity to risk score increase
+            switch (risk.severity) {
+                case 'critical':
+                    riskScore += 0.3;
+                    reasons.push(`Critical security issue: ${risk.type}`);
+                    break;
+                case 'high':
+                    riskScore += 0.2;
+                    reasons.push(`High security risk: ${risk.type}`);
+                    break;
+                case 'medium':
+                    riskScore += 0.1;
+                    reasons.push(`Security concern: ${risk.type}`);
+                    break;
+                case 'low':
+                    riskScore += 0.05;
+                    break;
+            }
+            detailedAnalysis.securityRisks.push(risk.description);
+        }
+
+        // Process performance issues
+        for (const issue of astAnalysis.performanceIssues) {
+            if (issue.impact === 'high') {
+                riskScore += 0.1;
+                reasons.push(`Performance issue: ${issue.type}`);
+            }
+            detailedAnalysis.performanceRisks.push(issue.description);
+        }
+
+        // Process code quality issues
+        for (const issue of astAnalysis.codeQualityIssues) {
+            riskScore += 0.05;
+            if (issue.type === 'obfuscated-code') {
+                reasons.push('Code obfuscation detected');
+                detailedAnalysis.securityRisks.push(issue.description);
+            } else if (issue.type === 'minified-code') {
+                reasons.push('Minified code in source files');
+                detailedAnalysis.architecturalRisks.push(issue.description);
+            }
+        }
+
+        // Dependencies are returned as strings in the new analyzer
+        if (astAnalysis.dependencies.length > 0) {
+            // Check if any are dangerous Node.js built-ins
+            const dangerousModules = [
+                'child_process',
+                'fs',
+                'net',
+                'dgram',
+                'cluster',
+            ];
+            const dangerousDeps = astAnalysis.dependencies.filter(dep =>
+                dangerousModules.includes(dep)
+            );
+
+            if (dangerousDeps.length > 0) {
+                riskScore += 0.15;
+                reasons.push(
+                    `Uses ${dangerousDeps.length} dangerous Node.js modules`
+                );
+                detailedAnalysis.securityRisks.push(
+                    `Accessing potentially dangerous modules: ${dangerousDeps.join(', ')}`
+                );
+            }
+        }
+    } catch (error) {
+        console.error('AST analysis failed:', error);
+        // Fall back to basic SQL/shell command detection for non-JS files
+        const sqlPatterns = [
+            {
+                pattern: /DROP\s+TABLE/i,
+                reason: 'Contains DROP TABLE statement',
+            },
+            { pattern: /TRUNCATE/i, reason: 'Contains TRUNCATE statement' },
+            { pattern: /DELETE\s+FROM/i, reason: 'Contains DELETE statement' },
+        ];
+
+        const shellPatterns = [
+            { pattern: /rm\s+-rf/i, reason: 'Contains rm -rf command' },
+            { pattern: /sudo/i, reason: 'Contains sudo command' },
+        ];
+
+        // Only check for SQL/shell patterns in appropriate files
+        for (const { pattern, reason } of sqlPatterns) {
+            if (
+                pattern.test(patch.patch_content) &&
+                /\.(sql|migration)/i.test(patch.patch_content)
+            ) {
+                riskScore += 0.3;
+                reasons.push(reason);
+                detailedAnalysis.securityRisks.push(
+                    'Destructive database operation'
+                );
+            }
+        }
+
+        for (const { pattern, reason } of shellPatterns) {
+            if (
+                pattern.test(patch.patch_content) &&
+                /\.(sh|bash|yml|yaml)/i.test(patch.patch_content)
+            ) {
+                riskScore += 0.2;
+                reasons.push(reason);
+                detailedAnalysis.securityRisks.push(
+                    'Potentially dangerous shell command'
+                );
+            }
         }
     }
 
     // Check if patch touches critical files
     const criticalPaths = [
-        '.env',
-        'docker-compose.yml',
-        'package.json',
-        'requirements.txt',
-        'Gemfile',
-        'go.mod',
+        {
+            path: '.env',
+            risk: 'security',
+            detail: 'Environment configuration changes affect security',
+        },
+        {
+            path: 'docker-compose.yml',
+            risk: 'architectural',
+            detail: 'Infrastructure changes affect deployment',
+        },
+        {
+            path: 'package.json',
+            risk: 'architectural',
+            detail: 'Dependency changes may introduce vulnerabilities',
+        },
+        {
+            path: 'requirements.txt',
+            risk: 'architectural',
+            detail: 'Python dependency changes',
+        },
+        {
+            path: 'Gemfile',
+            risk: 'architectural',
+            detail: 'Ruby dependency changes',
+        },
+        {
+            path: 'go.mod',
+            risk: 'architectural',
+            detail: 'Go dependency changes',
+        },
+        {
+            path: '.github/workflows',
+            risk: 'architectural',
+            detail: 'CI/CD pipeline changes',
+        },
+        {
+            path: 'webpack.config',
+            risk: 'architectural',
+            detail: 'Build configuration changes',
+        },
     ];
 
-    for (const criticalPath of criticalPaths) {
-        if (patch.patch_content.includes(`diff --git a/${criticalPath}`)) {
+    for (const { path, risk, detail } of criticalPaths) {
+        if (
+            patch.patch_content.includes(`diff --git a/${path}`) ||
+            patch.patch_content.includes(`diff --git a/./${path}`) ||
+            patch.patch_content.includes(`/${path}`)
+        ) {
             riskScore += 0.15;
-            reasons.push(`Modifies critical file: ${criticalPath}`);
+            reasons.push(`Modifies critical file: ${path}`);
+            if (risk === 'security') {
+                detailedAnalysis.securityRisks.push(detail);
+            } else if (risk === 'architectural') {
+                detailedAnalysis.architecturalRisks.push(detail);
+            }
         }
+    }
+
+    // Analyze metrics if available
+    if (patch.metrics) {
+        // High entropy indicates scattered changes
+        if (
+            patch.metrics.entropyNormalised &&
+            patch.metrics.entropyNormalised > 0.8
+        ) {
+            detailedAnalysis.architecturalRisks.push(
+                'High entropy suggests changes are scattered across many files'
+            );
+            riskScore += 0.1;
+        }
+
+        // High churn ratio indicates significant refactoring
+        if (patch.metrics.churnRatio && patch.metrics.churnRatio > 3) {
+            detailedAnalysis.architecturalRisks.push(
+                'High code churn indicates major refactoring'
+            );
+            detailedAnalysis.testingRisks.push(
+                'High churn requires comprehensive regression testing'
+            );
+            riskScore += 0.15;
+        }
+
+        // Cyclomatic complexity increase
+        if (
+            patch.metrics.cyclomaticDelta &&
+            patch.metrics.cyclomaticDelta > 10
+        ) {
+            detailedAnalysis.performanceRisks.push(
+                'Significant increase in code complexity'
+            );
+            detailedAnalysis.testingRisks.push(
+                'Complex code paths require more test coverage'
+            );
+            riskScore += 0.1;
+        }
+
+        // Developer unfamiliarity
+        if (
+            patch.metrics.developerUnfamiliarity &&
+            patch.metrics.developerUnfamiliarity > 0.8
+        ) {
+            detailedAnalysis.testingRisks.push(
+                'Developer is unfamiliar with most changed files'
+            );
+            riskScore += 0.05;
+        }
+
+        // Secret detection
+        if (
+            patch.metrics.secretRegexHits &&
+            patch.metrics.secretRegexHits > 0
+        ) {
+            detailedAnalysis.securityRisks.push(
+                `Detected ${patch.metrics.secretRegexHits} potential secrets or credentials`
+            );
+            riskScore += 0.2;
+        }
+
+        // API changes
+        if (
+            patch.metrics.apiSignatureEdits &&
+            patch.metrics.apiSignatureEdits > 0
+        ) {
+            detailedAnalysis.architecturalRisks.push(
+                `${patch.metrics.apiSignatureEdits} API signature changes detected`
+            );
+            detailedAnalysis.testingRisks.push(
+                'API changes require integration testing'
+            );
+            riskScore += 0.1;
+        }
+    }
+
+    // Check for missing tests
+    const hasTestFiles = /\.(test|spec)\.(js|ts|py|rb|go)/i.test(
+        patch.patch_content
+    );
+    const hasSourceChanges =
+        /\.(js|ts|py|rb|go|java|cs)/.test(patch.patch_content) && !hasTestFiles;
+
+    if (hasSourceChanges && !hasTestFiles) {
+        detailedAnalysis.testingRisks.push(
+            'Source code changes without accompanying tests'
+        );
+        riskScore += 0.05;
     }
 
     // Cap risk score at 1.0
@@ -193,7 +452,7 @@ export function assessPatchRisk(patch: PatchData): PatchRiskAssessment {
 
     // Determine if patch can be auto-merged based on policy
     const policies = getMergePolicies();
-    // const project = patch.project_id; // We'll need to fetch project details
+    const project = patch.project_id; // We'll need to fetch project details
 
     let canAutoMerge = false;
     let recommendation = '';
@@ -235,12 +494,18 @@ export function assessPatchRisk(patch: PatchData): PatchRiskAssessment {
         reasons.push('Low complexity changes');
     }
 
+    // Clean up empty arrays in detailed analysis
+    const hasDetailedRisks = Object.values(detailedAnalysis).some(
+        arr => arr.length > 0
+    );
+
     return {
         riskLevel,
         riskScore,
         canAutoMerge,
         reasons,
         recommendation,
+        ...(hasDetailedRisks ? { detailedAnalysis } : {}),
     };
 }
 
@@ -494,7 +759,7 @@ export async function getPatchesWithRiskAssessment(
                 const project = await getProject(patch.project_id);
                 const isGenerated = project?.is_generated || false;
 
-                const assessment = assessPatchRisk(patch);
+                const assessment = await assessPatchRisk(patch);
 
                 // Update assessment based on actual project type
                 const policies = getMergePolicies();

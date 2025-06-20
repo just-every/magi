@@ -167,9 +167,9 @@ export interface LLMResponse extends LLMMessage {
 }
 
 /**
- * Streaming event types - extends ensemble's StreamEventType with additional types
+ * Streaming event types - extends ensemble's StreamEventType with 'design'
  */
-export type StreamEventType = ProviderStreamEventType | 'design' | 'log' | 'response_chunk' | 'function_call' | 'function_result' | 'cost_data' | 'response' | 'tool_use' | 'tool_result';
+export type StreamEventType = ProviderStreamEventType | 'design';
 
 /**
  * Base streaming event interface
@@ -399,18 +399,6 @@ export interface ErrorEvent extends StreamEvent {
 }
 
 /**
- * Log streaming event
- */
-export interface LogEvent extends StreamEvent {
-    type: 'log';
-    level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'FATAL';
-    message: string;
-    timestamp: string;
-    context?: Record<string, any>;
-    data?: any;
-}
-
-/**
  * Audio streaming event
  */
 export interface AudioEvent extends StreamEvent {
@@ -525,48 +513,6 @@ export interface QuotaUpdateEvent extends StreamEvent {
 }
 
 /**
- * Response chunk streaming event
- */
-export interface ResponseChunkEvent extends StreamEvent {
-    type: 'response_chunk';
-    response: string;
-    is_tool_code?: boolean;
-}
-
-/**
- * Function call streaming event
- */
-export interface FunctionCallEvent extends StreamEvent {
-    type: 'function_call';
-    data: any;
-}
-
-/**
- * Function result streaming event
- */
-export interface FunctionResultEvent extends StreamEvent {
-    type: 'function_result';
-    data: any;
-}
-
-/**
- * Cost data streaming event
- */
-export interface CostDataEvent extends StreamEvent {
-    type: 'cost_data';
-    data: CostUpdateData;
-}
-
-/**
- * Response streaming event
- */
-export interface ResponseEvent extends StreamEvent {
-    type: 'response';
-    response?: string;
-    data?: any;
-}
-
-/**
  * Union type for all streaming events
  */
 export type StreamingEvent =
@@ -580,7 +526,6 @@ export type StreamingEvent =
     | FileEvent
     | ToolEvent
     | ErrorEvent
-    | LogEvent
     | CostUpdateEvent
     | SystemStatusEvent
     | SystemUpdateEvent
@@ -591,11 +536,6 @@ export type StreamingEvent =
     | DesignGridEvent
     | ConsoleEvent
     | GitPullRequestEvent
-    | ResponseChunkEvent
-    | FunctionCallEvent
-    | FunctionResultEvent
-    | CostDataEvent
-    | ResponseEvent
     // Add new wait events
     | ToolWaitStartEvent
     | ToolWaitingEvent
@@ -647,8 +587,6 @@ export interface ProcessCreateEvent {
         bgColor: string; // Background color (rgba)
         textColor: string; // Text color (rgba)
     };
-    isCore: boolean; // Is this the core process?
-    manager: string; // Name of the person/AI managing this process
     projectIds?: string[]; // List of git repositories this process has access to
 }
 
@@ -935,8 +873,7 @@ export interface ServerMessage {
         | 'process_event'
         | 'project_update'
         | 'system_message'
-        | 'system_command'
-        | 'shutdown';
+        | 'system_command';
 }
 
 export interface CommandMessage extends ServerMessage {
@@ -946,7 +883,6 @@ export interface CommandMessage extends ServerMessage {
         sourceProcessId?: string; // Added for process-to-process communication
         [key: string]: any;
     };
-    data?: any; // Command data payload
     content?: any; // For structured content (images, files, etc.)
 }
 
@@ -971,10 +907,6 @@ export interface ProcessEventMessage extends ServerMessage {
     type: 'process_event';
     processId: string;
     event: StreamingEvent;
-}
-
-export interface ShutdownMessage extends ServerMessage {
-    type: 'shutdown';
 }
 
 export interface ContainerConnection {

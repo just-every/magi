@@ -24,7 +24,7 @@ export interface ConflictResolution {
 export async function suggestConflictResolution(
     patchId: number,
     projectPath: string,
-    _conflictFiles: string[]
+    conflictFiles: string[]
 ): Promise<ConflictResolution[]> {
     const client = await getDB();
     const suggestions: ConflictResolution[] = [];

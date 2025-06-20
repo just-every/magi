@@ -51,15 +51,13 @@ const CommandInput: React.FC = () => {
 
         if (command.trim()) {
             // Always create structured content
-            const content = [
-                {
-                    type: 'input_text',
-                    text: command.trim(),
-                },
-            ];
-
+            const content = [{
+                type: 'input_text',
+                text: command.trim(),
+            }];
+            
             const messageContent = JSON.stringify({ contentArray: content });
-
+            
             if (isFirstProcess) {
                 // If there are no processes yet, create a new one
                 runCommand(messageContent);

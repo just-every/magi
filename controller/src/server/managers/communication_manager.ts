@@ -623,12 +623,9 @@ export class CommunicationManager {
                 typeof event.command === 'string' &&
                 event.command.trim().toLowerCase() === 'stop';
 
-            if (
-                commandIsStop &&
-                event.targetProcessId === this.processManager.coreProcessId
-            ) {
+            if(commandIsStop && event.targetProcessId === this.processManager.coreProcessId) {
                 this.sendMessage(
-                    processId,
+                    this.processManager.coreProcessId,
                     JSON.stringify({
                         type: 'system_message',
                         message: 'Can not stop the core process.',
@@ -862,7 +859,7 @@ export class CommunicationManager {
                     );
                     command = textContent ? textContent.text : '';
                 }
-            } catch (_e) {
+            } catch (e) {
                 // Not JSON, treat as regular text command
             }
 

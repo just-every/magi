@@ -6,9 +6,8 @@ import ProcessTreeColumn from './ProcessTreeColumn';
 import OutputColumn from './OutputColumn';
 import PatchesViewer, { Patch } from '../PatchesViewer';
 import CustomToolsViewer, { CustomTool } from '../CustomToolsViewer';
-import { PRIMARY_RGB } from '../../utils/constants';
 
-type ColumnLayoutProps = object;
+interface ColumnLayoutProps {}
 
 const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
     const { processes, coreProcessId, costData, isPaused, togglePauseState } =
@@ -46,7 +45,7 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                 <div
                     className="col-md-3 h-100"
                     style={{
-                        backgroundColor: `rgba(${PRIMARY_RGB} / 10%)`,
+                        backgroundColor: `rgb(209 238 255)`,
                         padding: '0.5rem',
                         paddingTop: '4.5rem',
                     }}
@@ -64,7 +63,7 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                 <div
                     className="col-md-3 h-100 d-flex flex-column"
                     style={{
-                        padding: '0.7rem 1rem',
+                        padding: '1rem',
                     }}
                 >
                     <ul className="nav nav-pills nav-fill small mb-3">

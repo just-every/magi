@@ -58,7 +58,7 @@ export function dateFormat(date?: Date | number): string {
 
             // Try to map the abbreviation to an IANA name
             timeZone = timezoneMap[timezoneAbbr] || 'UTC';
-        } catch (_e) {
+        } catch (e) {
             // Default to UTC if we can't determine the timezone
             timeZone = 'UTC';
         }
@@ -97,7 +97,7 @@ export function dateFormat(date?: Date | number): string {
                 timeZone: 'UTC',
             });
             return fallbackFormatter.format(dateToFormat);
-        } catch (_fallbackError) {
+        } catch (fallbackError) {
             // Last resort: just return the date as a string
             return dateToFormat.toString();
         }

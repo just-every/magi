@@ -80,7 +80,7 @@ export async function list_directory(directory: string): Promise<string> {
                         size: stats.size,
                         modified: stats.mtime.toISOString(),
                     };
-                } catch (_error) {
+                } catch (error) {
                     // If we can't stat a file, just return the name
                     return {
                         name: file,

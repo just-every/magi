@@ -8,6 +8,8 @@ export interface CLIOptions {
     loop: boolean;
     model?: string;
     noCheckKeys: boolean;
+    tool?: string;
+    base64?: string;
 }
 
 /**
@@ -34,6 +36,16 @@ export function parseCLIArgs(): CLIOptions {
                 type: 'boolean',
                 default: false,
             },
+            // --tool: Specify the tool to use
+            tool: {
+                type: 'string',
+                short: 't',
+            },
+            // --base64: Base64 encoded input
+            base64: {
+                type: 'string',
+                short: 'b',
+            },
         },
         allowPositionals: true,
     });
@@ -42,5 +54,7 @@ export function parseCLIArgs(): CLIOptions {
         loop: values.loop as boolean,
         model: values.model as string | undefined,
         noCheckKeys: values['no-check-keys'] as boolean,
+        tool: values.tool as string | undefined,
+        base64: values.base64 as string | undefined,
     };
 }

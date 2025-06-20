@@ -1986,7 +1986,7 @@ export class AgentBrowserSessionCDP {
                 try {
                     // Attempt to parse the string as JSON
                     action = JSON.parse(action);
-                } catch (_error) {
+                } catch (error) {
                     // If parsing fails, treat it as a raw string action
                     console.warn(
                         `[browser_session_cdp] Tab ${this.tabId}: Action ${i + 1} is a raw string: ${action}`

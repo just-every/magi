@@ -16,8 +16,6 @@ import {
 } from '@just-every/ensemble';
 // Temporary workaround - setDelayInterrupted is not exported from mind
 // This is used to interrupt thought delays when needed
-// Temporary workaround - delayInterrupted is used by setDelayInterrupted
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 let delayInterrupted = false;
 function setDelayInterrupted(interrupted: boolean): void {
     delayInterrupted = interrupted;
@@ -545,20 +543,15 @@ export async function addHumanMessage(
     } else {
         // Fallback: create structured content from plain text
         // This ensures backward compatibility
-        console.log(
-            '[addHumanMessage] Creating structured content from plain text:',
-            content
-        );
+        console.log('[addHumanMessage] Creating structured content from plain text:', content);
         addHistory(
             {
                 type: 'message',
                 role: 'user',
-                content: [
-                    {
-                        type: 'input_text',
-                        text: `${source || person} said:\n${content}`,
-                    },
-                ],
+                content: [{
+                    type: 'input_text',
+                    text: `${source || person} said:\n${content}`,
+                }],
             } as any,
             thread
         );

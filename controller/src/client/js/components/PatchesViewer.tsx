@@ -8,6 +8,12 @@ export interface PatchRiskAssessment {
     canAutoMerge: boolean;
     reasons: string[];
     recommendation: string;
+    detailedAnalysis?: {
+        securityRisks: string[];
+        performanceRisks: string[];
+        architecturalRisks: string[];
+        testingRisks: string[];
+    };
 }
 
 export interface Patch {
@@ -220,17 +226,15 @@ const PatchesViewer: React.FC<PatchesViewerProps> = ({
 
         if (pendingPatches.length === 0) {
             return (
-                <div className="compact-patches">
-                    <div className="middle-title">No patches</div>
+                <div className="compact-patches empty">
+                    <p className="text-muted">No pending patches</p>
                 </div>
             );
         }
 
         return (
             <div className="compact-patches">
-                <div className="middle-title">
-                    Patches ({pendingPatches.length})
-                </div>
+                <h4>Pending Patches ({pendingPatches.length})</h4>
                 <ul className="compact-patches-list">
                     {pendingPatches.map(patch => (
                         <li
