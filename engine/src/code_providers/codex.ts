@@ -132,7 +132,8 @@ export class CodexProvider implements ModelProvider {
             const { stream, write } = runPty(
                 'codex',
                 [
-                    '--profile="o3"',
+                    '--full-auto',
+                    '--dangerously-auto-approve-everything',
                     prompt,
                 ],
                 {
@@ -140,7 +141,6 @@ export class CodexProvider implements ModelProvider {
                     messageId,
                     env: {
                         ...process.env,
-                        CODEX_RUST: '1',
                         CODEX_UNSAFE_ALLOW_NO_SANDBOX: '1',
                     },
                     noiseFilter: isNoiseLine,

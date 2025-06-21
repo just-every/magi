@@ -1184,9 +1184,30 @@ export class ServerManager {
             this.handleUpdateAppSettings(settings);
         });
 
+        // Handle audio streaming events
+        socket.on('audio:stream_start', async (data: { sampleRate?: number }) => {
+            console.log(`Client ${clientId} starting audio stream`);
+            const { handleAudioStreamStart } = await import('../utils/audio_stream_handler.js');
+            await handleAudioStreamStart(socket, data);
+        });
+
+        socket.on('audio:stream_data', async (data: { audio: ArrayBuffer | string }) => {
+            const { handleAudioStreamData } = await import('../utils/audio_stream_handler.js');
+            handleAudioStreamData(socket, data);
+        });
+
+        socket.on('audio:stream_stop', async () => {
+            console.log(`Client ${clientId} stopping audio stream`);
+            const { handleAudioStreamStop } = await import('../utils/audio_stream_handler.js');
+            handleAudioStreamStop(socket);
+        });
+
         // Handle disconnect
-        socket.on('disconnect', () => {
+        socket.on('disconnect', async () => {
             console.log(`Client disconnected: ${clientId}`);
+            // Clean up audio session if exists
+            const { cleanupAudioSession } = await import('../utils/audio_stream_handler.js');
+            cleanupAudioSession(socket.id);
             // Note: We don't stop any processes when a client disconnects,
             // as other clients may still be monitoring them
         });

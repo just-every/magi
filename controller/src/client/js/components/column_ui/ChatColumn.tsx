@@ -12,6 +12,7 @@ import { parseMarkdown } from '../utils/MarkdownUtils';
 import { AudioPlayer } from '../../utils/AudioUtils';
 import MessageContent from '../ui/MessageContent';
 import { VersionManager } from '../ui/VersionManager';
+import { AudioRecorder } from '../../utils/AudioRecorder';
 
 interface VoiceOption {
     id: string;
@@ -48,6 +49,7 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
     togglePauseState,
 }) => {
     const {
+        socket,
         sendCoreCommand,
         runCommand,
         isAudioEnabled,
@@ -71,6 +73,9 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
     const [uploadProgress, setUploadProgress] = useState<Map<string, number>>(
         new Map()
     );
+    const [isRecording, setIsRecording] = useState(false);
+    const [transcriptionText, setTranscriptionText] = useState('');
+    const audioRecorderRef = useRef<AudioRecorder | null>(null);
 
     const coreProcess = coreProcessId
         ? (processes.get(coreProcessId) as ProcessData | undefined)
@@ -326,6 +331,122 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
     const removeFile = (index: number) => {
         setAttachedFiles(prev => prev.filter((_, i) => i !== index));
     };
+
+    // Audio recording handlers
+    const handleAudioToggle = async () => {
+        if (!socket) return;
+
+        if (isRecording) {
+            // Stop recording
+            audioRecorderRef.current?.stop();
+            socket.emit('audio:stream_stop');
+            setIsRecording(false);
+            setTranscriptionText('');
+        } else {
+            // Start recording
+            try {
+                const recorder = new AudioRecorder({
+                    sampleRate: 16000,
+                    channelCount: 1,
+                    onDataAvailable: (data) => {
+                        // Send audio data to server
+                        socket.emit('audio:stream_data', {
+                            audio: data
+                        });
+                    },
+                    onError: (error) => {
+                        console.error('Audio recording error:', error);
+                        setIsRecording(false);
+                    },
+                });
+
+                audioRecorderRef.current = recorder;
+                await recorder.start();
+                
+                // Notify server that we're starting
+                socket.emit('audio:stream_start', {
+                    sampleRate: 16000,
+                    model: 'whisper-1',
+                    language: 'en'
+                });
+                
+                setIsRecording(true);
+            } catch (error) {
+                console.error('Failed to start recording:', error);
+                alert('Failed to access microphone. Please check your permissions.');
+            }
+        }
+    };
+
+    // Set up socket event listeners for transcription
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleTranscriptionEvent = (data: { type: string; event: any }) => {
+            if (data.type !== 'transcription_event') return;
+            
+            const event = data.event;
+            
+            switch (event.type) {
+                case 'transcription_start':
+                    console.log('Transcription started');
+                    setTranscriptionText('');
+                    break;
+                    
+                case 'transcription_delta':
+                    if (event.delta) {
+                        setTranscriptionText(prev => prev + event.delta);
+                    }
+                    break;
+                    
+                case 'transcription_complete':
+                    if (event.text && event.text.trim()) {
+                        // Set the transcribed text as the command
+                        setCommand(event.text);
+                        // Optionally auto-submit
+                        // handleSubmit();
+                    }
+                    setTranscriptionText('');
+                    setIsRecording(false);
+                    break;
+                    
+                case 'vad_speech_start':
+                    console.log('Speech detected');
+                    break;
+                    
+                case 'vad_speech_end':
+                    console.log('Speech ended');
+                    break;
+                    
+                case 'error':
+                    console.error('Transcription error:', event.error);
+                    setIsRecording(false);
+                    audioRecorderRef.current?.stop();
+                    break;
+            }
+        };
+
+        const handleAudioError = (data: { error: string; details?: string }) => {
+            console.error('Audio error:', data.error, data.details);
+            setIsRecording(false);
+            audioRecorderRef.current?.stop();
+        };
+
+        socket.on('audio:transcription_event', handleTranscriptionEvent);
+        socket.on('audio:error', handleAudioError);
+
+        return () => {
+            socket.off('audio:transcription_event', handleTranscriptionEvent);
+            socket.off('audio:error', handleAudioError);
+        };
+    }, [socket]);
+
+    // Clean up on unmount
+    useEffect(() => {
+        return () => {
+            audioRecorderRef.current?.stop();
+        };
+    }, []);
 
     // Drag and drop handlers
     const handleDragEnter = (e: React.DragEvent) => {
@@ -761,6 +882,10 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                 placeholder={
                                     isDragging
                                         ? 'Drop files here...'
+                                        : isRecording && transcriptionText
+                                        ? transcriptionText
+                                        : isRecording
+                                        ? 'Listening...'
                                         : isFirstProcess
                                         ? 'Start task...'
                                         : `Talk${agentName ? ' to ' + agentName : ''}...`
@@ -792,11 +917,11 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                 </button>
                                 <button
                                     type="button"
-                                    className="btn btn-outline-secondary border-0 rounded-circle"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    title="Voice chat"
+                                    className={`btn btn-outline-secondary border-0 rounded-circle ${isRecording ? 'text-danger recording-active' : ''}`}
+                                    onClick={handleAudioToggle}
+                                    title={isRecording ? 'Stop recording' : 'Start voice input'}
                                 >
-                                    <i className="bi bi-soundwave"></i>
+                                    <i className={`bi ${isRecording ? 'bi-stop-circle-fill' : 'bi-soundwave'}`}></i>
                                 </button>
                                 <button
                                     type="button"
