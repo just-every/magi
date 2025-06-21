@@ -588,6 +588,8 @@ export interface ProcessCreateEvent {
         textColor: string; // Text color (rgba)
     };
     projectIds?: string[]; // List of git repositories this process has access to
+    isCore: boolean; // Whether this is the core process
+    manager: string; // Name of the person/AI managing this process
 }
 
 /**
