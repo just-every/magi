@@ -1,0 +1,297 @@
+/* Patches Viewer Styles */
+
+/* Compact view styles */
+.compact-patches {
+    padding: 0.5rem;
+}
+
+.compact-patches h4 {
+    font-size: 0.875rem;
+    margin-bottom: 0.75rem;
+    color: #333;
+}
+
+.compact-patches-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.compact-patch-item {
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.compact-patch-item:hover {
+    background-color: #e9ecef;
+    border-color: #6c757d;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.compact-patch-project {
+    font-weight: 600;
+    color: #0969da;
+    font-size: 0.875rem;
+}
+
+.compact-patch-branch {
+    color: #6c757d;
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+}
+
+.compact-patch-message {
+    color: #333;
+    font-size: 0.8125rem;
+    margin-top: 0.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.compact-patch-stats {
+    font-family: monospace;
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+}
+
+.compact-patch-date {
+    color: #6c757d;
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+}
+
+.compact-patches.empty {
+    text-align: center;
+    padding: 2rem 1rem;
+}
+
+/* Full view styles */
+.patches-container {
+    padding: 1rem;
+}
+
+.patches-container h2 {
+    margin-bottom: 0.5rem;
+}
+
+.patches-table {
+    margin-top: 1rem;
+    overflow-x: auto;
+}
+
+.patches-table table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.patches-table th {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+    padding: 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    color: #495057;
+}
+
+.patches-table td {
+    border-bottom: 1px solid #dee2e6;
+    padding: 0.75rem;
+    vertical-align: middle;
+}
+
+.patches-table tr {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.patches-table tr:hover {
+    background-color: #f8f9fa;
+}
+
+.patches-table tr.selected {
+    background-color: #e7f3ff;
+}
+
+.patch-message-cell {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.patch-stats-cell {
+    font-family: monospace;
+    font-size: 0.8125rem;
+}
+
+/* Status badges */
+.badge {
+    display: inline-block;
+    padding: 0.25em 0.6em;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 0.25rem;
+}
+
+.badge-warning {
+    color: #856404;
+    background-color: #fff3cd;
+}
+
+.badge-success {
+    color: #155724;
+    background-color: #d4edda;
+}
+
+.badge-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+}
+
+.badge-secondary {
+    color: #383d41;
+    background-color: #e2e3e5;
+}
+
+.badge-light {
+    color: #818182;
+    background-color: #fefefe;
+}
+
+.badge-info {
+    color: #0c5460;
+    background-color: #d1ecf1;
+}
+
+.badge-dark {
+    color: #fff;
+    background-color: #343a40;
+}
+
+/* Risk level badges */
+.badge-risk-low {
+    background-color: #28a745;
+    color: white;
+}
+
+.badge-risk-moderate {
+    background-color: #ffc107;
+    color: #000;
+}
+
+.badge-risk-high {
+    background-color: #dc3545;
+    color: white;
+}
+
+.badge-risk-critical {
+    background-color: #343a40;
+    color: white;
+}
+
+.ml-1 {
+    margin-left: 0.25rem;
+}
+
+/* Button styles */
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    border-radius: 0.2rem;
+    background-color: #6c757d;
+    color: white;
+    border: 1px solid #6c757d;
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+}
+
+.btn-sm:hover {
+    background-color: #5a6268;
+    border-color: #545b62;
+}
+
+.btn-sm.btn-primary {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.btn-sm.btn-primary:hover {
+    background-color: #0056b3;
+    border-color: #004085;
+}
+
+.btn-sm:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+/* Alert styles */
+.alert {
+    position: relative;
+    padding: 0.75rem 1.25rem;
+    margin-bottom: 1rem;
+    border: 1px solid transparent;
+    border-radius: 0.25rem;
+}
+
+.alert-info {
+    color: #0c5460;
+    background-color: #d1ecf1;
+    border-color: #bee5eb;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+.alert button {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.75rem;
+    padding: 0;
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: inherit;
+    opacity: 0.5;
+    cursor: pointer;
+}
+
+.alert button:hover {
+    opacity: 0.75;
+}
+
+/* Loading indicator */
+.loading-indicator {
+    text-align: center;
+    padding: 2rem;
+    color: #6c757d;
+}
+
+/* Text utilities */
+.text-success {
+    color: #28a745;
+}
+
+.text-danger {
+    color: #dc3545;
+}
+
+.text-muted {
+    color: #6c757d;
+}

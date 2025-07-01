@@ -1,0 +1,72 @@
+# This is comparable to --full-auto in the TypeScript Codex CLI, though
+sandbox_permissions = [
+    "disk-full-read-access",
+    "disk-write-platform-user-temp-folder",
+    "disk-write-platform-global-temp-folder",
+    "disk-write-cwd",
+]
+approval_policy = "never"
+disable_response_storage = false
+hide_agent_reasoning = false
+disable_mouse_capture = true
+file_opener = "none"
+model_reasoning_effort = "high"
+
+[mcp_servers.read-website-fast]
+command = "npx"
+args = ["-y", "@just-every/mcp-read-website-fast"]
+
+[mcp_servers.screenshot-website-fast]
+command = "npx"
+args = ["-y", "@just-every/mcp-screenshot-website-fast"]
+
+# Setting `profile` is equivalent to specifying `--profile o3` on the command
+# line, though the `--profile` flag can still be used to override this value.
+profile = "o3"
+
+[profiles.o3-high]
+model = "o3"
+model_provider = "openai"
+
+[profiles.o3]
+model = "o3"
+model_provider = "openai"
+model_reasoning_effort = "medium"
+
+[profiles.o4-mini]
+model = "o4-mini"
+model_provider = "openai"
+
+[profiles.codex]
+model = "codex-mini-latest"
+model_provider = "openai"
+
+[profiles.gemini-2-5-pro]
+model = "gemini-2.5-pro-preview-06-05"
+model_provider = "gemini"
+
+[profiles.gemini-2-5-flash]
+model = "gemini-2.5-flash-preview-05-20"
+model_provider = "gemini"
+
+[model_providers.anthropic]
+name = "Anthropic"
+base_url = "https://api.anthropic.com/v1/"
+env_key = "ANTHROPIC_API_KEY"
+wire_api = "chat"
+
+[profiles.claude-opus]
+model = "claude-opus-4-20250514"
+model_provider = "anthropic"
+
+[profiles.claude-sonnet]
+model = "claude-sonnet-4-20250514"
+model_provider = "anthropic"
+
+[profiles.claude-3-7-sonnet]
+model = "claude-3-7-sonnet-latest"
+model_provider = "anthropic"
+
+[profiles.claude-3-5-haiku]
+model = "claude-3-5-haiku-latest"
+model_provider = "anthropic"

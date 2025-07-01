@@ -25,6 +25,7 @@ import {
 // Comment out direct import - we'll use simpler approach to avoid TypeScript errors
 // import { ContainerConnection, MagiMessage } from '../../../server/managers/communication_manager';
 import { handleAudioMessage, stopAudio } from '../utils/AudioUtils';
+import { extractTitle } from '../components/utils/FormatUtils';
 
 // Define the type for the Socket.io socket
 // Using a basic interface for Socket.io instance
@@ -47,6 +48,7 @@ export interface PartialClientMessage {
         | 'tool_call'
         | 'tool_result'
         | 'error';
+    title?: string;
     content?: string;
     thinking_content?: string;
     timestamp?: string;
@@ -62,6 +64,7 @@ export interface PartialClientMessage {
 export interface ClientMessage {
     id: string; // Generated UUID for the message
     agent?: AgentData;
+    sender?: string; // e.g. Magi or person name for 'user' messages
     processId: string; // Process ID this message belongs to
     type:
         | 'user'
@@ -70,6 +73,7 @@ export interface ClientMessage {
         | 'tool_call'
         | 'tool_result'
         | 'error';
+    title?: string;
     content: string;
     thinking_content?: string;
     timestamp: string;
@@ -144,12 +148,15 @@ export interface ProcessData {
         bgColor: string;
         textColor: string;
     };
+    isCore: boolean; // Is this the core process?
+    manager: string; // Name of the person/AI managing this process
     logs: string;
     agent?: AgentData;
     pendingScreenshots: Map<string, ScreenshotEvent[]>;
     pendingConsoleEvents: Map<string, ConsoleEvent[]>;
     pendingDesignEvents: Map<string, DesignEvent[]>;
     pendingMessages: Map<string, PartialClientMessage[]>;
+    projectIds?: string[]; // List of git repositories this process has access to
 }
 
 // Create the context with a default value
@@ -285,12 +292,31 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                 const newProcesses = new Map(prevProcesses);
 
                 // Create initial user message from the command
+                // Parse command if it's structured content
+                let messageContent: any = event.command;
+                try {
+                    const parsed = JSON.parse(event.command);
+                    if (parsed.contentArray && Array.isArray(parsed.contentArray)) {
+                        messageContent = parsed.contentArray;
+                    }
+                } catch (e) {
+                    // Not JSON, use as-is
+                }
+
+                // Set the core process ID if this is the first process created
+                if (event.isCore) {
+                    setCoreProcessId(event.id);
+                    console.log(`Setting core process ID to ${event.id}`);
+                }
+
                 const initialMessage: ClientMessage = {
                     id: generateId(),
                     processId: event.id,
                     type: 'user',
-                    content: event.command,
+                    content: messageContent,
                     timestamp: new Date().toISOString(),
+                    sender: event.manager,
+                    ...(event.isCore === false && { title: extractTitle(typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent)) })
                 };
 
                 newProcesses.set(event.id, {
@@ -298,8 +324,11 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     command: event.command,
                     status: event.status,
                     colors: event.colors,
+                    isCore: event.isCore,
+                    manager: event.manager,
                     logs: '',
                     name: event.name,
+                    projectIds: event.projectIds,
                     agent: {
                         agent_id: undefined, // Explicitly set as undefined initially
                         name: event.name,
@@ -312,12 +341,6 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     pendingDesignEvents: new Map<string, DesignEvent[]>(),
                     pendingMessages: new Map<string, PartialClientMessage[]>(),
                 });
-
-                // Set the core process ID if this is the first process created
-                if (newProcesses.size === 1 || !coreProcessId) {
-                    setCoreProcessId(event.id);
-                    console.log(`Setting core process ID to ${event.id}`);
-                }
 
                 return newProcesses;
             });
@@ -376,11 +399,6 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
             setProcesses(prevProcesses => {
                 const newProcesses = new Map(prevProcesses);
-                const process = newProcesses.get(event.id) as
-                    | ProcessData
-                    | undefined;
-
-                if (!process) return newProcesses;
 
                 // Use the imported MagiMessage structure
                 const data = event.message;
@@ -390,6 +408,38 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     (streamingEvent as { timestamp?: string }).timestamp ||
                     new Date().toISOString();
                 const eventType = streamingEvent.type;
+
+                // Handle audio_stream events even for non-existent processes (e.g., voice previews)
+                if (eventType === 'audio_stream' && isAudioEnabled) {
+                    const audioEvent = streamingEvent as AudioEvent;
+                    handleAudioMessage({
+                        event: {
+                            pcmParameters: audioEvent.pcmParameters
+                                ? {
+                                      sampleRate:
+                                          audioEvent.pcmParameters.sampleRate ||
+                                          44100,
+                                      channels:
+                                          audioEvent.pcmParameters.channels ||
+                                          1,
+                                      bitDepth:
+                                          audioEvent.pcmParameters.bitDepth ||
+                                          16,
+                                  }
+                                : undefined,
+                            data: audioEvent.data || '',
+                            chunkIndex: audioEvent.chunkIndex || 0,
+                            isFinalChunk: audioEvent.isFinalChunk || false,
+                        },
+                    });
+                    return newProcesses; // No state update needed
+                }
+
+                const process = newProcesses.get(event.id) as
+                    | ProcessData
+                    | undefined;
+
+                if (!process) return newProcesses;
 
                 function updateAgent(
                     values: Record<string, unknown>,
@@ -706,35 +756,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                 }
 
                 // Handle different event types
-                if (eventType === 'audio_stream') {
-                    // Process audio data event for browser playback
-                    if (isAudioEnabled) {
-                        // Convert optional parameters to required ones for the AudioUtils handler
-                        const audioEvent = streamingEvent as AudioEvent;
-                        handleAudioMessage({
-                            event: {
-                                pcmParameters: audioEvent.pcmParameters
-                                    ? {
-                                          sampleRate:
-                                              audioEvent.pcmParameters
-                                                  .sampleRate || 44100,
-                                          channels:
-                                              audioEvent.pcmParameters
-                                                  .channels || 1,
-                                          bitDepth:
-                                              audioEvent.pcmParameters
-                                                  .bitDepth || 16,
-                                      }
-                                    : undefined,
-                                data: audioEvent.data || '',
-                                chunkIndex: audioEvent.chunkIndex || 0,
-                                isFinalChunk: audioEvent.isFinalChunk || false,
-                            },
-                        });
-                    }
-                    return newProcesses; // No need to update the process state
-                } else if (
-                    eventType === 'command_start' ||
+                if (
                     eventType === 'connected'
                 ) {
                     // User message - already handled in process:create but good as a fallback
@@ -742,6 +764,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         const content = streamingEvent.command || '';
                         if (
                             content &&
+                            typeof content === 'string' &&
                             !process.agent.messages.some(
                                 m => m.type === 'user' && m.content === content
                             )
@@ -1026,6 +1049,18 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         type: 'error',
                         content: errorMessage,
                     });
+                } else if (eventType === 'process_terminated') {
+                    addPartialMessage({
+                        type: 'system',
+                        title: 'Task Terminated',
+                        content: streamingEvent.error,
+                    });
+                } else if (eventType === 'process_done') {
+                    addPartialMessage({
+                        type: 'system',
+                        title: 'Task Done',
+                        content: streamingEvent.output,
+                    });
                 } else if (
                     eventType === 'agent_start' ||
                     eventType === 'agent_updated'
@@ -1220,12 +1255,25 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     | undefined;
 
                 if (process) {
+                    // Parse command if it's structured content
+                    let messageContent: any = command;
+                    try {
+                        const parsed = JSON.parse(command);
+                        if (parsed.contentArray && Array.isArray(parsed.contentArray)) {
+                            messageContent = parsed.contentArray;
+                        }
+                    } catch (e) {
+                        // Not JSON, use as-is
+                    }
+
                     const userMessage: ClientMessage = {
                         id: generateId(),
                         processId: processId,
                         type: 'user',
-                        content: command,
+                        content: messageContent,
                         timestamp: new Date().toISOString(),
+                        sender: process.manager,
+                        ...(process.isCore === false && { title: extractTitle(typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent)) })
                     };
                     process.agent!.messages.push(userMessage);
 

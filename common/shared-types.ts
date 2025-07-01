@@ -256,6 +256,7 @@ export interface GitPullRequestEvent extends StreamEvent {
     branch: string;
     message: string;
     timestamp: string;
+    patchId?: number;  // ID of the patch in the database
 }
 
 /**
@@ -586,6 +587,9 @@ export interface ProcessCreateEvent {
         bgColor: string; // Background color (rgba)
         textColor: string; // Text color (rgba)
     };
+    projectIds?: string[]; // List of git repositories this process has access to
+    isCore: boolean; // Whether this is the core process
+    manager: string; // Name of the person/AI managing this process
 }
 
 /**
@@ -881,6 +885,7 @@ export interface CommandMessage extends ServerMessage {
         sourceProcessId?: string; // Added for process-to-process communication
         [key: string]: any;
     };
+    content?: any; // For structured content (images, files, etc.)
 }
 
 export interface ProjectMessage extends ServerMessage {

@@ -152,34 +152,59 @@ export class CommunicationManager {
                     ) as ServerMessage;
                     console.log('Received command:', message);
 
+                    // Notify all command listeners IN PARALLEL
+                    const results = await Promise.allSettled(
+                        this.commandListeners.map(listener => listener(message))
+                    );
+
+                    // Log any listener errors without stopping processing of others
+                    for (const result of results) {
+                        if (result?.status === 'rejected') {
+                            console.error(
+                                'Error in command listener:',
+                                result.reason
+                            );
+                        }
+                    }
+
                     // Check if this is a welcome message with port information
                     if (message.type === 'connect') {
                         const commandMessage = message as CommandMessage;
-                        if (
-                            commandMessage.args &&
-                            commandMessage.args.controllerPort
-                        ) {
-                            const newPortRaw =
-                                commandMessage.args.controllerPort;
+                        if (commandMessage.args) {
+                            // Handle controller port
+                            if (commandMessage.args.controllerPort) {
+                                const newPortRaw =
+                                    commandMessage.args.controllerPort;
 
-                            // Check if newPortRaw is a string or number before assigning
-                            if (
-                                typeof newPortRaw === 'string' ||
-                                typeof newPortRaw === 'number'
-                            ) {
-                                const newPort = String(newPortRaw); // Convert number to string if necessary
+                                // Check if newPortRaw is a string or number before assigning
+                                if (
+                                    typeof newPortRaw === 'string' ||
+                                    typeof newPortRaw === 'number'
+                                ) {
+                                    const newPort = String(newPortRaw); // Convert number to string if necessary
 
-                                // If port has changed, update our stored port for future reconnections
-                                if (newPort !== this.controllerPort) {
-                                    console.log(
-                                        `Controller port changed from ${this.controllerPort} to ${newPort}`
+                                    // If port has changed, update our stored port for future reconnections
+                                    if (newPort !== this.controllerPort) {
+                                        console.log(
+                                            `Controller port changed from ${this.controllerPort} to ${newPort}`
+                                        );
+                                        this.controllerPort = newPort;
+                                    }
+                                } else if (newPortRaw !== undefined) {
+                                    console.warn(
+                                        `Received non-string/number controllerPort: ${typeof newPortRaw}`
                                     );
-                                    this.controllerPort = newPort;
                                 }
-                            } else if (newPortRaw !== undefined) {
-                                console.warn(
-                                    `Received non-string/number controllerPort: ${typeof newPortRaw}`
+                            }
+
+                            // Handle core process ID
+                            if (commandMessage.args.coreProcessId) {
+                                const coreProcessId =
+                                    commandMessage.args.coreProcessId;
+                                console.log(
+                                    `[Communication] Received core process ID: ${coreProcessId}`
                                 );
+                                processTracker.setCoreProcessId(coreProcessId);
                             }
                         }
                         return;
@@ -229,19 +254,6 @@ export class CommunicationManager {
                             );
                         }
                         return;
-                    }
-
-                    // Notify all command listeners SEQUENTIALLY
-                    for (const listener of this.commandListeners) {
-                        // Use for...of
-                        try {
-                            // Await the listener execution. This catches BOTH sync and async errors
-                            // from the listener promise.
-                            await listener(message);
-                        } catch (err: unknown) {
-                            console.error('Error in command listener:', err);
-                            // Decide if one listener failing should stop processing others
-                        }
                     }
                 } catch (err: unknown) {
                     console.error('Error parsing message:', err);

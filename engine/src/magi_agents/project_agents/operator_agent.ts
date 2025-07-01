@@ -17,10 +17,9 @@ import {
     getProjectTypeDescription,
 } from '../../constants/project_types.js';
 import { getProcessProjectIds } from '../../utils/project_utils.js';
-import { get_output_dir } from '../../utils/file_utils.js';
 import { createOperatorAgent, startTime } from '../operator_agent.js';
 import { dateFormat, readableTime } from '../../utils/date_tools.js';
-import { runningToolTracker } from '../../utils/running_tool_tracker.js';
+import { runningToolTracker } from '@just-every/ensemble';
 import { getThoughtDelay } from '@just-every/task';
 import { getRunningToolTools } from '../../utils/running_tools.js';
 
@@ -85,7 +84,7 @@ function formatProjectData(project: Project | null): string {
  */
 export async function createProjectOperatorAgent(): Promise<Agent> {
     const projectIds = getProcessProjectIds();
-    const paths = projectIds.map(id => get_output_dir(`projects/${id}`)); // Adjust path structure if needed
+    const paths = projectIds.map(id => `/app/projects/${id}`); // Adjust path structure if needed
 
     /* --------------------------- Agent Instructions ------------------------------ */
     // This large instruction block defines the agent's multi-faceted task.
@@ -220,7 +219,7 @@ npm run build         # Build for production
 # Example: @~/.claude/global_claude_preferences.md
 \`\`\`
 
-Save both Markdown files at the root of the project directory (e.g. \`${get_output_dir('projects')}/${projectIds[0]}/CLAUDE.md\`).
+Save both Markdown files at the root of the project directory (e.g. \`/app/projects/${projectIds[0]}/CLAUDE.md\`).
 
 ---
 ### Task 2: Update DB Metadata (Call \`update_project_details\`)
@@ -295,7 +294,7 @@ Final Steps:
             const currentProjectData = [];
             for (const projectId of projectIds) {
                 const project = await getProject(projectId);
-                currentProjectData.push(`### Project ID: ${projectId} (${get_output_dir(`projects/${projectId}`)})
+                currentProjectData.push(`### Project ID: ${projectId} (/app/projects/${projectId})
 \`\`\`
 ${formatProjectData(project)}
 \`\`\``);
@@ -312,7 +311,11 @@ Your Running Time: ${readableTime(new Date().getTime() - startTime.getTime())}
 Your Thought Delay: ${getThoughtDelay()} seconds
 
 Active Tools:
-${runningToolTracker.listActive()}`,
+${(() => {
+    const tools = runningToolTracker.getAllRunningTools();
+    if (tools.length === 0) return 'No running tools.';
+    return tools.map(t => `- ${t.toolName} (${t.id}) by ${t.agentName}`).join('\n');
+})()}`,
             });
 
             // Add the system status to the messages

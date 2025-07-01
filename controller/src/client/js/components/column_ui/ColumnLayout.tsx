@@ -4,10 +4,9 @@ import { useSocket } from '../../context/SocketContext';
 import ChatColumn from './ChatColumn';
 import ProcessTreeColumn from './ProcessTreeColumn';
 import OutputColumn from './OutputColumn';
-import PullRequestFailures, {
-    PullRequestFailure,
-} from '../PullRequestFailures';
+import PatchesViewer, { Patch } from '../PatchesViewer';
 import CustomToolsViewer, { CustomTool } from '../CustomToolsViewer';
+import { PRIMARY_RGB } from '../../utils/constants';
 
 interface ColumnLayoutProps {}
 
@@ -19,8 +18,7 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
         'tasks' | 'code' | 'tools' | 'complete'
     >('tasks');
     const [selectedTool, setSelectedTool] = useState<CustomTool | null>(null);
-    const [selectedFailure, setSelectedFailure] =
-        useState<PullRequestFailure | null>(null);
+    const [selectedPatch, setSelectedPatch] = useState<Patch | null>(null);
 
     useEffect(() => {
         // Focus input when visible
@@ -34,7 +32,7 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
             setSelectedTool(null);
         }
         if (middleTab !== 'code') {
-            setSelectedFailure(null);
+            setSelectedPatch(null);
         }
     }, [middleTab]);
 
@@ -48,7 +46,7 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                 <div
                     className="col-md-3 h-100"
                     style={{
-                        backgroundColor: `rgb(209 238 255)`,
+                        backgroundColor: `rgba(${PRIMARY_RGB} / 10%)`,
                         padding: '0.5rem',
                         paddingTop: '4.5rem',
                     }}
@@ -66,7 +64,7 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                 <div
                     className="col-md-3 h-100 d-flex flex-column"
                     style={{
-                        padding: '1rem',
+                        padding: '0.7rem 1rem',
                     }}
                 >
                     <ul className="nav nav-pills nav-fill small mb-3">
@@ -125,10 +123,10 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                                 ]}
                             />
                         ) : middleTab === 'code' ? (
-                            <PullRequestFailures
+                            <PatchesViewer
                                 compact
-                                onSelectFailure={failure => {
-                                    setSelectedFailure(failure);
+                                onSelectPatch={patch => {
+                                    setSelectedPatch(patch);
                                     setSelectedItemId(null);
                                 }}
                             />
@@ -161,7 +159,7 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                     <OutputColumn
                         selectedItemId={selectedItemId}
                         selectedTool={selectedTool}
-                        selectedFailure={selectedFailure}
+                        selectedPatch={selectedPatch}
                     />
                 </div>
             </div>

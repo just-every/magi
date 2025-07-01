@@ -5,6 +5,7 @@
  */
 import { ChildProcess } from 'child_process';
 import { Server } from 'socket.io';
+import path from 'path';
 import {
     ProcessStatus,
     ProcessCreateEvent,
@@ -16,7 +17,6 @@ import {
 } from '../../types/index';
 import { execPromise } from '../utils/docker_commands';
 import { generateProcessColors } from './color_manager';
-import { pushBranchAndOpenPR } from '../utils/git_push';
 import { PREventsManager } from './pr_events_manager';
 import {
     isDockerAvailable,
@@ -31,6 +31,11 @@ import {
     runProjectContainers,
 } from './container_manager';
 import { CommunicationManager } from './communication_manager';
+import {
+    analyzePatchConflicts,
+    applyPatch,
+    updatePatchStatus,
+} from '../utils/patch_manager';
 
 /**
  * Process data interface
@@ -140,6 +145,9 @@ export class ProcessManager {
 
             if (!this.coreProcessId) {
                 this.coreProcessId = processId;
+                console.log(
+                    `[ProcessManager] Set core process ID to: ${processId}`
+                );
             }
 
             const status = 'running';
@@ -164,6 +172,8 @@ export class ProcessManager {
             // Notify all clients about the new process
             this.io.emit('process:create', {
                 id: processId,
+                isCore: this.coreProcessId === processId,
+                manager: this.coreProcessId === processId ? process.env.PERSON_NAME : process.env.AI_NAME,
                 name:
                     agentProcess?.name ||
                     (this.coreProcessId === processId
@@ -172,6 +182,7 @@ export class ProcessManager {
                 command,
                 status,
                 colors,
+                projectIds: agentProcess?.projectIds,
             } as ProcessCreateEvent);
 
             // Start Docker container and command execution
@@ -692,7 +703,7 @@ export class ProcessManager {
         console.log(`Found ${containers.length} existing MAGI containers`);
 
         for (const container of containers) {
-            const { id, containerId, command } = container;
+            const { id, containerId, command, isCore } = container;
 
             // Skip if we're already tracking this process
             if (this.processes[id]) {
@@ -700,8 +711,16 @@ export class ProcessManager {
                 continue;
             }
 
+            // Set the core process ID if this is the core container
+            if (isCore && !this.coreProcessId) {
+                console.log(
+                    `[ProcessManager] Identified ${id} as the core MAGI process from existing containers`
+                );
+                this.coreProcessId = id;
+            }
+
             console.log(
-                `Resuming monitoring of container ${containerId} with ID ${id}`
+                `Resuming monitoring of container ${containerId} with ID ${id}${isCore ? ' (CORE)' : ''}`
             );
 
             // Generate colors for the process
@@ -715,6 +734,16 @@ export class ProcessManager {
                 logs: ['Connecting to secure MAGI container...'],
                 containerId,
                 colors,
+                agentProcess: isCore
+                    ? {
+                          processId: id,
+                          name: process.env.AI_NAME || 'Magi',
+                          command,
+                          status: 'running',
+                          started: new Date(),
+                          tool: 'research' as ProcessToolType, // Core process doesn't have a specific tool type
+                      }
+                    : undefined,
             };
 
             // Set up log monitoring for the container
@@ -928,31 +957,214 @@ export class ProcessManager {
         processId: string,
         projectId: string,
         branch: string,
-        message: string
+        message: string,
+        patchId?: number
     ): Promise<boolean> {
         console.log(
-            `[process-manager] Handling pull request ready for ${projectId} from process ${processId}`
+            `[process-manager] Handling pull request ready for ${projectId} from process ${processId}` +
+                (patchId ? ` with patch #${patchId}` : '')
         );
 
         try {
-            const result = await pushBranchAndOpenPR(
-                processId,
-                projectId,
-                branch,
-                message,
-                this.prEventsManager
-            );
-            console.log(
-                `[process-manager] Pull request ${result ? 'pushed successfully' : 'failed'} for ${projectId}`
-            );
+            if (patchId) {
+                // Import patch manager utilities
+                const {
+                    getPatchesWithRiskAssessment,
+                    applyPatch,
+                    analyzePatchConflicts,
+                } = await import('../utils/patch_manager.js');
 
-            // Log to the process logs
-            this.updateProcess(
-                processId,
-                `[git] Branch ${branch} for project ${projectId} ${result ? 'pushed successfully' : 'failed to push'}`
-            );
+                // New patch-based workflow
+                console.log(
+                    `[process-manager] Patch #${patchId} created for ${projectId}`
+                );
 
-            return result;
+                // Get patch with risk assessment
+                const patches = await getPatchesWithRiskAssessment(projectId);
+                const patch = patches.find(p => p.id === patchId);
+
+                if (!patch) {
+                    throw new Error(`Patch #${patchId} not found`);
+                }
+
+                // Emit patch created event to UI with risk assessment
+                this.io.emit('patch_created', {
+                    processId,
+                    projectId,
+                    patchId,
+                    branch,
+                    message,
+                    riskAssessment: patch.riskAssessment,
+                });
+
+                // Log to the process logs with risk info
+                this.updateProcess(
+                    processId,
+                    `[git] Patch #${patchId} created for project ${projectId} on branch ${branch} - Risk: ${patch.riskAssessment.riskLevel} (${patch.riskAssessment.recommendation})`
+                );
+
+                // Check if we should auto-merge
+                if (patch.riskAssessment.canAutoMerge) {
+                    console.log(
+                        `[process-manager] Auto-merging patch #${patchId} (risk: ${patch.riskAssessment.riskLevel})`
+                    );
+
+                    // Determine project path based on whether it's generated or external
+                    const projectPath = path.join('/external/host', projectId);
+
+                    // Check for conflicts first
+                    const conflictCheck = await analyzePatchConflicts(
+                        patchId,
+                        projectPath
+                    );
+
+                    if (conflictCheck.hasConflicts) {
+                        console.log(
+                            `[process-manager] Cannot auto-merge patch #${patchId} - conflicts detected`
+                        );
+
+                        this.updateProcess(
+                            processId,
+                            `[git] Patch #${patchId} has conflicts and requires manual resolution: ${conflictCheck.suggestion}`
+                        );
+
+                        // Emit conflict event
+                        this.io.emit('patch_conflict', {
+                            processId,
+                            projectId,
+                            patchId,
+                            conflictFiles: conflictCheck.conflictFiles,
+                            suggestion: conflictCheck.suggestion,
+                        });
+                    } else if (conflictCheck.error) {
+                        console.log(
+                            `[process-manager] Patch #${patchId} check failed with error: ${conflictCheck.error}`
+                        );
+
+                        // Check if it's an empty repository
+                        if (conflictCheck.isEmptyRepo) {
+                            console.log(
+                                `[process-manager] Empty repository detected for patch #${patchId} - requires manual intervention`
+                            );
+
+                            this.updateProcess(
+                                processId,
+                                `[git] Patch #${patchId} cannot be applied to empty repository - manual intervention required`
+                            );
+
+                            // Update patch status to failed
+                            await updatePatchStatus(
+                                patchId,
+                                'failed',
+                                conflictCheck.error
+                            );
+
+                            // Emit patch error event
+                            this.io.emit('patch_error', {
+                                processId,
+                                projectId,
+                                patchId,
+                                error: 'Empty repository - cannot apply patch',
+                                requiresManualIntervention: true,
+                            });
+                        } else if (conflictCheck.requiresManualIntervention) {
+                            console.error(
+                                `[process-manager] Patch #${patchId} requires manual intervention: ${conflictCheck.error}`
+                            );
+
+                            this.updateProcess(
+                                processId,
+                                `[git] Patch #${patchId} failed: ${conflictCheck.error}`
+                            );
+
+                            // Update patch status to failed
+                            await updatePatchStatus(
+                                patchId,
+                                'failed',
+                                conflictCheck.error
+                            );
+
+                            // Emit patch error event
+                            this.io.emit('patch_error', {
+                                processId,
+                                projectId,
+                                patchId,
+                                error: conflictCheck.error,
+                                requiresManualIntervention: true,
+                            });
+                        } else {
+                            // Unknown error - do not attempt to apply
+                            console.error(
+                                `[process-manager] Patch #${patchId} check failed with unknown error: ${conflictCheck.error}`
+                            );
+
+                            this.updateProcess(
+                                processId,
+                                `[git] Patch #${patchId} check failed: ${conflictCheck.error}`
+                            );
+
+                            // Update patch status to failed
+                            await updatePatchStatus(
+                                patchId,
+                                'failed',
+                                conflictCheck.error
+                            );
+                        }
+                    } else {
+                        // Apply the patch
+                        const result = await applyPatch(
+                            patchId,
+                            projectPath,
+                            true
+                        );
+
+                        if (result.success) {
+                            console.log(
+                                `[process-manager] Successfully auto-merged patch #${patchId}`
+                            );
+
+                            this.updateProcess(
+                                processId,
+                                `[git] Patch #${patchId} auto-merged successfully (commit: ${result.mergeCommitSha})`
+                            );
+
+                            // Emit patch applied event
+                            this.io.emit('patch_applied', {
+                                processId,
+                                projectId,
+                                patchId,
+                                mergeCommitSha: result.mergeCommitSha,
+                                autoMerged: true,
+                            });
+                        } else {
+                            console.error(
+                                `[process-manager] Failed to auto-merge patch #${patchId}: ${result.error}`
+                            );
+
+                            this.updateProcess(
+                                processId,
+                                `[git] Failed to auto-merge patch #${patchId}: ${result.error}`
+                            );
+                        }
+                    }
+                } else {
+                    console.log(
+                        `[process-manager] Patch #${patchId} requires manual review (risk: ${patch.riskAssessment.riskLevel})`
+                    );
+
+                    // Log reasons for manual review
+                    if (patch.riskAssessment.reasons.length > 0) {
+                        this.updateProcess(
+                            processId,
+                            `[git] Risk factors: ${patch.riskAssessment.reasons.join(', ')}`
+                        );
+                    }
+                }
+
+                return true;
+            } else {
+                throw new Error('No patch ID provided');
+            }
         } catch (error) {
             console.error(
                 '[process-manager] Error handling pull request:',
@@ -962,7 +1174,7 @@ export class ProcessManager {
             // Log to the process logs
             this.updateProcessWithError(
                 processId,
-                `Failed to push git changes: ${error instanceof Error ? error.message : String(error)}`
+                `Failed to handle git changes: ${error instanceof Error ? error.message : String(error)}`
             );
 
             return false;

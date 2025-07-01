@@ -2,6 +2,10 @@
 # Exit immediately if a command exits with a non-zero status.
 set -e
 
+# Fix for Node.js io_uring bug that causes PTY disconnects
+# This bug affects Node versions after 20.3.0 (including Node 23)
+export UV_USE_IO_URING=0
+
 # --- Claude Config Linking ---
 # Target directory and file paths in the user's home
 CLAUSE_DIR_TARGET="/home/magi_user/.claude"
@@ -44,6 +48,11 @@ echo "Ensuring /magi_output is owned by magi_user..."
 chown magi_user:magi_user /magi_output 2>/dev/null || true
 echo "Ownership checked for /magi_output"
 
+# --- Fix /claude_shared Permissions ---
+echo "Ensuring /claude_shared is owned by magi_user..."
+chown -R magi_user:magi_user /claude_shared 2>/dev/null || true
+echo "Ownership set for /claude_shared"
+
 # Check if PROCESS_ID environment variable is set
 if [ -n "$PROCESS_ID" ]; then
     PROCESS_DIR="/magi_output/$PROCESS_ID"
@@ -77,6 +86,39 @@ if [ ! -d "$SHARED_DIR" ]; then
     echo "Created $SHARED_DIR with correct permissions"
 else
     echo "$SHARED_DIR already exists"
+fi
+
+# --- Move projects directory ---
+# If PROCESS_ID is set and projects exist, move the entire projects directory
+if [ -n "$PROCESS_ID" ]; then
+    PROJECTS_SOURCE_DIR="/magi_output/$PROCESS_ID/projects"
+
+    # Only proceed if the source directory exists
+    if [ -d "$PROJECTS_SOURCE_DIR" ]; then
+        echo "Moving projects directory from $PROJECTS_SOURCE_DIR to /app/projects..."
+
+        # Remove existing /app/projects if it exists
+        if [ -d "/app/projects" ]; then
+            echo "  Removing existing /app/projects directory..."
+            rm -rf "/app/projects"
+        fi
+
+        # Move the entire projects directory
+        mv "$PROJECTS_SOURCE_DIR" "/app/projects"
+
+        # Ensure correct ownership
+        chown -R magi_user:magi_user "/app/projects"
+
+        echo "Projects directory moved successfully"
+    else
+        echo "Projects source directory $PROJECTS_SOURCE_DIR does not exist yet"
+        # Create empty /app/projects directory as fallback
+        if [ ! -d "/app/projects" ]; then
+            echo "Creating empty /app/projects directory..."
+            mkdir -p "/app/projects"
+            chown magi_user:magi_user "/app/projects"
+        fi
+    fi
 fi
 
 # --- Determine Command ---

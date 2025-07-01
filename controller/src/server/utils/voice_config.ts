@@ -8,62 +8,12 @@ export interface VoiceOption {
 }
 
 export const VOICE_OPTIONS: VoiceOption[] = [
-    // OpenAI Voices
-    {
-        id: 'openai-alloy',
-        name: 'Alloy',
-        provider: 'openai',
-        model: 'tts-1-hd',
-        voice: 'alloy',
-        description: 'Neutral and balanced',
-    },
-    {
-        id: 'openai-echo',
-        name: 'Echo',
-        provider: 'openai',
-        model: 'tts-1-hd',
-        voice: 'echo',
-        description: 'Warm and conversational',
-    },
-    {
-        id: 'openai-fable',
-        name: 'Fable',
-        provider: 'openai',
-        model: 'tts-1-hd',
-        voice: 'fable',
-        description: 'Expressive and dynamic',
-    },
-    {
-        id: 'openai-onyx',
-        name: 'Onyx',
-        provider: 'openai',
-        model: 'tts-1-hd',
-        voice: 'onyx',
-        description: 'Deep and authoritative',
-    },
-    {
-        id: 'openai-nova',
-        name: 'Nova',
-        provider: 'openai',
-        model: 'tts-1-hd',
-        voice: 'nova',
-        description: 'Friendly and upbeat',
-    },
-    {
-        id: 'openai-shimmer',
-        name: 'Shimmer',
-        provider: 'openai',
-        model: 'tts-1-hd',
-        voice: 'shimmer',
-        description: 'Gentle and soothing',
-    },
-
     // ElevenLabs Voices
     {
         id: 'elevenlabs-rachel',
         name: 'Rachel',
         provider: 'elevenlabs',
-        model: 'eleven_turbo_v2_5',
+        model: 'eleven_multilingual_v2',
         voice: 'rachel',
         description: 'Natural female voice',
     },
@@ -71,7 +21,7 @@ export const VOICE_OPTIONS: VoiceOption[] = [
         id: 'elevenlabs-bella',
         name: 'Bella',
         provider: 'elevenlabs',
-        model: 'eleven_turbo_v2_5',
+        model: 'eleven_multilingual_v2',
         voice: 'bella',
         description: 'Youthful female voice',
     },
@@ -79,7 +29,7 @@ export const VOICE_OPTIONS: VoiceOption[] = [
         id: 'elevenlabs-antoni',
         name: 'Antoni',
         provider: 'elevenlabs',
-        model: 'eleven_turbo_v2_5',
+        model: 'eleven_multilingual_v2',
         voice: 'antoni',
         description: 'Professional male voice',
     },
@@ -87,7 +37,7 @@ export const VOICE_OPTIONS: VoiceOption[] = [
         id: 'elevenlabs-josh',
         name: 'Josh',
         provider: 'elevenlabs',
-        model: 'eleven_turbo_v2_5',
+        model: 'eleven_multilingual_v2',
         voice: 'josh',
         description: 'Deep male voice',
     },
@@ -95,7 +45,7 @@ export const VOICE_OPTIONS: VoiceOption[] = [
         id: 'elevenlabs-adam',
         name: 'Adam',
         provider: 'elevenlabs',
-        model: 'eleven_turbo_v2_5',
+        model: 'eleven_multilingual_v2',
         voice: 'adam',
         description: 'Narrative male voice',
     },
@@ -103,7 +53,7 @@ export const VOICE_OPTIONS: VoiceOption[] = [
         id: 'elevenlabs-sam',
         name: 'Sam',
         provider: 'elevenlabs',
-        model: 'eleven_turbo_v2_5',
+        model: 'eleven_multilingual_v2',
         voice: 'sam',
         description: 'Energetic male voice',
     },
@@ -149,10 +99,60 @@ export const VOICE_OPTIONS: VoiceOption[] = [
         voice: 'Aoede',
         description: 'Musical and melodic',
     },
+
+    // OpenAI Voices
+    {
+        id: 'openai-alloy',
+        name: 'Alloy',
+        provider: 'openai',
+        model: 'gpt-4o-mini-tts',
+        voice: 'alloy',
+        description: 'Neutral and balanced',
+    },
+    {
+        id: 'openai-echo',
+        name: 'Echo',
+        provider: 'openai',
+        model: 'gpt-4o-mini-tts',
+        voice: 'echo',
+        description: 'Warm and conversational',
+    },
+    {
+        id: 'openai-fable',
+        name: 'Fable',
+        provider: 'openai',
+        model: 'gpt-4o-mini-tts',
+        voice: 'fable',
+        description: 'Expressive and dynamic',
+    },
+    {
+        id: 'openai-onyx',
+        name: 'Onyx',
+        provider: 'openai',
+        model: 'gpt-4o-mini-tts',
+        voice: 'onyx',
+        description: 'Deep and authoritative',
+    },
+    {
+        id: 'openai-nova',
+        name: 'Nova',
+        provider: 'openai',
+        model: 'gpt-4o-mini-tts',
+        voice: 'nova',
+        description: 'Friendly and upbeat',
+    },
+    {
+        id: 'openai-shimmer',
+        name: 'Shimmer',
+        provider: 'openai',
+        model: 'gpt-4o-mini-tts',
+        voice: 'shimmer',
+        description: 'Gentle and soothing',
+    },
 ];
 
 // Default voice
-export const DEFAULT_VOICE_ID = 'openai-echo';
+export const DEFAULT_VOICE_ID = 'elevenlabs-rachel';
 
 export function getVoiceById(id: string): VoiceOption | undefined {
     return VOICE_OPTIONS.find(voice => voice.id === id);

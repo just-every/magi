@@ -23,7 +23,7 @@ function setDelayInterrupted(interrupted: boolean): void {
 import { formatHistoryForSummary, createSummary } from './summary_utils.js';
 import { truncateLargeValues } from './file_utils.js';
 import { readableTime } from './date_tools.js';
-import { runningToolTracker } from './running_tool_tracker.js';
+import { runningToolTracker } from '@just-every/ensemble';
 import { sendStreamEvent } from './communication.js';
 import { v4 as uuid } from 'uuid';
 
@@ -40,14 +40,15 @@ export function interruptWaiting(reason: string): void {
     const activeTools = runningToolTracker.getAllRunningTools();
     for (const tool of activeTools) {
         if (
-            (tool.name === 'wait_for_running_task' ||
-                tool.name === 'wait_for_running_tool') &&
-            tool.status === 'running'
+            (tool.toolName === 'wait_for_running_task' ||
+                tool.toolName === 'wait_for_running_tool') &&
+            !tool.completed &&
+            !tool.failed
         ) {
             console.log(
-                `[History] Interrupting waiting tool: ${tool.name} (ID: ${tool.id}) due to ${reason}.`
+                `[History] Interrupting waiting tool: ${tool.toolName} (ID: ${tool.id}) due to ${reason}.`
             );
-            runningToolTracker.terminateRunningTool(tool.id, reason);
+            runningToolTracker.abortRunningTool(tool.id);
         }
     }
 }
@@ -524,17 +525,37 @@ export async function addMonologue(
 export async function addHumanMessage(
     content: string,
     thread?: ResponseInput,
-    source?: string
+    source?: string,
+    structuredContent?: any
 ): Promise<void> {
     const person = process.env.YOUR_NAME || 'User';
-    addHistory(
-        {
-            type: 'message',
-            role: 'developer',
-            content: `${source || person} said:\n${content}`,
-        },
-        thread
-    );
+
+    // Always expect structured content now
+    if (structuredContent && Array.isArray(structuredContent)) {
+        addHistory(
+            {
+                type: 'message',
+                role: 'user',
+                content: structuredContent,
+            } as any,
+            thread
+        );
+    } else {
+        // Fallback: create structured content from plain text
+        // This ensures backward compatibility
+        console.log('[addHumanMessage] Creating structured content from plain text:', content);
+        addHistory(
+            {
+                type: 'message',
+                role: 'user',
+                content: [{
+                    type: 'input_text',
+                    text: `${source || person} said:\n${content}`,
+                }],
+            } as any,
+            thread
+        );
+    }
 }
 
 /**

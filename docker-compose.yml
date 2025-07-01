@@ -42,6 +42,7 @@ services:
             - HOST_HOSTNAME=magi-controller # Use service name for internal communication
             - NODE_ENV=development # Set environment to development
             - TZ=$(date +%Z) # Get host timezone - conversion handled in code
+            - UV_USE_IO_URING=0 # Fix for Node.js io_uring bug causing PTY disconnects
         networks:
             - magi-network
         stop_signal: SIGINT
@@ -68,6 +69,7 @@ services:
             - HOST_HOSTNAME=magi-controller # Use service name instead of host.docker.internal
             - CONTROLLER_PORT=3010
             - TZ=$(date +%Z) # Get host timezone - conversion handled in code
+            - UV_USE_IO_URING=0 # Fix for Node.js io_uring bug causing PTY disconnects
         networks:
             - magi-network
 #        restart: unless-stopped

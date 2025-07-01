@@ -75,7 +75,8 @@ export function move_to_working_dir(working?: string): void {
  * @returns Object mapping repository names to full paths
  */
 export function get_git_repositories(): Record<string, string> {
-    const gitDir = get_output_dir('projects');
+    // Projects are now symlinked to /app/projects by the entrypoint script
+    const gitDir = '/app/projects';
     const result: Record<string, string> = {};
 
     try {

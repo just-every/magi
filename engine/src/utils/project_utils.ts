@@ -3,13 +3,14 @@
  */
 import { ProjectType } from '../types/shared-types.js';
 import { ToolFunction } from '@just-every/ensemble';
-import { sendStreamEvent } from './communication.js';
+import { sendStreamEvent, getCommunicationManager } from './communication.js';
 import { getDB } from './db.js';
 import { createToolFunction } from '@just-every/ensemble';
 import {
     PROJECT_TYPES,
     PROJECT_TYPE_DESCRIPTIONS,
 } from '../constants/project_types.js';
+import { ProjectMessage } from '../types/shared-types.js';
 
 export function getExternalProjectIds(): string[] {
     // Get the list of projects from the environment variable
@@ -170,13 +171,105 @@ export async function create_project(
             ]
         );
 
-        sendStreamEvent({
-            type: 'project_create',
-            project_id: project_id,
+        // Get communication manager
+        const communicationManager = getCommunicationManager();
+        let listenerAttached = false;
+
+        // Create the promise and set up the listener BEFORE sending the event
+        const projectUpdatePromise = new Promise<string>((resolve, reject) => {
+            let timeoutHandle: NodeJS.Timeout | null = null;
+            let resolved = false;
+
+            const listener = async (message: any) => {
+                if (resolved) return; // Ignore if already resolved
+
+                console.log(
+                    `[create_project] Received message type: ${message.type}`
+                );
+
+                if (message.type === 'project_update') {
+                    const projectMessage = message as ProjectMessage;
+                    console.log(
+                        `[create_project] Project update for: ${projectMessage.project_id} (waiting for: ${project_id})`
+                    );
+
+                    if (projectMessage.project_id === project_id) {
+                        resolved = true;
+                        cleanup();
+                        if (projectMessage.failed) {
+                            reject(
+                                new Error(
+                                    `Project creation failed: ${projectMessage.message}`
+                                )
+                            );
+                        } else {
+                            resolve(
+                                `Project '${project_id}' created successfully: ${projectMessage.message}`
+                            );
+                        }
+                    }
+                }
+            };
+
+            const cleanup = () => {
+                if (timeoutHandle) {
+                    clearTimeout(timeoutHandle);
+                    timeoutHandle = null;
+                }
+                // Remove the listener
+                if (listenerAttached) {
+                    try {
+                        const index =
+                            communicationManager['commandListeners'].indexOf(
+                                listener
+                            );
+                        if (index > -1) {
+                            communicationManager['commandListeners'].splice(
+                                index,
+                                1
+                            );
+                        }
+                    } catch (err) {
+                        console.error('Error removing listener:', err);
+                    }
+                }
+            };
+
+            // Add the listener
+            communicationManager.onCommand(listener);
+            listenerAttached = true;
+            console.log(
+                `[create_project] Listener attached for project: ${project_id}`
+            );
+
+            // NOW send the create event (after listener is attached)
+            console.log(
+                `[create_project] Sending project_create event for: ${project_id}`
+            );
+            sendStreamEvent({
+                type: 'project_create',
+                project_id: project_id,
+            });
+
+            // Set up timeout
+            timeoutHandle = setTimeout(
+                () => {
+                    if (!resolved) {
+                        resolved = true;
+                        cleanup();
+                        reject(
+                            new Error(
+                                `Timeout waiting for project '${project_id}' to be created (5 minutes)`
+                            )
+                        );
+                    }
+                },
+                5 * 60 * 1000
+            ); // 5 minute timeout
         });
 
-        // Return success message
-        return `Creating project '${project_id}'...`;
+        // Wait for the project to be created
+        return await projectUpdatePromise;
     } catch (error) {
         console.error('Error creating project:', error);
         return `Error creating project: ${error instanceof Error ? error.message : String(error)}`;

@@ -19,6 +19,7 @@ function createProviderAdapter(
     provider: MagiModelProvider
 ): EnsembleModelProvider {
     return {
+        provider_id: provider.provider_id,
         async *createResponseStream(
             messages: any,
             model: string,
@@ -70,7 +71,7 @@ export function registerCodeProviders(): void {
     );
 
     // Register Codex provider
-    registerExternalModel(
+    /*registerExternalModel(
         {
             id: 'codex',
             provider: 'magi-codex' as any, // Unique provider ID to avoid conflicts
@@ -91,7 +92,7 @@ export function registerCodeProviders(): void {
             },
         },
         createProviderAdapter(codexProvider)
-    );
+    );*/
 
     console.log('[MAGI] Registered code providers: claude-code, codex');
 

@@ -82,3 +82,6 @@ yarn-error.log
 # Temporary split directories
 temp-ecot/
 temp-ensemble/
+
+# AI-generated summaries and scratch files
+summaries/

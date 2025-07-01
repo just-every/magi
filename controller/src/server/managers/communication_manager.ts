@@ -27,6 +27,7 @@ interface CommandMessage {
     type: 'command' | 'connect';
     command: string;
     args?: Record<string, any>;
+    content?: any; // For structured content (images, files, etc.)
 }
 
 interface SystemCommandMessage {
@@ -233,6 +234,7 @@ export class CommunicationManager {
                     args: {
                         timestamp: new Date().toISOString(),
                         controllerPort: serverPort,
+                        coreProcessId: this.processManager.coreProcessId,
                     },
                 };
 
@@ -607,7 +609,8 @@ export class CommunicationManager {
                     gitPullRequest.processId,
                     gitPullRequest.projectId,
                     gitPullRequest.branch,
-                    gitPullRequest.message
+                    gitPullRequest.message,
+                    gitPullRequest.patchId
                 );
             } catch (error) {
                 console.error('Error handling git_pull_request:', error);
@@ -616,60 +619,56 @@ export class CommunicationManager {
         }
 
         if (event.type === 'command_start') {
-            if (
-                event.command &&
+            const commandIsStop =
                 typeof event.command === 'string' &&
-                event.command.trim().toLowerCase() === 'stop' &&
-                processId === this.processManager.coreProcessId
-            ) {
+                event.command.trim().toLowerCase() === 'stop';
+
+            if(commandIsStop && event.targetProcessId === this.processManager.coreProcessId) {
                 this.sendMessage(
-                    this.processManager.coreProcessId,
+                    processId,
                     JSON.stringify({
                         type: 'system_message',
                         message: 'Can not stop the core process.',
                     })
                 );
-            } else {
-                const commandIsStop =
-                    typeof event.command === 'string' &&
-                    event.command.trim().toLowerCase() === 'stop';
+                return;
+            }
 
-                const sent = this.sendCommand(
-                    event.targetProcessId as string,
-                    event.command as string,
-                    {},
-                    processId
-                );
+            const sent = this.sendCommand(
+                event.targetProcessId as string,
+                event.command as string,
+                {},
+                processId
+            );
 
-                if (commandIsStop) {
-                    if (!sent) {
-                        console.warn(
-                            `Failed to deliver stop command to ${event.targetProcessId}, force stopping.`
-                        );
-                        await this.processManager.stopProcess(
+            if (commandIsStop) {
+                if (!sent) {
+                    console.warn(
+                        `Failed to deliver stop command to ${event.targetProcessId}, force stopping.`
+                    );
+                    await this.processManager.stopProcess(
+                        event.targetProcessId as string
+                    );
+                } else {
+                    // Fallback: force stop if process doesn't end after 10s
+                    setTimeout(async () => {
+                        const proc = this.processManager.getProcess(
                             event.targetProcessId as string
                         );
-                    } else {
-                        // Fallback: force stop if process doesn't end after 10s
-                        setTimeout(async () => {
-                            const proc = this.processManager.getProcess(
+                        if (
+                            proc &&
+                            proc.status !== 'terminated' &&
+                            proc.status !== 'completed' &&
+                            proc.status !== 'failed'
+                        ) {
+                            console.warn(
+                                `Stop command for ${event.targetProcessId} not processed, force stopping.`
+                            );
+                            await this.processManager.stopProcess(
                                 event.targetProcessId as string
                             );
-                            if (
-                                proc &&
-                                proc.status !== 'terminated' &&
-                                proc.status !== 'completed' &&
-                                proc.status !== 'failed'
-                            ) {
-                                console.warn(
-                                    `Stop command for ${event.targetProcessId} not processed, force stopping.`
-                                );
-                                await this.processManager.stopProcess(
-                                    event.targetProcessId as string
-                                );
-                            }
-                        }, 10000);
-                    }
+                        }
+                    }, 5000);
                 }
             }
         } else if (event.type === 'process_start') {
@@ -848,6 +847,22 @@ export class CommunicationManager {
         sourceId?: string
     ): boolean {
         try {
+            // Check if command is a JSON string with structured content
+            let parsedContent = null;
+            try {
+                const parsed = JSON.parse(command);
+                if (parsed.contentArray && Array.isArray(parsed.contentArray)) {
+                    parsedContent = parsed.contentArray;
+                    // Extract text content as the command if present
+                    const textContent = parsedContent.find(
+                        (c: any) => c.type === 'input_text'
+                    );
+                    command = textContent ? textContent.text : '';
+                }
+            } catch (e) {
+                // Not JSON, treat as regular text command
+            }
+
             const commandMessage: CommandMessage = {
                 type: 'command',
                 command,
@@ -856,6 +871,7 @@ export class CommunicationManager {
                     // Include the source process ID if provided
                     sourceProcessId: sourceId,
                 },
+                content: parsedContent,
             };
 
             return this.sendMessage(processId, JSON.stringify(commandMessage));

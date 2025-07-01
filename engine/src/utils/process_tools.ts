@@ -1,9 +1,8 @@
 import { ProcessToolType } from '../types/shared-types.js'; // Removed AgentProcess
-import { ToolFunction } from '@just-every/ensemble';
+import { ToolFunction, runningToolTracker, createToolFunction } from '@just-every/ensemble';
 import { getCommunicationManager, sendStreamEvent } from './communication.js'; // Added sendStreamEvent
 import { processTracker } from './process_tracker.js';
 import { dateFormat } from './date_tools.js';
-import { createToolFunction } from '@just-every/ensemble';
 import { getAllProjectIds, getExternalProjectIds } from './project_utils.js';
 import { TASK_TYPE_DESCRIPTIONS } from '../magi_agents/constants.js';
 
@@ -124,7 +123,7 @@ function startProcess(
 // function startGodelMachine(name: string, command: string, project?: string[]): string {
 // 	return startProcess('godel_machine', name, command);
 // }
-function start_task(
+async function start_task(
     name: string,
     task: string,
     context: string,
@@ -132,14 +131,33 @@ function start_task(
     goal: string,
     type?: ProcessToolType,
     project?: string[]
-): string {
+): Promise<string> {
     const command: string[] = [];
     if (task) command.push(`**Task:** ${task}`);
     if (context) command.push(`**Context:** ${context}`);
     if (warnings) command.push(`**Warnings:** ${warnings}`);
     if (goal) command.push(`**Goal:** ${goal}`);
 
-    return startProcess(type, name, command.join('\n\n'), project);
+    // Ensure any duplicate project IDs are removed
+    const uniqueProjects = project ? [...new Set(project)] : undefined;
+
+    // Validate maximum number of unique projects
+    if (uniqueProjects && uniqueProjects.length > 3) {
+        return `Error: A maximum of 3 projects can be added to a task (but preferably only 1). You provided ${uniqueProjects.length} projects.`;
+    }
+
+    // Validate that all provided project IDs exist in the system
+    if (uniqueProjects) {
+        const allProjectIds = await getAllProjectIds();
+        const invalidProjects = uniqueProjects.filter(
+            id => !allProjectIds.includes(id)
+        );
+        if (invalidProjects.length > 0) {
+            return `Error: The following project IDs are invalid: ${invalidProjects.join(', ')}. Please try again with the correct project(s).`;
+        }
+    }
+
+    return startProcess(type, name, command.join('\n\n'), uniqueProjects);
 }
 
 /**
@@ -160,6 +178,20 @@ async function wait_for_running_task(
     const timeoutMs = timeout * 1000;
     let lastHeartbeatTime = Date.now();
     let finalResult = ''; // To store the final message
+
+    // Create an AbortController if none provided
+    const abortController = new AbortController();
+    const effectiveAbortSignal = abort_signal || abortController.signal;
+    
+    // Register this wait operation as a running tool so it can be interrupted
+    const waitToolId = `wait-task-${taskId}-${Date.now()}`;
+    const waitTool = runningToolTracker.addRunningTool(
+        waitToolId,
+        'wait_for_running_task',
+        'system',
+        JSON.stringify({ taskId, timeout })
+    );
+    waitTool.abortController = abortController;
 
     // Send start event
     sendStreamEvent({
@@ -219,8 +251,11 @@ async function wait_for_running_task(
     // Polling loop
     while (Date.now() - startTime < timeoutMs) {
         // Check if the operation was aborted
-        if (abort_signal?.aborted) {
-            finalResult = `Wait for task ${taskId} was aborted.`;
+        if (effectiveAbortSignal.aborted) {
+            const abortReason = (effectiveAbortSignal as any)?.reason
+                ? ` Reason: ${(effectiveAbortSignal as any)?.reason}.`
+                : '';
+            finalResult = `Wait for task ${taskId} was aborted.${abortReason}`;
             // Send stream event indicating abort - using task_wait_complete type with aborted status
             sendStreamEvent({
                 type: 'task_wait_complete',
@@ -331,6 +366,9 @@ async function wait_for_running_task(
         timestamp: new Date().toISOString(),
     });
 
+    // Clean up: mark the wait tool as completed
+    runningToolTracker.completeRunningTool(waitToolId, finalResult, null as any);
+    
     return finalResult;
 }
 
@@ -361,11 +399,7 @@ export function getProcessTools(): ToolFunction[] {
                 },
                 project: {
                     description:
-                        'An array of projects to mount for the task giving the task access to a copy of files. For coding tasks, first create a project of the relevant type as this will fill the project with a skeleton template for coding agents to work from. The task can modify the files and submit them back as a new git branch.' +
-                        (getExternalProjectIds().includes('magi')
-                            ? ' Include "magi" to provide access to your code.'
-                            : '') +
-                        ' The task will have access to these files at /magi_output/{taskId}/projects/{project}. Their default branch will be "task/{taskId}". If you provide only one project, that will be their working directory when they start (otherwise it will be /magi_output/{taskId}/working)\nNote: ONLY INCLUDE PROJECTS THE TASK NEEDS as an entire copy of the project is made for each task. For large projects this take 10+ seconds.',
+                        "Which projects to mount for the task. Gives the task access to a copy of project's files. For new coding tasks, first call create_project() with a project type to fill the project with a skeleton template for coding agents to work from. The task can modify the files and submit them back as a git patch. The task will have access to project files at /app/projects/{project_id}. I recommend only providing access to one project per task. You can provide up to three if necessary.",
                     type: 'array',
                     items: {
                         type: 'string',

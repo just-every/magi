@@ -120,38 +120,6 @@ export const findImagePath = (text: string): string => {
 };
 
 /**
- * Get display content for delta messages with chunks
- * @param message The message to process
- * @returns The complete content with all chunks in correct order
- */
-export const getDeltaMessageContent = (message: ClientMessage): string => {
-    // If this is a delta message with chunks, ensure we display all concatenated content
-    const thinkingContent =
-        typeof message.thinking_content === 'string'
-            ? message.thinking_content
-            : typeof message.thinking_content === 'object'
-              ? JSON.stringify(message.thinking_content, null, 2)
-              : message.thinking_content
-                ? String(message.thinking_content)
-                : '';
-
-    const messageContent =
-        typeof message.content === 'string'
-            ? message.content
-            : typeof message.content === 'object'
-              ? JSON.stringify(message.content, null, 2)
-              : message.content
-                ? String(message.content)
-                : '';
-
-    return (
-        thinkingContent +
-        (thinkingContent && messageContent ? '\n\n---\n\n' : '') +
-        messageContent
-    );
-};
-
-/**
  * Get formatted content for tool result message
  * @param resultMsg The tool result message to format
  * @returns Object containing result content and image path
@@ -181,11 +149,20 @@ export const getToolResultContent = (
             imagePath = findImagePath(resultContent);
         } else {
             // Just stringify the object
-            resultContent = JSON.stringify(resultMsg.result, null, 2);
+            resultContent = JSON.stringify(resultMsg.result, null, 4);
         }
     } else {
         resultContent = String(resultMsg.result);
     }
+
+    try {
+        // Prettify JSON output
+        let jsonFormat = JSON.parse(resultContent);
+        if(jsonFormat) {
+            resultContent = JSON.stringify(jsonFormat, null, 4);
+        }
+    }
+    catch(e) {}
 
     return { content: resultContent, imagePath };
 };

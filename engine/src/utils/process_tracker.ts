@@ -14,6 +14,40 @@ const truncateString = (string = '', maxLength = 200) =>
 class ProcessTracker {
     private processes: Map<string, AgentProcess> = new Map();
     private started: Date = new Date();
+    private coreProcessId: string | null = null;
+
+    /**
+     * Set the core process ID to exclude from active tasks
+     * @param processId The core process ID
+     */
+    setCoreProcessId(processId: string): void {
+        this.coreProcessId = processId;
+        console.log(`[ProcessTracker] Core process ID set to: ${processId}`);
+    }
+
+    /**
+     * Check if a process ID is the core process
+     * @param processId The process ID to check
+     */
+    isCoreProcess(processId: string): boolean {
+        // Check both stored core process ID and environment variables
+        if (this.coreProcessId && processId === this.coreProcessId) {
+            return true;
+        }
+
+        const currentProcessId = global.process.env.PROCESS_ID;
+        const isCore = global.process.env.IS_CORE_PROCESS === 'true';
+
+        if (processId === currentProcessId && isCore) {
+            // Store it for future reference
+            if (!this.coreProcessId) {
+                this.coreProcessId = processId;
+            }
+            return true;
+        }
+
+        return false;
+    }
 
     /**
      * Record usage details from a model provider
@@ -149,11 +183,36 @@ Note: Failed to generate summary - ${error}`;
         const processId: string = eventMessage.processId;
         let process = this.processes.get(processId);
         if (!process) {
-            console.error(
-                `taskId ${processId} not being tracked`,
+            // Check if this is the current core process
+            if (this.isCoreProcess(processId)) {
+                // This is the core process, don't create a placeholder
+                console.log(
+                    `[ProcessTracker] Ignoring event for core process ${processId}`
+                );
+                return;
+            }
+
+            console.warn(
+                `taskId ${processId} not being tracked, creating placeholder process`,
                 eventMessage
             );
-            return;
+
+            // Create a placeholder process for this unknown process
+            // This can happen if the process was started by another overseer instance
+            // or if there was a timing issue with process registration
+            process = {
+                processId: processId,
+                started: new Date(),
+                status: 'started',
+                tool: 'unknown' as any,
+                name: 'Unknown Process',
+                command: 'Process started outside of current tracking context',
+                projectIds: undefined,
+                output: '',
+                error: '',
+                history: [],
+            };
+            this.processes.set(processId, process);
         }
 
         if (
@@ -224,13 +283,23 @@ Note: Failed to generate summary - ${error}`;
      * @returns A formatted string with process information
      */
     listActive(): string {
-        if (this.processes.size === 0) {
+        // Filter out the core process and terminated tasks
+        const activeTasks = Array.from(this.processes.entries()).filter(
+            ([id, agentProcess]) => {
+                // Skip if terminated
+                if (agentProcess.status === 'terminated') return false;
+                // Skip if this is the core process
+                if (this.isCoreProcess(id)) return false;
+                return true;
+            }
+        );
+
+        if (activeTasks.length === 0) {
             return '- No tasks';
         }
 
         let result = '';
-        for (const [id, agentProcess] of this.processes.entries()) {
-            if (agentProcess.status === 'terminated') continue;
+        for (const [id, agentProcess] of activeTasks) {
             result += `- Task taskId: ${id}
   Name: ${agentProcess.name}
   Status: ${agentProcess.status}

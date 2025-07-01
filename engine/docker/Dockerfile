@@ -5,9 +5,7 @@ FROM node:23-slim AS latest-versions
 
 RUN set -e; \
     npm view @anthropic-ai/claude-code  dist-tags.latest  > /tmp/CLAUDE_VER && \
-    npm view @openai/codex              dist-tags.latest  > /tmp/CODEX_VER && \
-    npm view @just-every/ensemble       dist-tags.latest  > /tmp/ENSEMBLE_VER && \
-    npm view @just-every/task           dist-tags.latest  > /tmp/TASK_VER
+    npm view @openai/codex              dist-tags.latest  > /tmp/CODEX_VER
 
 ###############################################################################
 # Stage 1 – Build the application's dependencies
@@ -51,8 +49,8 @@ RUN npm install -g ts-node esbuild
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git gosu sudo ripgrep \
-                       libpixman-1-0 libcairo2 libpango1.0-0 libjpeg62-turbo \
-                       libgif7 librsvg2-2 && \
+        libpixman-1-0 libcairo2 libpango1.0-0 libjpeg62-turbo \
+        libgif7 librsvg2-2 python3 && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -69,12 +67,16 @@ RUN mkdir -p /app /magi_output /claude_shared /custom_tools && \
 
 WORKDIR /app
 
-RUN mkdir -p /home/${USER_NAME}/.claude /home/${USER_NAME}/.cache && \
+RUN mkdir -p /home/${USER_NAME}/.claude /home/${USER_NAME}/.cache /home/${USER_NAME}/.codex && \
     touch /home/${USER_NAME}/.claude/config.json && \
     touch /home/${USER_NAME}/.claude.json && \
     chown -R ${USER_NAME}:${GROUP_NAME} /home/${USER_NAME}/.claude \
-           /home/${USER_NAME}/.claude.json /home/${USER_NAME}/.cache && \
+           /home/${USER_NAME}/.claude.json /home/${USER_NAME}/.cache \
+           /home/${USER_NAME}/.codex && \
     chmod -R 777 /home/${USER_NAME}/.cache   # tighten if possible
+
+# Copy codex config
+COPY --chown=${USER_NAME}:${GROUP_NAME} ./engine/docker/.codex/config.toml /home/${USER_NAME}/.codex/config.toml
 
 ########################################################################
 # ---- Bring in project dependencies ----------------------------------
@@ -87,8 +89,6 @@ COPY --from=builder --chown=${USER_NAME}:${GROUP_NAME} /build/node_modules ./nod
 ########################################################################
 COPY --from=latest-versions /tmp/CLAUDE_VER /tmp/
 COPY --from=latest-versions /tmp/CODEX_VER  /tmp/
-COPY --from=latest-versions /tmp/ENSEMBLE_VER /tmp/
-COPY --from=latest-versions /tmp/TASK_VER /tmp/
 
 RUN --mount=type=cache,target=/root/.npm \
     set -e; \

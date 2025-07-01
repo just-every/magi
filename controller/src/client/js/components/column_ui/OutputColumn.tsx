@@ -15,8 +15,8 @@ import BrowserDisplay from '../ui/BrowserDisplay';
 import ConsoleDisplay from '../ui/ConsoleDisplay';
 import DesignDisplay from '../ui/DesignDisplay';
 import type { CustomTool } from '../CustomToolsViewer';
-import PullRequestFailureDetails from '../PullRequestFailureDetails';
-import type { PullRequestFailure } from '../PullRequestFailures';
+import PatchDetails from '../PatchDetails';
+import type { Patch } from '../PatchesViewer';
 import {
     ScreenshotEvent,
     ConsoleEvent,
@@ -26,13 +26,79 @@ import {
 interface OutputColumnProps {
     selectedItemId: string | null;
     selectedTool?: CustomTool | null;
-    selectedFailure?: PullRequestFailure | null;
+    selectedPatch?: Patch | null;
 }
+
+// Helper function to extract text from contentArray structure
+const extractTextFromCommand = (command: any): string => {
+    let text = '';
+
+    if (typeof command === 'string') {
+        // Try to parse it as JSON if it's a string
+        try {
+            const parsed = JSON.parse(command);
+            if (parsed.contentArray && Array.isArray(parsed.contentArray)) {
+                text = parsed.contentArray
+                    .map((item: any) => {
+                        if (item.type === 'input_text' && item.text) {
+                            return item.text;
+                        }
+                        return '';
+                    })
+                    .filter(Boolean)
+                    .join(' ');
+            } else {
+                text = command;
+            }
+        } catch {
+            // If parsing fails, use the original string
+            text = command;
+        }
+    } else if (command && command.contentArray && Array.isArray(command.contentArray)) {
+        // If it's already an object with contentArray
+        text = command.contentArray
+            .map((item: any) => {
+                if (item.type === 'input_text' && item.text) {
+                    return item.text;
+                }
+                return '';
+            })
+            .filter(Boolean)
+            .join(' ');
+    } else {
+        // Fallback to stringifying if we can't extract
+        text = typeof command === 'object' ? JSON.stringify(command) : String(command || '');
+    }
+
+    // Extract text after "Word:" pattern and get first sentence
+    const wordPattern = /\*\*(\w+):\*\*\s*(.+)/;
+    const match = text.match(wordPattern);
+
+    if (match) {
+        // Get the text after the pattern
+        const afterPattern = match[2];
+
+        // Find the first sentence (ends with . ! or ?)
+        const sentenceMatch = afterPattern.match(/^[^.!?]+[.!?]/);
+        if (sentenceMatch) {
+            text = sentenceMatch[0].trim();
+        } else {
+            // If no sentence ending found, take up to first newline or entire text
+            const newlineIndex = afterPattern.indexOf('\n');
+            text = newlineIndex > -1 ? afterPattern.substring(0, newlineIndex).trim() : afterPattern.trim();
+        }
+    }
+
+    // Remove backticks
+    text = text.replace(/`/g, '');
+
+    return text;
+};
 
 const OutputColumn: React.FC<OutputColumnProps> = ({
     selectedItemId,
     selectedTool,
-    selectedFailure,
+    selectedPatch,
 }) => {
     const { coreProcessId, processes, terminateProcess } = useSocket();
     if (selectedTool) {
@@ -50,10 +116,14 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
         );
     }
 
-    if (selectedFailure) {
+    if (selectedPatch) {
         return (
             <div className="output-column h-100 overflow-auto p-3">
-                <PullRequestFailureDetails failure={selectedFailure} />
+                <PatchDetails
+                    patch={selectedPatch}
+                    projectId={selectedPatch.project_id}
+                    processId={selectedPatch.process_id}
+                />
             </div>
         );
     }
@@ -260,7 +330,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                                 />
                                 {status}
                             </div>
-                            {status === 'running' && (
+                            {process.status === 'running' && (
                                 <div>
                                     <button
                                         className="btn btn-sm btn-outline-danger"
@@ -280,8 +350,18 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                             </div>
                             <div className="mt-2">
                                 <i className="bi bi-code me-1"></i>{' '}
-                                {truncate(command, 200)}
+                                {truncate(extractTextFromCommand(command), 200)}
                             </div>
+                            {process.projectIds &&
+                                process.projectIds.length > 0 && (
+                                    <div className="mt-2">
+                                        <i className="bi bi-folder-symlink me-1"></i>{' '}
+                                        {process.projectIds.length === 1
+                                            ? 'Project'
+                                            : 'Projects'}
+                                        : {process.projectIds.join(', ')}
+                                    </div>
+                                )}
                         </div>
                     </div>
                 </div>
@@ -459,7 +539,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                             />
                         )}
                         {tab === 'output' && (
-                            <MessageList messages={messages} />
+                            <MessageList messages={messages} colors={{rbg}} />
                         )}
                         {tab === 'llm' && (
                             <LogsViewer
@@ -682,7 +762,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                             />
                         )}
                         {tab === 'output' && (
-                            <MessageList messages={messages} />
+                            <MessageList messages={messages} colors={{rbg}} />
                         )}
                         {tab === 'llm' && selectedItem && (
                             <LogsViewer

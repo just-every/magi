@@ -356,8 +356,10 @@ export function handleAudioMessage(event: {
     // Start stream with parameters on the first chunk
     if (chunkData.pcmParameters) {
         audioPlayer.startStream(chunkData.pcmParameters);
-    } else {
-        // Add the chunk for processing
+    }
+
+    // Add the chunk data if present (even if pcmParameters was also present)
+    if (chunkData.data) {
         audioPlayer.addChunk(
             chunkData.data,
             chunkData.chunkIndex,

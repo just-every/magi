@@ -17,7 +17,7 @@ import {
     getProcessProjectIds,
     getProcessProjectPorts,
 } from '../../utils/project_utils.js';
-import { runningToolTracker } from '../../utils/running_tool_tracker.js';
+import { runningToolTracker } from '@just-every/ensemble';
 import { getRunningToolTools } from '../../utils/running_tools.js';
 import { getThoughtDelay } from '@just-every/task';
 import { createReasoningAgent } from '../common_agents/reasoning_agent.js';
@@ -152,7 +152,11 @@ Your Running Time: ${readableTime(new Date().getTime() - startTime.getTime())}
 Your Thought Delay: ${getThoughtDelay()} seconds
 
 Active Tools:
-${runningToolTracker.listActive()}`,
+${(() => {
+    const tools = runningToolTracker.getAllRunningTools();
+    if (tools.length === 0) return 'No running tools.';
+    return tools.map(t => `- ${t.toolName} (${t.id}) by ${t.agentName}`).join('\n');
+})()}`,
             });
             [agent, messages] = await addBrowserStatus(agent, messages);
 

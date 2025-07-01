@@ -27,6 +27,8 @@ import customToolsRoutes from './routes/custom_tools';
 import prEventsRoutes from './routes/pr_events';
 import patchesRoutes from './routes/patches';
 import voiceRoutes from './routes/voice';
+import uploadRoutes from './routes/upload';
+import { createVersionRoutes } from './routes/version_routes';
 import * as fs from 'fs';
 
 /**
@@ -116,7 +118,12 @@ async function main(): Promise<void> {
     app.use('/api/custom-tools', customToolsRoutes);
     app.use('/api/pr-events', prEventsRoutes);
     app.use('/api/patches', patchesRoutes);
+    app.use(
+        '/api/versions',
+        createVersionRoutes(serverManager.getVersionManager())
+    );
     app.use(voiceRoutes);
+    app.use('/api', uploadRoutes);
 
     // Expose the PR events manager for route handlers to use
     (app as any).prEventsManager = serverManager.getPrEventsManager();

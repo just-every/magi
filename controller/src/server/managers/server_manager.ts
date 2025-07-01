@@ -24,6 +24,7 @@ import {
     updateServerVersion,
 } from './env_store';
 import { ProcessManager } from './process_manager';
+import { VersionManager } from './version_manager';
 import { execPromise } from '../utils/docker_commands';
 import { cleanupAllContainers } from './container_manager';
 import { saveUsedColors } from './color_manager';
@@ -112,6 +113,7 @@ export class ServerManager {
     private wss = new WebSocket.Server({ noServer: true });
     private liveReloadClients = new Set<WebSocket>();
     private processManager: ProcessManager;
+    private versionManager: VersionManager;
     private communicationManager: CommunicationManager;
     private prEventsManager: PREventsManager;
     private bootstrapRan = false;
@@ -128,6 +130,13 @@ export class ServerManager {
      */
     getPrEventsManager(): PREventsManager {
         return this.prEventsManager;
+    }
+
+    /**
+     * Get the version manager instance
+     */
+    getVersionManager(): VersionManager {
+        return this.versionManager;
     }
     private cleanupInProgress = false;
     private isSystemPaused = false;
@@ -147,6 +156,9 @@ export class ServerManager {
             : path.join(__dirname, '../../../..');
 
         this.processManager = new ProcessManager(this.io);
+
+        // Initialize the version manager
+        this.versionManager = new VersionManager(this.io, this.processManager);
 
         // Initialize the communication manager before setting up WebSockets
         this.communicationManager = new CommunicationManager(
@@ -1060,7 +1072,7 @@ export class ServerManager {
 
         // Send current processes to the new client (excluding terminated)
         const processes = this.processManager.getAllProcesses();
-        Object.entries(processes).forEach(([id, process]) => {
+        Object.entries(processes).forEach(([id, processData]) => {
             console.log(
                 `Sending process ${id} state to new client ${clientId}`
             );
@@ -1068,13 +1080,15 @@ export class ServerManager {
             // First send the process creation event
             socket.emit('process:create', {
                 id,
-                command: process.command,
-                status: process.status,
-                colors: process.colors,
+                isCore: this.processManager.coreProcessId === id,
+                manager: this.processManager.coreProcessId === id ? process.env.PERSON_NAME : process.env.AI_NAME,
+                command: processData.command,
+                status: processData.status,
+                colors: processData.colors,
                 name:
-                    process.agentProcess?.name ||
+                    processData.agentProcess?.name ||
                     (id === this.processManager.coreProcessId
-                        ? global.process.env.AI_NAME
+                        ? process.env.AI_NAME
                         : id),
             });
 
@@ -1095,10 +1109,10 @@ export class ServerManager {
             }
 
             // Also send raw logs for compatibility
-            if (process.logs.length > 0) {
+            if (processData.logs.length > 0) {
                 socket.emit('process:logs', {
                     id,
-                    logs: process.logs.join('\n'),
+                    logs: processData.logs.join('\n'),
                 });
             }
         });
@@ -1170,9 +1184,30 @@ export class ServerManager {
             this.handleUpdateAppSettings(settings);
         });
 
+        // Handle audio streaming events
+        socket.on('audio:stream_start', async (data: { sampleRate?: number }) => {
+            console.log(`Client ${clientId} starting audio stream`);
+            const { handleAudioStreamStart } = await import('../utils/audio_stream_handler.js');
+            await handleAudioStreamStart(socket, data);
+        });
+
+        socket.on('audio:stream_data', async (data: { audio: ArrayBuffer | string }) => {
+            const { handleAudioStreamData } = await import('../utils/audio_stream_handler.js');
+            handleAudioStreamData(socket, data);
+        });
+
+        socket.on('audio:stream_stop', async () => {
+            console.log(`Client ${clientId} stopping audio stream`);
+            const { handleAudioStreamStop } = await import('../utils/audio_stream_handler.js');
+            handleAudioStreamStop(socket);
+        });
+
         // Handle disconnect
-        socket.on('disconnect', () => {
+        socket.on('disconnect', async () => {
             console.log(`Client disconnected: ${clientId}`);
+            // Clean up audio session if exists
+            const { cleanupAudioSession } = await import('../utils/audio_stream_handler.js');
+            cleanupAudioSession(socket.id);
             // Note: We don't stop any processes when a client disconnects,
             // as other clients may still be monitoring them
         });
