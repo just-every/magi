@@ -29,15 +29,6 @@ export default [
         plugins: {
             '@typescript-eslint': tseslint.plugin,
         },
-        rules: {
-            '@typescript-eslint/no-explicit-any': 'off',
-            '@typescript-eslint/no-namespace': [
-                'error',
-                { allowDeclarations: true },
-            ],
-            'no-console': 'off',
-            quotes: ['error', 'single', { avoidEscape: true }],
-        },
         ignores: [
             '**/dist/**',
             '**/node_modules/**',
@@ -45,7 +36,20 @@ export default [
             '**/*.js',
             '**/*.js.map',
         ],
-        files: ['controller/src/**/*.ts', 'engine/src/**/*.ts'],
+        files: ['controller/src/**/*.{ts,tsx}', 'engine/src/**/*.{ts,tsx}'],
+        rules: {
+            '@typescript-eslint/no-explicit-any': 'off',
+            '@typescript-eslint/no-unused-vars': [
+                'error',
+                { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+            ],
+            '@typescript-eslint/no-namespace': [
+                'error',
+                { allowDeclarations: true },
+            ],
+            'no-console': 'off',
+            quotes: ['error', 'single', { avoidEscape: true }],
+        },
     },
     // Add Prettier plugin rules
     {
