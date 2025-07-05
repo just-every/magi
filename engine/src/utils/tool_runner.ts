@@ -141,7 +141,7 @@ async function main() {
                         '[tool_runner] Successfully parsed JSON args:',
                         JSON.stringify(parsedArgs)
                     );
-                } catch (err) {
+                } catch {
                     // If not valid JSON, use as-is
                     console.log(
                         '[tool_runner] Args not valid JSON, using as raw strings:',
