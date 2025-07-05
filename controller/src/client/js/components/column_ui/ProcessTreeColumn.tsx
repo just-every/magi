@@ -19,7 +19,7 @@ const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
     setSelectedItemId,
     statusFilter,
 }) => {
-    const { processes, coreProcessId } = useSocket();
+    const { processes, coreProcessId, yourName } = useSocket();
 
     const showCompletedOnly =
         statusFilter &&
@@ -158,9 +158,11 @@ const ProcessTreeColumn: React.FC<ProcessTreeColumnProps> = ({
     // Render the tree structure
     const renderProcessTree = () => {
         if (processList.length === 0) {
-            return <div className='middle-ready'>
-                I'm ready! Let's start!
-            </div>;
+            return (
+                <div className="middle-ready">
+                    I'm ready. Let's start{yourName ? ` ${yourName}` : ''}!
+                </div>
+            );
         }
 
         const processClass = 'process-item rounded py-2 px-3 mb-2';

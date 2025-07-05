@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { DiffView, DiffModeEnum } from '@git-diff-view/react';
+import '@git-diff-view/react/styles/diff-view.css';
 import type { Patch } from './PatchesViewer';
 
 interface PatchDetailsProps {
@@ -40,6 +42,60 @@ interface ExtendedPatchInfo {
     };
 }
 
+// Parse file paths from git diff
+interface DiffFileInfo {
+    oldPath: string | null;
+    newPath: string;
+    isNew: boolean;
+    isDeleted: boolean;
+    isRenamed: boolean;
+}
+
+const parseDiffFiles = (diffContent: string): DiffFileInfo[] => {
+    const files: DiffFileInfo[] = [];
+    const lines = diffContent.split('\n');
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        if (line.startsWith('diff --git')) {
+            // Parse file paths from diff --git line
+            const match = line.match(/diff --git a\/(.*) b\/(.*)/);
+            if (match) {
+                const aPath = match[1];
+                const bPath = match[2];
+
+                // Look ahead for file status
+                let isNew = false;
+                let isDeleted = false;
+                let isRenamed = false;
+                let oldPath = aPath;
+                let newPath = bPath;
+
+                // Check next few lines for file status
+                for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+                    const nextLine = lines[j];
+                    if (nextLine.startsWith('new file mode')) {
+                        isNew = true;
+                        oldPath = null;
+                    } else if (nextLine.startsWith('deleted file mode')) {
+                        isDeleted = true;
+                    } else if (nextLine.startsWith('rename from')) {
+                        isRenamed = true;
+                        oldPath = nextLine.replace('rename from ', '');
+                    } else if (nextLine.startsWith('rename to')) {
+                        newPath = nextLine.replace('rename to ', '');
+                    }
+                }
+
+                files.push({ oldPath, newPath, isNew, isDeleted, isRenamed });
+            }
+        }
+    }
+
+    return files;
+};
+
 const PatchDetails: React.FC<PatchDetailsProps> = ({
     patch,
     projectId,
@@ -54,6 +110,10 @@ const PatchDetails: React.FC<PatchDetailsProps> = ({
         null
     );
     const [, setLoadingExtended] = useState(true);
+    const [fileContents, setFileContents] = useState<Record<string, string>>(
+        {}
+    );
+    const [loadingFiles, setLoadingFiles] = useState(false);
 
     // Fetch extended patch information
     useEffect(() => {
@@ -79,32 +139,102 @@ const PatchDetails: React.FC<PatchDetailsProps> = ({
         }
     }, [patch.id]);
 
-    // Parse diff to add syntax highlighting
-    const renderDiff = (content: string) => {
-        const lines = content.split('\n');
+    // Parse diff files
+    const diffFiles = useMemo(() => {
+        if (!patch.patch_content) return [];
+        return parseDiffFiles(patch.patch_content);
+    }, [patch.patch_content]);
 
-        return lines.map((line, index) => {
-            let className = 'diff-line';
+    // Fetch file contents when patch changes
+    useEffect(() => {
+        const fetchFileContents = async () => {
+            if (!patch.id || !patch.patch_content || diffFiles.length === 0)
+                return;
 
-            if (line.startsWith('+++') || line.startsWith('---')) {
-                className += ' diff-file-header';
-            } else if (line.startsWith('@@')) {
-                className += ' diff-hunk-header';
-            } else if (line.startsWith('+')) {
-                className += ' diff-addition';
-            } else if (line.startsWith('-')) {
-                className += ' diff-deletion';
-            } else if (line.startsWith('diff --git')) {
-                className += ' diff-header';
+            setLoadingFiles(true);
+            const contents: Record<string, string> = {};
+
+            // Fetch content for each file in the diff
+            for (const file of diffFiles) {
+                // Only fetch existing files (not new files)
+                if (file.oldPath && !file.isNew) {
+                    try {
+                        const response = await fetch(
+                            `/api/patches/${patch.id}/file-content?filePath=${encodeURIComponent(file.oldPath)}`
+                        );
+                        if (response.ok) {
+                            const data = await response.json();
+                            contents[file.oldPath] = data.data.content;
+                        }
+                    } catch (error) {
+                        console.error(
+                            `Failed to fetch content for ${file.oldPath}:`,
+                            error
+                        );
+                    }
+                }
             }
 
-            return (
-                <div key={index} className={className}>
-                    {line || '\u00A0'}
-                </div>
-            );
-        });
-    };
+            setFileContents(contents);
+            setLoadingFiles(false);
+        };
+
+        fetchFileContents();
+    }, [patch.id, patch.patch_content, diffFiles]);
+
+    // Split diff content by files
+    const splitDiffByFiles = useMemo(() => {
+        if (!patch.patch_content || diffFiles.length === 0) return [];
+
+        const result: {
+            fileInfo: DiffFileInfo;
+            diffContent: string;
+            oldContent?: string;
+        }[] = [];
+        const diffLines = patch.patch_content.split('\n');
+        let currentFileIndex = -1;
+        let currentDiffLines: string[] = [];
+
+        for (let i = 0; i < diffLines.length; i++) {
+            const line = diffLines[i];
+
+            if (line.startsWith('diff --git')) {
+                // Save previous file's diff if exists
+                if (currentFileIndex >= 0 && currentDiffLines.length > 0) {
+                    const fileInfo = diffFiles[currentFileIndex];
+                    const oldContent = fileInfo.oldPath
+                        ? fileContents[fileInfo.oldPath]
+                        : undefined;
+                    result.push({
+                        fileInfo,
+                        diffContent: currentDiffLines.join('\n'),
+                        oldContent,
+                    });
+                }
+
+                // Start new file
+                currentFileIndex++;
+                currentDiffLines = [line];
+            } else if (currentFileIndex >= 0) {
+                currentDiffLines.push(line);
+            }
+        }
+
+        // Don't forget the last file
+        if (currentFileIndex >= 0 && currentDiffLines.length > 0) {
+            const fileInfo = diffFiles[currentFileIndex];
+            const oldContent = fileInfo.oldPath
+                ? fileContents[fileInfo.oldPath]
+                : undefined;
+            result.push({
+                fileInfo,
+                diffContent: currentDiffLines.join('\n'),
+                oldContent,
+            });
+        }
+
+        return result;
+    }, [patch.patch_content, diffFiles, fileContents]);
 
     const handleApply = async () => {
         setIsApplying(true);
@@ -580,8 +710,82 @@ const PatchDetails: React.FC<PatchDetailsProps> = ({
             <div className="patch-diff">
                 <h4>Changes</h4>
                 <div className="diff-content">
-                    {patch.patch_content ? (
-                        renderDiff(patch.patch_content)
+                    {loadingFiles ? (
+                        <p>Loading file contents...</p>
+                    ) : splitDiffByFiles.length > 0 ? (
+                        splitDiffByFiles.map((item, index) => {
+                            const { fileInfo, diffContent, oldContent } = item;
+
+                            // Extract file extension for language detection
+                            const getFileExt = (filePath: string) => {
+                                const ext = filePath.split('.').pop() || '';
+                                return ext;
+                            };
+
+                            return (
+                                <div key={index} className="diff-file">
+                                    <div className="diff-file-header">
+                                        {fileInfo.isNew && (
+                                            <span className="file-status new">
+                                                (new){' '}
+                                            </span>
+                                        )}
+                                        {fileInfo.isDeleted && (
+                                            <span className="file-status deleted">
+                                                (deleted){' '}
+                                            </span>
+                                        )}
+                                        {fileInfo.isRenamed
+                                            ? `${fileInfo.oldPath} → ${fileInfo.newPath}`
+                                            : fileInfo.newPath}
+                                    </div>
+                                    <DiffView
+                                        data={{
+                                            oldFile: {
+                                                fileName:
+                                                    fileInfo.oldPath ||
+                                                    fileInfo.newPath,
+                                                content: oldContent || null,
+                                                fileLang: getFileExt(
+                                                    fileInfo.oldPath ||
+                                                        fileInfo.newPath
+                                                ),
+                                            },
+                                            newFile: {
+                                                fileName: fileInfo.newPath,
+                                                content: oldContent || null, // We'll apply the patch to get new content
+                                                fileLang: getFileExt(
+                                                    fileInfo.newPath
+                                                ),
+                                            },
+                                            hunks: [diffContent],
+                                        }}
+                                        diffViewMode={DiffModeEnum.Unified}
+                                        diffViewHighlight={true}
+                                        diffViewTheme="light"
+                                        diffViewFontSize={14}
+                                    />
+                                </div>
+                            );
+                        })
+                    ) : patch.patch_content ? (
+                        // Fallback to raw diff display
+                        <DiffView
+                            data={{
+                                oldFile: {
+                                    fileName: 'patch',
+                                    content: null,
+                                },
+                                newFile: {
+                                    fileName: 'patch',
+                                    content: null,
+                                },
+                                hunks: [patch.patch_content],
+                            }}
+                            diffViewMode={DiffModeEnum.Unified}
+                            diffViewHighlight={true}
+                            diffViewTheme="light"
+                        />
                     ) : (
                         <p>Loading diff...</p>
                     )}
@@ -642,47 +846,43 @@ const PatchDetails: React.FC<PatchDetailsProps> = ({
                     padding: 1rem;
                     overflow-x: auto;
                     flex: 1;
-                    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-                    font-size: 0.875rem;
-                    line-height: 1.4;
                 }
 
-                .diff-line {
-                    white-space: pre;
-                    word-wrap: normal;
-                    margin: 0;
+                .diff-file {
+                    margin-bottom: 1.5rem;
                 }
 
-                .diff-header {
-                    color: #6f42c1;
-                    font-weight: bold;
-                    background-color: #f3f0ff;
-                    margin: 0.5rem -1rem;
-                    padding: 0.25rem 1rem;
+                .diff-file:last-child {
+                    margin-bottom: 0;
                 }
 
                 .diff-file-header {
+                    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+                    font-size: 0.875rem;
+                    font-weight: bold;
                     color: #0969da;
                     background-color: #ddf4ff;
-                    margin: 0.25rem -1rem;
-                    padding: 0.25rem 1rem;
+                    padding: 0.5rem 1rem;
+                    margin: -1rem -1rem 1rem -1rem;
+                    border-bottom: 1px solid #dee2e6;
                 }
 
-                .diff-hunk-header {
-                    color: #636e7b;
-                    background-color: #eff2f5;
-                    margin: 0.25rem -1rem;
-                    padding: 0.25rem 1rem;
+                .file-status {
+                    font-weight: normal;
+                    padding: 0.125rem 0.375rem;
+                    border-radius: 0.25rem;
+                    font-size: 0.75rem;
+                    margin-right: 0.5rem;
                 }
 
-                .diff-addition {
-                    background-color: #ccffd8;
-                    color: #055d20;
+                .file-status.new {
+                    background-color: #d4edda;
+                    color: #155724;
                 }
 
-                .diff-deletion {
-                    background-color: #ffd7cc;
-                    color: #82071e;
+                .file-status.deleted {
+                    background-color: #f8d7da;
+                    color: #721c24;
                 }
 
                 .alert {

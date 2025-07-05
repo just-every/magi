@@ -175,6 +175,7 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
             scrollback: 5000,
             convertEol: true,
             fontSize: 13,
+            fontFamily: "'Noto Sans Mono', 'Courier New', monospace",
             // Removed 'rows' option, FitAddon will handle it
         });
         const addon = new FitAddon();

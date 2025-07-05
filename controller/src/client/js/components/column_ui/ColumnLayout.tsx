@@ -7,6 +7,7 @@ import OutputColumn from './OutputColumn';
 import PatchesViewer, { Patch } from '../PatchesViewer';
 import CustomToolsViewer, { CustomTool } from '../CustomToolsViewer';
 import { PRIMARY_RGB } from '../../utils/constants';
+import { ProcessData, ProcessStatus } from '../../context/SocketContext';
 
 interface ColumnLayoutProps {}
 
@@ -19,6 +20,8 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
     >('tasks');
     const [selectedTool, setSelectedTool] = useState<CustomTool | null>(null);
     const [selectedPatch, setSelectedPatch] = useState<Patch | null>(null);
+    const [patchesCount, setPatchesCount] = useState<number>(0);
+    const [toolsCount, setToolsCount] = useState<number>(0);
 
     useEffect(() => {
         // Focus input when visible
@@ -35,6 +38,65 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
             setSelectedPatch(null);
         }
     }, [middleTab]);
+
+    // Calculate counts for tasks and complete tabs
+    const getTasksCount = () => {
+        let count = 0;
+        const activeStatuses: ProcessStatus[] = [
+            'running',
+            'failed',
+            'terminated',
+            'ending',
+        ];
+
+        Array.from(processes.values()).forEach((process: ProcessData) => {
+            if (activeStatuses.includes(process.status as ProcessStatus)) {
+                count++; // Count the process itself
+            }
+
+            // Count active workers
+            if (process.agent?.workers) {
+                process.agent.workers.forEach(worker => {
+                    const workerStatus = worker.statusEvent
+                        ?.status as ProcessStatus;
+                    if (
+                        !workerStatus ||
+                        activeStatuses.includes(workerStatus)
+                    ) {
+                        count++;
+                    }
+                });
+            }
+        });
+
+        return count;
+    };
+
+    const getCompleteCount = () => {
+        let count = 0;
+
+        Array.from(processes.values()).forEach((process: ProcessData) => {
+            if (process.status === 'completed') {
+                count++; // Count the process itself
+
+                // Count all workers of completed processes
+                if (process.agent?.workers) {
+                    count += process.agent.workers.size;
+                }
+            } else {
+                // For non-completed processes, count only completed workers
+                if (process.agent?.workers) {
+                    process.agent.workers.forEach(worker => {
+                        if (worker.statusEvent?.status === 'completed') {
+                            count++;
+                        }
+                    });
+                }
+            }
+        });
+
+        return count;
+    };
 
     return (
         <div
@@ -76,6 +138,11 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                                 onClick={() => setMiddleTab('tasks')}
                             >
                                 Tasks
+                                {getTasksCount() > 0 && (
+                                    <span className="ms-1">
+                                        ({getTasksCount()})
+                                    </span>
+                                )}
                             </button>
                         </li>
                         <li className="nav-item">
@@ -86,6 +153,11 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                                 onClick={() => setMiddleTab('code')}
                             >
                                 Code
+                                {patchesCount > 0 && (
+                                    <span className="ms-1">
+                                        ({patchesCount})
+                                    </span>
+                                )}
                             </button>
                         </li>
                         <li className="nav-item">
@@ -96,6 +168,9 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                                 onClick={() => setMiddleTab('tools')}
                             >
                                 Tools
+                                {toolsCount > 0 && (
+                                    <span className="ms-1">({toolsCount})</span>
+                                )}
                             </button>
                         </li>
                         <li className="nav-item">
@@ -106,6 +181,11 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                                 onClick={() => setMiddleTab('complete')}
                             >
                                 Complete
+                                {getCompleteCount() > 0 && (
+                                    <span className="ms-1">
+                                        ({getCompleteCount()})
+                                    </span>
+                                )}
                             </button>
                         </li>
                     </ul>
@@ -129,6 +209,7 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                                     setSelectedPatch(patch);
                                     setSelectedItemId(null);
                                 }}
+                                onCountChange={setPatchesCount}
                             />
                         ) : middleTab === 'tools' ? (
                             <CustomToolsViewer
@@ -137,6 +218,7 @@ const ColumnLayout: React.FC<ColumnLayoutProps> = () => {
                                     setSelectedTool(tool);
                                     setSelectedItemId(null);
                                 }}
+                                onCountChange={setToolsCount}
                             />
                         ) : (
                             <ProcessTreeColumn

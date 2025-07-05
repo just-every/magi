@@ -29,7 +29,7 @@ services:
         ports:
             - '3010:3010' # Expose web interface port
         volumes:
-            - claude_credentials:/claude_shared:rw # For Claude auth
+            - magi_home:/magi_home:rw # For home directory files
             - magi_output:/magi_output:rw # For output storage
             - custom_tools:/custom_tools:rw # Custom tools
             - ../:/external/host:rw # Mount parent directory for repo management
@@ -43,6 +43,7 @@ services:
             - NODE_ENV=development # Set environment to development
             - TZ=$(date +%Z) # Get host timezone - conversion handled in code
             - UV_USE_IO_URING=0 # Fix for Node.js io_uring bug causing PTY disconnects
+            - MAGI_INITIAL_COMMAND=${MAGI_INITIAL_COMMAND:-} # Pass initial command if provided
         networks:
             - magi-network
         stop_signal: SIGINT
@@ -60,7 +61,7 @@ services:
                 BUILDKIT_INLINE_CACHE: 1
         volumes:
             - ./engine/src:/app/src:rw # Mount source code for development hot reloading
-            - claude_credentials:/claude_shared:rw
+            - magi_home:/magi_home:rw
             - magi_output:/magi_output:rw
             - custom_tools:/custom_tools:rw
         env_file:
@@ -81,8 +82,8 @@ networks:
         driver: bridge
 
 volumes:
-    claude_credentials:
-        name: claude_credentials
+    magi_home:
+        name: magi_home
         external: true
     magi_output:
         name: magi_output

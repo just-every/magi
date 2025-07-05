@@ -8,7 +8,8 @@ import { Server as WebSocketServer, WebSocket } from 'ws';
 import { Server as HttpServer } from 'http';
 import { ProcessManager } from './process_manager';
 import { createNewProject } from './container_manager.js';
-import fs from 'fs';
+import fs from 'fs/promises';
+import { existsSync, mkdirSync } from 'fs';
 import path from 'path';
 import { talk } from '../utils/talk';
 import {
@@ -62,6 +63,8 @@ export class CommunicationManager {
     private readonly LAST_MINUTE_WINDOW_MS = 60 * 1000;
     private eventHandlers: Map<string, EventHandler> = new Map();
     private childToParentMap: Map<string, string> = new Map(); // Maps child processId to parent processId
+    private lastLimitWarning: number = 0; // Timestamp of last warning
+    private hasExceededLimit: boolean = false; // Track if limit was exceeded
 
     constructor(server: HttpServer, processManager: ProcessManager) {
         this.processManager = processManager;
@@ -74,18 +77,20 @@ export class CommunicationManager {
         // Add debug logging
         console.log('[DEBUG] CommunicationManager initialized');
 
-        // Set up a debug interval
-        setInterval(() => {
-            const connectionCount = this.connections.size;
-            const containerDataCount = this.containerData.size;
-            console.log(
-                `[DEBUG] WebSocket connections: ${connectionCount}, Container data records: ${containerDataCount}`
-            );
-        }, 30000); // Log every 30 seconds
+        // Set up a debug interval (development only)
+        if (process.env.NODE_ENV === 'development') {
+            setInterval(() => {
+                const connectionCount = this.connections.size;
+                const containerDataCount = this.containerData.size;
+                console.log(
+                    `[DEBUG] WebSocket connections: ${connectionCount}, Container data records: ${containerDataCount}`
+                );
+            }, 120000); // Reduced to every 2 minutes in development
+        }
 
         // Ensure storage directory exists
-        if (!fs.existsSync(this.storageDir)) {
-            fs.mkdirSync(this.storageDir, { recursive: true });
+        if (!existsSync(this.storageDir)) {
+            mkdirSync(this.storageDir, { recursive: true });
         }
 
         // Initialize WebSocket server
@@ -154,7 +159,12 @@ export class CommunicationManager {
                     this.containerData.set(processId, containerConnection);
 
                     // Load history from disk if available
-                    this.loadMessageHistory(processId);
+                    this.loadMessageHistory(processId).catch(err => {
+                        console.error(
+                            `Error loading message history for ${processId}:`,
+                            err
+                        );
+                    });
                 }
 
                 // Handle incoming messages
@@ -184,7 +194,14 @@ export class CommunicationManager {
 
                             // Save to disk periodically (we don't need to save every message)
                             if (containerData.messageHistory.length % 5 === 0) {
-                                this.saveMessageHistory(processId);
+                                this.saveMessageHistory(processId).catch(
+                                    err => {
+                                        console.error(
+                                            `Error saving message history for ${processId}:`,
+                                            err
+                                        );
+                                    }
+                                );
                             }
                         }
 
@@ -207,7 +224,12 @@ export class CommunicationManager {
 
                     // Save message history on disconnect but don't delete container data
                     // This allows us to preserve history if the container reconnects
-                    this.saveMessageHistory(processId);
+                    this.saveMessageHistory(processId).catch(err => {
+                        console.error(
+                            `Error saving message history on disconnect for ${processId}:`,
+                            err
+                        );
+                    });
 
                     // Log that the container may reconnect with updated port
                     const serverPort = process.env.PORT || '3010';
@@ -482,6 +504,9 @@ export class CommunicationManager {
             };
 
             this.processManager.io.emit('cost:info', emitPayload);
+
+            // Check cost limit and emit warnings if needed
+            this.checkCostLimitAndNotify(aggregatedGlobalUsage.cost.total);
         } catch (error) {
             console.error(
                 'Error recalculating and emitting global state:',
@@ -623,7 +648,10 @@ export class CommunicationManager {
                 typeof event.command === 'string' &&
                 event.command.trim().toLowerCase() === 'stop';
 
-            if(commandIsStop && event.targetProcessId === this.processManager.coreProcessId) {
+            if (
+                commandIsStop &&
+                event.targetProcessId === this.processManager.coreProcessId
+            ) {
                 this.sendMessage(
                     processId,
                     JSON.stringify({
@@ -694,6 +722,29 @@ export class CommunicationManager {
                         type: 'project_update',
                         project_id: event.project_id,
                         message: `Error creating project ${event.project_id}: ${error}`,
+                        failed: true,
+                    })
+                );
+            }
+        } else if (event.type === 'project_delete') {
+            try {
+                // Delete the project files
+                await deleteProject(event.project_id);
+                this.sendMessage(
+                    this.processManager.coreProcessId,
+                    JSON.stringify({
+                        type: 'project_delete_complete',
+                        project_id: event.project_id,
+                        message: `${event.project_id} successfully deleted`,
+                    })
+                );
+            } catch (error) {
+                this.sendMessage(
+                    this.processManager.coreProcessId,
+                    JSON.stringify({
+                        type: 'project_delete_complete',
+                        project_id: event.project_id,
+                        message: `Error deleting project ${event.project_id}: ${error}`,
                         failed: true,
                     })
                 );
@@ -813,7 +864,6 @@ export class CommunicationManager {
                         'message_complete',
                         'system_status',
                         'agent_start',
-                        'agent_updated',
                         'process_updated',
                         'tool_done',
                         'tool_start',
@@ -948,7 +998,7 @@ export class CommunicationManager {
     /**
      * Save message history for a process to disk
      */
-    private saveMessageHistory(processId: string): void {
+    private async saveMessageHistory(processId: string): Promise<void> {
         const containerData = this.containerData.get(processId);
 
         if (!containerData) {
@@ -960,7 +1010,7 @@ export class CommunicationManager {
                 this.storageDir,
                 `${processId}_messages.json`
             );
-            fs.writeFileSync(
+            await fs.writeFile(
                 filePath,
                 JSON.stringify(containerData.messageHistory, null, 2),
                 'utf8'
@@ -976,15 +1026,15 @@ export class CommunicationManager {
     /**
      * Load message history for a process from disk
      */
-    private loadMessageHistory(processId: string): void {
+    private async loadMessageHistory(processId: string): Promise<void> {
         try {
             const filePath = path.join(
                 this.storageDir,
                 `${processId}_messages.json`
             );
 
-            if (fs.existsSync(filePath)) {
-                const data = fs.readFileSync(filePath, 'utf8');
+            if (existsSync(filePath)) {
+                const data = await fs.readFile(filePath, 'utf8');
                 const messages = JSON.parse(data) as MagiMessage[];
 
                 // Update container data
@@ -1079,5 +1129,86 @@ export class CommunicationManager {
         }
 
         this.connections.clear();
+    }
+
+    /**
+     * Check if cost limit is exceeded and notify users
+     */
+    private checkCostLimitAndNotify(currentCost: number): void {
+        // Import loadData function
+        const { loadData } = require('../utils/storage');
+
+        // Load cost limit from storage
+        const costLimitStr = loadData('dailyCostLimit.json');
+        if (!costLimitStr) return;
+
+        let dailyLimit: number | null = null;
+        try {
+            const data = JSON.parse(costLimitStr);
+            dailyLimit = data.dailyLimit;
+        } catch (err) {
+            console.error('Error parsing cost limit data:', err);
+            return;
+        }
+
+        if (dailyLimit === null) return;
+
+        const now = Date.now();
+        const isOverLimit = currentCost > dailyLimit;
+        const isNearLimit = currentCost > dailyLimit * 0.8;
+
+        // Rate limit warnings to once per minute
+        const shouldWarn = now - this.lastLimitWarning > 60000;
+
+        if (isOverLimit && !this.hasExceededLimit) {
+            // First time exceeding limit
+            this.hasExceededLimit = true;
+            this.lastLimitWarning = now;
+
+            // Emit system message
+            const warningMessage = {
+                processId: this.processManager.coreProcessId || 'system',
+                event: {
+                    type: 'system_update',
+                    content: `⚠️ **Daily cost limit exceeded!** Current spend: $${currentCost.toFixed(2)} / Limit: $${dailyLimit.toFixed(2)}`,
+                    message_id: `limit-warning-${now}`,
+                    timestamp: new Date().toISOString(),
+                },
+            };
+
+            this.processManager.io.emit('process:message', {
+                id: warningMessage.processId,
+                message: warningMessage,
+            });
+
+            console.warn(
+                `COST LIMIT EXCEEDED: $${currentCost.toFixed(2)} > $${dailyLimit.toFixed(2)}`
+            );
+        } else if (isNearLimit && !isOverLimit && shouldWarn) {
+            // Near limit warning (80%)
+            this.lastLimitWarning = now;
+
+            const warningMessage = {
+                processId: this.processManager.coreProcessId || 'system',
+                event: {
+                    type: 'system_update',
+                    content: `⚠️ **Approaching daily cost limit** (${Math.round((currentCost / dailyLimit) * 100)}%). Current: $${currentCost.toFixed(2)} / Limit: $${dailyLimit.toFixed(2)}`,
+                    message_id: `limit-warning-${now}`,
+                    timestamp: new Date().toISOString(),
+                },
+            };
+
+            this.processManager.io.emit('process:message', {
+                id: warningMessage.processId,
+                message: warningMessage,
+            });
+
+            console.warn(
+                `COST LIMIT WARNING: Approaching limit - $${currentCost.toFixed(2)} / $${dailyLimit.toFixed(2)}`
+            );
+        } else if (!isOverLimit && this.hasExceededLimit) {
+            // Reset exceeded flag if back under limit (e.g., if limit was raised)
+            this.hasExceededLimit = false;
+        }
     }
 }

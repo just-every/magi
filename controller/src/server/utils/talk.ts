@@ -23,7 +23,7 @@ export function getCurrentVoice(): string {
     return currentVoiceId;
 }
 
-let communicationManager: CommunicationManager | null = null;
+export let communicationManager: CommunicationManager | null = null;
 
 /**
  * Set the communication manager instance for audio streaming
@@ -91,7 +91,9 @@ export async function talk(
         return;
     }
 
-    const format = 'pcm'; // Use PCM format
+    // Set the format based on the provider
+    const format =
+        voiceConfig.provider === 'elevenlabs' ? 'pcm_22050' : 'pcm_16000';
 
     try {
         // Create agent definition for ensemble
@@ -106,9 +108,10 @@ export async function talk(
         // Voice generation options
         const voiceOptions: any = {
             voice: voiceConfig.voice,
-            response_format: format as any,
-            speed: voiceConfig.provider === 'elevenlabs' ? 0.5 : 1.0,
-            stream: true,
+            response_format: format,
+            speed:
+                voiceConfig.speed ||
+                (voiceConfig.provider === 'elevenlabs' ? 0.9 : 1.0),
             affect,
         };
 
@@ -116,43 +119,43 @@ export async function talk(
         const stream = ensembleVoice(input, agent, voiceOptions);
 
         let chunkCount = 0;
-        let hasSeenFirstChunk = false;
 
         // Process stream events
         for await (const event of stream) {
-            if (event.type === 'audio_stream') {
-                // Log for debugging
-                if (!hasSeenFirstChunk || event.pcmParameters) {
-                    console.log(
-                        `[Server] Audio stream event for ${processId}:`,
-                        {
-                            hasData: !!event.data,
-                            dataLength: event.data?.length,
-                            hasPcmParameters: !!event.pcmParameters,
-                            chunkIndex: event.chunkIndex,
-                            isFinalChunk: event.isFinalChunk,
-                        }
-                    );
-                    hasSeenFirstChunk = true;
-                }
-
-                // Simply forward the audio_stream event as-is
+            if (event.type === 'format_info') {
+                // Forward format info to client
                 communicationManager.broadcastProcessMessage(processId, {
                     processId,
-                    event: {
-                        ...event,
-                        timestamp: event.timestamp || new Date().toISOString(),
-                    },
+                    event,
+                });
+                console.log(
+                    `[Server] Sent format_info for ${processId}:`,
+                    event.pcmParameters
+                );
+            } else if (event.type === 'audio_stream') {
+                // Forward audio stream event
+                communicationManager.broadcastProcessMessage(processId, {
+                    processId,
+                    event,
                 });
                 chunkCount++;
             } else if (event.type === 'cost_update') {
                 // Forward the cost_update event directly
                 communicationManager.handleModelUsage(
-                    processId,
+                    'controller',
                     event as CostUpdateEvent
                 );
             }
         }
+
+        // Send a complete event to signal end of stream
+        communicationManager.broadcastProcessMessage(processId, {
+            processId,
+            event: {
+                type: 'complete',
+                timestamp: new Date().toISOString(),
+            },
+        });
 
         console.log(
             `[Server] Finished sending ${chunkCount} audio chunks for process ${processId} using ${voiceConfig.name}.`

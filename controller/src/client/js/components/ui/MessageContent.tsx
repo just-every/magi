@@ -41,11 +41,7 @@ const MessageContent: React.FC<MessageContentProps> = ({ content }) => {
             <div className="structured-content">
                 {content.map((item, index) => {
                     if (item.type === 'input_text') {
-                        return (
-                            <div key={index}>
-                                {item.text}
-                            </div>
-                        );
+                        return <div key={index}>{item.text}</div>;
                     } else if (item.type === 'input_image') {
                         return (
                             <div key={index}>

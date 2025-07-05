@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import * as fs from 'fs';
+import * as os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import * as readline from 'readline';
@@ -485,6 +486,7 @@ function ensureAllEnvVars(): void {
         { key: 'PROJECT_REPOSITORIES' },
         { key: 'AUTO_MERGE_MAGI_PROJECTS', defaultValue: 'all' },
         { key: 'AUTO_MERGE_EXISTING_PROJECTS', defaultValue: 'low_risk' },
+        { key: 'HOME_LINKS', defaultValue: '' },
     ];
 
     // Check if .env file already exists and load existing values
@@ -663,6 +665,13 @@ function promptForMissingKeys(): void {
             defaultValue: 'low_risk',
             description:
                 'Controls auto-merge of PRs to repositories listed in PROJECT_REPOSITORIES.',
+        },
+        {
+            key: 'HOME_LINKS',
+            prompt: 'Enter home directory paths to sync (comma-separated, e.g., .llm.env,.config/tool or press Enter to skip): ',
+            defaultValue: '',
+            description:
+                'Maps local home files/folders into Docker. Example: .llm.env,.config/tool\nNote: Be mindful of Terms of Service when sharing authentication data.',
         },
     ];
 
@@ -894,6 +903,11 @@ function saveEnvFile(): void {
                 comment:
                     '# Same as above, but for EXISTING repositories listed in PROJECT_REPOSITORIES',
             },
+            {
+                key: 'HOME_LINKS',
+                comment:
+                    '# Home directory file/folder mappings (comma-separated paths)',
+            },
         ];
 
         // Add each variable if it exists and has a value
@@ -1009,6 +1023,71 @@ function buildDockerImage(): void {
     }
 }
 
+function syncHomeLinks(): void {
+    // Read HOME_LINKS from environment
+    const homeLinks = envVars['HOME_LINKS'];
+    if (!homeLinks || homeLinks.trim() === '') {
+        console.log('No HOME_LINKS configured, skipping home sync');
+        return;
+    }
+
+    console.log('\n🔗 Syncing home directory files...');
+
+    const homeDir = os.homedir();
+    const magiHomeDir = path.join(rootDir, '.magi_home');
+
+    // Parse HOME_LINKS (format: ".gemini,.claude,.claude.json")
+    const links = homeLinks.split(',').map(link => link.trim());
+
+    for (const link of links) {
+        if (!link) continue;
+
+        // Source and destination have the same name
+        const sourcePath = path.join(homeDir, link);
+        const destPath = path.join(magiHomeDir, link);
+
+        try {
+            if (!fs.existsSync(sourcePath)) {
+                console.log(
+                    `\x1b[33m%s\x1b[0m`,
+                    `Source not found: ${sourcePath}`
+                );
+                continue;
+            }
+
+            // Create destination directory if needed
+            const destDir = path.dirname(destPath);
+            if (!fs.existsSync(destDir)) {
+                fs.mkdirSync(destDir, { recursive: true });
+            }
+
+            const stats = fs.statSync(sourcePath);
+
+            if (stats.isDirectory()) {
+                // Use rsync to sync directory
+                console.log(`Syncing directory: ${link}`);
+                execSync(`rsync -a --delete "${sourcePath}/" "${destPath}/"`, {
+                    stdio: 'inherit',
+                });
+            } else {
+                // Copy single file
+                console.log(`Copying file: ${link}`);
+                fs.copyFileSync(sourcePath, destPath);
+
+                // Preserve permissions
+                fs.chmodSync(destPath, stats.mode);
+            }
+
+            console.log(`\x1b[32m%s\x1b[0m`, `✓ Synced: ${link}`);
+        } catch (error) {
+            console.log(
+                `\x1b[31m%s\x1b[0m`,
+                `Failed to sync ${link}: ${error instanceof Error ? error.message : String(error)}`
+            );
+        }
+    }
+}
+
 function ensureBindVolume(volumeName: string, hostDir: string) {
     // Ensure the host directory exists
     if (!fs.existsSync(hostDir)) {
@@ -1103,14 +1182,19 @@ function setupDockerVolumes(): void {
             { stdio: 'inherit', cwd: rootDir }
         );
 
-        // claude_credentials (leave as-is)
+        // magi_home as bind-backed named volume
+        const magiHomeHostDir = path.join(rootDir, '.magi_home');
+        ensureBindVolume('magi_home', magiHomeHostDir);
         console.log(
-            `Setting permissions for volume 'claude_credentials' to ${MAGI_UID}:${MAGI_GID}...`
+            `Setting permissions for volume 'magi_home' to ${MAGI_UID}:${MAGI_GID}...`
         );
         execSync(
-            `docker run --rm --user root -v claude_credentials:/claude_shared alpine:latest chown -R "${MAGI_UID}:${MAGI_GID}" /claude_shared`,
+            `docker run --rm --user root -v magi_home:/magi_home alpine:latest chown -R "${MAGI_UID}:${MAGI_GID}" /magi_home`,
             { stdio: 'inherit', cwd: rootDir }
         );
+
+        // Sync HOME_LINKS if specified
+        syncHomeLinks();
 
         console.log(
             '\x1b[32m%s\x1b[0m',
@@ -1149,85 +1233,53 @@ function setupDockerVolumes(): void {
 
 function setupClaude(): void {
     console.log('');
-    console.log('\x1b[36m%s\x1b[0m', 'Step 5: Setting up Claude');
+    console.log('\x1b[36m%s\x1b[0m', 'Step 5: Setting up Code Providers');
 
-    // Check if Docker is available for Claude setup
-    if (!checkDockerInstalled()) {
-        console.error(
-            '\x1b[33m%s\x1b[0m',
-            'Docker is required for Claude setup.'
-        );
-        rl.question(
-            'Do you want to skip Claude setup and continue? (y/n): ',
-            answer => {
-                if (
-                    answer.toLowerCase() === 'y' ||
-                    answer.toLowerCase() === 'yes'
-                ) {
-                    console.log(
-                        '\x1b[33m%s\x1b[0m',
-                        'Skipping Claude setup. You can run "npm run setup:claude" later when Docker is available.'
-                    );
-                    setupComplete();
-                } else {
-                    console.log(
-                        'Setup aborted. Please install Docker and try again.'
-                    );
-                    process.exit(1);
-                }
-            }
-        );
-        return;
-    }
-
-    // Ask user if they want to set up Claude Code
+    // Ask user if they want to set up code providers
     console.log(
         '\x1b[90m%s\x1b[0m',
-        'Claude Code requires separate authentication from the Anthropic API key.'
+        'MAGI can use specialized code generation tools like Claude Code, Gemini CLI, and Codex.'
     );
     console.log(
         '\x1b[90m%s\x1b[0m',
-        "It's highly recommended as part of our coding toolset."
+        "These tools significantly enhance MAGI's ability to write and modify code."
     );
-    rl.question('Do you want to set up Claude Code? (y/n): ', answer => {
+
+    rl.question('Do you want to set up code providers now? (y/n): ', answer => {
         if (answer.toLowerCase() === 'n' || answer.toLowerCase() === 'no') {
             console.log(
                 '\x1b[33m%s\x1b[0m',
-                'Skipping Claude setup. You can run "npm run setup:claude" later if needed.'
+                'Skipping code provider setup. You can run "npm run setup:code-providers" later.'
             );
             setupComplete();
             return;
         }
 
         try {
-            console.log('Running npm run setup:claude...');
+            console.log('Running code provider setup...');
             console.log(
                 '\x1b[33m%s\x1b[0m',
-                'Follow the prompts to authenticate with Claude when they appear.'
-            );
-            console.log(
-                '\x1b[33m%s\x1b[0m',
-                'When complete, press Ctrl+C to continue with the setup.'
+                'This will guide you through setting up available code generation tools.'
             );
 
-            execSync('npm run setup:claude', {
+            execSync('npm run setup:code-providers', {
                 stdio: 'inherit',
                 cwd: rootDir,
             });
-            console.log(
-                '\x1b[32m%s\x1b[0m',
-                '✓ Claude setup completed successfully'
-            );
+            console.log('\x1b[32m%s\x1b[0m', '✓ Code provider setup completed');
             setupComplete();
         } catch (error) {
-            console.error('\x1b[31m%s\x1b[0m', 'Failed to set up Claude.');
+            console.error(
+                '\x1b[31m%s\x1b[0m',
+                'Code provider setup encountered an issue.'
+            );
             console.error(
                 'Error: ',
                 error instanceof Error ? error.message : String(error)
             );
 
             rl.question(
-                'Do you want to continue without Claude setup? (y/n): ',
+                'Do you want to continue without code provider setup? (y/n): ',
                 answer => {
                     if (
                         answer.toLowerCase() === 'y' ||
@@ -1235,12 +1287,12 @@ function setupClaude(): void {
                     ) {
                         console.log(
                             '\x1b[33m%s\x1b[0m',
-                            'Skipping Claude setup. You can run "npm run setup:claude" later.'
+                            'Continuing without code providers. You can run "npm run setup:code-providers" later.'
                         );
                         setupComplete();
                     } else {
                         console.log(
-                            'Setup aborted. Please fix the Claude setup issue and try again.'
+                            'Setup aborted. Please fix the issue and try again.'
                         );
                         process.exit(1);
                     }

@@ -58,6 +58,7 @@ import { initializeEnsembleLogging } from './utils/ensemble_logger_bridge.js';
 const person = process.env.YOUR_NAME || 'User';
 const talkToolName = `talk to ${person}`.toLowerCase().replaceAll(' ', '_');
 let primaryAgentId: string | undefined;
+let exitedCode: number | undefined;
 
 // Parse command line arguments
 function parseCommandLineArgs() {
@@ -76,6 +77,10 @@ function parseCommandLineArgs() {
 }
 
 function endProcess(exit: number, result?: string): void {
+    if (typeof exitedCode === 'number' && exitedCode >= exit) {
+        return; // Already existed at this level
+    }
+    exitedCode = exit;
     if (exit > 0 && !result) {
         result = 'Exited with error';
     }
@@ -267,10 +272,10 @@ function checkModelProviderApiKeys(): boolean {
 // Add exit handlers to print cost summary and send cost data
 process.on('exit', code => endProcess(-1, `Process exited with code ${code}`));
 process.on('SIGINT', signal =>
-    endProcess(0, `Received SIGINT ${signal}, terminating...`)
+    endProcess(0, `Received ${signal}, terminating.`)
 );
 process.on('SIGTERM', signal =>
-    endProcess(0, `Received SIGTERM ${signal}, terminating...`)
+    endProcess(0, `Received ${signal}, terminating.`)
 );
 process.on('unhandledRejection', reason =>
     endProcess(-1, `Unhandled Rejection reason ${reason}`)
@@ -312,7 +317,7 @@ async function main(): Promise<void> {
     });
 
     // Process prompt (either plain text or base64-encoded)
-    let promptText: string;
+    let promptText: string | undefined;
     if (args.base64) {
         try {
             const buffer = Buffer.from(args.base64, 'base64');
@@ -322,9 +327,14 @@ async function main(): Promise<void> {
         }
     } else if (args.prompt) {
         promptText = args.prompt;
-    } else {
-        return endProcess(1, 'Either --prompt or --base64 must be provided');
+    } else if (args.tool && args.tool !== 'none') {
+        // Tool runs require a prompt
+        return endProcess(
+            1,
+            'Either --prompt or --base64 must be provided for tool runs'
+        );
     }
+    // If no prompt and no tool, we're starting the overseer in idle mode
 
     // Move to working directory
     const projects = getProcessProjectIds();
@@ -389,23 +399,6 @@ async function main(): Promise<void> {
             agent.agent_id = primaryAgentId;
         }
 
-        // Send agent_start event so the UI can properly initialize the agent
-        sendComms({
-            type: 'agent_start',
-            agent: {
-                agent_id: agent.agent_id,
-                name: agent.name,
-                model: agent.model,
-                modelClass: agent.modelClass,
-            },
-        });
-
-        sendComms({
-            type: 'agent_status',
-            agent_id: agent.agent_id,
-            status: 'process_start',
-        });
-
         if (args.tool && args.tool !== 'none') {
             // Use mind task for task runs
             const startTime = Date.now();
@@ -439,7 +432,7 @@ async function main(): Promise<void> {
                 );
 
                 // Process the mind task stream
-                const runTaskStream = runTask(agent, promptText);
+                const runTaskStream = runTask(agent, promptText!);
 
                 for await (const event of runTaskStream) {
                     // Collect response_output events for history
@@ -559,7 +552,17 @@ async function main(): Promise<void> {
                 `${person} is nice to me. I will be nice to them too. I hope I hear from them soon. I should come up with a plan on how to improve myself and better help ${person}.`
             );
 
-            await spawnThought(args, promptText);
+            // Only spawn initial thought if a prompt was provided and it's not the idle mode marker
+            if (promptText && promptText !== '[IDLE_MODE_START]') {
+                await spawnThought(args, promptText);
+            } else if (promptText === '[IDLE_MODE_START]') {
+                console.log(
+                    'Starting overseer in idle mode, waiting for commands...'
+                );
+                await addMonologue(
+                    'I am now ready and waiting for commands. The system is initialized and I can begin helping as soon as I receive instructions.'
+                );
+            }
 
             await mainLoop(
                 agent,

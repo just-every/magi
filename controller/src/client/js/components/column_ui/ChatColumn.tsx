@@ -9,10 +9,11 @@ import TextareaAutosize from 'react-textarea-autosize'; // Import TextareaAutosi
 import CostDisplay from '../ui/CostDisplay'; // Import CostDisplay
 import StatusDisplay from '../ui/StatusDisplay'; // Import StatusDisplay
 import { parseMarkdown } from '../utils/MarkdownUtils';
-import { AudioPlayer } from '../../utils/AudioUtils';
+import { AudioPlayer, fadeOutAndStopAudio } from '../../utils/AudioUtils';
 import MessageContent from '../ui/MessageContent';
 import { VersionManager } from '../ui/VersionManager';
 import { AudioRecorder } from '../../utils/AudioRecorder';
+import AudioVisualizer from '../ui/AudioVisualizer';
 
 interface VoiceOption {
     id: string;
@@ -69,13 +70,17 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
     const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
     const [isDragging, setIsDragging] = useState(false);
     const [inputFocus, setInputFocus] = useState(false);
-    const [showVersionManager, setShowVersionManager] = useState<boolean>(false);
+    const [showVersionManager, setShowVersionManager] =
+        useState<boolean>(false);
     const [uploadProgress, setUploadProgress] = useState<Map<string, number>>(
         new Map()
     );
     const [isRecording, setIsRecording] = useState(false);
     const [transcriptionText, setTranscriptionText] = useState('');
     const audioRecorderRef = useRef<AudioRecorder | null>(null);
+    const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
+    const [audioSource, setAudioSource] =
+        useState<MediaStreamAudioSourceNode | null>(null);
 
     const coreProcess = coreProcessId
         ? (processes.get(coreProcessId) as ProcessData | undefined)
@@ -203,8 +208,8 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
         setIsMultiline(command.includes('\n'));
     }, [command]);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        if (e.preventDefault) e.preventDefault();
+    const handleSubmit = async (e?: React.FormEvent) => {
+        if (e && e.preventDefault) e.preventDefault();
 
         if (command.trim() || attachedFiles.length > 0) {
             // Always create structured content
@@ -338,23 +343,33 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
 
         if (isRecording) {
             // Stop recording
-            audioRecorderRef.current?.stop();
-            socket.emit('audio:stream_stop');
             setIsRecording(false);
             setTranscriptionText('');
+
+            // Stop the recorder which will handle disconnecting audio nodes
+            if (audioRecorderRef.current) {
+                audioRecorderRef.current.stop();
+                audioRecorderRef.current = null;
+            }
+
+            // Clear audio states after recorder is stopped
+            setAudioContext(null);
+            setAudioSource(null);
+
+            socket.emit('audio:stream_stop');
         } else {
             // Start recording
             try {
                 const recorder = new AudioRecorder({
                     sampleRate: 16000,
                     channelCount: 1,
-                    onDataAvailable: (data) => {
+                    onDataAvailable: data => {
                         // Send audio data to server
                         socket.emit('audio:stream_data', {
-                            audio: data
+                            audio: data,
                         });
                     },
-                    onError: (error) => {
+                    onError: error => {
                         console.error('Audio recording error:', error);
                         setIsRecording(false);
                     },
@@ -362,18 +377,26 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
 
                 audioRecorderRef.current = recorder;
                 await recorder.start();
-                
+
+                // Get audio context and source for visualization
+                const ctx = recorder.getAudioContext();
+                const src = recorder.getSource();
+                setAudioContext(ctx);
+                setAudioSource(src);
+
                 // Notify server that we're starting
                 socket.emit('audio:stream_start', {
                     sampleRate: 16000,
-                    model: 'whisper-1',
-                    language: 'en'
+                    model: 'gemini-live-2.5-flash-preview',
+                    language: 'en',
                 });
-                
+
                 setIsRecording(true);
             } catch (error) {
                 console.error('Failed to start recording:', error);
-                alert('Failed to access microphone. Please check your permissions.');
+                alert(
+                    'Failed to access microphone. Please check your permissions.'
+                );
             }
         }
     };
@@ -382,42 +405,75 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
     useEffect(() => {
         if (!socket) return;
 
-        const handleTranscriptionEvent = (data: { type: string; event: any }) => {
+        const handleTranscriptionEvent = (data: {
+            type: string;
+            event: {
+                type: string;
+                delta?: string;
+                text?: string;
+                error?: string;
+            };
+        }) => {
             if (data.type !== 'transcription_event') return;
-            
+
             const event = data.event;
-            
+
             switch (event.type) {
                 case 'transcription_start':
                     console.log('Transcription started');
                     setTranscriptionText('');
                     break;
-                    
-                case 'transcription_delta':
+
+                case 'transcription_turn_delta':
                     if (event.delta) {
+                        // Append preview delta to existing text
                         setTranscriptionText(prev => prev + event.delta);
                     }
                     break;
-                    
-                case 'transcription_complete':
+
+                case 'transcription_turn_complete':
                     if (event.text && event.text.trim()) {
-                        // Set the transcribed text as the command
-                        setCommand(event.text);
-                        // Optionally auto-submit
-                        // handleSubmit();
+                        const textContent = event.text.trim();
+
+                        // Create structured content
+                        const content = [
+                            {
+                                type: 'input_text',
+                                text: textContent,
+                            },
+                        ];
+
+                        const messageContent = JSON.stringify({
+                            contentArray: content,
+                        });
+
+                        // Submit directly without going through handleSubmit
+                        if (coreProcessId) {
+                            sendCoreCommand(messageContent);
+                        } else {
+                            console.warn(
+                                'No core process found, attempting to start a new one with the command.'
+                            );
+                            runCommand(messageContent);
+                        }
+
+                        // Clear the command after submission
+                        setCommand('');
                     }
                     setTranscriptionText('');
-                    setIsRecording(false);
+                    // Don't stop recording - let user control this
                     break;
-                    
+
                 case 'vad_speech_start':
                     console.log('Speech detected');
+                    // Fade out any ongoing audio playback when user starts speaking
+                    fadeOutAndStopAudio(150);
                     break;
-                    
+
                 case 'vad_speech_end':
                     console.log('Speech ended');
                     break;
-                    
+
                 case 'error':
                     console.error('Transcription error:', event.error);
                     setIsRecording(false);
@@ -426,7 +482,10 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
             }
         };
 
-        const handleAudioError = (data: { error: string; details?: string }) => {
+        const handleAudioError = (data: {
+            error: string;
+            details?: string;
+        }) => {
             console.error('Audio error:', data.error, data.details);
             setIsRecording(false);
             audioRecorderRef.current?.stop();
@@ -439,7 +498,7 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
             socket.off('audio:transcription_event', handleTranscriptionEvent);
             socket.off('audio:error', handleAudioError);
         };
-    }, [socket]);
+    }, [socket, coreProcessId, sendCoreCommand, runCommand]);
 
     // Clean up on unmount
     useEffect(() => {
@@ -547,7 +606,11 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                 <i
                                     className={`bi ${isAudioEnabled ? 'bi-volume-up-fill' : 'bi-x'} mx-2 ${isAudioEnabled ? 'text-primary' : 'text-dark'}`}
                                 />
-                                {isAudioEnabled ? (isPlayingPreview ? 'Playing Preview...' : 'Active') : 'Muted'}
+                                {isAudioEnabled
+                                    ? isPlayingPreview
+                                        ? 'Playing Preview...'
+                                        : 'Active'
+                                    : 'Muted'}
                             </span>
                         </div>
                         <button
@@ -705,9 +768,7 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                     <div className="d-flex justify-content-between align-items-center mt-3">
                         <div>
                             <span className="fw-bold me-2">Version:</span>
-                            <span>
-                                None
-                            </span>
+                            <span>None</span>
                         </div>
 
                         {/* Version Manager Button */}
@@ -726,8 +787,6 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                             onClose={() => setShowVersionManager(false)}
                         />
                     </div>
-
-
 
                     <div className="mt-4">
                         <StatusDisplay />
@@ -801,7 +860,7 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                     className={`${message.type === 'user' ? 'text-end' : ''}`}
                                 >
                                     <div
-                                        className={`d-inline-block p-3 rounded-top-3 ${
+                                        className={`d-inline-block p-3 pb-0 rounded-top-3 ${
                                             message.type === 'user'
                                                 ? 'bg-primary text-white rounded-start-3'
                                                 : 'bg-white rounded-end-3'
@@ -814,7 +873,9 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                         {toolCallMessage ? (
                                             toolCallMessage.command
                                         ) : (
-                                            <MessageContent content={message.content} />
+                                            <MessageContent
+                                                content={message.content}
+                                            />
                                         )}
                                     </div>
                                 </div>
@@ -872,7 +933,9 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                             borderRadius: '0.375rem',
                             transition: 'all 0.2s',
                             backgroundColor: '#fff',
-                            borderColor: inputFocus ? 'rgba(var(--bs-primary-rgb))' : '#fff',
+                            borderColor: inputFocus
+                                ? 'rgba(var(--bs-primary-rgb))'
+                                : '#fff',
                         }}
                     >
                         <div className="d-flex flex-column">
@@ -883,12 +946,12 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                     isDragging
                                         ? 'Drop files here...'
                                         : isRecording && transcriptionText
-                                        ? transcriptionText
-                                        : isRecording
-                                        ? 'Listening...'
-                                        : isFirstProcess
-                                        ? 'Start task...'
-                                        : `Talk${agentName ? ' to ' + agentName : ''}...`
+                                          ? transcriptionText
+                                          : isRecording
+                                            ? 'Listening...'
+                                            : isFirstProcess
+                                              ? 'Start task...'
+                                              : `Talk${agentName ? ' to ' + agentName : ''}...`
                                 }
                                 value={command}
                                 onChange={e => setCommand(e.target.value)}
@@ -903,34 +966,63 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                                     border: 'none',
                                     resize: 'none',
                                     outline: 'none !important',
-                                    boxShadow: 'none'
+                                    boxShadow: 'none',
                                 }}
                             />
-                            <div className="d-flex flex-row justify-content-end align-items-center gap-2 p-2">
-                                <button
-                                    type="button"
-                                    className="btn btn-outline-secondary border-0 rounded-circle"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    title="Attach files"
-                                >
-                                    <i className="bi bi-paperclip"></i>
-                                </button>
-                                <button
-                                    type="button"
-                                    className={`btn btn-outline-secondary border-0 rounded-circle ${isRecording ? 'text-danger recording-active' : ''}`}
-                                    onClick={handleAudioToggle}
-                                    title={isRecording ? 'Stop recording' : 'Start voice input'}
-                                >
-                                    <i className={`bi ${isRecording ? 'bi-stop-circle-fill' : 'bi-soundwave'}`}></i>
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn btn-outline-secondary border-0 rounded-circle bg-primary text-white ms-1"
-                                    onClick={handleSubmit}
-                                    title="Send"
-                                >
-                                    <i className="bi bi-send-fill"></i>
-                                </button>
+                            <div className="d-flex flex-row justify-content-between align-items-center gap-2 p-2">
+                                {/* Audio Visualizer on the left */}
+                                {isRecording && audioContext && audioSource ? (
+                                    <div className="flex-grow-1">
+                                        <AudioVisualizer
+                                            audioContext={audioContext}
+                                            source={audioSource}
+                                            height={24}
+                                            barCount={20}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="flex-grow-1"></div>
+                                )}
+                                {/* Buttons on the right */}
+                                <div className="d-flex flex-row align-items-center gap-2">
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline-secondary border-0 rounded-circle"
+                                        onClick={() =>
+                                            fileInputRef.current?.click()
+                                        }
+                                        title="Attach files"
+                                    >
+                                        <i className="bi bi-paperclip"></i>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`btn border-0 rounded-circle ${isRecording ? 'recording-active' : 'btn-outline-secondary'}`}
+                                        style={
+                                            isRecording
+                                                ? { color: '#00a2ff' }
+                                                : {}
+                                        }
+                                        onClick={handleAudioToggle}
+                                        title={
+                                            isRecording
+                                                ? 'Stop recording'
+                                                : 'Start voice input'
+                                        }
+                                    >
+                                        <i
+                                            className={`bi ${isRecording ? 'bi-stop-circle-fill' : 'bi-soundwave'}`}
+                                        ></i>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`btn border-0 rounded-circle ms-1 ${isRecording ? 'btn-outline-secondary' : 'btn-primary text-white'}`}
+                                        onClick={handleSubmit}
+                                        title="Send"
+                                    >
+                                        <i className="bi bi-send-fill"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
 

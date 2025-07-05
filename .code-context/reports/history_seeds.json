@@ -1,0 +1,2488 @@
+{
+  "generated": "2025-07-01T01:31:30.337Z",
+  "since": "6 months ago",
+  "commitCount": 377,
+  "fileCount": 1357,
+  "patterns": {
+    "interesting-commit": [
+      {
+        "type": "interesting-commit",
+        "score": 133.23549058690068,
+        "hash": "57fec30356680467053c7d1c1a933d48ba9cb467",
+        "subject": "fix: resolve code provider registration and sub-agent visibility issues",
+        "date": "2025-05-30T06:12:41.000Z",
+        "reason": "Commit type: fix, Keywords: 4",
+        "keywordMatches": 4,
+        "filesChanged": 66,
+        "linesChanged": 6077,
+        "author": "magi",
+        "prefix": "fix"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 118.00358086415524,
+        "hash": "3411c57593811b5265b2f8e605342c354585c973",
+        "subject": "feat: enhance design system and browser tools",
+        "date": "2025-05-21T13:56:04.000Z",
+        "reason": "Commit type: feat, Keywords: 3",
+        "keywordMatches": 3,
+        "filesChanged": 24,
+        "linesChanged": 1597,
+        "author": "MAGI System",
+        "prefix": "feat"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 109.29362947875342,
+        "hash": "6a13fa8ab9c284a396ef22fd0c0adf53d148a4fb",
+        "subject": "fix: exclude examples directory from ensemble TypeScript build",
+        "date": "2025-05-27T05:59:27.000Z",
+        "reason": "Commit type: fix, Keywords: 5",
+        "keywordMatches": 5,
+        "filesChanged": 4,
+        "linesChanged": 794,
+        "author": "MAGI System",
+        "prefix": "fix"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 105.01877044862063,
+        "hash": "b69dfbd168282ac73c4ec67c83d7c498c4933079",
+        "subject": "feat: Add new run_pty utility and system updates support",
+        "date": "2025-05-17T00:10:52.000Z",
+        "reason": "Commit type: feat, Keywords: 2",
+        "keywordMatches": 2,
+        "filesChanged": 17,
+        "linesChanged": 3246,
+        "author": "MAGI System",
+        "prefix": "feat"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 104.80197115567923,
+        "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+        "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+        "date": "2025-06-26T11:23:00.000Z",
+        "reason": "Commit type: fix, Keywords: 1",
+        "keywordMatches": 1,
+        "filesChanged": 73,
+        "linesChanged": 4313,
+        "author": "magi",
+        "prefix": "fix"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 104.27928551070205,
+        "hash": "ca7e13f74a35de9dfe6c34931ddde9b004c0c167",
+        "subject": "fix: improve PTY timeout handling for PatchAgent",
+        "date": "2025-06-14T08:40:14.000Z",
+        "reason": "Commit type: fix, Keywords: 1",
+        "keywordMatches": 1,
+        "filesChanged": 70,
+        "linesChanged": 11025,
+        "author": "magi",
+        "prefix": "fix"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 100.72447964597602,
+        "hash": "5494b915062cdd8aa74f281e54b28b80c8ce4633",
+        "subject": "Major system rewrite with enhanced UI and agent architecture",
+        "date": "2025-03-23T23:31:17.000Z",
+        "reason": "Keyword matches: 4",
+        "keywordMatches": 4,
+        "filesChanged": 67,
+        "linesChanged": 17102,
+        "author": "MAGI System"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 98.47831700627853,
+        "hash": "7a8a5464577631dec564b178783ed82b60fbedf1",
+        "subject": "feat(streaming): implement stream_end events for reliable AsyncQueue completion",
+        "date": "2025-05-25T00:51:44.000Z",
+        "reason": "Commit type: feat, Keywords: 1",
+        "keywordMatches": 1,
+        "filesChanged": 53,
+        "linesChanged": 2841,
+        "author": "MAGI System",
+        "prefix": "feat"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 98.28721968892692,
+        "hash": "d3e68f52c85b022112b7766aa1fe3925afaac666",
+        "subject": "feat: add design system library, implement the Smart Design Search tool",
+        "date": "2025-05-20T09:15:41.000Z",
+        "reason": "Commit type: feat, Keywords: 1",
+        "keywordMatches": 1,
+        "filesChanged": 21,
+        "linesChanged": 5185,
+        "author": "MAGI System",
+        "prefix": "feat"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 98.08894723839421,
+        "hash": "308952796ad142cb88296b1a35cb50e83fd4105b",
+        "subject": "feat: Implement PR events tracking and management",
+        "date": "2025-05-15T13:28:13.000Z",
+        "reason": "Commit type: feat, Keywords: 1",
+        "keywordMatches": 1,
+        "filesChanged": 117,
+        "linesChanged": 8711,
+        "author": "MAGI System",
+        "prefix": "feat"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 97.82499366152967,
+        "hash": "a3b4274c6fbfacede70c7a86e5e39622ffce7646",
+        "subject": "feat: Add browser and console display components, tool types",
+        "date": "2025-05-09T03:19:17.000Z",
+        "reason": "Commit type: feat, Keywords: 1",
+        "keywordMatches": 1,
+        "filesChanged": 52,
+        "linesChanged": 4110,
+        "author": "MAGI System",
+        "prefix": "feat"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 93.79346211869348,
+        "hash": "f74f480a6d32c8626442f3f954a88fc2b310b7e6",
+        "subject": "feat: Add Docker containerization support",
+        "date": "2025-04-02T10:38:01.000Z",
+        "reason": "Commit type: feat, Keywords: 1",
+        "keywordMatches": 1,
+        "filesChanged": 22,
+        "linesChanged": 1369,
+        "author": "MAGI System",
+        "prefix": "feat"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 93.75984091528728,
+        "hash": "456390293d293d329048a801e38b7fa99253f49f",
+        "subject": "refactor: complete separation of ensemble and ecot packages",
+        "date": "2025-05-30T07:09:13.000Z",
+        "reason": "Commit type: refactor, Keywords: 1",
+        "keywordMatches": 1,
+        "filesChanged": 78,
+        "linesChanged": 16942,
+        "author": "magi",
+        "prefix": "refactor"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 92.87428899843036,
+        "hash": "4c10e32045b5aeec862e098e479d80fb74203c54",
+        "subject": "refactor: Remove browser extension and reorganize codebase",
+        "date": "2025-05-07T14:46:20.000Z",
+        "reason": "Commit type: refactor, Keywords: 1",
+        "keywordMatches": 1,
+        "filesChanged": 122,
+        "linesChanged": 16545,
+        "author": "MAGI System",
+        "prefix": "refactor"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 91.35787315145832,
+        "hash": "279abd6cf9b6b0bcdbd3d469d4515ad1833bf758",
+        "subject": "refactor: Reorganize agent structure with common agents and task force",
+        "date": "2025-04-01T05:45:17.000Z",
+        "reason": "Commit type: refactor, Keywords: 1",
+        "keywordMatches": 1,
+        "filesChanged": 41,
+        "linesChanged": 1495,
+        "author": "MAGI System",
+        "prefix": "refactor"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 90.93548603515029,
+        "hash": "c788edf1b2d10097a4aa5b260ea4e91e31c1564e",
+        "subject": "Refactor codebase to improve modularity and add webpack",
+        "date": "2025-03-18T22:55:07.000Z",
+        "reason": "Keyword matches: 3",
+        "keywordMatches": 3,
+        "filesChanged": 20,
+        "linesChanged": 5109,
+        "author": "MAGI System"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 89.39470790839042,
+        "hash": "72fa6e136c8ec1d2ad9296ab8ba0cf8ffc33da98",
+        "subject": "fix: exclude core MAGI process from active tasks display",
+        "date": "2025-06-14T16:45:28.000Z",
+        "reason": "Commit type: fix, Keywords: 1",
+        "keywordMatches": 1,
+        "filesChanged": 31,
+        "linesChanged": 1754,
+        "author": "magi",
+        "prefix": "fix"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 89.38699429537671,
+        "hash": "c5df11f0751eff4ef5c60387ae5f6879fda7025e",
+        "subject": "fix: improve patch conflict detection for empty repositories",
+        "date": "2025-06-14T11:45:09.000Z",
+        "reason": "Commit type: fix, Keywords: 1",
+        "keywordMatches": 1,
+        "filesChanged": 28,
+        "linesChanged": 5027,
+        "author": "magi",
+        "prefix": "fix"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 85.39415430145414,
+        "hash": "311e5e749c5541f27dcd18b60e86c86f6aeabcdf",
+        "subject": "feat: Add persistent command input and process-to-process communication",
+        "date": "2025-03-30T06:17:46.000Z",
+        "reason": "Commit type: feat, Keywords: 1",
+        "keywordMatches": 1,
+        "filesChanged": 30,
+        "linesChanged": 939,
+        "author": "MAGI System",
+        "prefix": "feat"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 84.59212964844939,
+        "hash": "4dd156c5c50d96677e407b2227cc265ea6fa4724",
+        "subject": "fix: resolve CI smoke test failures and improve performance",
+        "date": "2025-06-19T09:17:39.000Z",
+        "reason": "Commit type: fix, Keywords: 4",
+        "keywordMatches": 4,
+        "filesChanged": 3,
+        "linesChanged": 115,
+        "author": "magi",
+        "prefix": "fix"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 84.20064716187214,
+        "hash": "f3759633fff58724e1607760a04535ddc8fea418",
+        "subject": "Refactor: rename utils/ to setup/ and convert to TypeScript",
+        "date": "2025-03-18T00:08:11.000Z",
+        "reason": "Commit type: refactor, Keywords: 1",
+        "keywordMatches": 1,
+        "filesChanged": 13,
+        "linesChanged": 2065,
+        "author": "MAGI System",
+        "prefix": "refactor"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 84.14495501469749,
+        "hash": "7c95e69aeeeaa5f6406313a0520d4610bc218862",
+        "subject": "fix: update ensemble to local version to fix tool_call streaming bug",
+        "date": "2025-06-06T14:03:32.000Z",
+        "reason": "Commit type: fix, Keywords: 4",
+        "keywordMatches": 4,
+        "filesChanged": 1,
+        "linesChanged": 62,
+        "author": "magi",
+        "prefix": "fix"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 82.1520705017599,
+        "hash": "7bb9d1aec6e875d8503d30750d67366c087f0b3a",
+        "subject": "Convert browser extension to TypeScript with modular architecture",
+        "date": "2025-04-10T12:49:48.000Z",
+        "reason": "Keyword matches: 2",
+        "keywordMatches": 2,
+        "filesChanged": 25,
+        "linesChanged": 4890,
+        "author": "MAGI System"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 81.51996022303082,
+        "hash": "4c2fb40462ba1c9e642a969fe24f1cab8bd4b5e0",
+        "subject": "Fix message delta handling to properly append content in order",
+        "date": "2025-03-23T10:31:59.000Z",
+        "reason": "Keyword matches: 2",
+        "keywordMatches": 2,
+        "filesChanged": 54,
+        "linesChanged": 9803,
+        "author": "MAGI System"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 78.59185794292237,
+        "hash": "7bba52a10318fd0e4501bbd349b8b259c8c43a3f",
+        "subject": "chore: migrate image tools to standard tools setup",
+        "date": "2025-05-19T05:34:53.000Z",
+        "reason": "Commit type: chore, Keywords: 1",
+        "keywordMatches": 1,
+        "filesChanged": 21,
+        "linesChanged": 3025,
+        "author": "MAGI System",
+        "prefix": "chore"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 77.62281691207191,
+        "hash": "6fbe78ff7fceae1760f0d1afc5d265a6c9b4f336",
+        "subject": "Refactor agent system with improved tool handling",
+        "date": "2025-03-21T14:37:04.000Z",
+        "reason": "Keyword matches: 2",
+        "keywordMatches": 2,
+        "filesChanged": 16,
+        "linesChanged": 1558,
+        "author": "MAGI System"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 74.34934242080479,
+        "hash": "50706bd0dbac0500095114f5e3b4f5ef4e0154ad",
+        "subject": "fix: downgrade Express to v4 for compatibility",
+        "date": "2025-06-09T22:52:47.000Z",
+        "reason": "Commit type: fix, Keywords: 3",
+        "keywordMatches": 3,
+        "filesChanged": 1,
+        "linesChanged": 2,
+        "author": "magi",
+        "prefix": "fix"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 72.55056887628425,
+        "hash": "9fa8eca492e858a0277d72671da81bb2da8c1023",
+        "subject": "Update system architecture and replace task_force with new task_run module",
+        "date": "2025-04-12T14:14:05.000Z",
+        "reason": "Keyword matches: 1",
+        "keywordMatches": 1,
+        "filesChanged": 35,
+        "linesChanged": 2908,
+        "author": "MAGI System"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 72.01859113655821,
+        "hash": "b38ee76d2b4746c4fcd5f1f80299f562ef519e25",
+        "subject": "Add cost tracking and model pricing",
+        "date": "2025-03-26T08:00:05.000Z",
+        "reason": "Keyword matches: 1",
+        "keywordMatches": 1,
+        "filesChanged": 31,
+        "linesChanged": 1948,
+        "author": "MAGI System"
+      },
+      {
+        "type": "interesting-commit",
+        "score": 71.677318305508,
+        "hash": "007948d53ea4b78a4a21866fec333d8b149646fd",
+        "subject": "Migrate to Node.js frontend with Python backend in Docker",
+        "date": "2025-03-15T06:15:49.000Z",
+        "reason": "Keyword matches: 1",
+        "keywordMatches": 1,
+        "filesChanged": 47,
+        "linesChanged": 5633,
+        "author": "MAGI System"
+      }
+    ],
+    "large-refactor": [
+      {
+        "type": "large-refactor",
+        "score": 99.37133700215627,
+        "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+        "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+        "loc": 4313,
+        "files": 73,
+        "date": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 98.5554583238204,
+        "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+        "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+        "loc": 4125,
+        "files": 79,
+        "date": "2025-06-20T12:26:29.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 98.00536795091325,
+        "hash": "59a3085937bd631d3733448b51bf4270169e24a5",
+        "subject": "chore: add AI-generated summaries to gitignore\r  Add summaries/ directory to .gitignore to prevent committing temporary\r  AI-generated summary files and hash maps that are created during agent\r  operations.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)",
+        "loc": 2734,
+        "files": 48,
+        "date": "2025-06-16T12:03:56.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 97.72960850139523,
+        "hash": "c5df11f0751eff4ef5c60387ae5f6879fda7025e",
+        "subject": "fix: improve patch conflict detection for empty repositories",
+        "loc": 5027,
+        "files": 28,
+        "date": "2025-06-14T11:45:09.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 97.71201749429224,
+        "hash": "ca7e13f74a35de9dfe6c34931ddde9b004c0c167",
+        "subject": "fix: improve PTY timeout handling for PatchAgent",
+        "loc": 11025,
+        "files": 70,
+        "date": "2025-06-14T08:40:14.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 97.1058420123034,
+        "hash": "f54c00ee8d36158037cfb4b4b1bc3e2e9609f221",
+        "subject": "refactor: complete repository migration and restructure project",
+        "loc": 13912,
+        "files": 177,
+        "date": "2025-06-09T22:28:07.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 95.64856461504313,
+        "hash": "456390293d293d329048a801e38b7fa99253f49f",
+        "subject": "refactor: complete separation of ensemble and ecot packages",
+        "loc": 16942,
+        "files": 78,
+        "date": "2025-05-30T07:09:13.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 95.64318663432267,
+        "hash": "57fec30356680467053c7d1c1a933d48ba9cb467",
+        "subject": "fix: resolve code provider registration and sub-agent visibility issues",
+        "loc": 6077,
+        "files": 66,
+        "date": "2025-05-30T06:12:41.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 94.9277233542618,
+        "hash": "7a8a5464577631dec564b178783ed82b60fbedf1",
+        "subject": "feat(streaming): implement stream_end events for reliable AsyncQueue completion",
+        "loc": 2841,
+        "files": 53,
+        "date": "2025-05-25T00:51:44.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 94.29073229642313,
+        "hash": "d3e68f52c85b022112b7766aa1fe3925afaac666",
+        "subject": "feat: add design system library, implement the Smart Design Search tool",
+        "loc": 5185,
+        "files": 21,
+        "date": "2025-05-20T09:15:41.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 94.14148857496195,
+        "hash": "38d8f6899b89929d7283fce497282add00b0c3b6",
+        "subject": "fixed lint errors",
+        "loc": 2044,
+        "files": 47,
+        "date": "2025-05-19T07:06:50.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 94.13274142884322,
+        "hash": "7bba52a10318fd0e4501bbd349b8b259c8c43a3f",
+        "subject": "chore: migrate image tools to standard tools setup",
+        "loc": 3025,
+        "files": 21,
+        "date": "2025-05-19T05:34:53.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 93.86197785705225,
+        "hash": "1f3195e93d3bf5889699d488ad095a2c55c3bff2",
+        "subject": "Commit all file changes",
+        "loc": 8450,
+        "files": 176,
+        "date": "2025-05-17T06:08:37.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 93.82794532280569,
+        "hash": "b69dfbd168282ac73c4ec67c83d7c498c4933079",
+        "subject": "feat: Add new run_pty utility and system updates support",
+        "loc": 3246,
+        "files": 17,
+        "date": "2025-05-17T00:10:52.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 93.62982412798073,
+        "hash": "308952796ad142cb88296b1a35cb50e83fd4105b",
+        "subject": "feat: Implement PR events tracking and management",
+        "loc": 8711,
+        "files": 117,
+        "date": "2025-05-15T13:28:13.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 93.1648206399036,
+        "hash": "82fcf2c923df99b79b5e10e4409c34d4d5672941",
+        "subject": "refactor: Clean up project templates and implement web agents",
+        "loc": 7837,
+        "files": 135,
+        "date": "2025-05-12T04:00:06.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 92.7499788717656,
+        "hash": "a3b4274c6fbfacede70c7a86e5e39622ffce7646",
+        "subject": "feat: Add browser and console display components, tool types",
+        "loc": 4110,
+        "files": 52,
+        "date": "2025-05-09T03:19:17.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 92.54136490677321,
+        "hash": "4c10e32045b5aeec862e098e479d80fb74203c54",
+        "subject": "refactor: Remove browser extension and reorganize codebase",
+        "loc": 16545,
+        "files": 122,
+        "date": "2025-05-07T14:46:20.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 91.4033099854135,
+        "hash": "f0984134723ed56e200f71e4636256d84c461cd3",
+        "subject": "refactor: Remove browser extension and reorganize codebase",
+        "loc": 11916,
+        "files": 77,
+        "date": "2025-04-29T07:23:06.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 90.73813367897007,
+        "hash": "85590d55e495b43fff00b37a8b91554ed3997c97",
+        "subject": "Implement browser CDP integration for Chrome Devtools Protocol",
+        "loc": 7512,
+        "files": 56,
+        "date": "2025-04-24T10:50:46.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 90.5825923928209,
+        "hash": "2f92462c2dd10b5c192f868b3cd839e3da0444d2",
+        "subject": "Major system overhaul with improved architecture and new features",
+        "loc": 69836,
+        "files": 294,
+        "date": "2025-04-23T07:35:43.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 89.36458440195332,
+        "hash": "ff282ecc0651aaa0c34efc0ecae241e84c305c2d",
+        "subject": "Implement TDD framework with tests and browser integration updates",
+        "loc": 4696,
+        "files": 56,
+        "date": "2025-04-14T10:12:01.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 89.21435900271119,
+        "hash": "98b572d891aaf57613c929cd57245ecb9ef5210b",
+        "subject": "ensemble migration",
+        "loc": 1870,
+        "files": 57,
+        "date": "2025-05-28T14:28:59.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 89.1136394501522,
+        "hash": "9fa8eca492e858a0277d72671da81bb2da8c1023",
+        "subject": "Update system architecture and replace task_force with new task_run module",
+        "loc": 2908,
+        "files": 35,
+        "date": "2025-04-12T14:14:05.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 88.83164902650938,
+        "hash": "7bb9d1aec6e875d8503d30750d67366c087f0b3a",
+        "subject": "Convert browser extension to TypeScript with modular architecture",
+        "loc": 4890,
+        "files": 25,
+        "date": "2025-04-10T12:49:48.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 88.77024301433283,
+        "hash": "9d655ebd51e702657024db659cd4ea09b2057264",
+        "subject": "Add browser extension support with Chrome native messaging",
+        "loc": 3102,
+        "files": 27,
+        "date": "2025-04-10T02:04:18.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 88.76673115487063,
+        "hash": "84d5e4c7c5ea3fa270b4ed2491242ed31829ce2e",
+        "subject": "Add screenshot functionality to browser agent with tab focus preservation",
+        "loc": 2112,
+        "files": 12,
+        "date": "2025-04-10T01:27:23.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 88.62082330352614,
+        "hash": "826d95a742c57a05a4d24d106c0c8adf18637038",
+        "subject": "Add comprehensive automated testing suite with test provider",
+        "loc": 2645,
+        "files": 28,
+        "date": "2025-04-08T23:53:36.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 88.5277534785642,
+        "hash": "eee2c752d2c21bc726925e0850404cf0c1f38b63",
+        "subject": "Fix lint errors except mixed tabs in claude.ts",
+        "loc": 6060,
+        "files": 41,
+        "date": "2025-04-08T07:35:15.000Z"
+      },
+      {
+        "type": "large-refactor",
+        "score": 87.87078208079654,
+        "hash": "ac628e36a8d7e370d52210f42788df77e6a933a7",
+        "subject": "fix: Fix linting errors and code style issues",
+        "loc": 2208,
+        "files": 43,
+        "date": "2025-04-03T12:29:10.000Z"
+      }
+    ],
+    "revert": [
+      {
+        "type": "revert",
+        "score": 58.26699519406393,
+        "hash": "589dab113a5a2d0ce507c39ed7a2a610f2a104b1",
+        "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+        "reason": "Test failures",
+        "date": "2025-06-20T12:30:23.000Z"
+      },
+      {
+        "type": "revert",
+        "score": 58.26654998858447,
+        "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+        "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+        "reason": "Test failures",
+        "date": "2025-06-20T12:26:29.000Z"
+      }
+    ],
+    "security-patch": [
+      {
+        "type": "security-patch",
+        "score": 97.11096104134957,
+        "hash": "875edbf03859e038fe84a320e02d73c07b36f97a",
+        "subject": "feat: add patch security analyzer and test results tracking",
+        "severity": "medium",
+        "date": "2025-06-20T12:26:43.000Z",
+        "filesChanged": 2
+      },
+      {
+        "type": "security-patch",
+        "score": 74.35785348173516,
+        "hash": "0d8fb7787fedb2bf24742bb100a20d63ce772f66",
+        "subject": "Add tar-fs override to package.json files to fix security vulnerability",
+        "severity": "medium",
+        "date": "2025-03-29T11:16:23.000Z",
+        "filesChanged": 2
+      },
+      {
+        "type": "security-patch",
+        "score": 74.35766322298325,
+        "hash": "65bb0f8c47582c7971ec05f64433c1de77008f4c",
+        "subject": "Fix security vulnerability in tar-fs dependency",
+        "severity": "medium",
+        "date": "2025-03-29T11:15:23.000Z",
+        "filesChanged": 1
+      }
+    ],
+    "hot-file": [
+      {
+        "type": "hot-file",
+        "score": 73.40559881515776,
+        "file": "magi/src/utils/design_search.ts",
+        "touches": 17,
+        "timeSpanDays": 18,
+        "contributors": 2,
+        "lastTouched": "2025-05-30T08:32:58.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 66.66666666666666,
+        "file": "utils/display.py",
+        "touches": 20,
+        "timeSpanDays": 1,
+        "contributors": 2,
+        "lastTouched": "2025-03-15T06:15:49.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 65.15353574074074,
+        "file": "controller/src/server/utils/git_push.ts",
+        "touches": 8,
+        "timeSpanDays": 30,
+        "contributors": 3,
+        "lastTouched": "2025-06-14T08:40:14.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 61.2201303909465,
+        "file": "AGENTS.md",
+        "touches": 8,
+        "timeSpanDays": 23,
+        "contributors": 3,
+        "lastTouched": "2025-06-09T22:28:07.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 60,
+        "file": "controller/src/client/js/components/ProcessBox.tsx",
+        "touches": 18,
+        "timeSpanDays": 17,
+        "contributors": 2,
+        "lastTouched": "2025-04-09T02:55:24.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 58.29268141203704,
+        "file": "magi/src/magi_agents/project_agents/operator_agent.ts",
+        "touches": 9,
+        "timeSpanDays": 15,
+        "contributors": 3,
+        "lastTouched": "2025-05-30T08:32:58.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 51.8157168106996,
+        "file": "magi/src/magi_agents/web_agents/operator_agent.ts",
+        "touches": 8,
+        "timeSpanDays": 18,
+        "contributors": 3,
+        "lastTouched": "2025-05-30T08:32:58.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 47.69721369598765,
+        "file": "engine/src/magi.ts",
+        "touches": 15,
+        "timeSpanDays": 16,
+        "contributors": 1,
+        "lastTouched": "2025-06-26T22:02:41.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 44.51776553326474,
+        "file": "engine/src/utils/run_pty.ts",
+        "touches": 14,
+        "timeSpanDays": 17,
+        "contributors": 1,
+        "lastTouched": "2025-06-26T22:03:42.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 43.17976400891633,
+        "file": "magi/src/magi_agents/web_agents/design_agent.ts",
+        "touches": 10,
+        "timeSpanDays": 18,
+        "contributors": 2,
+        "lastTouched": "2025-05-30T08:32:58.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 43.17976400891633,
+        "file": "magi/src/utils/custom_tool_utils.ts",
+        "touches": 10,
+        "timeSpanDays": 23,
+        "contributors": 2,
+        "lastTouched": "2025-05-30T08:32:58.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 41.203616013374486,
+        "file": "controller/src/client/js/components/CustomToolsViewer.tsx",
+        "touches": 7,
+        "timeSpanDays": 30,
+        "contributors": 2,
+        "lastTouched": "2025-06-20T12:39:50.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 38.823014459876546,
+        "file": "ensemble/index.ts",
+        "touches": 6,
+        "timeSpanDays": 6,
+        "contributors": 3,
+        "lastTouched": "2025-05-30T07:09:13.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 32.752357001886146,
+        "file": "engine/src/code_providers/codex.ts",
+        "touches": 11,
+        "timeSpanDays": 11,
+        "contributors": 1,
+        "lastTouched": "2025-06-21T10:56:12.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 32.72653124485596,
+        "file": "controller/src/server/utils/bootstrap.ts",
+        "touches": 6,
+        "timeSpanDays": 30,
+        "contributors": 2,
+        "lastTouched": "2025-06-14T16:45:28.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 32.57676787037037,
+        "file": "controller/src/server/routes/pr_events.ts",
+        "touches": 6,
+        "timeSpanDays": 30,
+        "contributors": 2,
+        "lastTouched": "2025-06-14T08:40:14.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 32.38482300668725,
+        "file": "magi/src/magi_agents/research_agents/operator_agent.ts",
+        "touches": 5,
+        "timeSpanDays": 12,
+        "contributors": 3,
+        "lastTouched": "2025-05-30T08:32:58.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 32.35251204989712,
+        "file": "ensemble/types.ts",
+        "touches": 5,
+        "timeSpanDays": 6,
+        "contributors": 3,
+        "lastTouched": "2025-05-30T07:09:13.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 31.798335365226336,
+        "file": "engine/src/code_providers/claude_code.ts",
+        "touches": 10,
+        "timeSpanDays": 16,
+        "contributors": 1,
+        "lastTouched": "2025-06-26T22:03:26.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 30.22583480624143,
+        "file": "magi/src/magi_agents/web_agents/backend_agent.ts",
+        "touches": 7,
+        "timeSpanDays": 18,
+        "contributors": 2,
+        "lastTouched": "2025-05-30T08:32:58.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 30.22583480624143,
+        "file": "magi/src/magi_agents/web_agents/frontend_agent.ts",
+        "touches": 7,
+        "timeSpanDays": 18,
+        "contributors": 2,
+        "lastTouched": "2025-05-30T08:32:58.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 30.22583480624143,
+        "file": "magi/src/magi_agents/web_agents/test_agent.ts",
+        "touches": 7,
+        "timeSpanDays": 18,
+        "contributors": 2,
+        "lastTouched": "2025-05-30T08:32:58.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 30.22583480624143,
+        "file": "magi/src/utils/llm_call_utils.ts",
+        "touches": 7,
+        "timeSpanDays": 23,
+        "contributors": 2,
+        "lastTouched": "2025-05-30T08:32:58.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 30,
+        "file": "controller/client/html/index.html",
+        "touches": 18,
+        "timeSpanDays": 2,
+        "contributors": 1,
+        "lastTouched": "2025-03-19T22:13:51.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 30,
+        "file": "controller/server/server.ts",
+        "touches": 18,
+        "timeSpanDays": 1,
+        "contributors": 1,
+        "lastTouched": "2025-03-18T22:55:07.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 28.618501828703703,
+        "file": "engine/src/code_providers/gemini_cli.ts",
+        "touches": 9,
+        "timeSpanDays": 1,
+        "contributors": 1,
+        "lastTouched": "2025-06-26T22:03:26.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 28.47025337191358,
+        "file": "controller/src/client/js/components/PatchesViewer.tsx",
+        "touches": 9,
+        "timeSpanDays": 12,
+        "contributors": 1,
+        "lastTouched": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 28.47025337191358,
+        "file": "controller/src/client/js/components/ui/MessageContent.tsx",
+        "touches": 9,
+        "timeSpanDays": 10,
+        "contributors": 1,
+        "lastTouched": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 28.333333333333332,
+        "file": "controller/src/client/js/components/ProcessGrid.tsx",
+        "touches": 17,
+        "timeSpanDays": 16,
+        "contributors": 1,
+        "lastTouched": "2025-04-09T02:55:24.000Z"
+      },
+      {
+        "type": "hot-file",
+        "score": 26.73834364969136,
+        "file": ".github/workflows/ci.yml",
+        "touches": 9,
+        "timeSpanDays": 2,
+        "contributors": 1,
+        "lastTouched": "2025-06-21T06:41:09.000Z"
+      }
+    ],
+    "ping-pong-bug": [
+      {
+        "type": "ping-pong-bug",
+        "score": 175.8556906712963,
+        "file": "controller/src/client/js/components/PatchDetails.tsx",
+        "fixes": [
+          {
+            "hash": "ca7e13f74a35de9dfe6c34931ddde9b004c0c167",
+            "subject": "fix: improve PTY timeout handling for PatchAgent",
+            "date": "2025-06-14T08:40:14.000Z"
+          },
+          {
+            "hash": "72fa6e136c8ec1d2ad9296ab8ba0cf8ffc33da98",
+            "subject": "fix: exclude core MAGI process from active tasks display",
+            "date": "2025-06-14T16:45:28.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          },
+          {
+            "hash": "862713fdb91e67b6a2c74f605f0deab59d4ccbad",
+            "subject": "fix: various improvements to patches, talk, and utility functions",
+            "date": "2025-06-26T22:03:42.000Z"
+          }
+        ],
+        "totalFixes": 5,
+        "timeSpanDays": 13,
+        "lastFixed": "2025-06-26T22:03:42.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.8556906712963,
+        "file": "controller/src/server/routes/patches.ts",
+        "fixes": [
+          {
+            "hash": "59a3085937bd631d3733448b51bf4270169e24a5",
+            "subject": "chore: add AI-generated summaries to gitignore\r  Add summaries/ directory to .gitignore to prevent committing temporary\r  AI-generated summary files and hash maps that are created during agent\r  operations.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)",
+            "date": "2025-06-16T12:03:56.000Z"
+          },
+          {
+            "hash": "5085c160dd9ff5d4e64eaabd0f728e000439cbc8",
+            "subject": "fix: resolve all ESLint errors for clean CI build",
+            "date": "2025-06-19T08:48:47.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          },
+          {
+            "hash": "862713fdb91e67b6a2c74f605f0deab59d4ccbad",
+            "subject": "fix: various improvements to patches, talk, and utility functions",
+            "date": "2025-06-26T22:03:42.000Z"
+          }
+        ],
+        "totalFixes": 7,
+        "timeSpanDays": 13,
+        "lastFixed": "2025-06-26T22:03:42.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.8556906712963,
+        "file": "engine/src/utils/project_utils.ts",
+        "fixes": [
+          {
+            "hash": "ca7e13f74a35de9dfe6c34931ddde9b004c0c167",
+            "subject": "fix: improve PTY timeout handling for PatchAgent",
+            "date": "2025-06-14T08:40:14.000Z"
+          },
+          {
+            "hash": "72fa6e136c8ec1d2ad9296ab8ba0cf8ffc33da98",
+            "subject": "fix: exclude core MAGI process from active tasks display",
+            "date": "2025-06-14T16:45:28.000Z"
+          },
+          {
+            "hash": "6451fe01967514720f98778e1e976e5c514cafeb",
+            "subject": "fix: improve noise filtering to preserve actual Gemini CLI output",
+            "date": "2025-06-26T11:59:15.000Z"
+          },
+          {
+            "hash": "862713fdb91e67b6a2c74f605f0deab59d4ccbad",
+            "subject": "fix: various improvements to patches, talk, and utility functions",
+            "date": "2025-06-26T22:03:42.000Z"
+          }
+        ],
+        "totalFixes": 4,
+        "timeSpanDays": 13,
+        "lastFixed": "2025-06-26T22:03:42.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.8556906712963,
+        "file": "engine/src/utils/run_pty.ts",
+        "fixes": [
+          {
+            "hash": "59a3085937bd631d3733448b51bf4270169e24a5",
+            "subject": "chore: add AI-generated summaries to gitignore\r  Add summaries/ directory to .gitignore to prevent committing temporary\r  AI-generated summary files and hash maps that are created during agent\r  operations.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)",
+            "date": "2025-06-16T12:03:56.000Z"
+          },
+          {
+            "hash": "bc3f1bda97bfa74fef2caaf01c6110ff950e5902",
+            "subject": "feat(engine): add immediate processing support for zero timeout in runPty\r  Add support for silenceTimeoutMs=0 in the PTY runner to enable immediate\r  processing without timeout delays. This allows callers to bypass the\r  silence detection mechanism when real-time output is critical.\r  - Skip timeout setup when silenceTimeoutMs is 0\r  - Process data immediately without buffering delays\r  - Maintain backward compatibility for non-zero timeout values\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)",
+            "date": "2025-06-18T22:31:13.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          },
+          {
+            "hash": "862713fdb91e67b6a2c74f605f0deab59d4ccbad",
+            "subject": "fix: various improvements to patches, talk, and utility functions",
+            "date": "2025-06-26T22:03:42.000Z"
+          }
+        ],
+        "totalFixes": 12,
+        "timeSpanDays": 17,
+        "lastFixed": "2025-06-26T22:03:42.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.43777400462963,
+        "file": "engine/src/code_providers/gemini_cli.ts",
+        "fixes": [
+          {
+            "hash": "5187970a64a2857bdd0475251d7e3557a2133b1c",
+            "subject": "fix: remove GEMINI_API_KEY support to keep using free OAuth auth",
+            "date": "2025-06-26T11:40:51.000Z"
+          },
+          {
+            "hash": "250eb36ee992c2fd8829bb9e5f6b7f53eab91a9f",
+            "subject": "fix: simplify Gemini CLI ready detection after auth",
+            "date": "2025-06-26T11:41:31.000Z"
+          },
+          {
+            "hash": "6451fe01967514720f98778e1e976e5c514cafeb",
+            "subject": "fix: improve noise filtering to preserve actual Gemini CLI output",
+            "date": "2025-06-26T11:59:15.000Z"
+          },
+          {
+            "hash": "e4369805fec641109bf2b487e47e29255c9ffd30",
+            "subject": "fix: handle plain text output from Gemini CLI",
+            "date": "2025-06-26T12:00:58.000Z"
+          },
+          {
+            "hash": "eec3d2cb1c4e8eee19adc2b5798bbc578ac26ce1",
+            "subject": "fix: disable immediate start to properly filter Gemini CLI noise",
+            "date": "2025-06-26T12:01:54.000Z"
+          }
+        ],
+        "totalFixes": 8,
+        "timeSpanDays": 1,
+        "lastFixed": "2025-06-26T12:01:54.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.43777400462963,
+        "file": "controller/src/client/js/components/message/ToolCallMessage.tsx",
+        "fixes": [
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "589dab113a5a2d0ce507c39ed7a2a610f2a104b1",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:30:23.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          },
+          {
+            "hash": "e4369805fec641109bf2b487e47e29255c9ffd30",
+            "subject": "fix: handle plain text output from Gemini CLI",
+            "date": "2025-06-26T12:00:58.000Z"
+          },
+          {
+            "hash": "eec3d2cb1c4e8eee19adc2b5798bbc578ac26ce1",
+            "subject": "fix: disable immediate start to properly filter Gemini CLI noise",
+            "date": "2025-06-26T12:01:54.000Z"
+          }
+        ],
+        "totalFixes": 10,
+        "timeSpanDays": 10,
+        "lastFixed": "2025-06-26T12:01:54.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.4371258564815,
+        "file": "controller/src/client/js/components/message/MessageList.tsx",
+        "fixes": [
+          {
+            "hash": "e858afc9d85dcdc371d79b6fc353cc1d5be4bd3b",
+            "subject": "fix: resolve test failures and lint issues",
+            "date": "2025-06-19T08:06:54.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "589dab113a5a2d0ce507c39ed7a2a610f2a104b1",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:30:23.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          },
+          {
+            "hash": "e4369805fec641109bf2b487e47e29255c9ffd30",
+            "subject": "fix: handle plain text output from Gemini CLI",
+            "date": "2025-06-26T12:00:58.000Z"
+          }
+        ],
+        "totalFixes": 7,
+        "timeSpanDays": 8,
+        "lastFixed": "2025-06-26T12:00:58.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "engine/src/code_providers/claude_code.ts",
+        "fixes": [
+          {
+            "hash": "c5df11f0751eff4ef5c60387ae5f6879fda7025e",
+            "subject": "fix: improve patch conflict detection for empty repositories",
+            "date": "2025-06-14T11:45:09.000Z"
+          },
+          {
+            "hash": "59a3085937bd631d3733448b51bf4270169e24a5",
+            "subject": "chore: add AI-generated summaries to gitignore\r  Add summaries/ directory to .gitignore to prevent committing temporary\r  AI-generated summary files and hash maps that are created during agent\r  operations.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)",
+            "date": "2025-06-16T12:03:56.000Z"
+          },
+          {
+            "hash": "5085c160dd9ff5d4e64eaabd0f728e000439cbc8",
+            "subject": "fix: resolve all ESLint errors for clean CI build",
+            "date": "2025-06-19T08:48:47.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 8,
+        "timeSpanDays": 12,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "engine/src/utils/register_code_providers.ts",
+        "fixes": [
+          {
+            "hash": "ca7e13f74a35de9dfe6c34931ddde9b004c0c167",
+            "subject": "fix: improve PTY timeout handling for PatchAgent",
+            "date": "2025-06-14T08:40:14.000Z"
+          },
+          {
+            "hash": "18bfe34e5da3693d7375280226a72a8a9a3894d2",
+            "subject": "fix: immediate termination for PatchAgent commit messages",
+            "date": "2025-06-21T11:44:21.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 3,
+        "timeSpanDays": 12,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "host/src/setup/setup.ts",
+        "fixes": [
+          {
+            "hash": "5085c160dd9ff5d4e64eaabd0f728e000439cbc8",
+            "subject": "fix: resolve all ESLint errors for clean CI build",
+            "date": "2025-06-19T08:48:47.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 3,
+        "timeSpanDays": 7,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "controller/src/client/css/styles.scss",
+        "fixes": [
+          {
+            "hash": "d12cbdf28ba3e89e23e4d7c06c7f84abe829aba9",
+            "subject": "fix: resolve TypeScript build errors and update event types",
+            "date": "2025-06-19T07:57:09.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "589dab113a5a2d0ce507c39ed7a2a610f2a104b1",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:30:23.000Z"
+          },
+          {
+            "hash": "400eb785d7b20726e8128c4128f6eb3a87d0981a",
+            "subject": "fix: add code element styling for tool call blocks",
+            "date": "2025-06-21T06:28:20.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 9,
+        "timeSpanDays": 38,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "controller/src/client/js/components/message/AssistantMessage.tsx",
+        "fixes": [
+          {
+            "hash": "e858afc9d85dcdc371d79b6fc353cc1d5be4bd3b",
+            "subject": "fix: resolve test failures and lint issues",
+            "date": "2025-06-19T08:06:54.000Z"
+          },
+          {
+            "hash": "5085c160dd9ff5d4e64eaabd0f728e000439cbc8",
+            "subject": "fix: resolve all ESLint errors for clean CI build",
+            "date": "2025-06-19T08:48:47.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "589dab113a5a2d0ce507c39ed7a2a610f2a104b1",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:30:23.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 8,
+        "timeSpanDays": 10,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "controller/src/client/js/components/message/SystemMessage.tsx",
+        "fixes": [
+          {
+            "hash": "17afd788453545e625e5166953c7dcf8b17b31bf",
+            "subject": "feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)",
+            "date": "2025-06-18T20:55:53.000Z"
+          },
+          {
+            "hash": "e858afc9d85dcdc371d79b6fc353cc1d5be4bd3b",
+            "subject": "fix: resolve test failures and lint issues",
+            "date": "2025-06-19T08:06:54.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "589dab113a5a2d0ce507c39ed7a2a610f2a104b1",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:30:23.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 6,
+        "timeSpanDays": 8,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "controller/src/client/js/components/message/ToolResultMessage.tsx",
+        "fixes": [
+          {
+            "hash": "17afd788453545e625e5166953c7dcf8b17b31bf",
+            "subject": "feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)",
+            "date": "2025-06-18T20:55:53.000Z"
+          },
+          {
+            "hash": "e858afc9d85dcdc371d79b6fc353cc1d5be4bd3b",
+            "subject": "fix: resolve test failures and lint issues",
+            "date": "2025-06-19T08:06:54.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "589dab113a5a2d0ce507c39ed7a2a610f2a104b1",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:30:23.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 6,
+        "timeSpanDays": 8,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "controller/src/client/js/components/message/UserMessage.tsx",
+        "fixes": [
+          {
+            "hash": "17afd788453545e625e5166953c7dcf8b17b31bf",
+            "subject": "feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)",
+            "date": "2025-06-18T20:55:53.000Z"
+          },
+          {
+            "hash": "e858afc9d85dcdc371d79b6fc353cc1d5be4bd3b",
+            "subject": "fix: resolve test failures and lint issues",
+            "date": "2025-06-19T08:06:54.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "589dab113a5a2d0ce507c39ed7a2a610f2a104b1",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:30:23.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 7,
+        "timeSpanDays": 10,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "controller/src/client/js/utils/AudioUtils.tsx",
+        "fixes": [
+          {
+            "hash": "ca7e13f74a35de9dfe6c34931ddde9b004c0c167",
+            "subject": "fix: improve PTY timeout handling for PatchAgent",
+            "date": "2025-06-14T08:40:14.000Z"
+          },
+          {
+            "hash": "72fa6e136c8ec1d2ad9296ab8ba0cf8ffc33da98",
+            "subject": "fix: exclude core MAGI process from active tasks display",
+            "date": "2025-06-14T16:45:28.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 3,
+        "timeSpanDays": 12,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "common/shared-types.ts",
+        "fixes": [
+          {
+            "hash": "d12cbdf28ba3e89e23e4d7c06c7f84abe829aba9",
+            "subject": "fix: resolve TypeScript build errors and update event types",
+            "date": "2025-06-19T07:57:09.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "589dab113a5a2d0ce507c39ed7a2a610f2a104b1",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:30:23.000Z"
+          },
+          {
+            "hash": "210cfb739ec54003d45987dee4845ae8e93ce285",
+            "subject": "fix: resolve build errors in UI components",
+            "date": "2025-06-21T06:41:09.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 13,
+        "timeSpanDays": 39,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "engine/src/magi.ts",
+        "fixes": [
+          {
+            "hash": "e858afc9d85dcdc371d79b6fc353cc1d5be4bd3b",
+            "subject": "fix: resolve test failures and lint issues",
+            "date": "2025-06-19T08:06:54.000Z"
+          },
+          {
+            "hash": "5085c160dd9ff5d4e64eaabd0f728e000439cbc8",
+            "subject": "fix: resolve all ESLint errors for clean CI build",
+            "date": "2025-06-19T08:48:47.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "589dab113a5a2d0ce507c39ed7a2a610f2a104b1",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:30:23.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 12,
+        "timeSpanDays": 12,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "controller/src/client/js/components/App.tsx",
+        "fixes": [
+          {
+            "hash": "17afd788453545e625e5166953c7dcf8b17b31bf",
+            "subject": "feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)",
+            "date": "2025-06-18T20:55:53.000Z"
+          },
+          {
+            "hash": "e858afc9d85dcdc371d79b6fc353cc1d5be4bd3b",
+            "subject": "fix: resolve test failures and lint issues",
+            "date": "2025-06-19T08:06:54.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "589dab113a5a2d0ce507c39ed7a2a610f2a104b1",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:30:23.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 7,
+        "timeSpanDays": 12,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "controller/src/client/js/components/PatchesViewer.tsx",
+        "fixes": [
+          {
+            "hash": "17afd788453545e625e5166953c7dcf8b17b31bf",
+            "subject": "feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)",
+            "date": "2025-06-18T20:55:53.000Z"
+          },
+          {
+            "hash": "e858afc9d85dcdc371d79b6fc353cc1d5be4bd3b",
+            "subject": "fix: resolve test failures and lint issues",
+            "date": "2025-06-19T08:06:54.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "589dab113a5a2d0ce507c39ed7a2a610f2a104b1",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:30:23.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 8,
+        "timeSpanDays": 12,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "controller/src/client/js/components/canvas_ui/CommandInput.tsx",
+        "fixes": [
+          {
+            "hash": "59a3085937bd631d3733448b51bf4270169e24a5",
+            "subject": "chore: add AI-generated summaries to gitignore\r  Add summaries/ directory to .gitignore to prevent committing temporary\r  AI-generated summary files and hash maps that are created during agent\r  operations.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)",
+            "date": "2025-06-16T12:03:56.000Z"
+          },
+          {
+            "hash": "e858afc9d85dcdc371d79b6fc353cc1d5be4bd3b",
+            "subject": "fix: resolve test failures and lint issues",
+            "date": "2025-06-19T08:06:54.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 4,
+        "timeSpanDays": 10,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "controller/src/client/js/components/column_ui/OutputColumn.tsx",
+        "fixes": [
+          {
+            "hash": "e858afc9d85dcdc371d79b6fc353cc1d5be4bd3b",
+            "subject": "fix: resolve test failures and lint issues",
+            "date": "2025-06-19T08:06:54.000Z"
+          },
+          {
+            "hash": "5085c160dd9ff5d4e64eaabd0f728e000439cbc8",
+            "subject": "fix: resolve all ESLint errors for clean CI build",
+            "date": "2025-06-19T08:48:47.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "589dab113a5a2d0ce507c39ed7a2a610f2a104b1",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:30:23.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 12,
+        "timeSpanDays": 30,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "controller/src/client/js/components/column_ui/ProcessTreeColumn.tsx",
+        "fixes": [
+          {
+            "hash": "17afd788453545e625e5166953c7dcf8b17b31bf",
+            "subject": "feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)",
+            "date": "2025-06-18T20:55:53.000Z"
+          },
+          {
+            "hash": "e858afc9d85dcdc371d79b6fc353cc1d5be4bd3b",
+            "subject": "fix: resolve test failures and lint issues",
+            "date": "2025-06-19T08:06:54.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "589dab113a5a2d0ce507c39ed7a2a610f2a104b1",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:30:23.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 8,
+        "timeSpanDays": 27,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "controller/src/client/js/components/ui/MessageContent.tsx",
+        "fixes": [
+          {
+            "hash": "e858afc9d85dcdc371d79b6fc353cc1d5be4bd3b",
+            "subject": "fix: resolve test failures and lint issues",
+            "date": "2025-06-19T08:06:54.000Z"
+          },
+          {
+            "hash": "5085c160dd9ff5d4e64eaabd0f728e000439cbc8",
+            "subject": "fix: resolve all ESLint errors for clean CI build",
+            "date": "2025-06-19T08:48:47.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "589dab113a5a2d0ce507c39ed7a2a610f2a104b1",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:30:23.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 8,
+        "timeSpanDays": 10,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "controller/src/client/js/components/utils/FormatUtils.tsx",
+        "fixes": [
+          {
+            "hash": "5085c160dd9ff5d4e64eaabd0f728e000439cbc8",
+            "subject": "fix: resolve all ESLint errors for clean CI build",
+            "date": "2025-06-19T08:48:47.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "589dab113a5a2d0ce507c39ed7a2a610f2a104b1",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:30:23.000Z"
+          },
+          {
+            "hash": "210cfb739ec54003d45987dee4845ae8e93ce285",
+            "subject": "fix: resolve build errors in UI components",
+            "date": "2025-06-21T06:41:09.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 8,
+        "timeSpanDays": 8,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "controller/src/client/js/components/utils/ProcessBoxUtils.tsx",
+        "fixes": [
+          {
+            "hash": "e858afc9d85dcdc371d79b6fc353cc1d5be4bd3b",
+            "subject": "fix: resolve test failures and lint issues",
+            "date": "2025-06-19T08:06:54.000Z"
+          },
+          {
+            "hash": "5085c160dd9ff5d4e64eaabd0f728e000439cbc8",
+            "subject": "fix: resolve all ESLint errors for clean CI build",
+            "date": "2025-06-19T08:48:47.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "589dab113a5a2d0ce507c39ed7a2a610f2a104b1",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:30:23.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 7,
+        "timeSpanDays": 8,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "controller/src/server/utils/voice_config.ts",
+        "fixes": [
+          {
+            "hash": "ca7e13f74a35de9dfe6c34931ddde9b004c0c167",
+            "subject": "fix: improve PTY timeout handling for PatchAgent",
+            "date": "2025-06-14T08:40:14.000Z"
+          },
+          {
+            "hash": "72fa6e136c8ec1d2ad9296ab8ba0cf8ffc33da98",
+            "subject": "fix: exclude core MAGI process from active tasks display",
+            "date": "2025-06-14T16:45:28.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 3,
+        "timeSpanDays": 12,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "engine/docker/Dockerfile",
+        "fixes": [
+          {
+            "hash": "ca7e13f74a35de9dfe6c34931ddde9b004c0c167",
+            "subject": "fix: improve PTY timeout handling for PatchAgent",
+            "date": "2025-06-14T08:40:14.000Z"
+          },
+          {
+            "hash": "59a3085937bd631d3733448b51bf4270169e24a5",
+            "subject": "chore: add AI-generated summaries to gitignore\r  Add summaries/ directory to .gitignore to prevent committing temporary\r  AI-generated summary files and hash maps that are created during agent\r  operations.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)",
+            "date": "2025-06-16T12:03:56.000Z"
+          },
+          {
+            "hash": "18bfe34e5da3693d7375280226a72a8a9a3894d2",
+            "subject": "fix: immediate termination for PatchAgent commit messages",
+            "date": "2025-06-21T11:44:21.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 4,
+        "timeSpanDays": 12,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "engine/src/magi_agents/operator_agent.ts",
+        "fixes": [
+          {
+            "hash": "59a3085937bd631d3733448b51bf4270169e24a5",
+            "subject": "chore: add AI-generated summaries to gitignore\r  Add summaries/ directory to .gitignore to prevent committing temporary\r  AI-generated summary files and hash maps that are created during agent\r  operations.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)",
+            "date": "2025-06-16T12:03:56.000Z"
+          },
+          {
+            "hash": "e858afc9d85dcdc371d79b6fc353cc1d5be4bd3b",
+            "subject": "fix: resolve test failures and lint issues",
+            "date": "2025-06-19T08:06:54.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 4,
+        "timeSpanDays": 10,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      },
+      {
+        "type": "ping-pong-bug",
+        "score": 175.41076011574074,
+        "file": "engine/src/magi_agents/overseer_agent.ts",
+        "fixes": [
+          {
+            "hash": "ca7e13f74a35de9dfe6c34931ddde9b004c0c167",
+            "subject": "fix: improve PTY timeout handling for PatchAgent",
+            "date": "2025-06-14T08:40:14.000Z"
+          },
+          {
+            "hash": "59a3085937bd631d3733448b51bf4270169e24a5",
+            "subject": "chore: add AI-generated summaries to gitignore\r  Add summaries/ directory to .gitignore to prevent committing temporary\r  AI-generated summary files and hash maps that are created during agent\r  operations.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)",
+            "date": "2025-06-16T12:03:56.000Z"
+          },
+          {
+            "hash": "e858afc9d85dcdc371d79b6fc353cc1d5be4bd3b",
+            "subject": "fix: resolve test failures and lint issues",
+            "date": "2025-06-19T08:06:54.000Z"
+          },
+          {
+            "hash": "a61413341e1e96ca35a6aa1a418eeab7106ef2d7",
+            "subject": "Revert \"feat(ci): add GitHub Actions CI/CD pipeline\r  - Add comprehensive CI/CD workflow with lint, test, build, and smoke test\r   jobs\r  - Configure ESLint and TypeScript type checking in CI\r  - Add test coverage measurement with Vitest\r  - Include Docker-based smoke testing for integration validation\r  - Add CI/CD status badges to README for build and test visibility\r  - Document CI/CD pipeline setup and job descriptions in docs/ci.md\r  The pipeline ensures code quality through automated checks on all PRs and\r   pushes to main branch, with planned branch protection rules to enforce\r  successful CI before merging.\r\\n● I'\"'\"'ll exit the PatchAgent session.\r● Bash(exit 0)\r  ⎿  Waiting…\r  ⎿  Running…\r  Bash(exit 0)\r  ⎿  (No content)\"",
+            "date": "2025-06-20T12:26:29.000Z"
+          },
+          {
+            "hash": "bcba13ec651819c671b8ad01a1af1093c8c3141b",
+            "subject": "fix: wait for Gemini CLI auth completion before sending prompts",
+            "date": "2025-06-26T11:23:00.000Z"
+          }
+        ],
+        "totalFixes": 5,
+        "timeSpanDays": 12,
+        "lastFixed": "2025-06-26T11:23:00.000Z"
+      }
+    ],
+    "feature-burst": [
+      {
+        "type": "feature-burst",
+        "score": 31.636523538432268,
+        "subsystem": "setup",
+        "day": "2025-04-02",
+        "count": 7,
+        "description": "7 features added to setup on 2025-04-02"
+      }
+    ],
+    "unstable-subsystem": [
+      {
+        "type": "unstable-subsystem",
+        "score": 49.50000000000001,
+        "subsystem": "controller",
+        "features": 11,
+        "bugs": 28,
+        "ratio": "2.55",
+        "description": "High bug-to-feature ratio in controller"
+      }
+    ],
+    "important-file": [
+      {
+        "type": "important-file",
+        "score": 423.0913351099538,
+        "file": ".github/workflows/ci.yml",
+        "reasons": [
+          "Hot file: 9 changes in 2 days",
+          "Recurring issues: 8 fixes needed",
+          "Architectural/Configuration file"
+        ],
+        "metrics": {
+          "hotFileScore": 26.73834364969136,
+          "pingPongScore": 170.21503094907408,
+          "architecturalImpact": 211.5456675549769,
+          "dependentFiles": 0
+        },
+        "relatedFiles": [],
+        "isArchitectural": true
+      },
+      {
+        "type": "important-file",
+        "score": 394.6742102604167,
+        "file": "engine/docker/Dockerfile",
+        "reasons": [
+          "Recurring issues: 4 fixes needed",
+          "Architectural/Configuration file"
+        ],
+        "metrics": {
+          "pingPongScore": 175.41076011574074,
+          "architecturalImpact": 197.33710513020836,
+          "dependentFiles": 0
+        },
+        "relatedFiles": [],
+        "isArchitectural": true
+      },
+      {
+        "type": "important-file",
+        "score": 310.8133538695988,
+        "file": "engine/src/magi.ts",
+        "reasons": [
+          "Hot file: 15 changes in 16 days",
+          "Recurring issues: 12 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 47.69721369598765,
+          "pingPongScore": 175.41076011574074,
+          "dependentFiles": 1
+        },
+        "relatedFiles": [
+          "common/shared-types.ts"
+        ],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 308.3013015402092,
+        "file": "engine/src/utils/run_pty.ts",
+        "reasons": [
+          "Hot file: 14 changes in 17 days",
+          "Recurring issues: 12 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 44.51776553326474,
+          "pingPongScore": 175.8556906712963,
+          "dependentFiles": 1
+        },
+        "relatedFiles": [
+          "engine/src/utils/communication.ts"
+        ],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 295.3899471592078,
+        "file": "controller/src/client/js/components/CustomToolsViewer.tsx",
+        "reasons": [
+          "Hot file: 7 changes in 30 days",
+          "Recurring issues: 4 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 41.203616013374486,
+          "pingPongScore": 169.45755409722221,
+          "dependentFiles": 0
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 294.91447553883745,
+        "file": "engine/src/code_providers/claude_code.ts",
+        "reasons": [
+          "Hot file: 10 changes in 16 days",
+          "Recurring issues: 8 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 31.798335365226336,
+          "pingPongScore": 175.41076011574074,
+          "dependentFiles": 0
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 291.77516283564813,
+        "file": "engine/src/code_providers/gemini_cli.ts",
+        "reasons": [
+          "Hot file: 9 changes in 1 days",
+          "Recurring issues: 8 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 28.618501828703703,
+          "pingPongScore": 175.43777400462963,
+          "dependentFiles": 0
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 291.58639354552474,
+        "file": "controller/src/client/js/components/PatchesViewer.tsx",
+        "reasons": [
+          "Hot file: 9 changes in 12 days",
+          "Recurring issues: 8 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 28.47025337191358,
+          "pingPongScore": 175.41076011574074
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 291.58639354552474,
+        "file": "controller/src/client/js/components/ui/MessageContent.tsx",
+        "reasons": [
+          "Hot file: 9 changes in 10 days",
+          "Recurring issues: 8 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 28.47025337191358,
+          "pingPongScore": 175.41076011574074
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 286.93462564771943,
+        "file": "engine/src/code_providers/codex.ts",
+        "reasons": [
+          "Hot file: 11 changes in 11 days",
+          "Recurring issues: 9 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 32.752357001886146,
+          "pingPongScore": 169.45484576388887,
+          "dependentFiles": 0
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 286.0424187735768,
+        "file": "controller/src/server/routes/patches.ts",
+        "reasons": [
+          "Hot file: 7 changes in 13 days",
+          "Recurring issues: 7 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 22.25888276663237,
+          "pingPongScore": 175.8556906712963,
+          "dependentFiles": 0
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 285.2596705739884,
+        "file": "engine/src/magi_agents/overseer_agent.ts",
+        "reasons": [
+          "Hot file: 7 changes in 17 days",
+          "Recurring issues: 5 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 22.143530400377223,
+          "pingPongScore": 175.41076011574074
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 283.3320862109911,
+        "file": "magi/src/utils/design_search.ts",
+        "reasons": [
+          "Hot file: 17 changes in 18 days",
+          "Recurring issues: 3 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 73.40559881515776,
+          "pingPongScore": 139.95099159722224,
+          "dependentFiles": 1
+        },
+        "relatedFiles": [
+          "magi/src/magi_agents/web_agents/design_agent.ts"
+        ],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 282.19514139274696,
+        "file": "engine/src/utils/register_code_providers.ts",
+        "reasons": [
+          "Hot file: 6 changes in 16 days",
+          "Recurring issues: 3 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 19.0790012191358,
+          "pingPongScore": 175.41076011574074,
+          "dependentFiles": 0
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 282.0963090882202,
+        "file": "engine/src/magi_agents/project_agents/operator_agent.ts",
+        "reasons": [
+          "Hot file: 6 changes in 16 days",
+          "Recurring issues: 5 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 18.980168914609052,
+          "pingPongScore": 175.41076011574074
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 282.0963090882202,
+        "file": "engine/src/utils/process_tools.ts",
+        "reasons": [
+          "Hot file: 6 changes in 12 days",
+          "Recurring issues: 6 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 18.980168914609052,
+          "pingPongScore": 175.41076011574074
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 279.68273798311037,
+        "file": "controller/src/client/js/components/PatchDetails.tsx",
+        "reasons": [
+          "Hot file: 5 changes in 13 days",
+          "Recurring issues: 5 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 15.89920197616598,
+          "pingPongScore": 175.8556906712963,
+          "dependentFiles": 0
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 279.68273798311037,
+        "file": "engine/src/utils/project_utils.ts",
+        "reasons": [
+          "Hot file: 5 changes in 16 days",
+          "Recurring issues: 4 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 15.89920197616598,
+          "pingPongScore": 175.8556906712963,
+          "dependentFiles": 0
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 278.93294760245203,
+        "file": "engine/src/magi_agents/operator_agent.ts",
+        "reasons": [
+          "Hot file: 5 changes in 16 days",
+          "Recurring issues: 4 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 15.816807428840876,
+          "pingPongScore": 175.41076011574074
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 278.93294760245203,
+        "file": "engine/src/magi_agents/research_agents/operator_agent.ts",
+        "reasons": [
+          "Hot file: 5 changes in 16 days",
+          "Recurring issues: 4 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 15.816807428840876,
+          "pingPongScore": 175.41076011574074
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 278.93294760245203,
+        "file": "engine/src/magi_agents/web_agents/operator_agent.ts",
+        "reasons": [
+          "Hot file: 5 changes in 16 days",
+          "Recurring issues: 4 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 15.816807428840876,
+          "pingPongScore": 175.41076011574074
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 278.93294760245203,
+        "file": "engine/src/utils/history.ts",
+        "reasons": [
+          "Hot file: 5 changes in 16 days",
+          "Recurring issues: 4 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 15.816807428840876,
+          "pingPongScore": 175.41076011574074
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 278.93294760245203,
+        "file": "engine/src/utils/running_tools.ts",
+        "reasons": [
+          "Hot file: 5 changes in 10 days",
+          "Recurring issues: 5 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 15.816807428840876,
+          "pingPongScore": 175.41076011574074
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 277.52335943287034,
+        "file": "controller/src/server/routes/pr_events.ts",
+        "reasons": [
+          "Hot file: 6 changes in 30 days",
+          "Recurring issues: 3 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 32.57676787037037,
+          "pingPongScore": 163.29772770833333,
+          "dependentFiles": 0
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 273.5107323135288,
+        "file": "engine/src/utils/commit_planner.ts",
+        "reasons": [
+          "Hot file: 6 changes in 7 days",
+          "Recurring issues: 6 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 17.87235255658436,
+          "pingPongScore": 170.42558650462962,
+          "dependentFiles": 0
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 270.1771817845508,
+        "file": "docs/ci.md",
+        "reasons": [
+          "Hot file: 5 changes in 2 days",
+          "Recurring issues: 5 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 14.854635360939643,
+          "pingPongScore": 170.21503094907408,
+          "dependentFiles": 0
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 268.8961289724794,
+        "file": "controller/src/server/utils/patch_manager.ts",
+        "reasons": [
+          "Hot file: 5 changes in 6 days",
+          "Recurring issues: 5 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 14.713860326646088,
+          "pingPongScore": 169.45484576388887
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 267.717086554784,
+        "file": "engine/src/utils/communication.ts",
+        "reasons": [
+          "Hot file: 7 changes in 6 days",
+          "Recurring issues: 5 fixes needed"
+        ],
+        "metrics": {
+          "hotFileScore": 19.558307492283948,
+          "pingPongScore": 165.43918604166666,
+          "dependentFiles": 1
+        },
+        "relatedFiles": [
+          "engine/src/utils/run_pty.ts"
+        ],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 263.15666100694443,
+        "file": "controller/src/client/js/components/message/ToolCallMessage.tsx",
+        "reasons": [
+          "Recurring issues: 10 fixes needed"
+        ],
+        "metrics": {
+          "pingPongScore": 175.43777400462963,
+          "dependentFiles": 0
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      },
+      {
+        "type": "important-file",
+        "score": 263.1556887847222,
+        "file": "controller/src/client/js/components/message/MessageList.tsx",
+        "reasons": [
+          "Recurring issues: 7 fixes needed"
+        ],
+        "metrics": {
+          "pingPongScore": 175.4371258564815,
+          "dependentFiles": 0
+        },
+        "relatedFiles": [],
+        "isArchitectural": false
+      }
+    ]
+  },
+  "summary": {
+    "totalCommits": 377,
+    "totalPatterns": 520,
+    "byType": {
+      "interesting-commit": 30,
+      "large-refactor": 30,
+      "revert": 2,
+      "security-patch": 3,
+      "hot-file": 30,
+      "ping-pong-bug": 30,
+      "feature-burst": 1,
+      "unstable-subsystem": 1,
+      "important-file": 30
+    }
+  }
+}

@@ -1,5 +1,9 @@
 import { ProcessToolType } from '../types/shared-types.js'; // Removed AgentProcess
-import { ToolFunction, runningToolTracker, createToolFunction } from '@just-every/ensemble';
+import {
+    ToolFunction,
+    runningToolTracker,
+    createToolFunction,
+} from '@just-every/ensemble';
 import { getCommunicationManager, sendStreamEvent } from './communication.js'; // Added sendStreamEvent
 import { processTracker } from './process_tracker.js';
 import { dateFormat } from './date_tools.js';
@@ -182,7 +186,7 @@ async function wait_for_running_task(
     // Create an AbortController if none provided
     const abortController = new AbortController();
     const effectiveAbortSignal = abort_signal || abortController.signal;
-    
+
     // Register this wait operation as a running tool so it can be interrupted
     const waitToolId = `wait-task-${taskId}-${Date.now()}`;
     const waitTool = runningToolTracker.addRunningTool(
@@ -367,8 +371,12 @@ async function wait_for_running_task(
     });
 
     // Clean up: mark the wait tool as completed
-    runningToolTracker.completeRunningTool(waitToolId, finalResult, null as any);
-    
+    runningToolTracker.completeRunningTool(
+        waitToolId,
+        finalResult,
+        null as any
+    );
+
     return finalResult;
 }
 

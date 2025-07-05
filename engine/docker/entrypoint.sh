@@ -6,35 +6,49 @@ set -e
 # This bug affects Node versions after 20.3.0 (including Node 23)
 export UV_USE_IO_URING=0
 
-# --- Claude Config Linking ---
-# Target directory and file paths in the user's home
-CLAUSE_DIR_TARGET="/home/magi_user/.claude"
-CLAUSE_JSON_TARGET="/home/magi_user/.claude.json"
+# --- Home File/Directory Linking ---
+# Dynamically link all files and directories from /magi_home/ to the user's home
+HOME_SOURCE_DIR="/magi_home"
+USER_HOME="/home/magi_user"
 
-# Source directory and file paths from the mounted volume
-CLAUSE_DIR_SOURCE="/claude_shared/.claude"
-CLAUSE_JSON_SOURCE="/claude_shared/.claude.json"
-
-# Check if source directory exists in the volume mount
-if [ -d "$CLAUSE_DIR_SOURCE" ]; then
-    # Ensure target exists as a directory before removing (safety)
-    if [ -e "$CLAUSE_DIR_TARGET" ]; then
-        rm -rf "$CLAUSE_DIR_TARGET"
-    fi
-    # Link the source directory to the target location
-    ln -sf "$CLAUSE_DIR_SOURCE" "$CLAUSE_DIR_TARGET"
-    echo "Linked $CLAUSE_DIR_SOURCE to $CLAUSE_DIR_TARGET"
-fi
-
-# Check if source file exists in the volume mount
-if [ -f "$CLAUSE_JSON_SOURCE" ]; then
-    # Ensure target exists as a file before removing (safety)
-    if [ -e "$CLAUSE_JSON_TARGET" ]; then
-        rm -f "$CLAUSE_JSON_TARGET"
-    fi
-    # Link the source file to the target location
-    ln -sf "$CLAUSE_JSON_SOURCE" "$CLAUSE_JSON_TARGET"
-    echo "Linked $CLAUSE_JSON_SOURCE to $CLAUSE_JSON_TARGET"
+if [ -d "$HOME_SOURCE_DIR" ]; then
+    echo "Linking home directory files from $HOME_SOURCE_DIR..."
+    
+    # Iterate through all items in /magi_home/
+    for item in "$HOME_SOURCE_DIR"/.* "$HOME_SOURCE_DIR"/*; do
+        # Skip . and .. entries
+        basename_item=$(basename "$item")
+        if [ "$basename_item" = "." ] || [ "$basename_item" = ".." ]; then
+            continue
+        fi
+        
+        # Skip if the glob didn't match anything
+        if [ ! -e "$item" ]; then
+            continue
+        fi
+        
+        # Determine target path
+        target="$USER_HOME/$basename_item"
+        
+        # Remove existing target if it exists
+        if [ -e "$target" ]; then
+            rm -rf "$target"
+        fi
+        
+        # Create symlink
+        ln -sf "$item" "$target"
+        
+        # Log what was linked
+        if [ -d "$item" ]; then
+            echo "Linked directory: $item -> $target"
+        else
+            echo "Linked file: $item -> $target"
+        fi
+    done
+    
+    echo "Home directory file linking complete"
+else
+    echo "No /magi_home directory found, skipping home linking"
 fi
 
 # --- Git Safe Directory Configuration ---
@@ -48,10 +62,10 @@ echo "Ensuring /magi_output is owned by magi_user..."
 chown magi_user:magi_user /magi_output 2>/dev/null || true
 echo "Ownership checked for /magi_output"
 
-# --- Fix /claude_shared Permissions ---
-echo "Ensuring /claude_shared is owned by magi_user..."
-chown -R magi_user:magi_user /claude_shared 2>/dev/null || true
-echo "Ownership set for /claude_shared"
+# --- Fix /magi_home Permissions ---
+echo "Ensuring /magi_home is owned by magi_user..."
+chown -R magi_user:magi_user /magi_home 2>/dev/null || true
+echo "Ownership set for /magi_home"
 
 # Check if PROCESS_ID environment variable is set
 if [ -n "$PROCESS_ID" ]; then

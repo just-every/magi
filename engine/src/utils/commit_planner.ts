@@ -171,7 +171,7 @@ export async function planAndCommitChanges(
             const client = await getDB();
             try {
                 const result = await client.query(
-                    `INSERT INTO patches 
+                    `INSERT INTO patches
                     (process_id, project_id, branch_name, commit_message, patch_content, metrics, status)
                     VALUES ($1, $2, $3, $4, $5, $6, 'pending')
                     RETURNING id`,
@@ -257,6 +257,7 @@ build/, dist/, out/, node_modules/, vendor/, venv/, coverage, log files, IDE fol
 2. **Evaluate** each diff. If none are meaningful, output exactly:
 
 [no-changes]
+[complete]
 
 3. **Stage** meaningful files only.
 • Add ignore patterns to \`.gitignore\` when you spot recurring junk; stage the updated \`.gitignore\`.
@@ -271,8 +272,10 @@ build/, dist/, out/, node_modules/, vendor/, venv/, coverage, log files, IDE fol
 
 [commit-message]
 <your commit message here>
+[complete]
 
-Do NOT actually commit the changes - just stage them and provide the message.`,
+Do NOT actually commit the changes - just stage them and provide the message.
+ALWAYS output your last line as [complete] after you finish the message.`,
                 modelClass: 'code',
             },
             agent.agent_id
@@ -299,9 +302,17 @@ Do NOT actually commit the changes - just stage them and provide the message.`,
         }
 
         // Extract everything after the last [commit-message] marker
-        const commitMessageText = response
+        let commitMessageText = response
             .substring(lastCommitMessageIndex + '[commit-message]'.length)
             .trim();
+
+        // Remove [complete] marker if present at the end
+        if (commitMessageText.endsWith('[complete]')) {
+            commitMessageText = commitMessageText
+                .substring(0, commitMessageText.length - '[complete]'.length)
+                .trim();
+        }
+
         if (!commitMessageText) {
             console.error(
                 '[commit-planner] Empty commit message after [commit-message] marker'
@@ -385,7 +396,7 @@ Do NOT actually commit the changes - just stage them and provide the message.`,
         const client = await getDB();
         try {
             const result = await client.query(
-                `INSERT INTO patches 
+                `INSERT INTO patches
                 (process_id, project_id, branch_name, commit_message, patch_content, metrics, status)
                 VALUES ($1, $2, $3, $4, $5, $6, 'pending')
                 RETURNING id`,

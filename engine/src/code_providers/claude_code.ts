@@ -94,7 +94,10 @@ function parseTokenProgress(line: string): number | null {
  * @param tokenCb - Optional callback to receive detected token counts from status lines
  * @returns True if the line is considered noise, false otherwise.
  */
-function isNoiseLine(line: string, tokenCb?: (n: number) => void): boolean {
+export function isNoiseLine(
+    line: string,
+    tokenCb?: (n: number) => void
+): boolean {
     if (!line) return true; // Skip empty lines
 
     // --- Filtering based on observed output ---
@@ -508,12 +511,15 @@ export class ClaudeCodeProvider implements ModelProvider {
             const { ANTHROPIC_API_KEY, ...envWithoutAnthropicKey } =
                 process.env;
             const ptyOpts: PtyRunOptions = {
+                prompt,
                 cwd,
                 messageId,
                 noiseFilter: isNoiseLine,
                 onTokenProgress: updateLiveTokenEstimate,
                 onLine: lineHook,
                 silenceTimeoutMs: 30000, // 30 seconds for all agents
+                newlineSequence: '\x1b\r', // Default newline sequence as requested
+                newlineDelay: 10, // Small delay before sending newline
                 env: {
                     ...envWithoutAnthropicKey,
                     CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR: '1',
@@ -525,7 +531,7 @@ export class ClaudeCodeProvider implements ModelProvider {
             // 4. Run Claude CLI command via run_pty utility
             const { stream } = runPty(
                 'claude',
-                ['--dangerously-skip-permissions', prompt],
+                ['--dangerously-skip-permissions'],
                 ptyOpts
             );
 

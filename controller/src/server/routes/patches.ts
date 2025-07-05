@@ -521,4 +521,78 @@ router.post(
     }
 );
 
+// Get file content from project directory
+router.get('/:id/file-content', async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { filePath } = req.query;
+
+    if (!filePath || typeof filePath !== 'string') {
+        return res.status(400).json({
+            success: false,
+            error: 'File path is required',
+        });
+    }
+
+    const client = await getDB();
+    try {
+        // Get patch details to find project ID
+        const patchResult = await client.query(
+            'SELECT project_id FROM patches WHERE id = $1',
+            [id]
+        );
+
+        if (patchResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Patch not found',
+            });
+        }
+
+        const patch = patchResult.rows[0];
+        const projectPath = path.join('/external/host', patch.project_id);
+        const fullFilePath = path.join(projectPath, filePath);
+
+        // Security check: ensure the file path doesn't escape the project directory
+        const resolvedPath = path.resolve(fullFilePath);
+        const resolvedProjectPath = path.resolve(projectPath);
+
+        if (!resolvedPath.startsWith(resolvedProjectPath)) {
+            return res.status(403).json({
+                success: false,
+                error: 'Access denied: Invalid file path',
+            });
+        }
+
+        // Read file content
+        const fs = await import('fs/promises');
+
+        try {
+            const content = await fs.readFile(resolvedPath, 'utf-8');
+            res.json({
+                success: true,
+                data: {
+                    filePath,
+                    content,
+                },
+            });
+        } catch (fileError: any) {
+            if (fileError.code === 'ENOENT') {
+                return res.status(404).json({
+                    success: false,
+                    error: 'File not found',
+                });
+            }
+            throw fileError;
+        }
+    } catch (error) {
+        console.error(`Error fetching file content for patch ${id}:`, error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch file content',
+        });
+    } finally {
+        client.release();
+    }
+});
+
 export default router;

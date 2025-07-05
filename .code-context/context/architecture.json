@@ -1,0 +1,238 @@
+{
+  "patterns": {},
+  "dependencies": [
+    {
+      "name": "@google/genai",
+      "version": "^1.4.0",
+      "type": "production",
+      "usage": []
+    },
+    {
+      "name": "@just-every/ensemble",
+      "version": "^0.2.35",
+      "type": "production",
+      "usage": [
+        "common/shared-types.ts"
+      ]
+    },
+    {
+      "name": "@just-every/search",
+      "version": "^1.0.1",
+      "type": "production",
+      "usage": [
+        "test/tools/web-search.ts"
+      ]
+    },
+    {
+      "name": "@just-every/task",
+      "version": "^0.2.5",
+      "type": "production",
+      "usage": []
+    },
+    {
+      "name": "@types/pg",
+      "version": "^8.15.4",
+      "type": "production",
+      "usage": []
+    },
+    {
+      "name": "canvas",
+      "version": "^3.1.0",
+      "type": "production",
+      "usage": []
+    },
+    {
+      "name": "chrome-launcher",
+      "version": "^1.2.0",
+      "type": "production",
+      "usage": []
+    },
+    {
+      "name": "chrome-remote-interface",
+      "version": "^0.33.3",
+      "type": "production",
+      "usage": []
+    },
+    {
+      "name": "dotenv",
+      "version": "^16.5.0",
+      "type": "production",
+      "usage": []
+    },
+    {
+      "name": "esbuild",
+      "version": "^0.25.5",
+      "type": "production",
+      "usage": []
+    },
+    {
+      "name": "openai",
+      "version": "^5.2.0",
+      "type": "production",
+      "usage": []
+    },
+    {
+      "name": "pg",
+      "version": "^8.16.0",
+      "type": "production",
+      "usage": []
+    },
+    {
+      "name": "proper-lockfile",
+      "version": "^4.1.2",
+      "type": "production",
+      "usage": []
+    },
+    {
+      "name": "simple-git",
+      "version": "^3.28.0",
+      "type": "production",
+      "usage": []
+    },
+    {
+      "name": "ws",
+      "version": "^8.18.2",
+      "type": "production",
+      "usage": []
+    },
+    {
+      "name": "@anthropic-ai/sdk",
+      "version": "^0.54.0",
+      "type": "development",
+      "usage": []
+    },
+    {
+      "name": "@eslint/js",
+      "version": "^9.28.0",
+      "type": "development",
+      "usage": [
+        "eslint.config.js"
+      ]
+    },
+    {
+      "name": "@types/node",
+      "version": "^24.0.3",
+      "type": "development",
+      "usage": []
+    },
+    {
+      "name": "@types/ws",
+      "version": "^8.18.1",
+      "type": "development",
+      "usage": []
+    },
+    {
+      "name": "@vitest/coverage-v8",
+      "version": "^3.2.3",
+      "type": "development",
+      "usage": []
+    },
+    {
+      "name": "@vitest/ui",
+      "version": "^3.2.3",
+      "type": "development",
+      "usage": []
+    },
+    {
+      "name": "eslint",
+      "version": "^9.28.0",
+      "type": "development",
+      "usage": []
+    },
+    {
+      "name": "eslint-config-prettier",
+      "version": "^10.1.5",
+      "type": "development",
+      "usage": [
+        "eslint.config.js"
+      ]
+    },
+    {
+      "name": "eslint-plugin-prettier",
+      "version": "^5.4.1",
+      "type": "development",
+      "usage": [
+        "eslint.config.js"
+      ]
+    },
+    {
+      "name": "jsdom",
+      "version": "^26.1.0",
+      "type": "development",
+      "usage": []
+    },
+    {
+      "name": "node-pg-migrate",
+      "version": "^8.0.2",
+      "type": "development",
+      "usage": []
+    },
+    {
+      "name": "prettier",
+      "version": "^3.5.3",
+      "type": "development",
+      "usage": []
+    },
+    {
+      "name": "prettier-plugin-sh",
+      "version": "^0.17.4",
+      "type": "development",
+      "usage": []
+    },
+    {
+      "name": "ts-node",
+      "version": "^10.9.2",
+      "type": "development",
+      "usage": []
+    },
+    {
+      "name": "typescript",
+      "version": "^5.8.3",
+      "type": "development",
+      "usage": []
+    },
+    {
+      "name": "typescript-eslint",
+      "version": "^8.34.0",
+      "type": "development",
+      "usage": [
+        "eslint.config.js"
+      ]
+    },
+    {
+      "name": "vitest",
+      "version": "^3.2.3",
+      "type": "development",
+      "usage": []
+    }
+  ],
+  "structure": {
+    "directories": [
+      {
+        "path": "test",
+        "purpose": "Test files",
+        "fileCount": 20,
+        "importance": "high"
+      },
+      {
+        "path": "docs",
+        "purpose": "Documentation",
+        "fileCount": 15,
+        "importance": "medium"
+      },
+      {
+        "path": "scripts",
+        "purpose": "Build/utility scripts",
+        "fileCount": 3,
+        "importance": "medium"
+      }
+    ],
+    "mainLanguage": "TypeScript",
+    "frameworks": [],
+    "buildTools": [
+      "Docker Compose"
+    ]
+  },
+  "entryPoints": [],
+  "testFramework": "Vitest"
+}

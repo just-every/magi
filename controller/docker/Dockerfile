@@ -49,8 +49,8 @@ RUN groupadd -g 998 docker || true && \
     usermod -aG docker ${USER_NAME}
 
 # Create volume mount points
-RUN mkdir -p /magi_output /claude_shared /external/host /custom_tools && \
-        chown -R ${USER_NAME}:${GROUP_NAME} /magi_output /claude_shared /external/host /custom_tools
+RUN mkdir -p /magi_output /magi_auth /external/host /custom_tools && \
+        chown -R ${USER_NAME}:${GROUP_NAME} /magi_output /magi_auth /external/host /custom_tools
 
 # Expose the ports
 EXPOSE 3010

@@ -473,7 +473,6 @@ RESULT:
 Return ONLY valid JSON containing name, description, parameters_json, and final_parameter_values.`,
             modelClass: 'reasoning_mini',
             modelSettings: {
-                force_json: true,
                 json_schema: {
                     name: 'tool_specification',
                     type: 'json_schema',
@@ -676,7 +675,7 @@ declare function read_file(
 
 declare function quick_llm_call(
     messages: string | Array<{ type: 'message'; role: 'user' | 'system' | 'developer'; content: string }>,
-    modelClass: 'reasoning_mini' | 'reasoning' | 'code' | 'writing' | 'summary' | 'vision' | 'search' | 'image_generation',
+    modelClass: 'reasoning_mini' | 'reasoning' | 'code' | 'writing' | 'summary' | 'vision' | 'image_generation',
 ): Promise<string>;
 
 /**

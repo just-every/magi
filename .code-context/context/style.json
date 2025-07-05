@@ -1,0 +1,118 @@
+{
+  "configs": [
+    {
+      "path": ".prettierrc",
+      "type": "Prettier",
+      "rules": {
+        "raw": "{\n    \"singleQuote\": true,\n    \"trailingComma\": \"es5\",\n    \"arrowParens\": \"avoid\",\n    \"plugins\": [\"prettier-plugin-sh\"]\n}\n"
+      }
+    },
+    {
+      "path": "tsconfig.json",
+      "type": "TypeScript",
+      "rules": {
+        "compilerOptions": {
+          "target": "ESNext",
+          "module": "NodeNext",
+          "moduleResolution": "NodeNext",
+          "esModuleInterop": true,
+          "strict": true,
+          "jsx": "react",
+          "outDir": "./dist",
+          "rootDir": "./",
+          "sourceMap": true,
+          "declaration": true,
+          "removeComments": true,
+          "skipLibCheck": true,
+          "typeRoots": [
+            "./common/shared-types",
+            "./node_modules/@types"
+          ],
+          "baseUrl": "./",
+          "paths": {
+            "@types": [
+              "./common/shared-types"
+            ],
+            "common/*": [
+              "common/*"
+            ]
+          }
+        },
+        "include": [
+          "engine/**/*",
+          "controller/**/*",
+          "browser/**/*",
+          "common/**/*",
+          "setup/**/*",
+          "test/**/*",
+          "templates/**/*"
+        ],
+        "exclude": [
+          "controller/node_modules",
+          "controller/dist",
+          "ensemble"
+        ],
+        "files": [
+          "test/tools/tool-types.d.ts"
+        ]
+      }
+    },
+    {
+      "path": ".editorconfig",
+      "type": "EditorConfig",
+      "rules": {
+        "raw": "# Editor configuration, see http://editorconfig.org\nroot = true\n\n[*]\ncharset = utf-8\nindent_style = space\nindent_size = 4\nend_of_line = lf\ninsert_final_newline = false\ntrim_trailing_whitespace = true\n\n[*.md]\nmax_line_length = off\ntrim_trailing_whitespace = false\n"
+      }
+    },
+    {
+      "path": "vitest.config.ts",
+      "type": "Vitest",
+      "rules": {}
+    },
+    {
+      "path": ".gitignore",
+      "type": "Git Ignore",
+      "rules": {
+        "raw": "# Local state and volume mapping\n.custom_tools\n.magi_output\n.server\n.chrome\n.claude\n.gemini\n.cache\n\n# Python bytecode\n__pycache__/\n*.py[cod]\n*$py.class\n\n# Virtual environments\nvenv/\nenv/\nENV/\n.env.old\n\n# Distribution/packaging\ndist/\nbuild/\neggs/\n*.egg-info/\n\n# Unit test / coverage reports\nhtmlcov/\n.coverage\n.coverage.*\ncoverage.xml\n*.cover\n\n# Jupyter Notebook\n.ipynb_checkpoints\n\n# VSCode\n.vscode/\n*.code-workspace\n\n# Pycharm\n.idea/\n\n# macOS\n.DS_Store\n.AppleDouble\n.LSOverride\n\n# Windows\nThumbs.db\nehthumbs.db\nDesktop.ini\n\n# Logs\n*.log\n\n# Local development settings\n*.env\n*.env.local\nlocal_settings.py\n.aider*\n\n# Node.js\nnode_modules/\nnpm-debug.log\nyarn-debug.log\nyarn-error.log\n\n# Local state storage\n\n# Ignore compiled files\n*.js\n*.js.map\n*.jsx\n\n# Allow specific JS files\n!host/setup.js\n!controller/webpack.config.js\n!eslint.config.js\n!templates/web-static/tailwind.config.js\n\n/*chrome*\n\n# Temporary split directories\ntemp-ecot/\ntemp-ensemble/\n\n# AI-generated summaries and scratch files\nsummarie"
+      }
+    },
+    {
+      "path": ".dockerignore",
+      "type": "Docker Ignore",
+      "rules": {
+        "raw": "# Ignore everything by default\n*\n\n# Only required directories\n!controller/\n!engine/\n!setup/\n!common/\n!db/\n!templates/\n!ensemble/\n!mech/\n\n# Ignore unnecessary files in the included directories\n**/__pycache__/\n**/*.pyc\n**/*.pyo\n**/*.pyd\n**/.Python\n**/.env\n**/.venv\n**/env/\n**/venv/\n**/ENV/\n**/Dockerfile\n**/.server\n**/.git\n**/*.log\n**/npm-debug.log\n**/.dockerignore\n**/.md\n\n# Very important we don't overwrite the node_modules build for the container\n**/node_modules\n\n# Ignore dist directories - they should be built inside the container\n**/dist\ncontroller/dist\nengine/dist\n"
+      }
+    }
+  ],
+  "conventions": [
+    {
+      "name": "TypeScript: Strict mode",
+      "description": "Strict type checking enabled",
+      "examples": [
+        "// All strict type checks are enabled"
+      ],
+      "enforced": true
+    },
+    {
+      "name": "Line endings",
+      "description": "Use lf line endings",
+      "examples": [
+        "Line ending style: lf"
+      ],
+      "enforced": true
+    },
+    {
+      "name": "Trailing whitespace",
+      "description": "Trim trailing whitespace",
+      "examples": [
+        "No spaces at end of lines"
+      ],
+      "enforced": true
+    }
+  ],
+  "autoFixAvailable": true,
+  "linters": [
+    "Prettier",
+    "ESLint"
+  ]
+}

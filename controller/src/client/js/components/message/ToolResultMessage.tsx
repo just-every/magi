@@ -1,24 +1,17 @@
 /**
  * ToolResultMessage Component
- * Renders tool result messages
+ * Renders tool result messages using the unified BaseMessage wrapper
  */
 import * as React from 'react';
 import { ToolResultMessage as ToolResultMessageType } from '../../context/SocketContext';
 import { getToolResultContent } from '../utils/ProcessBoxUtils';
-import { iconFromMessage } from '@components/utils/FormatUtils';
-/**
- * ToolResultMessage Component
- * Renders tool result messages
- */
+import BaseMessage from './BaseMessage';
 
 interface ToolResultMessageProps {
+    rgb: string;
     message: ToolResultMessageType;
     followsCall: boolean;
-    colors?: {
-        rgb: string;
-        bgColor: string;
-        textColor: string;
-    };
+    defaultCollapsed?: boolean;
 }
 
 function prepareToolName(name: string): string {
@@ -27,9 +20,10 @@ function prepareToolName(name: string): string {
 }
 
 const ToolResultMessage: React.FC<ToolResultMessageProps> = ({
+    rgb,
     message,
     followsCall,
-    colors,
+    defaultCollapsed = false,
 }) => {
     // Get the content and image path from the result
     let { content, imagePath } = getToolResultContent(message);
@@ -40,58 +34,92 @@ const ToolResultMessage: React.FC<ToolResultMessageProps> = ({
         content = '';
     }
 
-    return (
-        <div
-            className={
-                'message-group tool-result-message' +
-                (followsCall ? ' follows-tool' : '')
-            }
-            key={message.id}
-        >
-            <div className="message-bubble tool-result-bubble">
-                {!followsCall && (
-                    <div className="message-header">
-                        {message.agent?.model && (
-                            <div className="message-model">
-                                {message.agent.model}
-                            </div>
-                        )}
-                        <div className="message-title">
-                            {iconFromMessage(message, colors.rgb)} {prepareToolName(message.toolName)} Result
-                        </div>
-                    </div>
-                )}
-                <div className="tool-result-content message-bubble assistant-bubble">
-                    {content && <pre>{content}</pre>}
+    const getPreviewText = (): string => {
+        if (imagePath) {
+            return `${prepareToolName(message.toolName)} Result (with image)`;
+        }
+        if (content) {
+            const preview =
+                content.length > 100
+                    ? content.substring(0, 100) + '...'
+                    : content;
+            return `${prepareToolName(message.toolName)} Result: ${preview}`;
+        }
+        return `${prepareToolName(message.toolName)} Result`;
+    };
 
-                    {/* Display image if an image path was found */}
-                    {imagePath && (
-                        <div className="magi-output-image">
-                            {imageURL && (
-                                <a
-                                    href={imageURL}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                >
-                                    <img
-                                        src={imagePath}
-                                        alt={`Result from ${message.toolName}`}
-                                        className="img-fluid"
-                                    />
-                                </a>
-                            )}
-                            {!imageURL && (
+    // If this follows a tool call directly, don't wrap in BaseMessage
+    if (followsCall) {
+        return (
+            <div className="tool-result-content follows-tool">
+                {content && <pre>{content}</pre>}
+                {/* Display image if an image path was found */}
+                {imagePath && (
+                    <div className="magi-output-image">
+                        {imageURL && (
+                            <a
+                                href={imageURL}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
                                 <img
                                     src={imagePath}
                                     alt={`Result from ${message.toolName}`}
                                     className="img-fluid"
                                 />
-                            )}
-                        </div>
-                    )}
-                </div>
+                            </a>
+                        )}
+                        {!imageURL && (
+                            <img
+                                src={imagePath}
+                                alt={`Result from ${message.toolName}`}
+                                className="img-fluid"
+                            />
+                        )}
+                    </div>
+                )}
             </div>
-        </div>
+        );
+    }
+
+    return (
+        <BaseMessage
+            rgb={rgb}
+            message={message}
+            defaultCollapsed={defaultCollapsed}
+            title={`${prepareToolName(message.toolName)} Result`}
+            subtitle={message.agent?.model}
+            className="tool-result-message"
+        >
+            <div className="tool-result-content">
+                {content && <pre>{content}</pre>}
+                {/* Display image if an image path was found */}
+                {imagePath && (
+                    <div className="magi-output-image">
+                        {imageURL && (
+                            <a
+                                href={imageURL}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <img
+                                    src={imagePath}
+                                    alt={`Result from ${message.toolName}`}
+                                    className="img-fluid"
+                                />
+                            </a>
+                        )}
+                        {!imageURL && (
+                            <img
+                                src={imagePath}
+                                alt={`Result from ${message.toolName}`}
+                                className="img-fluid"
+                            />
+                        )}
+                    </div>
+                )}
+            </div>
+        </BaseMessage>
     );
 };
 

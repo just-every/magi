@@ -85,7 +85,6 @@ export class CodexProvider implements ModelProvider {
         agent: Agent
     ): AsyncGenerator<ProviderStreamEvent> {
         const messageId = uuidv4();
-        let finalOutputText = ''; // Accumulate output_text for message_complete
 
         try {
             // Construct prompt from history
@@ -131,12 +130,9 @@ export class CodexProvider implements ModelProvider {
             );
             const { stream, write } = runPty(
                 'codex',
-                [
-                    '--full-auto',
-                    '--dangerously-auto-approve-everything',
-                    prompt,
-                ],
+                ['--full-auto', '--dangerously-auto-approve-everything'],
                 {
+                    prompt,
                     cwd,
                     messageId,
                     env: {
@@ -153,61 +149,31 @@ export class CodexProvider implements ModelProvider {
                                 '[CodexProvider] Detected warning prompt, auto-responding with "y"'
                             );
                             // Send "y" after delay - this was working before
-                            setTimeout(() => write('y'), 2000);
+                            setTimeout(() => write('y'), 1000);
                         }
                     },
                 }
             );
 
-            // Process stream, looking for JSON with output_text
-            let deltaPosition = 0; // Track the highest order value
+            let deltaPosition = 0;
+            let finalContent = ''; // Accumulate output for message_complete
             for await (const event of stream) {
-                // Track order for sequencing the final complete message
-                if (
-                    'order' in event &&
-                    typeof event.order === 'number' &&
-                    event.order > deltaPosition
-                ) {
-                    deltaPosition = event.order;
-                }
-
-                // For message_delta events, try to extract output_text from JSON
+                // For message_delta events, accumulate content for final completion event
                 if (event.type === 'message_delta' && 'content' in event) {
-                    const lines = event.content.split('\n');
+                    finalContent += event.content;
 
-                    for (const line of lines) {
-                        const trimmed = line.trim();
-                        if (!trimmed) continue;
-
-                        try {
-                            const parsed = JSON.parse(trimmed);
-
-                            if (
-                                parsed &&
-                                parsed.type === 'message' &&
-                                parsed.role === 'assistant' &&
-                                Array.isArray(parsed.content)
-                            ) {
-                                for (const part of parsed.content as CodexContentPart[]) {
-                                    if (
-                                        part.type === 'output_text' &&
-                                        typeof part.text === 'string'
-                                    ) {
-                                        finalOutputText += part.text;
-                                    }
-                                }
-                            }
-                        } catch {
-                            // Ignore non-JSON lines
-                        }
+                    // Track the highest order value we've seen
+                    if (
+                        'order' in event &&
+                        typeof event.order === 'number' &&
+                        event.order > deltaPosition
+                    ) {
+                        deltaPosition = event.order;
                     }
-
-                    // Pass through the message_delta event unmodified
-                    yield event as ProviderStreamEvent;
-                } else {
-                    // Pass through all other events unchanged
-                    yield event as ProviderStreamEvent;
                 }
+
+                // Pass through the event
+                yield event as ProviderStreamEvent;
             }
 
             // Stream finished, emit our own message_complete with the parsed content
@@ -219,7 +185,7 @@ export class CodexProvider implements ModelProvider {
             yield {
                 type: 'message_complete',
                 message_id: messageId,
-                content: finalOutputText,
+                content: finalContent,
                 order: deltaPosition + 1, // Use sequential order number
             } as MessageEvent;
         } catch (error: unknown) {

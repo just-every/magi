@@ -3,7 +3,7 @@
  *
  * Higher-level container management functionality for MAGI System.
  */
-import { spawn, execSync } from 'child_process';
+import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 
@@ -364,14 +364,14 @@ export async function createNewProject(projectId: string): Promise<void> {
 
     try {
         // Initialize git repository
-        execSync('git config --global init.defaultBranch main');
-        execSync(`git -C "${projectPath}" init`);
+        await execPromise('git config --global init.defaultBranch main');
+        await execPromise(`git -C "${projectPath}" init`);
 
         // Set repo-local identity so the initial commit does not fail with
         // “Author identity unknown”.  We keep this local to the repository
         // (no --global) to avoid touching any host-level Git configuration.
-        execSync(`git -C "${projectPath}" config user.name "magi"`);
-        execSync(
+        await execPromise(`git -C "${projectPath}" config user.name "magi"`);
+        await execPromise(
             `git -C "${projectPath}" config user.email "magi+${projectId}@withmagi.com"`
         );
 
@@ -379,8 +379,10 @@ export async function createNewProject(projectId: string): Promise<void> {
         await copyTemplateToProject(projectPath, project.project_type, project);
 
         // Stage all files and create initial commit
-        execSync(`git -C "${projectPath}" add .`);
-        execSync(`git -C "${projectPath}" commit -m "Initial template setup"`);
+        await execPromise(`git -C "${projectPath}" add .`);
+        await execPromise(
+            `git -C "${projectPath}" commit -m "Initial template setup"`
+        );
 
         // Add entry to project history
         await addProjectHistory(projectId, 'Added initial template files');
@@ -629,7 +631,7 @@ export async function runDockerContainer(
               : ''
       } \
       --env-file ${path.resolve(projectRoot, '../.env')} \
-      -v claude_credentials:/claude_shared:rw \
+      -v magi_home:/magi_home:rw \
       -v magi_output:/magi_output:rw \
       -v custom_tools:/custom_tools:rw \
       -v /etc/timezone:/etc/timezone:ro \

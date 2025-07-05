@@ -94,6 +94,8 @@ ensureGlobalExitHook();
  * Options for running a command through PTY.
  */
 export interface PtyRunOptions {
+    /** The initial prompt to send */
+    prompt: string;
     /** Working directory for the command */
     cwd: string;
     /** Environment variables to pass to the command */
@@ -108,8 +110,12 @@ export interface PtyRunOptions {
     noiseFilter?: (line: string, tokenCb?: (n: number) => void) => boolean;
     /** What text separates input from output? */
     promptSeparator?: string;
+    /** Function to detect when the process can receive a prompt */
+    readySignal?: (line: string) => boolean;
     /** Function to detect when the actual processing/output has started */
     startSignal?: (line: string) => boolean;
+    /** Process all output */
+    startImmediately?: boolean;
     /** Callback for token progress updates */
     onTokenProgress?: (n: number) => void;
     /** Tiered batching configuration for output */
@@ -120,10 +126,16 @@ export interface PtyRunOptions {
     messageId?: string;
     /** Optional callback for each processed line */
     onLine?: (line: string) => void;
+    /** Optional line processor to clean/transform lines before they're added to output */
+    lineProcessor?: (line: string) => string;
     /** What command should we use to exit (default: /exit) */
     exitCommand?: string;
     /** Array of exit codes to treat as successful (default: [0]) */
     successExitCodes?: number[];
+    /** Newline sequence to append to write() commands (default: '\x1b\r') */
+    newlineSequence?: string;
+    /** Delay in ms before appending newline sequence (default: 10) */
+    newlineDelay?: number;
 }
 
 /**
@@ -173,6 +185,8 @@ export function runPty(
     const batchTiers = options.batch?.tiers || DEFAULT_BATCH_TIERS;
     const noiseFilter = options.noiseFilter || (() => false);
     const promptSeparator = options.promptSeparator || DEFAULT_PROMPT_SEPARATOR;
+    const prompt = options.prompt || 'This is a test';
+    const readySignal = options.readySignal || null;
     const startSignal =
         options.startSignal ||
         ((line: string): boolean => {
@@ -181,12 +195,18 @@ export function runPty(
         });
     const onTokenProgress = options.onTokenProgress;
     const onLine = options.onLine;
+    const lineProcessor = options.lineProcessor;
     const exitCommand = options.exitCommand || DEFAULT_EXIT_COMMAND;
     const successExitCodes = options.successExitCodes || [0, 1];
+    const newlineSequence = options.newlineSequence || '\r';
+    const newlineDelay = options.newlineDelay ?? 100;
 
     // Queue to pass events from PTY callbacks/timers to the generator loop
     // Moved outside the generator to be accessible to timeout handlers
     const eventQueue: StreamingEvent[] = [];
+
+    // Flag to prevent onStart during write operations - moved outside generator for write() function access
+    let writingInProgress = false;
 
     // Create an async generator to yield StreamingEvent objects
     const stream = (async function* () {
@@ -197,7 +217,12 @@ export function runPty(
         let exitRequested = false;
         let ptyExited = false;
         let ptyError: Error | null = null;
-        let processingStarted = startSignal ? false : true; // Skip the "start signal" logic if not provided
+        let processingReady = false;
+        let processingStarted = options.startImmediately
+            ? true
+            : startSignal
+              ? false
+              : true; // Skip the "start signal" logic if not provided
 
         // --- Delta Batching Logic Variables (moved up for closure access) ---
         let deltaBuffer = '';
@@ -205,15 +230,69 @@ export function runPty(
         let currentBatchTimeoutValue: number | null = null;
 
         // --- Sliding Window History for Deduplication ---
-        const historySize = 10;
+        const historySize = 20; // Increased to catch more duplicates
         const recentHistory: string[] = [];
         const recentHistorySet = new Set<string>();
+        const recentNormalizedSet = new Set<string>(); // For fuzzy deduplication
 
         // --- Console Output Buffering ---
         const consoleBuffers = new Map<string, DeltaBuffer>();
 
         // --- PTY Silence Timeout Variables ---
         let silenceTimeoutId: NodeJS.Timeout | null = null;
+
+        const onReady = () => {
+            if (!processingReady) {
+                processingReady = true;
+                console.log(
+                    '[runPty] Processing ready. Starting prompt retry mechanism...',
+                    prompt + `\n\n${promptSeparator}`
+                );
+
+                let retryCount = 0;
+                const maxRetries = 4;
+
+                // Send prompt initially after 2000ms
+                setTimeout(() => {
+                    if (!processingStarted) {
+                        console.log(
+                            '[runPty] Sending initial prompt (attempt 1/5)...'
+                        );
+                        write(prompt + `\n\n${promptSeparator}`);
+                    }
+                }, 2000);
+
+                // Set up retry mechanism - check every 3000ms
+                const retryInterval = setInterval(() => {
+                    if (processingStarted) {
+                        console.log(
+                            '[runPty] Processing started detected, clearing retry mechanism.'
+                        );
+                        clearInterval(retryInterval);
+                        return;
+                    }
+
+                    retryCount++;
+                    if (retryCount <= maxRetries) {
+                        console.log(
+                            `[runPty] Processing not started after ${2000 + retryCount * 3000}ms, sending prompt retry (attempt ${retryCount + 1}/5)...`
+                        );
+                        write(prompt + `\n\n${promptSeparator}`);
+                    } else {
+                        console.warn(
+                            `[runPty] Giving up after ${retryCount} retries (${2000 + retryCount * 3000}ms total). Processing may not start.`
+                        );
+                        clearInterval(retryInterval);
+                    }
+                }, 3000);
+            }
+        };
+
+        const onStart = () => {
+            if (!processingStarted && !writingInProgress) {
+                processingStarted = true;
+            }
+        };
 
         /**
          * Request graceful exit by sending "{exitCommand}}".
@@ -227,12 +306,11 @@ export function runPty(
             );
             try {
                 // Try multiple newline variations for better compatibility
-                ptyProcess.write(`${exitCommand}\r\n`);
-                setTimeout(() => ptyProcess.write('\r'), 50);
-                setTimeout(() => ptyProcess.write('\n'), 100);
-                setTimeout(() => ptyProcess.write('\x1b\r'), 150);
-                setTimeout(() => ptyProcess.write('\x1b\n'), 200);
-                setTimeout(() => ptyProcess.write('\x1b\n\r'), 250);
+                ptyProcess.write(exitCommand);
+                setTimeout(
+                    () => ptyProcess.write(newlineSequence),
+                    newlineDelay
+                );
             } catch (e) {
                 console.warn(
                     `[runPty] Error sending ${exitCommand} command:`,
@@ -429,7 +507,7 @@ export function runPty(
                 );
                 batchTimerId = null;
                 currentBatchTimeoutValue = null;
-                deltaBuffer += '\n'; // Add newline to separate from next delta
+                //deltaBuffer += '\n'; // Add newline to separate from next delta
                 yieldBufferedDelta();
             }, applicableTimeout);
         };
@@ -444,19 +522,11 @@ export function runPty(
                 order: deltaPosition++,
             } as MessageEvent;
 
-            args[args.length - 1] =
-                args[args.length - 1] + `\n\n${promptSeparator}`;
-
             // Create a Promise to manage PTY process completion/failure
             const completionPromise = new Promise<void>(resolve => {
                 try {
                     console.log(
                         `[runPty] Spawning PTY: ${command} ${args.map(a => (a.length > 50 ? a.substring(0, 50) + '...' : a)).join(' ')}`
-                    );
-
-                    // Log environment for debugging
-                    console.log(
-                        `[runPty] UV_USE_IO_URING=${env.UV_USE_IO_URING || 'not set'}`
                     );
 
                     ptyProcess = pty.spawn(command, args, {
@@ -527,27 +597,50 @@ export function runPty(
                                     onLine(line);
                                 }
 
-                                // Check for [complete] signal to initiate graceful exit sequence
-                                if (
-                                    processingStarted &&
-                                    !noiseFilter(
-                                        trimmedLine,
-                                        onTokenProgress
-                                    ) &&
-                                    trimmedLine === '[complete]'
-                                ) {
-                                    console.log(
-                                        `[runPty] Early completion signal "[complete]" detected for message ${messageId}. Requesting graceful exit.`
-                                    );
-                                    requestExit();
+                                // --- Skip until ready signal logic ---
+                                if (!processingReady) {
+                                    if (!readySignal) {
+                                        // Ready immediately once we have data
+                                        onReady();
+                                    } else if (readySignal(trimmedLine)) {
+                                        console.log(
+                                            `[runPty] Processing ready detected for message ${messageId}.`
+                                        );
+                                        onReady();
+                                    } else {
+                                        continue;
+                                    }
+                                }
+
+                                // --- Skip until start signal logic ---
+                                if (!processingStarted && startSignal) {
+                                    if (startSignal(trimmedLine)) {
+                                        console.log(
+                                            `[runPty] Processing started detected for message ${messageId}.`
+                                        );
+                                        onStart();
+                                    }
+                                    // Always skip processing this line even if we start (so we don't put the start characters in the output)
                                     continue;
                                 }
 
                                 // Process line only if processing has started
                                 if (
-                                    processingStarted &&
                                     !noiseFilter(trimmedLine, onTokenProgress)
                                 ) {
+                                    // Check for [complete] signal to initiate graceful exit sequence
+                                    // Handle both plain [complete] and variations like "✦ [complete]"
+                                    if (
+                                        trimmedLine === '[complete]' ||
+                                        trimmedLine.endsWith('[complete]')
+                                    ) {
+                                        console.log(
+                                            `[runPty] Early completion signal "[complete]" detected for message ${messageId}. Requesting graceful exit.`
+                                        );
+                                        requestExit();
+                                        continue;
+                                    }
+
                                     let shouldBuffer = true;
 
                                     // --- Deduplication Logic ---
@@ -555,7 +648,14 @@ export function runPty(
                                     if (line === lastYieldedLine) {
                                         shouldBuffer = false;
                                     }
-                                    // Avoid recent duplicates using the sliding window history
+
+                                    // Normalize line for fuzzy comparison
+                                    const normalizedLine = line
+                                        .replace(/\s+/g, ' ') // Collapse whitespace
+                                        .trim()
+                                        .toLowerCase();
+
+                                    // Skip if exact match in recent history
                                     if (
                                         shouldBuffer &&
                                         recentHistorySet.has(line)
@@ -563,17 +663,93 @@ export function runPty(
                                         shouldBuffer = false;
                                     }
 
+                                    // Skip if normalized version matches (handles wrapped lines)
+                                    if (
+                                        shouldBuffer &&
+                                        normalizedLine.length > 10 && // Only for meaningful lines
+                                        recentNormalizedSet.has(normalizedLine)
+                                    ) {
+                                        shouldBuffer = false;
+                                    }
+
+                                    // Check if this line is a substring of a recent line or vice versa
+                                    // This handles cases where content is output in parts
+                                    if (
+                                        shouldBuffer &&
+                                        normalizedLine.length > 20
+                                    ) {
+                                        for (const recentNorm of recentNormalizedSet) {
+                                            if (recentNorm.length > 20) {
+                                                // Check if one contains a significant portion of the other
+                                                if (
+                                                    normalizedLine.includes(
+                                                        recentNorm
+                                                    ) ||
+                                                    recentNorm.includes(
+                                                        normalizedLine
+                                                    )
+                                                ) {
+                                                    // Only skip if they're very similar in length
+                                                    const lengthRatio =
+                                                        Math.min(
+                                                            normalizedLine.length,
+                                                            recentNorm.length
+                                                        ) /
+                                                        Math.max(
+                                                            normalizedLine.length,
+                                                            recentNorm.length
+                                                        );
+                                                    if (lengthRatio > 0.8) {
+                                                        shouldBuffer = false;
+                                                        break;
+                                                    }
+                                                }
+
+                                                // Also check if lines start the same way (handles truncated duplicates)
+                                                // This catches cases like "Shell: /app/projects..." appearing multiple times
+                                                const minLen = Math.min(
+                                                    normalizedLine.length,
+                                                    recentNorm.length,
+                                                    30
+                                                );
+                                                if (
+                                                    minLen > 15 &&
+                                                    normalizedLine.substring(
+                                                        0,
+                                                        minLen
+                                                    ) ===
+                                                        recentNorm.substring(
+                                                            0,
+                                                            minLen
+                                                        )
+                                                ) {
+                                                    shouldBuffer = false;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+
                                     if (shouldBuffer) {
-                                        // Add newline back for structure within the buffer
-                                        const contentChunk = line;
+                                        // Apply line processor if provided
+                                        const processedLine = lineProcessor
+                                            ? lineProcessor(line)
+                                            : line;
+
                                         // Append valid, non-duplicate content to the batch buffer
-                                        deltaBuffer += contentChunk;
+                                        deltaBuffer += processedLine + '\n';
                                         // Update last yielded line for next dedupe check
-                                        lastYieldedLine = line;
+                                        lastYieldedLine = processedLine;
 
                                         // --- Update Sliding Window History ---
                                         recentHistory.push(line);
                                         recentHistorySet.add(line);
+                                        if (normalizedLine.length > 10) {
+                                            recentNormalizedSet.add(
+                                                normalizedLine
+                                            );
+                                        }
+
                                         // Maintain history size
                                         if (
                                             recentHistory.length > historySize
@@ -581,33 +757,19 @@ export function runPty(
                                             const oldestLine =
                                                 recentHistory.shift()!;
                                             recentHistorySet.delete(oldestLine);
+
+                                            // Also remove from normalized set
+                                            const oldestNormalized = oldestLine
+                                                .replace(/\s+/g, ' ')
+                                                .trim()
+                                                .toLowerCase();
+                                            recentNormalizedSet.delete(
+                                                oldestNormalized
+                                            );
                                         }
 
                                         // Start or adjust batch timer
                                         startBatchTimer();
-                                    }
-                                }
-
-                                // --- Skip until start signal logic ---
-                                if (!processingStarted && startSignal) {
-                                    if (
-                                        !noiseFilter(
-                                            trimmedLine,
-                                            onTokenProgress
-                                        )
-                                    ) {
-                                        if (startSignal(trimmedLine)) {
-                                            processingStarted = true;
-                                            console.log(
-                                                `[runPty] Processing started detected for message ${messageId}.`
-                                            );
-                                        } else {
-                                            // Still in echo phase, skip this line
-                                            continue;
-                                        }
-                                    } else {
-                                        // Skip noise lines before processing starts
-                                        continue;
                                     }
                                 }
                             }
@@ -824,12 +986,11 @@ export function runPty(
         if (ptyProcess) {
             try {
                 // Try multiple newline variations for better compatibility
-                ptyProcess.write(`${exitCommand}\r\n`);
-                setTimeout(() => ptyProcess.write('\r'), 50);
-                setTimeout(() => ptyProcess.write('\n'), 100);
-                setTimeout(() => ptyProcess.write('\x1b\r'), 150);
-                setTimeout(() => ptyProcess.write('\x1b\n'), 200);
-                setTimeout(() => ptyProcess.write('\x1b\n\r'), 250);
+                ptyProcess.write(exitCommand);
+                setTimeout(
+                    () => ptyProcess.write(newlineSequence),
+                    newlineDelay
+                );
                 setTimeout(() => {
                     if (activePtyProcesses.has(ptyProcess)) {
                         try {
@@ -852,14 +1013,35 @@ export function runPty(
 
     /**
      * Write function to send data to the PTY process.
+     * Automatically appends the configured newline sequence after a small delay.
+     * Temporarily disables onStart() during the write operation to prevent
+     * processingStarted from being set until after the newline sequence.
      */
     const write = (data: string) => {
         const ptyProcess = ptyMap.get(messageId);
         if (ptyProcess) {
             try {
+                // Disable onStart() during write operation
+                writingInProgress = true;
+
                 ptyProcess.write(data);
+
+                setTimeout(() => {
+                    try {
+                        // Re-enable onStart() just before sending newline
+                        writingInProgress = false;
+                        ptyProcess.write(newlineSequence);
+                    } catch (e) {
+                        console.warn(
+                            '[runPty] Error during delayed newline write:',
+                            e
+                        );
+                        writingInProgress = false; // Ensure flag is reset on error
+                    }
+                }, newlineDelay);
             } catch (e) {
                 console.warn('[runPty] Error during write:', e);
+                writingInProgress = false; // Ensure flag is reset on error
             }
         } else {
             console.warn(
@@ -936,12 +1118,8 @@ export function resumeAllSilenceTimeouts(): void {
                             ptyExitCommands.get(ptyProcess) ||
                             DEFAULT_EXIT_COMMAND;
                         // Use the same newline variations as requestExit for consistency
-                        ptyProcess.write(`${exitCommand}\r\n`);
-                        setTimeout(() => ptyProcess.write('\r'), 50);
-                        setTimeout(() => ptyProcess.write('\n'), 100);
-                        setTimeout(() => ptyProcess.write('\x1b\r'), 150);
-                        setTimeout(() => ptyProcess.write('\x1b\n'), 200);
-                        setTimeout(() => ptyProcess.write('\x1b\n\r'), 250);
+                        ptyProcess.write(exitCommand);
+                        setTimeout(() => ptyProcess.write('\r'), 100);
                     } catch (e) {
                         console.warn('[runPty] Error sending exit command:', e);
                     }
@@ -985,6 +1163,9 @@ export function sendToAllPtyProcesses(command: string): void {
     for (const ptyProcess of activePtyProcesses) {
         try {
             ptyProcess.write(command);
+            if (command[0] !== '\x1b\x1b') {
+                setTimeout(() => ptyProcess.write('\r'), 100);
+            }
         } catch (e) {
             console.warn('[runPty] Error sending command to PTY process:', e);
         }
@@ -1017,6 +1198,9 @@ export function sendToPtyProcess(messageId: string, command: string): void {
 
     try {
         ptyProcess.write(command);
+        if (command[0] !== '\x1b\x1b') {
+            setTimeout(() => ptyProcess.write('\r'), 100);
+        }
     } catch (e) {
         console.warn('[runPty] Error sending command to PTY process:', e);
     }

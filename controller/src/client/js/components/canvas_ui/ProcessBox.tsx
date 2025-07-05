@@ -130,7 +130,7 @@ const ProcessBox: React.FC<ProcessBoxProps> = ({
                         agent={process?.agent}
                         messages={messages}
                         isTyping={isTyping}
-                        colors={colors}
+                        rgb={colors.rgb}
                     />
                 </AutoScrollContainer>
             </div>

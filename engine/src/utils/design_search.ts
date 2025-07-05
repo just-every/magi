@@ -2104,7 +2104,6 @@ export async function selectBestFromGrid(
         instructions:
             'You are a design assistant. Your job is to select the best images from a grid of images.',
         modelSettings: {
-            force_json: true,
             json_schema: {
                 name: 'image_selection',
                 type: 'json_schema',

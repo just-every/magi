@@ -89,6 +89,36 @@ export class ProcessManager {
         return this.processes;
     }
 
+    /**
+     * Clean up all monitoring intervals for performance optimization
+     */
+    cleanupIntervals(): void {
+        console.log('Cleaning up all process monitoring intervals...');
+        for (const processId in this.processes) {
+            const process = this.processes[processId];
+            if (process.checkInterval) {
+                clearInterval(process.checkInterval);
+                process.checkInterval = undefined;
+                console.log(
+                    `Cleared monitoring interval for process ${processId}`
+                );
+            }
+        }
+    }
+
+    /**
+     * Get count of active monitoring intervals (for debugging)
+     */
+    getActiveIntervalCount(): number {
+        let count = 0;
+        for (const processId in this.processes) {
+            if (this.processes[processId].checkInterval) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     setCommunicationManager(communicationManager: CommunicationManager): void {
         this.communicationManager = communicationManager;
     }
@@ -140,15 +170,16 @@ export class ProcessManager {
         agentProcess?: AgentProcess
     ): Promise<ProcessData> {
         try {
-            // Generate colors for the process
-            const colors = generateProcessColors();
-
             if (!this.coreProcessId) {
                 this.coreProcessId = processId;
                 console.log(
                     `[ProcessManager] Set core process ID to: ${processId}`
                 );
             }
+            // Generate colors for the process
+            const colors = generateProcessColors(
+                this.coreProcessId == processId
+            );
 
             const status = 'running';
             if (agentProcess) {
@@ -173,7 +204,10 @@ export class ProcessManager {
             this.io.emit('process:create', {
                 id: processId,
                 isCore: this.coreProcessId === processId,
-                manager: this.coreProcessId === processId ? process.env.PERSON_NAME : process.env.AI_NAME,
+                manager:
+                    this.coreProcessId === processId
+                        ? process.env.YOUR_NAME
+                        : process.env.AI_NAME,
                 name:
                     agentProcess?.name ||
                     (this.coreProcessId === processId
@@ -480,23 +514,29 @@ export class ProcessManager {
     setupContainerStatusChecking(processId: string): void {
         const containerName = `task-${processId}`;
 
-        // Set up periodic container status checking
-        const statusCheckIntervalMs = 5000; // Check every 5 seconds
+        // Set up periodic container status checking (optimized)
+        const statusCheckIntervalMs = 15000; // Reduced frequency: Check every 15 seconds instead of 5
         let checkCount = 0;
         const checkInterval = setInterval(async () => {
             checkCount++;
-            if (checkCount % 12 === 0) {
-                // Log every minute (12 * 5000ms)
+
+            // Only log in development mode and less frequently
+            if (
+                process.env.NODE_ENV === 'development' &&
+                checkCount % 4 === 0
+            ) {
+                // Log every minute (4 * 15000ms)
                 console.log(
                     `[DEBUG] Container status check #${checkCount} for ${processId}`
                 );
             }
+
             try {
-                // Query container status using Docker inspect
+                // Optimize: Get both status and exit code in one docker inspect call
                 const { stdout } = await execPromise(
-                    `docker inspect --format={{.State.Status}} ${containerName}`
+                    `docker inspect --format='{{.State.Status}} {{.State.ExitCode}}' ${containerName}`
                 );
-                const status = stdout.trim();
+                const [status, exitCodeStr] = stdout.trim().split(' ');
 
                 // If the container has exited, determine success/failure and clean up
                 if (status === 'exited') {
@@ -504,11 +544,7 @@ export class ProcessManager {
                         `Container ${containerName} has exited, checking exit code`
                     );
 
-                    // Get the container's exit code
-                    const { stdout: exitCodeStdout } = await execPromise(
-                        `docker inspect --format={{.State.ExitCode}} ${containerName}`
-                    );
-                    const exitCode = parseInt(exitCodeStdout.trim(), 10);
+                    const exitCode = parseInt(exitCodeStr, 10);
 
                     // Update process status based on exit code
                     if (this.processes[processId]) {
@@ -532,6 +568,9 @@ export class ProcessManager {
 
                     // Clean up monitoring resources
                     clearInterval(checkInterval);
+                    if (this.processes[processId]) {
+                        this.processes[processId].checkInterval = undefined;
+                    }
 
                     // Kill the monitoring process if it exists
                     if (this.processes[processId]?.monitorProcess) {
@@ -724,7 +763,7 @@ export class ProcessManager {
             );
 
             // Generate colors for the process
-            const colors = generateProcessColors();
+            const colors = generateProcessColors(this.coreProcessId == id);
 
             // Set up process tracking
             this.processes[id] = {
