@@ -105,7 +105,7 @@ function getRecentDirectories(baseDir: string, limit: number = 10): string[] {
                         name: dir.name,
                         mtime: stats.mtime.getTime(),
                     };
-                } catch (error) {
+                } catch (_error) {
                     // Skip directories we can't access
                     return null;
                 }
