@@ -374,7 +374,10 @@ export class CommunicationManager {
      * and triggers global recalculation/emission.
      * @param payload - The event payload containing processId and the single ModelUsage increment.
      */
-    public async handleModelUsage(processId: string, event: CostUpdateEvent): Promise<void> {
+    public async handleModelUsage(
+        processId: string,
+        event: CostUpdateEvent
+    ): Promise<void> {
         // Extract usage data from the event object
         const { usage } = event; // Get usage from the event parameter
 
@@ -507,7 +510,9 @@ export class CommunicationManager {
             this.processManager.io.emit('cost:info', emitPayload);
 
             // Check cost limit and emit warnings if needed
-            await this.checkCostLimitAndNotify(aggregatedGlobalUsage.cost.total);
+            await this.checkCostLimitAndNotify(
+                aggregatedGlobalUsage.cost.total
+            );
         } catch (error) {
             console.error(
                 'Error recalculating and emitting global state:',
