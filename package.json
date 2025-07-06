@@ -21,6 +21,7 @@
         "format:check": "prettier --check .",
         "lint": "eslint 'controller/src/**/*.{ts,tsx}' 'engine/src/**/*.{ts,tsx}' 'host/**/*.{ts,tsx}'",
         "lint:fix": "eslint 'controller/src/**/*.{ts,tsx}' 'engine/src/**/*.{ts,tsx}' 'host/**/*.{ts,tsx}' --fix",
+        "type-check": "tsc --noEmit -p controller/tsconfig.json && tsc --noEmit -p engine/tsconfig.json && tsc --noEmit -p host/tsconfig.json",
         "setup": "node host/setup.js",
         "sync-home": "npm run build:host && node host/dist/setup/sync-home.js",
         "test": "vitest run",
