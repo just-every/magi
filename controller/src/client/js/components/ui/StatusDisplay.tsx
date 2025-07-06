@@ -2,7 +2,8 @@ import * as React from 'react';
 import { useSocket } from '../../context/SocketContext';
 
 // No props needed for StatusDisplay
-interface StatusDisplayProps {}
+// Component does not accept props at the moment
+type StatusDisplayProps = Record<string, never>;
 
 /**
  * Status Display Component

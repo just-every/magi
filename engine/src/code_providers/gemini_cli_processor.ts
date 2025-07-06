@@ -16,8 +16,6 @@ export class GeminiOutputProcessor {
      * @returns Processed line or null if it should be filtered
      */
     processLine(line: string): string | null {
-        const originalLine = line;
-
         // Handle empty lines - generally preserve them for formatting
         if (!line.trim()) {
             return line;

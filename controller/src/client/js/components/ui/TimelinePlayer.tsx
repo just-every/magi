@@ -696,7 +696,7 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
                                     currentPoint.screenshot
                                 );
                                 (e.target as HTMLImageElement).src =
-                                    `https://placehold.co/600x400/CCCCCC/4F4F4F?text=Error+Loading+Image`;
+                                    'https://placehold.co/600x400/CCCCCC/4F4F4F?text=Error+Loading+Image';
                             }}
                         />
                         {mode === 'design' &&

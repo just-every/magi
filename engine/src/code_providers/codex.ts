@@ -14,10 +14,6 @@ import { log_llm_request } from '../utils/file_utils.js';
 import { runPty } from '../utils/run_pty.js';
 
 // Define interface for parsing Codex CLI JSON output
-interface CodexContentPart {
-    type: string;
-    text?: string;
-}
 
 /**
  * Helper function to filter out known noise patterns from the interactive CLI output.
@@ -27,10 +23,9 @@ interface CodexContentPart {
  * in future CLI versions may require this function to be updated.
  *
  * @param line - A single line of text (after ANSI stripping and trimming).
- * @param tokenCb - Optional callback to receive detected token counts from status lines
  * @returns True if the line is considered noise, false otherwise.
  */
-function isNoiseLine(line: string, tokenCb?: (n: number) => void): boolean {
+function isNoiseLine(line: string): boolean {
     if (!line) return true; // Skip empty lines
 
     // --- Filtering based on observed output ---
@@ -57,20 +52,6 @@ function isNoiseLine(line: string, tokenCb?: (n: number) => void): boolean {
  * @param line - A single line of text (after ANSI stripping and trimming).
  * @returns True if the line signals processing start, false otherwise.
  */
-function isProcessingStartSignal(line: string): boolean {
-    // NOTE: These patterns might break with future CLI updates.
-    // Add patterns that reliably appear only *after* the initial prompt/setup output
-    if (/^\s*\p{S}\s*\w+…/u.test(line)) return true;
-    if (
-        line.startsWith('● ') ||
-        line.startsWith('╭') ||
-        line.startsWith('│') ||
-        line.startsWith('╰')
-    )
-        return true; // Lines starting with ● often indicate actions/tasks
-    if (line.startsWith('Task(')) return true; // Task descriptions
-    return false;
-}
 
 /**
  * CodexProvider uses run_pty to spawn the `codex` CLI,

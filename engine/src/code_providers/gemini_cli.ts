@@ -163,7 +163,7 @@ export class GeminiCliProvider implements ModelProvider {
                 `[GeminiCliProvider] Setting up runPty for message ${messageId}`
             );
 
-            const { GOOGLE_API_KEY, ...envWithoutGoogleKey } = process.env;
+            const envWithoutGoogleKey = process.env;
 
             const ptyOpts: PtyRunOptions = {
                 prompt,

@@ -125,7 +125,7 @@ async function takeScreenshot(
                         .replace(/_+/g, '_')
                         .substring(0, 50);
                 }
-            } catch (e) {
+            } catch {
                 // Ignore errors when getting the title
             }
         }
@@ -1563,7 +1563,7 @@ function parseWebSearchResults(
                     }))
                     .slice(0, limit);
             }
-        } catch (e) {
+        } catch {
             // Not JSON, continue with text parsing
         }
 
@@ -1744,7 +1744,7 @@ export async function design_search(
             results = await searchAwwwards(query, limit);
             break;
         case 'web_search':
-        default:
+        default: {
             // Use web_search directly with appropriate search engine
             const random_agent_id = `design-search-${uuidv4()}`;
             const searchQuery = `${query} design inspiration websites`;
@@ -1769,6 +1769,7 @@ export async function design_search(
             // Parse search results into DesignSearchResult format
             results = parseWebSearchResults(searchResult, query, limit);
             break;
+        }
     }
 
     // Limit results

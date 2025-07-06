@@ -9,7 +9,6 @@ import { Agent } from '@just-every/ensemble';
 import { execSync } from 'child_process';
 import { sendStreamEvent } from './communication.js';
 import { quick_llm_call } from './llm_call_utils.js';
-import { get_output_dir } from './file_utils.js';
 import { getDB } from './db.js';
 // import { computeMetrics } from '../../controller/src/server/managers/commit_metrics.js';
 
@@ -41,13 +40,13 @@ export async function planAndCommitChanges(
             execSync(`git -C "${projectPath}" rev-parse --verify main`, {
                 stdio: 'pipe',
             });
-        } catch (e) {
+        } catch {
             try {
                 execSync(`git -C "${projectPath}" rev-parse --verify master`, {
                     stdio: 'pipe',
                 });
                 mainBranch = 'master';
-            } catch (e2) {
+            } catch {
                 console.warn(
                     '[commit-planner] Could not find main or master branch'
                 );
@@ -61,7 +60,7 @@ export async function planAndCommitChanges(
                 `git -C "${projectPath}" rev-parse --abbrev-ref HEAD`,
                 { encoding: 'utf8' }
             ).trim();
-        } catch (e) {
+        } catch {
             console.warn(
                 `[commit-planner] Could not determine current branch, using '${mainBranch}'`
             );
@@ -83,7 +82,7 @@ export async function planAndCommitChanges(
                         `[commit-planner] Found ${commitCount} existing commits on branch ${currentBranch}`
                     );
                 }
-            } catch (e) {
+            } catch {
                 console.log(
                     `[commit-planner] Could not compare with ${mainBranch} branch`
                 );
@@ -103,9 +102,9 @@ export async function planAndCommitChanges(
                     `git -C "${projectPath}" log ${mainBranch}..HEAD --pretty=format:"%s%n%n%b" --reverse`,
                     { encoding: 'utf8' }
                 ).trim();
-            } catch (e) {
+            } catch (_error) {
                 console.error(
-                    `[commit-planner] Failed to get commit messages: ${e}`
+                    `[commit-planner] Failed to get commit messages: ${_error}`
                 );
             }
 
@@ -121,9 +120,9 @@ export async function planAndCommitChanges(
                     console.log('[commit-planner] Generated patch is empty');
                     return;
                 }
-            } catch (e) {
+            } catch (_error) {
                 console.error(
-                    `[commit-planner] Failed to generate patch from commits: ${e}`
+                    `[commit-planner] Failed to generate patch from commits: ${_error}`
                 );
                 return;
             }
@@ -160,10 +159,10 @@ export async function planAndCommitChanges(
                     additions: totalAdds,
                     deletions: totalDels,
                 };
-            } catch (err) {
+            } catch (_error) {
                 console.warn(
                     '[commit-planner] Failed to compute metrics:',
-                    err
+                    _error
                 );
             }
 
@@ -347,8 +346,10 @@ ALWAYS output your last line as [complete] after you finish the message.`,
                 console.log('[commit-planner] Generated patch is empty');
                 return;
             }
-        } catch (e) {
-            console.error(`[commit-planner] Failed to generate patch: ${e}`);
+        } catch (_error) {
+            console.error(
+                `[commit-planner] Failed to generate patch: ${_error}`
+            );
             return;
         }
 
@@ -387,8 +388,8 @@ ALWAYS output your last line as [complete] after you finish the message.`,
                 additions: totalAdds,
                 deletions: totalDels,
             };
-        } catch (err) {
-            console.warn('[commit-planner] Failed to compute metrics:', err);
+        } catch (_error) {
+            console.warn('[commit-planner] Failed to compute metrics:', _error);
             // Continue without metrics - not a fatal error
         }
 
@@ -437,9 +438,9 @@ ALWAYS output your last line as [complete] after you finish the message.`,
         // Reset staged changes to clean up
         try {
             execSync(`git -C "${projectPath}" reset`, { stdio: 'pipe' });
-        } catch (e) {
+        } catch (_error) {
             console.warn(
-                `[commit-planner] Failed to reset staged changes: ${e}`
+                `[commit-planner] Failed to reset staged changes: ${_error}`
             );
         }
     } catch (error) {

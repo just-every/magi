@@ -136,7 +136,7 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
                     if (source) {
                         source.disconnect(analyserRef.current);
                     }
-                } catch (e) {
+                } catch {
                     // Node might already be disconnected, which is fine
                     console.debug(
                         'AudioVisualizer cleanup: Node already disconnected'
