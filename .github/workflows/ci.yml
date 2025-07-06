@@ -69,6 +69,20 @@ jobs:
           echo "YOUR_NAME=CI" >> .env
           echo "AI_NAME=Magi" >> .env
           echo "DATABASE_HOST=db" >> .env
+      - name: Setup Docker volumes for CI
+        run: |
+          # Create directories
+          mkdir -p .magi_home .magi_output .custom_tools
+          
+          # Create Docker volumes as bind mounts
+          docker volume create --driver local --opt type=none --opt o=bind --opt device="$(pwd)/.magi_home" magi_home
+          docker volume create --driver local --opt type=none --opt o=bind --opt device="$(pwd)/.magi_output" magi_output
+          docker volume create --driver local --opt type=none --opt o=bind --opt device="$(pwd)/.custom_tools" custom_tools
+          
+          # Set proper permissions (magi user is 1001:1001)
+          docker run --rm -v magi_home:/magi_home alpine:latest chown -R 1001:1001 /magi_home
+          docker run --rm -v magi_output:/magi_output alpine:latest chown -R 1001:1001 /magi_output
+          docker run --rm -v custom_tools:/custom_tools alpine:latest chown -R 1001:1001 /custom_tools
       - name: Build and spin up Docker environment
         run: |
           docker compose up --build -d
@@ -80,4 +94,7 @@ jobs:
         run: echo "Running smoke tests..." # Replace with actual smoke test command
       - name: Tear down Docker environment
         if: always()
-        run: docker compose down
+        run: |
+          docker compose down
+          # Clean up volumes
+          docker volume rm magi_home magi_output custom_tools || true
