@@ -62,6 +62,13 @@ jobs:
     needs: build
     steps:
       - uses: actions/checkout@v4
+      - name: Create minimal .env file for CI
+        run: |
+          cp .env.example .env
+          # Set minimal required values for CI
+          echo "YOUR_NAME=CI" >> .env
+          echo "AI_NAME=Magi" >> .env
+          echo "DATABASE_HOST=db" >> .env
       - name: Build and spin up Docker environment
         run: |
           docker compose up --build -d
