@@ -27,7 +27,7 @@ const MessageContent: React.FC<MessageContentProps> = ({ content }) => {
             if (parsed.contentArray && Array.isArray(parsed.contentArray)) {
                 return <MessageContent content={parsed.contentArray} />;
             }
-        } catch (e) {
+        } catch {
             // Not JSON, render as text
         }
 

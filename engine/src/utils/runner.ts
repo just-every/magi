@@ -6,7 +6,6 @@
  */
 
 import type {
-    ToolCall,
     ResponseInput,
     ResponseInputItem,
     ResponseInputFunctionCall,
@@ -26,16 +25,6 @@ import {
 
 import { getCommunicationManager } from './communication.js';
 import type { ResponseOutputEvent } from '@just-every/ensemble/dist/types/types.js';
-
-const EVENT_TIMEOUT_MS = 300000; // 5 min timeout for events
-
-// Define a specific error type for clarity
-class TimeoutError extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = 'TimeoutError';
-    }
-}
 
 /**
  * Agent runner class for executing agents with tools

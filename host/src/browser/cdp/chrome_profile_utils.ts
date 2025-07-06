@@ -294,7 +294,7 @@ export function isChromeRunning(): boolean {
             }
         }
         return false;
-    } catch (_error) {
+    } catch {
         // If the command fails, assume Chrome is not running
         return false;
     }

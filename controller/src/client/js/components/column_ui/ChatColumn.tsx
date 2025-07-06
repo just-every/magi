@@ -549,14 +549,16 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                     <>
                         {!isPaused && !isFirstProcess && isAudioEnabled && (
                             <i
-                                className={`bi bi-volume-up-fill text-primary me-3`}
+                                className={
+                                    'bi bi-volume-up-fill text-primary me-3'
+                                }
                             />
                         )}
                         {!isPaused && !isFirstProcess && isTelegramEnabled && (
-                            <i className={`bi bi-telegram text-primary me-3`} />
+                            <i className={'bi bi-telegram text-primary me-3'} />
                         )}
                         <i
-                            className={`bi bi-circle-fill me-3`}
+                            className={'bi bi-circle-fill me-3'}
                             style={{
                                 color: isPaused
                                     ? '#00000'
@@ -773,7 +775,7 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
 
                         {/* Version Manager Button */}
                         <button
-                            className={`btn btn-sm btn-primary text-white`}
+                            className={'btn btn-sm btn-primary text-white'}
                             onClick={() =>
                                 setShowVersionManager(!showVersionManager)
                             }
@@ -831,9 +833,11 @@ const ChatColumn: React.FC<ChatColumnProps> = ({
                             toolCallMessage.toolParams.document
                         ) {
                             document = (
-                                <div className={`mt-2`}>
+                                <div className={'mt-2'}>
                                     <div
-                                        className={`d-inline-block p-3 rounded-top-3 bg-white text-black border border-light-subtle rounded-end-3 font-monospace`}
+                                        className={
+                                            'd-inline-block p-3 rounded-top-3 bg-white text-black border border-light-subtle rounded-end-3 font-monospace'
+                                        }
                                     >
                                         <div
                                             style={{

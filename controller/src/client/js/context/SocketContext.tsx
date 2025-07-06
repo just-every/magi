@@ -20,7 +20,6 @@ import {
     ConsoleEvent,
     DesignEvent,
     AgentStatusEvent,
-    AudioEvent,
 } from '../../../types/shared-types';
 // Comment out direct import - we'll use simpler approach to avoid TypeScript errors
 // import { ContainerConnection, MagiMessage } from '../../../server/managers/communication_manager';
@@ -284,7 +283,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
         // Handle complete app settings updates from the server
         socketInstance.on('app_settings_update', (settings: AppSettings) => {
-            console.log(`Received app_settings_update:`, settings);
+            console.log('Received app_settings_update:', settings);
 
             // Apply all settings
             if (settings.uiMode) {
@@ -316,7 +315,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     ) {
                         messageContent = parsed.contentArray;
                     }
-                } catch (e) {
+                } catch {
                     // Not JSON, use as-is
                 }
 
@@ -413,7 +412,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     ].includes(event.message.event.type))
             ) {
                 console.log(
-                    `process:message`,
+                    'process:message',
                     event.id,
                     event.message.event.type,
                     event.message
@@ -802,8 +801,11 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                             toolParams = JSON.parse(
                                 toolCall.function.arguments
                             );
-                        } catch (e) {
-                            console.error('Error parsing tool arguments:', e);
+                        } catch (_error) {
+                            console.error(
+                                'Error parsing tool arguments:',
+                                _error
+                            );
                         }
 
                         // Generate command representation for certain tool types
@@ -1306,7 +1308,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         ) {
                             messageContent = parsed.contentArray;
                         }
-                    } catch (e) {
+                    } catch {
                         // Not JSON, use as-is
                     }
 

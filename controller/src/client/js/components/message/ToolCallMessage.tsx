@@ -1,5 +1,5 @@
 /**
- * ToolCallMessage Component – compact JSON‑first view (June 2025)
+ * ToolCallMessage Component - compact JSON-first view (June 2025)
  * ------------------------------------------------------------------
  * • Parameters are now shown ONLY as an interactive JSON tree.
  * • The tool/function name wraps the tree with "name(" … ")" lines so it

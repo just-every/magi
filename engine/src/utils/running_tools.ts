@@ -158,7 +158,7 @@ async function wait_for_running_tool(
                         { once: true }
                     );
                 });
-            } catch (error) {
+            } catch {
                 if (abort_signal?.aborted) {
                     const abortReason2 = (abort_signal as any)?.reason
                         ? ` Reason: ${(abort_signal as any)?.reason}.`

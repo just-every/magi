@@ -56,7 +56,6 @@ import { ensureMemoryDirectories } from './utils/memory_utils.js';
 import { initializeEnsembleLogging } from './utils/ensemble_logger_bridge.js';
 
 const person = process.env.YOUR_NAME || 'User';
-const talkToolName = `talk to ${person}`.toLowerCase().replaceAll(' ', '_');
 let primaryAgentId: string | undefined;
 let exitedCode: number | undefined;
 
@@ -203,7 +202,7 @@ export async function spawnThought(
 export async function mainLoop(
     agent: Agent,
     loop: boolean,
-    model?: string
+    _model?: string
 ): Promise<void> {
     const comm = getCommunicationManager();
 

@@ -89,7 +89,7 @@ const CostDisplay: React.FC<CostDisplayProps> = ({ forceExpand = false }) => {
     const formatDateTime = (dateString: string): string => {
         try {
             return dateTimeFormatter.format(new Date(dateString));
-        } catch (e) {
+        } catch {
             return 'Invalid Date';
         }
     };

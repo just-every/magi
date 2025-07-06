@@ -12,6 +12,7 @@ import fs from 'fs/promises';
 import { existsSync, mkdirSync } from 'fs';
 import path from 'path';
 import { talk } from '../utils/talk';
+import { loadData } from '../utils/storage';
 import {
     CostUpdateData,
     CostUpdateEvent,
@@ -207,10 +208,10 @@ export class CommunicationManager {
 
                         // Process the message based on type
                         await this.processContainerMessage(processId, message);
-                    } catch (err) {
+                    } catch (_error) {
                         console.error(
                             'Error processing WebSocket message:',
-                            err
+                            _error
                         );
                     }
                 });
@@ -261,8 +262,8 @@ export class CommunicationManager {
                 };
 
                 ws.send(JSON.stringify(connectMessage));
-            } catch (err) {
-                console.error('Error handling WebSocket connection:', err);
+            } catch (_error) {
+                console.error('Error handling WebSocket connection:', _error);
                 ws.close(1011, 'Internal server error');
             }
         });
@@ -373,7 +374,7 @@ export class CommunicationManager {
      * and triggers global recalculation/emission.
      * @param payload - The event payload containing processId and the single ModelUsage increment.
      */
-    public handleModelUsage(processId: string, event: CostUpdateEvent): void {
+    public async handleModelUsage(processId: string, event: CostUpdateEvent): Promise<void> {
         // Extract usage data from the event object
         const { usage } = event; // Get usage from the event parameter
 
@@ -475,7 +476,7 @@ export class CommunicationManager {
             );
 
             // --- Recalculate Global State & Emit ---
-            this.recalculateAndEmitGlobalState();
+            await this.recalculateAndEmitGlobalState();
         } catch (error) {
             console.error(
                 `Error handling model usage for process ${processId}:`,
@@ -487,7 +488,7 @@ export class CommunicationManager {
     /**
      * Recalculates the global state and emits it. Called after any change.
      */
-    private recalculateAndEmitGlobalState(): void {
+    private async recalculateAndEmitGlobalState(): Promise<void> {
         try {
             const aggregatedGlobalUsage = this.calculateGlobalCostData();
             const elapsedMinutes = (Date.now() - this.costStartTime) / 60000;
@@ -506,7 +507,7 @@ export class CommunicationManager {
             this.processManager.io.emit('cost:info', emitPayload);
 
             // Check cost limit and emit warnings if needed
-            this.checkCostLimitAndNotify(aggregatedGlobalUsage.cost.total);
+            await this.checkCostLimitAndNotify(aggregatedGlobalUsage.cost.total);
         } catch (error) {
             console.error(
                 'Error recalculating and emitting global state:',
@@ -540,11 +541,11 @@ export class CommunicationManager {
      * Triggers recalculation and emission of the global state.
      * @param processId - The identifier of the process to remove.
      */
-    public removeProcessData(processId: string): void {
+    public async removeProcessData(processId: string): Promise<void> {
         if (this.processCostData[processId]) {
             console.log(`Removing cost data for process: ${processId}`);
             delete this.processCostData[processId];
-            this.recalculateAndEmitGlobalState();
+            await this.recalculateAndEmitGlobalState();
         }
     }
 
@@ -807,7 +808,7 @@ export class CommunicationManager {
                 }
             }
         } else if (event.type === 'cost_update' && 'usage' in event) {
-            this.handleModelUsage(
+            await this.handleModelUsage(
                 processId,
                 event as unknown as CostUpdateEvent
             );
@@ -909,7 +910,7 @@ export class CommunicationManager {
                     );
                     command = textContent ? textContent.text : '';
                 }
-            } catch (e) {
+            } catch {
                 // Not JSON, treat as regular text command
             }
 
@@ -925,10 +926,10 @@ export class CommunicationManager {
             };
 
             return this.sendMessage(processId, JSON.stringify(commandMessage));
-        } catch (err) {
+        } catch (_error) {
             console.error(
                 `Error sending command to process ${processId}:`,
-                err
+                _error
             );
             return false;
         }
@@ -945,10 +946,10 @@ export class CommunicationManager {
             };
 
             return this.sendMessage(processId, JSON.stringify(commandMessage));
-        } catch (err) {
+        } catch (_error) {
             console.error(
                 `Error sending command to process ${processId}:`,
-                err
+                _error
             );
             return false;
         }
@@ -968,10 +969,10 @@ export class CommunicationManager {
         try {
             connection.send(message);
             return true;
-        } catch (err) {
+        } catch (_error) {
             console.error(
                 `Error sending message to process ${processId}:`,
-                err
+                _error
             );
             return false;
         }
@@ -987,10 +988,10 @@ export class CommunicationManager {
                 id: processId,
                 message,
             });
-        } catch (err) {
+        } catch (_error) {
             console.error(
                 `Error broadcasting message for process ${processId}:`,
-                err
+                _error
             );
         }
     }
@@ -1134,12 +1135,9 @@ export class CommunicationManager {
     /**
      * Check if cost limit is exceeded and notify users
      */
-    private checkCostLimitAndNotify(currentCost: number): void {
-        // Import loadData function
-        const { loadData } = require('../utils/storage');
-
+    private async checkCostLimitAndNotify(currentCost: number): Promise<void> {
         // Load cost limit from storage
-        const costLimitStr = loadData('dailyCostLimit.json');
+        const costLimitStr = await loadData('dailyCostLimit.json');
         if (!costLimitStr) return;
 
         let dailyLimit: number | null = null;

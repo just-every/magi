@@ -4,7 +4,6 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import { getDB } from '../utils/db.js';
-import { getProject } from '../utils/db_utils.js';
 import {
     getPatchesWithRiskAssessment,
     applyPatch,
@@ -121,7 +120,7 @@ router.get('/:id/extended', async (req: Request, res: Response) => {
                     timestamp: test.created_at,
                 };
             }
-        } catch (_err) {
+        } catch {
             console.log('No test results table or data available');
         }
 

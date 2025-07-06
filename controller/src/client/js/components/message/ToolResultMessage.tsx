@@ -34,20 +34,6 @@ const ToolResultMessage: React.FC<ToolResultMessageProps> = ({
         content = '';
     }
 
-    const getPreviewText = (): string => {
-        if (imagePath) {
-            return `${prepareToolName(message.toolName)} Result (with image)`;
-        }
-        if (content) {
-            const preview =
-                content.length > 100
-                    ? content.substring(0, 100) + '...'
-                    : content;
-            return `${prepareToolName(message.toolName)} Result: ${preview}`;
-        }
-        return `${prepareToolName(message.toolName)} Result`;
-    };
-
     // If this follows a tool call directly, don't wrap in BaseMessage
     if (followsCall) {
         return (
