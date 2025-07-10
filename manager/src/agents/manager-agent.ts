@@ -1,5 +1,5 @@
 /**
- * Design Agent - Orchestrates the entire design generation process using MECH
+ * Manager Agent - Orchestrates the entire manager generation process using MECH
  */
 
 import { runMECH, runMECHStreaming, type Agent as MechAgent } from '../interfaces/mech.js';
@@ -16,13 +16,13 @@ import {
 } from '../constants.js';
 // path removed - not used in this file
 import { v4 as uuidv4 } from 'uuid';
-import { smart_manager_raw } from '../manager-search.js';
+import { businessIntelSearch, multiSourceBusinessSearch } from '../manager-search-business.js';
 import { addMessageToTask } from "@just-every/task";
 
 /**
- * Design progress tracker interface
+ * Manager progress tracker interface
  */
-interface DesignProgress {
+interface ManagerProgress {
     phase: string;
     totalPhases: number;
     currentPhase: number;
@@ -35,9 +35,9 @@ interface DesignProgress {
 }
 
 /**
- * Create the design agent configuration
+ * Create the manager agent configuration
  */
-export function createDesignAgent(
+export function createManagerAgent(
     userPrompt: string,
     assetType?: MANAGER_ASSET_TYPES,
     withInspiration: boolean = true,
@@ -46,27 +46,27 @@ export function createDesignAgent(
 /*
 Task List:
 
-1. Pick design type
+1. Pick manager type
 2. Background research
 - web search
-- system knowledge for design type
+- system knowledge for manager type
 3. Inspiration research
-- run design search and narrow results
+- run manager search and narrow results
 4. Drafts
 - Create a lot of low quality ideas and narrow down
 5. Upscale
 - Upscale a few of the best and choose winner
     */
 
-    const designId = `design_${uuidv4().substring(0, 6)}`;
-    let designType: MANAGER_ASSET_TYPES | undefined = assetType;
+    const managerId = `manager_${uuidv4().substring(0, 6)}`;
+    let managerType: MANAGER_ASSET_TYPES | undefined = assetType;
     let researchReport: string | undefined;
-    let designInspiration: ManagerSearchResult[] | undefined;
-    let draftDesigns: string | undefined;
+    let managerInspiration: ManagerSearchResult[] | undefined;
+    let draftManagers: string | undefined;
 
-    const set_design_type = (design_type: MANAGER_ASSET_TYPES): string => {
-        designType = design_type;
-        return 'Successfully updated design state';
+    const set_manager_type = (manager_type: MANAGER_ASSET_TYPES): string => {
+        managerType = manager_type;
+        return 'Successfully updated manager state';
     };
     const write_research_report = (guide: string, ideal: string, warnings: string, inspiration: string, criteria: string): string => {
         researchReport = `GENERAL GUIDELINES:
@@ -87,21 +87,21 @@ ${criteria}`;
     };
 
     const statusPrompt = (): string => {
-        return `=== Design Status ===
-Design Request:
+        return `=== CEO Management Task Status ===
+Management Request:
 ${userPrompt}
 
-Design ID: ${designId}
-Design Type: ${designType ?? 'Not Set'}
+Task ID: ${managerId}
+Deliverable Type: ${managerType ?? 'Not Set'}
 
-=== Research Report ===
-${researchReport ?? 'None Yet'}
+=== Research Analysis ===
+${researchReport ?? 'Not Started'}
 
-=== Design Inspiration ===
-${designInspiration ?? 'None Yet'}
+=== Research Sources ===
+${managerInspiration ?? 'Not Gathered'}
 
-=== Draft Designs ===
-${draftDesigns ?? 'None Yet'}
+=== Analysis Progress ===
+${draftManagers ?? 'Not Started'}
 `;
     };
 
@@ -110,52 +110,52 @@ ${draftDesigns ?? 'None Yet'}
             .map(([k, v]) => `- ${k}: ${v.description}`)
             .join('\n');
 
-        return `**Design Type is missing**
-Please set it first with \`set_design_type(design_type)\`
+        return `**Deliverable Type is missing**
+Please set it first with \`set_manager_type(manager_type)\`
 
-Possible values for design_type:
+As Manager-as-CEO, which type of deliverable should we create?
 ${list}`;
     };
 
     const researchPrompt = (): string => {
-        const guide = MANAGER_ASSET_GUIDE[designType as MANAGER_ASSET_TYPES] as ManagerAssetGuideItem;
-        return `**Research Report is missing**
+        const guide = MANAGER_ASSET_GUIDE[managerType as MANAGER_ASSET_TYPES] as ManagerAssetGuideItem;
+        return `**Research Analysis is missing**
 
 Please use \`write_research_report(guide, ideal, warnings, inspiration, criteria)\` next.
 
-Here's some general research we've performed previously on ${designType}. You can also use \`web_search()\` to gather additional research to if you would like clarification on any area before writing your report. Please make sure your report is relevant to the original **Design Request**.
+As CEO, here's the strategic framework for ${managerType}. You can also use \`manager_search()\` to gather additional business intelligence before writing your analysis. Ensure the analysis addresses the original **Management Request**.
 
-GUIDE:
+GUIDELINES:
 - ${guide.guide.join('\n- ')}
 
-IDEAL:
+IDEAL CHARACTERISTICS:
 - ${guide.ideal.join('\n- ')}
 
-WARNINGS:
+RISKS TO AVOID:
 - ${guide.warnings.join('\n- ')}
 
-INSPIRATION:
-- ${guide.inspiration.join('\n- ')}
+RESEARCH SOURCES:
+- ${guide.research_sources.join('\n- ')}
 
-CRITERIA:
-- ${guide.criteria.join('\n- ')}`;
+EVALUATION CRITERIA:
+- ${guide.evaluation_criteria.join('\n- ')}`;
     };
 
     const inspirationPrompt = (): string => {
-        return `**Design Inspiration is missing**
+        return `**Research Sources are missing**
 
-Please call manager_search() to find appropriate reference images.
+Please call manager_search() to gather business intelligence and industry insights.
 
-Design search can call search many design sources at once, then use use a visual judge to select the best reference images for our task. Ideally we want 2-5 really good reference images to use as inspiration for the actual draft phases.
+Manager search will query multiple authoritative sources (Gartner, McKinsey, HBR, etc.) to gather relevant research for your analysis. Aim for 3-5 high-quality sources that directly inform your strategic deliverable.
 `;
     };
 
     const draftPrompt = (): string => {
-        return `**No Draft Designs**
+        return `**Analysis Not Started**
 
-Please call manager_search() to find appropriate reference images.
+Now that you have research sources and framework, begin creating the strategic analysis.
 
-Design search can call search many design sources at once, then use use a visual judge to select the best reference images for our task. Ideally we want 2-5 really good reference images to use as inspiration for the actual draft phases.
+As CEO, synthesize your research into actionable insights. Create a structured analysis that addresses the management request with specific recommendations and next steps. Include any sub-tasks that should be assigned to teams via Magi/Task.
 `;
     };
 
@@ -167,7 +167,7 @@ Design search can call search many design sources at once, then use use a visual
             content: statusPrompt(),
         });
 
-        if(!designType) {
+        if(!managerType) {
             messages.push({
                 type: 'message',
                 role: 'developer',
@@ -181,14 +181,14 @@ Design search can call search many design sources at once, then use use a visual
                 content: researchPrompt(),
             });
         }
-        else if(!designInspiration) {
+        else if(!managerInspiration) {
             messages.push({
                 type: 'message',
                 role: 'developer',
                 content: inspirationPrompt(),
             });
         }
-        else if(!draftDesigns) {
+        else if(!draftManagers) {
             messages.push({
                 type: 'message',
                 role: 'developer',
@@ -209,82 +209,106 @@ Design search can call search many design sources at once, then use use a visual
         judge_criteria: string,
         count?: number
     ): Promise<ManagerSearchResult[]> => {
-        if(!assetType) {
-            throw new Error('Manager type is not set');
+        try {
+            console.log(`[manager_search] Searching ${searchConfigs.length} business intelligence sources`);
+            
+            const searchPromises = searchConfigs.map(async (config) => {
+                const contextualQuery = `${context}\n\n${config.query}`;
+                const response = await businessIntelSearch(config.engine, contextualQuery, config.limit || 5);
+                return JSON.parse(response);
+            });
+            
+            const allResults = await Promise.all(searchPromises);
+            const flatResults = allResults.flat();
+            
+            // Sort by relevance and limit to requested count
+            const sortedResults = flatResults.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+            const limitedResults = sortedResults.slice(0, count || 5);
+            
+            // Convert to expected ManagerSearchResult format
+            return limitedResults.map(result => ({
+                url: result.url,
+                title: result.title,
+                description: result.description,
+                source: result.source
+            }));
+        } catch (error) {
+            console.error('[manager_search] Error:', error);
+            return [];
         }
-        return smart_manager_raw(context, searchConfigs, count, assetType, judge_criteria);
     }
 
     // Create the Agent instance with all required properties
     const agentConfig = {
-        name: 'DesignAgent',
-        agent_id: designId,
-        modelClass: 'reasoning' as const, // Use reasoning modelClass for complex design tasks
-        modelOverride: 'claude-3.5-sonnet', // Force Claude instead of Gemini
+        name: 'ManagerAgent',
+        agent_id: managerId,
+        modelClass: 'standard' as const, // Use standard modelClass to avoid thinking blocks issues
+        // modelOverride: 'claude-3-5-sonnet-20241022', // Let ensemble choose appropriate model
+        // Remove modelSettings - let ensemble handle thinking configuration
         tools: [
             createToolFunction(
-                set_design_type,
-                'Set the overall design type',
+                set_manager_type,
+                'Set the management task type',
                 {
-                    design_type: {
+                    manager_type: {
                         type: 'string',
-                        description: `Based on the request which type are we most likely designing?`,
+                        description: `Based on the CEO/management request, which deliverable type are we creating?`,
                         enum: Object.keys(MANAGER_ASSET_REFERENCE),
                     },
                 }
             ),
             createToolFunction(
                 write_research_report,
-                'Sets the direction for the design based',
+                'Define the research and analysis approach',
                 {
                     guide: {
                         type: 'string',
-                        description: 'General guidelines on what to focus on',
+                        description: 'General guidelines on research methodology and focus areas',
                     },
                     ideal: {
                         type: 'string',
-                        description: 'What\'s ideal characteristics for this design?',
+                        description: 'What are the ideal characteristics for this management deliverable?',
                     },
                     warnings: {
                         type: 'string',
-                        description: 'Anything we should avoid?',
+                        description: 'Risks or pitfalls to avoid in analysis',
                     },
                     inspiration: {
                         type: 'string',
-                        description: 'What type of inspiration/reference images should we look for?',
+                        description: 'What type of research sources and references should we prioritize?',
                     },
                     criteria: {
                         type: 'string',
-                        description: 'How do we compare the designs we create? Why would one win over the other?',
+                        description: 'How do we evaluate quality and completeness of the analysis?',
                     },
                 }
             ),
             createToolFunction(
                 manager_search,
-                'Search multiple design platforms in parallel and select the best results using vision-based ranking',
+                'Search multiple business intelligence sources for research and analysis',
                 {
                     context: {
                         type: 'string',
-                        description: 'What context about the request needs to be provided to the search engines and judges? They do not have access to any other conversation history or context, so you need to provide all relevant information. This will be included with the search query and the judge criteria so the LLMs using them know what they are doing.',
+                        description: 'Context about the CEO/management task and what specific information is needed for analysis',
                     },
                     searches: {
                         type: 'array',
-                        description: 'Array of search configurations',
+                        description: 'Array of search configurations across different business intelligence sources',
                         items: {
                             type: 'object',
                             properties: {
                                 engine: {
                                     type: 'string',
-                                    description: 'Design search engine',
+                                    description: 'Business intelligence search engine',
                                     enum: MANAGER_SEARCH_ENGINES,
                                 },
                                 query: {
                                     type: 'string',
-                                    description: 'Search query',
+                                    description: 'Search query tailored to the specific source',
                                 },
                                 limit: {
                                     type: 'number',
-                                    description: 'Max results',
+                                    description: 'Max results to retrieve',
                                     optional: true,
                                 },
                             },
@@ -293,65 +317,69 @@ Design search can call search many design sources at once, then use use a visual
                     },
                     judge_criteria: {
                         type: 'string',
-                        description: 'What criteria should the searches use to pick the best reference images - i.e. what are they looking for? 1 - 2 sentences.',
+                        description: 'Criteria for evaluating and ranking the research results for relevance and quality',
                     },
                     count: {
                         type: 'number',
-                        description: 'How many final results should be returned from this set of searches? Default: 3',
+                        description: 'How many final research sources should be returned? Default: 5',
                         optional: true,
                     }
                 },
             ),
         ],
-        instructions: `You are one of the best AI manager in the world. You have an eye for aesthetically pleasing managers that push the boundaries of modern interfaces.
+        instructions: `You are a **Manager-as-CEO** AI assistant for JustEvery Inc. You have expertise in strategic planning, market analysis, operational excellence, and executive decision-making.
 
+**COMPANY CONTEXT:**
+- Mission: "Turn any single prompt into a live product—UI, back-end, hosting and all." 100% MIT-licensed, community-first, democratizing software creation.
+- Product Stack: Ensemble → Task → Magi → JustEvery social layer
+- Goal: Ship JustEvery App v1.0 to public beta by Dec 2025 with ≥10k MAU and ≤2% critical error rate
+- Values: Radical openness, post-scarcity ethos (90% profit donation), healthy risk-taking
 
-        You are given a manager task and a series of steps to work through to complete a world class manager for any given prompt. While the series of steps are important, you are free to use you best judgement if a step needs to be repeated or skipped to return the best result.
+**YOUR CEO RESPONSIBILITIES:**
+1. **Market & Tech Research** - Competitive analysis, feature prioritization for non-technical creators
+2. **Strategic Planning** - 12-month roadmap, quarterly OKRs, team alignment
+3. **Execution Oversight** - Sub-task creation via Magi/Task, budget management ($25k/month ceiling)
+4. **Feedback & Governance** - Weekly progress reports, decision logging, team communication
+5. **Risk Management** - Technical, legal, financial risk identification and mitigation
 
-MANAGER SPECIFICATIONS:
-${assetType ? `- Asset Type: ${assetType} (${MANAGER_ASSET_REFERENCE[assetType].description})
-- Usage Context: ${MANAGER_ASSET_REFERENCE[assetType].usage_context}
-- Aspect Ratio: ${MANAGER_ASSET_REFERENCE[assetType].spec.aspect}
-- Background: ${MANAGER_ASSET_REFERENCE[assetType].spec.background}` : '- Asset Type: To be determined based on user request'}
+**DELIVERABLE TYPE:**
+${assetType ? `- Type: ${assetType} (${MANAGER_ASSET_REFERENCE[assetType].description})
+- Usage: ${MANAGER_ASSET_REFERENCE[assetType].usage_context}
+- Output: ${MANAGER_ASSET_REFERENCE[assetType].spec.type}` : '- Type: To be determined based on management task'}
 
-YOUR PROCESS:
+**YOUR PROCESS:**
 1. **Research Phase** ${withInspiration ? '(ENABLED)' : '(SKIPPED)'}:
-   ${withInspiration ? `- Use smart_manager_search to find 3-6 inspiration images
-   - Search multiple platforms with queries tailored to the user's request
-   - Focus on finding diverse, high-quality references that match the brief` : '- Skipping inspiration search as requested'}
+   ${withInspiration ? `- Search Gartner, McKinsey, HBR, TechCrunch, Forrester for industry insights
+   - Gather 3-5 authoritative sources relevant to the task
+   - Focus on recent trends, best practices, and strategic frameworks` : '- Skipping external research as requested'}
 
-2. **Draft Generation Phase**:
-   - Generate 9-12 draft variations using different creative approaches
-   - Use reference images (if available) to inform style but create original designs
-   - Generate in batches of 3 with varied prompts exploring different concepts
+2. **Analysis Phase**:
+   - Synthesize research into actionable insights
+   - Apply strategic frameworks (SWOT, Porter's Five Forces, etc.)
+   - Consider JustEvery's specific context and constraints
 
-3. **Draft Selection Phase**:
-   - Create a grid of all draft images
-   - Select the best 3 drafts based on concept strength and brief alignment
-   - Minor imperfections are acceptable at this stage
+3. **Structure Phase**:
+   - Organize analysis into executive-ready format
+   - Include key recommendations and next steps
+   - Ensure alignment with quarterly OKRs and company goals
 
-4. **Medium Quality Phase**:
-   - Generate 3 medium-quality versions of each selected draft (9 total)
-   - Fix any text/spelling errors, improve details, maintain layout
-   - Each should refine the concept while preserving what made it successful
+4. **Review Phase**:
+   - Validate against CEO responsibilities and company values
+   - Check for completeness and actionability
+   - Ensure appropriate level of detail for executive consumption
 
-5. **Medium Selection Phase**:
-   - Create a grid of all medium images
-   - Select the single best medium image
-   - Look for clean execution and adherence to specifications
+5. **Final Output**:
+   - Deliver structured management deliverable
+   - Include executive summary, key insights, and recommended actions
+   - Specify any sub-tasks that should be created via Magi/Task
 
-6. **High Quality Phase**:
-   - Generate a high-quality version of the best medium image
-   - Achieve pixel-perfect quality with exact colors and alignment
-   - If it doesn't meet criteria, generate up to 2 more attempts
+**OPERATING RULES:**
+- Ask clarifying questions for underspecified objectives
+- Seek approval before exceeding budget by >10%
+- Maintain supportive, transparent tone
+- Focus on decisions and actions, not just analysis
 
-7. **Final Output**:
-   - Return the path to the final high-quality image
-
-IMPORTANT:
-- When creating
-
-Begin with ${withInspiration ? 'the research phase' : 'draft generation'}.`,
+Begin with ${withInspiration ? 'research and analysis' : 'strategic analysis'}.`,
         onRequest: async (agent: AgentDefinition, messages: ResponseInput): Promise<[AgentDefinition, ResponseInput]> => {
             messages = await addOperatorStatus(messages);
             return [agent, messages];
@@ -366,9 +394,9 @@ Begin with ${withInspiration ? 'the research phase' : 'draft generation'}.`,
 }
 
 /**
- * Run the complete design generation process using MECH
+ * Run the complete manager generation process using MECH
  */
-export async function runDesignAgent(
+export async function runManagerAgent(
     assetType: MANAGER_ASSET_TYPES,
     userPrompt: string,
     withInspiration: boolean = true,
@@ -376,36 +404,32 @@ export async function runDesignAgent(
 ): Promise<string> {
     const startTime = new Date();
 
-    // Initialize design progress tracker
-    // Design progress tracking (future enhancement)
-    const designProgress: DesignProgress = { // eslint-disable-line @typescript-eslint/no-unused-vars
-        phase: 'Initialization',
-        totalPhases: withInspiration ? 7 : 6,
+    // Initialize manager progress tracker
+    // CEO task progress tracking
+    const managerProgress: ManagerProgress = { // eslint-disable-line @typescript-eslint/no-unused-vars
+        phase: 'Strategic Analysis',
+        totalPhases: withInspiration ? 5 : 4,
         currentPhase: 0,
         tasks: withInspiration ? [
-            { id: '1', description: 'Research and find inspiration images', status: 'pending' },
-            { id: '2', description: 'Generate draft variations (9-12 images)', status: 'pending' },
-            { id: '3', description: 'Select best 3 draft concepts', status: 'pending' },
-            { id: '4', description: 'Generate medium quality versions (9 total)', status: 'pending' },
-            { id: '5', description: 'Select best medium quality image', status: 'pending' },
-            { id: '6', description: 'Generate high quality final image', status: 'pending' },
-            { id: '7', description: 'Finalize and return result', status: 'pending' }
+            { id: '1', description: 'Gather business intelligence and research', status: 'pending' },
+            { id: '2', description: 'Analyze market and competitive landscape', status: 'pending' },
+            { id: '3', description: 'Synthesize strategic insights and recommendations', status: 'pending' },
+            { id: '4', description: 'Create executive deliverable', status: 'pending' },
+            { id: '5', description: 'Define next steps and sub-tasks', status: 'pending' }
         ] : [
-            { id: '1', description: 'Generate draft variations (9-12 images)', status: 'pending' },
-            { id: '2', description: 'Select best 3 draft concepts', status: 'pending' },
-            { id: '3', description: 'Generate medium quality versions (9 total)', status: 'pending' },
-            { id: '4', description: 'Select best medium quality image', status: 'pending' },
-            { id: '5', description: 'Generate high quality final image', status: 'pending' },
-            { id: '6', description: 'Finalize and return result', status: 'pending' }
+            { id: '1', description: 'Analyze strategic requirements', status: 'pending' },
+            { id: '2', description: 'Synthesize insights and recommendations', status: 'pending' },
+            { id: '3', description: 'Create executive deliverable', status: 'pending' },
+            { id: '4', description: 'Define next steps and sub-tasks', status: 'pending' }
         ],
         startTime
     };
 
     // Create agent with progress tracking
-    const agent = createDesignAgent(userPrompt, assetType, withInspiration);
+    const agent = createManagerAgent(userPrompt, assetType, withInspiration);
 
     // Create the task description
-    const task = `Generate a ${assetType} design based on: "${userPrompt}"`;
+    const task = `Generate a ${assetType} manager based on: "${userPrompt}"`;
 
     // Run the agent using MECH
     const result = await runMECH(agent, task);
@@ -427,14 +451,14 @@ export async function runDesignAgent(
         }
     }
 
-    throw new Error('Design agent did not produce a final image path');
+    throw new Error('Manager agent did not produce a final image path');
 }
 
 /**
- * Run the complete design generation process using MECH with streaming
+ * Run the complete manager generation process using MECH with streaming
  * @returns AsyncGenerator that yields ProviderStreamEvent objects
  */
-export async function* runDesignAgentStreaming(
+export async function* runManagerAgentStreaming(
     assetType: MANAGER_ASSET_TYPES,
     userPrompt: string,
     withInspiration: boolean = true,
@@ -442,8 +466,8 @@ export async function* runDesignAgentStreaming(
 ): AsyncGenerator<ProviderStreamEvent, string, unknown> {
     const startTime = new Date();
 
-    // Initialize design progress tracker
-    const designProgress: DesignProgress = { // eslint-disable-line @typescript-eslint/no-unused-vars
+    // Initialize manager progress tracker
+    const managerProgress: ManagerProgress = { // eslint-disable-line @typescript-eslint/no-unused-vars
         phase: 'Initialization',
         totalPhases: withInspiration ? 7 : 6,
         currentPhase: 0,
@@ -467,10 +491,10 @@ export async function* runDesignAgentStreaming(
     };
 
     // Create agent with progress tracking
-    const agent = createDesignAgent(userPrompt, assetType, withInspiration);
+    const agent = createManagerAgent(userPrompt, assetType, withInspiration);
 
     // Create the task description
-    const task = `Generate a ${assetType} design based on: "${userPrompt}"`;
+    const task = `Generate a ${assetType} manager based on: "${userPrompt}"`;
 
     // Inject messages from external code
     //addMessageToTask(task, {
@@ -517,7 +541,7 @@ export async function* runDesignAgentStreaming(
         // Handle errors
         if (event.type === 'error') {
             const errorEvent = event as any;
-            throw new Error(`Design agent error: ${errorEvent.error || 'Unknown error'}`);
+            throw new Error(`Manager agent error: ${errorEvent.error || 'Unknown error'}`);
         }
     }
 
@@ -533,5 +557,5 @@ export async function* runDesignAgentStreaming(
         return finalImagePath;
     }
 
-    throw new Error('Design agent did not produce a final image path');
+    throw new Error('Manager agent did not produce a final image path');
 }

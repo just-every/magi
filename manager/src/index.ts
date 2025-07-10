@@ -7,7 +7,7 @@
 
 export { manager_image, getManagerImageTools, getImageGenerationTools } from './manager-image.js';
 export { manager_search, createNumberedGrid, selectBestFromGrid, smart_manager_raw } from './manager-search.js';
-export { createDesignAgent, runDesignAgent, runDesignAgentStreaming } from './agents/manager-agent.js';
+export { createManagerAgent, runManagerAgent, runManagerAgentStreaming } from './agents/manager-agent.js';
 export * from './constants.js';
 export * from './utils/grid-judge.js';
 export * from './utils/image-utils.js';

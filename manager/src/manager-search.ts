@@ -1,8 +1,8 @@
 /**
- * Simplified Design Search Utility for standalone use
+ * Business Intelligence Search Utility for CEO Management Tasks
  *
- * This is a minimal version that provides the basic functionality needed
- * by the manager_image function without browser dependencies.
+ * Searches authoritative business sources like Gartner, McKinsey, HBR, etc.
+ * for strategic insights, market analysis, and management best practices.
  */
 
 import fs from 'fs';
@@ -24,10 +24,9 @@ import {
     type ManagerSearchEngine,
 } from './constants.js';
 
-// Type aliases for compatibility
-type DesignSearchEngine = ManagerSearchEngine;
-type DesignAssetAspect = ManagerAssetAspect;
-type DesignSearchResult = ManagerSearchResult;
+import { businessIntelSearch } from './manager-search-business.js';
+
+// Type aliases removed - using Manager types directly
 
 // Search result interface
 interface ManagerSearchResult {
@@ -41,7 +40,7 @@ interface ManagerSearchResult {
 }
 
 const USER_AGENT =
-    'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; design-tool/1.0)';
+    'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; ceo-manager-tool/1.0)';
 
 // Base directory for storing screenshots - configurable
 const DEFAULT_ASSETS_DIR = process.env.MANAGER_OUTPUT_DIR || path.join(process.cwd(), '.output');
@@ -54,7 +53,7 @@ const SLEEP = (ms = 1000) => new Promise(res => setTimeout(res, ms));
  */
 const communicationManager = {
     send: (data: any) => {
-        console.log(`[DesignSearch] ${data.type}:`, {
+        console.log(`[CEO-BusinessIntel] ${data.type}:`, {
             timestamp: data.timestamp,
             prompt: data.prompt,
             data: data.data ? `[${typeof data.data}]` : undefined
@@ -63,9 +62,9 @@ const communicationManager = {
 };
 
 /**
- * Ensure the design assets directory exists
+ * Ensure the manager assets directory exists
  */
-function ensureDesignAssetsDir() {
+function ensureManagerAssetsDir() {
     const screenshotsDir = path.join(MANAGER_ASSETS_DIR, 'screenshots');
     if (!fs.existsSync(screenshotsDir)) {
         fs.mkdirSync(screenshotsDir, { recursive: true });
@@ -79,7 +78,7 @@ async function takeScreenshot(
     url: string,
     title?: string
 ): Promise<string | null> {
-    ensureDesignAssetsDir();
+    ensureManagerAssetsDir();
 
     try {
         // Launch browser
@@ -114,7 +113,7 @@ async function takeScreenshot(
 
         await browser.close();
 
-        console.log(`[DesignSearch] Screenshot saved: ${filePath}`);
+        console.log(`[ManagerSearch] Screenshot saved: ${filePath}`);
         return filePath;
 
     } catch (error) {
@@ -153,7 +152,7 @@ async function takeScreenshot(
 }
 
 /**
- * Search for design inspiration on Dribbble using real web scraping
+ * Search for manager inspiration on Dribbble using real web scraping
  */
 async function searchDribbble(
     query: string,
@@ -267,13 +266,13 @@ async function searchDribbble(
         await browser.close();
 
         console.log(`[DesignSearch] Found ${results.length} Dribbble results`);
-        return results as DesignSearchResult[];
+        return results as ManagerSearchResult[];
 
     } catch (error) {
         console.error('Error in searchDribbble:', error);
 
         // Fallback to basic mock data if scraping fails
-        const fallbackResults: DesignSearchResult[] = [];
+        const fallbackResults: ManagerSearchResult[] = [];
         for (let i = 0; i < Math.min(limit, 2); i++) {
             fallbackResults.push({
                 url: `https://dribbble.com/search/${encodeURIComponent(query)}`,
@@ -287,7 +286,7 @@ async function searchDribbble(
 }
 
 /**
- * Search for design inspiration on Behance
+ * Search for manager inspiration on Behance
  */
 async function searchBehance(
     query: string,
@@ -379,7 +378,7 @@ async function searchBehance(
         await browser.close();
 
         console.log(`[DesignSearch] Found ${results.length} Behance results`);
-        return results as DesignSearchResult[];
+        return results as ManagerSearchResult[];
 
     } catch (error) {
         console.error('Error in searchBehance:', error);
@@ -388,7 +387,7 @@ async function searchBehance(
 }
 
 /**
- * Search for design inspiration on Pinterest
+ * Search for manager inspiration on Pinterest
  */
 async function searchPinterest(
     query: string,
@@ -474,7 +473,7 @@ async function searchPinterest(
         await browser.close();
 
         console.log(`[DesignSearch] Found ${results.length} Pinterest results`);
-        return results as DesignSearchResult[];
+        return results as ManagerSearchResult[];
 
     } catch (error) {
         console.error('Error in searchPinterest:', error);
@@ -483,7 +482,7 @@ async function searchPinterest(
 }
 
 /**
- * Search for design inspiration on Envato Elements
+ * Search for manager inspiration on Envato Elements
  */
 async function searchEnvato(
     query: string,
@@ -580,7 +579,7 @@ async function searchEnvato(
         await browser.close();
 
         console.log(`[DesignSearch] Found ${results.length} Envato results`);
-        return results as DesignSearchResult[];
+        return results as ManagerSearchResult[];
 
     } catch (error) {
         console.error('Error in searchEnvato:', error);
@@ -589,7 +588,7 @@ async function searchEnvato(
 }
 
 /**
- * Search for award-winning web designs on Awwwards
+ * Search for award-winning web management solutions on Awwwards
  */
 async function searchAwwwards(
     query: string,
@@ -680,10 +679,10 @@ async function searchAwwwards(
         await browser.close();
 
         // Limit to requested number
-        const limitedResults = (results as DesignSearchResult[]).slice(0, limit);
+        const limitedResults = (results as ManagerSearchResult[]).slice(0, limit);
 
         console.log(`[DesignSearch] Found ${limitedResults.length} Awwwards results`);
-        return limitedResults as DesignSearchResult[];
+        return limitedResults as ManagerSearchResult[];
 
     } catch (error) {
         console.error('Error in searchAwwwards:', error);
@@ -805,13 +804,13 @@ export async function web_search(
 }
 
 /**
- * Web search specifically for design inspiration
+ * Web search specifically for manager inspiration
  * This can be called separately or used within manager_search
  *
  * @param query - The search query
  * @param numResults - Number of results to return
  * @param preferredEngine - Optional preferred search engine
- * @returns Array of design search results
+ * @returns Array of manager search results
  */
 export async function web_search_design(
     query: string,
@@ -819,7 +818,7 @@ export async function web_search_design(
     preferredEngine?: string
 ): Promise<ManagerSearchResult[]> {
     const inject_agent_id = `design-search-${uuidv4()}`;
-    const searchQuery = `${query} design inspiration`;
+    const searchQuery = `${query} manager tools templates`;
 
     // Determine which engines are available
     const availableEngines: string[] = [];
@@ -868,7 +867,7 @@ export async function web_search_design(
         return [];
     }
 
-    // Parse search results into DesignSearchResult format
+    // Parse search results into ManagerSearchResult format
     const results = parseSearchResults(searchResult, numResults);
     console.log(`[web_search_design] Found ${results.length} results via ${successfulEngine}`);
     return results;
@@ -877,8 +876,8 @@ export async function web_search_design(
 /**
  * Parse search results from LLM response
  */
-function parseSearchResults(searchResult: string, limit: number): DesignSearchResult[] {
-    const results: DesignSearchResult[] = [];
+function parseSearchResults(searchResult: string, limit: number): ManagerSearchResult[] {
+    const results: ManagerSearchResult[] = [];
 
     try {
         // Try to extract URLs and titles from the response
@@ -934,37 +933,34 @@ function parseSearchResults(searchResult: string, limit: number): DesignSearchRe
 
 
 /**
- * Main function to search for design inspiration
+ * Main function to search for manager inspiration
  */
 export async function manager_search(
     engine: ManagerSearchEngine,
     query: string,
     limit: number = 9
 ): Promise<string> {
-    // Select the appropriate search function based on the engine
-    let results: DesignSearchResult[];
+    // Select the appropriate search function based on the business intelligence engine
+    let results: ManagerSearchResult[];
 
     switch (engine) {
-        case 'dribbble':
-            results = await searchDribbble(query, limit);
-            break;
-        case 'behance':
-            results = await searchBehance(query, limit);
-            break;
-        case 'envato':
-            results = await searchEnvato(query, limit);
-            break;
-        case 'pinterest':
-            results = await searchPinterest(query, limit);
-            break;
-        case 'awwwards':
-            results = await searchAwwwards(query, limit);
-            break;
+        case 'gartner':
+        case 'mckinsey':
+        case 'hbr':
+        case 'techcrunch':
+        case 'forrester':
         case 'web_search':
-        default:
-            // Use web_search_design which handles engine selection and fallback
-            results = await web_search_design(query, limit);
+            // Use business intelligence search for all engines
+            const businessResults = await businessIntelSearch(engine, query, limit);
+            results = JSON.parse(businessResults).map((r: any) => ({
+                url: r.url,
+                title: r.title,
+                description: r.description,
+                source: r.source
+            }));
             break;
+        default:
+            throw new Error(`Unsupported search engine: ${engine}`);
     }
 
     // Limit results
@@ -1017,7 +1013,7 @@ export interface ImageSource {
 export async function createNumberedGrid(
     images: ImageSource[],
     gridName: string = 'grid',
-    aspect: DesignAssetAspect = 'square'
+    aspect: ManagerAssetAspect = 'square'
 ): Promise<string> {
     // Make sure grid directory exists
     const gridDir = path.join(MANAGER_ASSETS_DIR, 'grid');
@@ -1161,7 +1157,7 @@ export async function selectBestFromGrid(
     const cols = 3;
     const rows = Math.ceil(count / cols);
 
-    // Determine appropriate message based on whether this is for design search or image generation
+    // Determine appropriate message based on whether this is for manager search or image generation
     let content: string;
     if (type) {
         const readableType = type.replace(/_/g, ' ');
@@ -1171,13 +1167,13 @@ export async function selectBestFromGrid(
         if (isDesignSearch) {
             content = `We are looking for inspiration/reference images for a ${readableName}. We have ${count} images that we want to rank. When you rank the images, you should first choose only the relevant images. Once you have selected the relevant images, rank them by how aesthetically pleasing they are.`;
         } else {
-            content = `We are designing a new ${readableName}. I've generated ${count} different versions of a ${readableType} and would like you to rank them for me. Please evaluate them and select the best version(s).`;
+            content = `We are creating a new ${readableName}. I've generated ${count} different versions of a ${readableType} and would like you to rank them for me. Please evaluate them and select the best version(s).`;
         }
     } else {
         if (isDesignSearch) {
-            content = `We are trying to create a design and are searching the web for design inspiration. We have ${count} images that we want to rank. When you rank the images, you should first choose only the relevant images. Once you have selected the relevant images, rank them by how aesthetically pleasing they are.`;
+            content = `We are trying to create a manager solution and are searching the web for manager tool inspiration. We have ${count} images that we want to rank. When you rank the images, you should first choose only the relevant images. Once you have selected the relevant images, rank them by how appropriate and effective they are for management purposes.`;
         } else {
-            content = `I've generated ${count} different designs. Please evaluate them and select the best version(s). Consider overall aesthetics, composition, and how well they match the prompt.`;
+            content = `I've generated ${count} different manager interfaces. Please evaluate them and select the best version(s). Consider overall effectiveness, organization, and how well they match the prompt.`;
         }
     }
 
@@ -1206,9 +1202,9 @@ export async function selectBestFromGrid(
     const imageSelectorAgent = new Agent({
         name: 'ImageSelector',
         modelClass: 'vision_mini',
-        instructions: 'You are a design assistant. Your job is to select the best images from a grid of images.',
+        instructions: 'You are a manager assistant. Your job is to select the best images from a grid of images for management solutions.',
         modelSettings: {
-            force_json: true,
+            // force_json: true, // Removed - not supported in current ensemble version
             json_schema: {
                 name: 'image_selection',
                 type: 'json_schema',
@@ -1334,10 +1330,10 @@ export async function selectBestFromGrid(
 }
 
 /**
- * Generates a unique identifier for a design to prevent duplicate processing
+ * Generates a unique identifier for a manager result to prevent duplicate processing
  */
-export function getDesignId(design: DesignSearchResult): string {
-    return design.url || design.screenshotURL || JSON.stringify(design);
+export function getManagerId(result: ManagerSearchResult): string {
+    return result.url || result.screenshotURL || JSON.stringify(result);
 }
 
 /**
@@ -1368,7 +1364,7 @@ export async function smart_manager_raw(
                 `${background}\n\n${config.query}`,
                 config.limit || 9
             );
-            return JSON.parse(result) as DesignSearchResult[];
+            return JSON.parse(result) as ManagerSearchResult[];
         } catch (error) {
             console.error(`[smart_manager_raw] Error searching ${config.engine}:`, error);
             return [];
@@ -1391,22 +1387,22 @@ export async function smart_manager_raw(
         return allDesigns;
     }
 
-    // Use iterative vision-based selection to narrow down to the best designs
+    // Use iterative vision-based selection to narrow down to the best results
     const processedIds = new Set<string>();
     let currentCandidates = [...allDesigns];
     let round = 1;
 
-    // Keep selecting best designs until we reach the target count
+    // Keep selecting best results until we reach the target count
     while (currentCandidates.length > finalLimit && round <= 3) {
         console.log(`[smart_manager_raw] Selection round ${round}: ${currentCandidates.length} candidates`);
 
         // Create groups of up to 9 for grid evaluation
-        const groups: DesignSearchResult[][] = [];
+        const groups: ManagerSearchResult[][] = [];
         for (let i = 0; i < currentCandidates.length; i += 9) {
             groups.push(currentCandidates.slice(i, i + 9));
         }
 
-        const roundWinners: DesignSearchResult[] = [];
+        const roundWinners: ManagerSearchResult[] = [];
 
         // Process each group
         for (let i = 0; i < groups.length; i++) {
@@ -1414,9 +1410,9 @@ export async function smart_manager_raw(
             const gridName = `${prefix}_round${round}_group${i + 1}`;
 
             // Create grid from group
-            const imageSources = group.map(design => ({
-                url: design.screenshotURL || design.thumbnailURL,
-                title: design.title
+            const imageSources = group.map(result => ({
+                url: result.screenshotURL || result.thumbnailURL,
+                title: result.title
             }));
 
             const gridDataUrl = await createNumberedGrid(
@@ -1436,16 +1432,16 @@ export async function smart_manager_raw(
                 background,
                 group.length,
                 selectCount,
-                true, // isDesignSearch
+                true, // isManagerSearch
                 type,
                 judge_guide
             );
 
-            // Add selected designs to round winners
+            // Add selected results to round winners
             for (const idx of selectedIndices) {
                 if (idx >= 1 && idx <= group.length) {
                     const selected = group[idx - 1];
-                    const id = getDesignId(selected);
+                    const id = getManagerId(selected);
                     if (!processedIds.has(id)) {
                         roundWinners.push(selected);
                         processedIds.add(id);
@@ -1457,7 +1453,7 @@ export async function smart_manager_raw(
         currentCandidates = roundWinners;
         round++;
 
-        console.log(`[smart_manager_raw] Round ${round - 1} complete: ${currentCandidates.length} designs selected`);
+        console.log(`[smart_manager_raw] Round ${round - 1} complete: ${currentCandidates.length} results selected`);
     }
 
     // Return the final selection, limited to requested count

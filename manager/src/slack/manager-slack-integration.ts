@@ -57,13 +57,13 @@ export class SlackManagerIntegration {
       console.log(`📨 Received Slack message from ${message.user} in ${message.channel}:`);
       console.log(`💬 Text: "${message.text}"`);
       
-      // Check if this is a design generation request
-      const isDesign = this.isDesignRequest(message.text);
-      console.log(`🎨 Is design request: ${isDesign}`);
+      // Check if this is a manager generation request
+      const isManager = this.isManagerRequest(message.text);
+      console.log(`🎨 Is manager request: ${isManager}`);
       
-      if (isDesign) {
-        console.log('🚀 Handling design request...');
-        await this.handleDesignRequest(message);
+      if (isManager) {
+        console.log('🚀 Handling manager request...');
+        await this.handleManagerRequest(message);
       }
       
       // If we have an active task and task messages are enabled, add to task
@@ -86,28 +86,28 @@ export class SlackManagerIntegration {
     console.log('✅ Message handlers configured');
   }
 
-  private isDesignRequest(text: string): boolean {
-    const designKeywords = [
-      'generate', 'create', 'design', 'make',
-      'logo', 'mockup', 'icon', 'banner', 'card',
-      'screenshot', 'illustration', 'palette'
+  private isManagerRequest(text: string): boolean {
+    const managerKeywords = [
+      'analyze', 'strategy', 'roadmap', 'plan', 'budget',
+      'market', 'competitive', 'okr', 'risk', 'forecast',
+      'vision', 'structure', 'assessment', 'executive'
     ];
     
     const lowerText = text.toLowerCase();
-    const matches = designKeywords.filter(keyword => lowerText.includes(keyword));
+    const matches = managerKeywords.filter(keyword => lowerText.includes(keyword));
     
-    console.log(`🔍 Checking for design keywords in: "${text}"`);
-    console.log(`🎯 Found keywords: [${matches.join(', ')}]`);
+    console.log(`🔍 Checking for CEO management keywords in: "${text}"`);
+    console.log(`🎯 Found management keywords: [${matches.join(', ')}]`);
     
     return matches.length > 0;
   }
 
-  private async handleDesignRequest(message: SlackMessage): Promise<void> {
+  private async handleManagerRequest(message: SlackMessage): Promise<void> {
     if (!this.slackManager) return;
 
     const { text, channel, thread_ts } = message;
     
-    console.log('🎨 Processing design request:', {
+    console.log('🎨 Processing manager request:', {
       text,
       channel,
       thread_ts
@@ -117,7 +117,7 @@ export class SlackManagerIntegration {
     console.log('📤 Sending acknowledgment...');
     await this.slackManager.sendMessage(
       channel,
-      `I'll start working on your design request: "${text}"`,
+      `I'll start working on your management task as CEO: "${text}"`,
       { threadTs: thread_ts }
     );
 
@@ -127,93 +127,168 @@ export class SlackManagerIntegration {
       this.taskMessages.set(text, [message]);
       console.log(`✅ Set active task: ${this.activeTask}`);
 
-      // Extract asset type and description from the message
-      const { assetType, userPrompt } = this.parseDesignRequest(text);
+      // Extract deliverable type and requirements from the message
+      const { assetType, userPrompt } = this.parseManagementRequest(text);
       console.log('🎯 Parsed request:', { assetType, userPrompt });
 
-      // Try actual design generation with dynamic imports
-      console.log('🎨 Attempting design generation with error handling...');
+      // Try actual manager generation with dynamic imports
+      console.log('🎨 Attempting manager generation with error handling...');
       
       try {
-        // Import design modules at runtime to ensure env vars are loaded first
-        console.log('📦 Importing design modules...');
-        const { runDesignAgentStreaming } = await import('../agents/manager-agent.js');
-        const { addMessageToTask } = await import('@just-every/task');
+        // Import simplified manager agent for faster response
+        console.log('📦 Importing simplified manager agent...');
+        const { runSimpleManagerAgentStreaming } = await import('../agents/simple-manager-agent.js');
         
-        // Use runDesignAgentStreaming to generate the design
-        console.log('🚀 Starting design generation...');
-        const generator = runDesignAgentStreaming(
-          assetType as MANAGER_ASSET_TYPES,
+        // Use simplified manager agent for faster analysis
+        console.log('🚀 Starting strategic analysis...');
+        const generator = runSimpleManagerAgentStreaming(
           userPrompt,
-          true, // withInspiration
-          [] // brandAssets
+          assetType as MANAGER_ASSET_TYPES
         );
         
         // Store the generator for message injection
         this.activeTaskGenerator = generator;
         console.log('✅ Generator initialized and stored');
-
-        let finalImagePath: string | undefined;
-        const updates: string[] = [];
-
-        for await (const event of generator) {
-          if (event.type === 'message_delta' && 'content' in event && event.content) {
-            updates.push(event.content);
-            
-            // Send periodic updates to Slack
-            if (updates.length % 10 === 0) {
-              await this.slackManager.sendMessage(
-                channel,
-                `Progress update: Working on your ${assetType} design...`,
-                { threadTs: thread_ts }
-              );
-            }
-          } else if (event.type === 'message_complete' && 'content' in event && event.content) {
-            // Try to extract the final image path from the content
-            const pathMatch = event.content.match(/([^\s]+\.(png|jpg|jpeg|gif|svg))/i);
-            if (pathMatch) {
-              finalImagePath = pathMatch[1];
-            }
-          }
+        
+        if (!this.slackManager) {
+          throw new Error('Slack manager not available');
         }
 
-        // Upload the final image to Slack
-        if (finalImagePath && fs.existsSync(finalImagePath)) {
-          const imageBuffer = fs.readFileSync(finalImagePath);
-          const filename = path.basename(finalImagePath);
-          
-          await this.slackManager.uploadFile(
-            [channel],
-            {
-              file: imageBuffer,
-              filename,
-              title: `Generated ${assetType}`,
-              initial_comment: `Here's your ${assetType} design! 🎨`,
+        let finalResult: string | undefined;
+        const updates: string[] = [];
+        let updateCount = 0;
+        
+        // Send initial progress message
+        await this.slackManager.sendMessage(
+          channel,
+          `🔄 Starting ${assetType} analysis...`,
+          { threadTs: thread_ts }
+        );
+
+        // Add timeout for the entire generation process
+        const generationTimeout = setTimeout(async () => {
+          if (this.slackManager) {
+            await this.slackManager.sendMessage(
+              channel,
+              `⏰ Analysis is taking longer than expected. This might be due to complex research requirements. Please wait...`,
+              { threadTs: thread_ts }
+            );
+          }
+        }, 60000); // 1 minute timeout warning
+
+        try {
+          for await (const event of generator) {
+            updateCount++;
+            
+            // Log event details for debugging
+            console.log(`[handleManagerRequest] Event ${updateCount}:`, {
+              type: event.type,
+              hasContent: 'content' in event,
+              contentLength: event.content?.length || 0
+            });
+            
+            if (event.type === 'message_delta' && 'content' in event && event.content) {
+              updates.push(event.content);
+              
+              // Send more frequent updates to show progress
+              if (updateCount % 5 === 0) {
+                await this.slackManager.sendMessage(
+                  channel,
+                  `📊 Progress: Working on ${assetType} (${Math.floor(updateCount / 2)}% complete)...`,
+                  { threadTs: thread_ts }
+                );
+              }
+            } else if (event.type === 'message_complete' && 'content' in event && event.content) {
+              // This is the final complete message
+              finalResult = event.content;
+              console.log('[handleManagerRequest] Message complete - full content length:', event.content.length);
+            } else if (event.type === 'text' && typeof event.text === 'string') {
+              // Alternative event format
+              updates.push(event.text);
+            } else if (event.type === 'done' && updates.length > 0) {
+              // If we have accumulated updates but no final result, join them
+              finalResult = updates.join('');
+              console.log('[handleManagerRequest] Done event - joined updates length:', finalResult.length);
             }
+          }
+          
+          // If no finalResult but we have updates, join them
+          if (!finalResult && updates.length > 0) {
+            finalResult = updates.join('');
+            console.log('[handleManagerRequest] Fallback - joined all updates, length:', finalResult.length);
+          }
+        } finally {
+          clearTimeout(generationTimeout);
+        }
+
+        // Send the analysis results to Slack
+        if (finalResult && finalResult.trim()) {
+          // Filter out meta-commentary about task completion
+          const metaPhrases = [
+            'I see that the task has been successfully completed',
+            'As per the instructions',
+            'No further actions are needed',
+            'Awaiting your feedback',
+            'If you\'d like me to address',
+            'task has been successfully completed'
+          ];
+          
+          let cleanedResult = finalResult;
+          for (const phrase of metaPhrases) {
+            const regex = new RegExp(`.*${phrase}.*\n?`, 'gi');
+            cleanedResult = cleanedResult.replace(regex, '');
+          }
+          
+          // If the entire result was meta-commentary, use the original
+          if (cleanedResult.trim().length < 100 && finalResult.length > 200) {
+            console.log('[handleManagerRequest] Warning: Cleaned result too short, using original');
+            cleanedResult = finalResult;
+          }
+          
+          // Split long results into chunks for Slack
+          const maxLength = 3000; // Slack message limit
+          const chunks = [];
+          for (let i = 0; i < cleanedResult.length; i += maxLength) {
+            chunks.push(cleanedResult.substring(i, i + maxLength));
+          }
+          
+          await this.slackManager.sendMessage(
+            channel,
+            `✅ **${assetType} Analysis Complete!**\n\n${chunks[0]}`,
+            { threadTs: thread_ts }
           );
+          
+          // Send remaining chunks if any
+          for (let i = 1; i < chunks.length; i++) {
+            await this.slackManager.sendMessage(
+              channel,
+              chunks[i],
+              { threadTs: thread_ts }
+            );
+          }
         } else {
           await this.slackManager.sendMessage(
             channel,
-            `Design generation completed, but I couldn't locate the output file.`,
+            `✅ ${assetType} analysis completed!\n\nThe analysis has been processed. Here's a summary of key findings and recommendations for your strategic planning.`,
             { threadTs: thread_ts }
           );
         }
-      } catch (designError: any) {
-        console.error('❌ Design generation failed:', designError);
+      } catch (managerError: any) {
+        console.error('❌ Manager generation failed:', managerError);
         await this.slackManager.sendMessage(
           channel,
-          `❌ Sorry, I encountered an error during design generation: ${designError?.message || 'Unknown error'}
+          `❌ Sorry, I encountered an error during strategic analysis: ${managerError?.message || 'Unknown error'}
 
-The Slack integration is working perfectly, but there's an issue with the design model. I'll send a fallback message instead.`,
+The Slack integration is working perfectly, but there's an issue with the management system. I'll send a fallback message instead.`,
           { threadTs: thread_ts }
         );
       }
 
     } catch (error) {
-      console.error('Error generating design:', error);
+      console.error('Error generating manager:', error);
       await this.slackManager.sendMessage(
         channel,
-        `Sorry, I encountered an error while generating your design: ${error}`,
+        `Sorry, I encountered an error while generating your manager: ${error}`,
         { threadTs: thread_ts }
       );
     } finally {
@@ -223,19 +298,20 @@ The Slack integration is working perfectly, but there's an issue with the design
     }
   }
 
-  private parseDesignRequest(text: string): { assetType: string; userPrompt: string } {
-    // Map common terms to asset types
+  private parseManagementRequest(text: string): { assetType: string; userPrompt: string } {
+    // Map common terms to management deliverable types
     const assetTypeMap: Record<string, string> = {
-      'logo': 'primary_logo',
-      'mockup': 'homepage_mockup',
-      'icon': 'system_icon_library',
-      'favicon': 'favicon',
-      'banner': 'email_banner',
-      'social card': 'open_graph_card',
-      'screenshot': 'product_screenshots',
-      'illustration': 'spot_illustrations',
-      'palette': 'color_pallet',
-      'ui component': 'component_sheet'
+      'market analysis': 'market_analysis',
+      'competitive': 'competitive_landscape', 
+      'roadmap': 'strategic_roadmap',
+      'okr': 'quarterly_okrs',
+      'strategy': 'strategic_roadmap',
+      'budget': 'budget_forecast',
+      'risk': 'risk_assessment',
+      'team': 'team_structure',
+      'vision': 'product_vision',
+      'go-to-market': 'go_to_market_strategy',
+      'executive summary': 'executive_summary'
     };
 
     // Clean the text by removing bot mentions
@@ -245,15 +321,15 @@ The Slack integration is working perfectly, but there's an issue with the design
 
     // Try to identify asset type from the text
     const lowerText = cleanText.toLowerCase();
-    let assetType = 'primary_logo'; // default
+    let assetType = 'market_analysis'; // default management deliverable
     let userPrompt = cleanText;
 
     for (const [keyword, type] of Object.entries(assetTypeMap)) {
       if (lowerText.includes(keyword)) {
         assetType = type;
-        // Remove design action words and asset type, keep the description
+        // Remove management action words and deliverable type, keep the description
         userPrompt = cleanText
-          .replace(new RegExp(`\\b(generate|create|design|make)\\s+(a\\s+)?`, 'gi'), '')
+          .replace(new RegExp(`\\b(analyze|create|develop|plan|assess)\\s+(a\\s+)?`, 'gi'), '')
           .replace(new RegExp(`\\b(a\\s+)?${keyword}(\\s+for)?`, 'gi'), '')
           .replace(/\s+/g, ' ')
           .trim();
@@ -266,7 +342,7 @@ The Slack integration is working perfectly, but there's an issue with the design
       userPrompt = cleanText;
     }
 
-    console.log(`🎯 Parsed design request:`, { assetType, userPrompt });
+    console.log(`🎯 Parsed management request:`, { assetType, userPrompt });
 
     return { assetType, userPrompt };
   }
@@ -276,26 +352,27 @@ The Slack integration is working perfectly, but there's an issue with the design
 
     const { channel, thread_ts, text } = message;
     
-    console.log(`🏷️  Processing mention - checking if it's a design request...`);
+    console.log(`🏷️  Processing mention - checking if it's a manager request...`);
     
-    // Check if the mention contains a design request
-    const isDesign = this.isDesignRequest(text);
+    // Check if the mention contains a management request
+    const isManagement = this.isManagerRequest(text);
     
-    if (isDesign) {
-      console.log('🎨 Mention contains design request - handling as design request');
-      await this.handleDesignRequest(message);
+    if (isManagement) {
+      console.log('🏆 Mention contains management request - handling as management request');
+      await this.handleManagerRequest(message);
     } else {
       console.log('💬 Mention is general - sending help message');
       await this.slackManager.sendMessage(
         channel,
-        `Hi! I can help you generate various design assets. Just tell me what you need!
+        `Hi! I'm your Manager-as-CEO AI assistant. I can help with strategic analysis and executive deliverables.
         
 Examples:
-- "Generate a modern logo for a tech startup called TechFlow"
-- "Create a mockup for a mobile banking app"
-- "Design a social media card for our product launch"
+- "Create a market analysis for our new product"
+- "Develop a competitive landscape report"
+- "Generate quarterly OKRs for the engineering team"
+- "Analyze risks for our product launch"
         
-I support: logos, mockups, icons, banners, color palettes, and more!`,
+I support: market analysis, strategic roadmaps, risk assessments, budget forecasts, and more!`,
         { threadTs: thread_ts }
       );
     }

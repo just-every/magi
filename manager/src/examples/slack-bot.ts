@@ -70,24 +70,25 @@ async function main() {
   }
 
   console.log('✅ Connected to Slack!');
-  console.log('📢 Bot is now listening for design requests...\n');
+  console.log('📢 Bot is now listening for management requests...\n');
   console.log('Try these commands in Slack:');
-  console.log('  - "Generate a logo for TechStartup"');
-  console.log('  - "Create a mockup for a fitness app"');
+  console.log('  - "Create a market analysis for our product"');
+  console.log('  - "Generate quarterly OKRs for engineering"');
   console.log('  - "@yourbot help" for more info\n');
 
   // Send welcome message to default channel
   await slackManager.sendMessage(
     defaultChannel || 'general',
-    `👋 AI Manager Bot is online! I can help you generate design assets.
+    `👋 Manager-as-CEO Bot is online! I can help with strategic analysis and executive deliverables.
     
 Try asking me to:
-• Generate logos
-• Create mockups
-• Design icons and banners
-• Make color palettes
+• Create market analysis reports
+• Generate competitive landscape assessments
+• Develop strategic roadmaps
+• Plan quarterly OKRs
+• Analyze risks and opportunities
     
-Just describe what you need and I'll create it for you!`
+Just describe what management task you need and I'll help!`
   );
 
   // Keep the process running

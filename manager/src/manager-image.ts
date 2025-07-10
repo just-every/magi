@@ -399,7 +399,7 @@ export function getImageGenerationTools(): ExtendedToolFunction[] {
     return [
         createExtendedToolFunction(
             generate_image, // Use the wrapper function that always returns a string
-            'Generate or edit an image based on a textual description. Uses high-quality image generation models. Please note that image generation may take several minutes.',
+            'Generate management visualizations like charts, diagrams, or infographics based on strategic requirements. Focused on executive-level visual communication.',
             {
                 prompt: 'A text description of the desired image',
                 aspect: {
