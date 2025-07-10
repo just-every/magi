@@ -85,7 +85,6 @@ const AppContent: React.FC = () => {
                     <ColumnLayout />
                 )}
             </div>
-
         </div>
     );
 };

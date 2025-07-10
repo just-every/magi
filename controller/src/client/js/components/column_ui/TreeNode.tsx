@@ -72,7 +72,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
     return (
         <div className="tree-node">
             <div
-                className={`d-flex p-2 rounded-2 shadow-sm mb-2`}
+                className={'d-flex p-2 rounded-2 shadow-sm mb-2'}
                 style={{
                     cursor: 'pointer',
                     marginLeft: `${level * 15}px`,

@@ -14,12 +14,7 @@ import {
     ResponseThinkingMessage,
     ResponseOutputMessage,
 } from '@just-every/ensemble';
-// Temporary workaround - setDelayInterrupted is not exported from mind
-// This is used to interrupt thought delays when needed
-let delayInterrupted = false;
-function setDelayInterrupted(interrupted: boolean): void {
-    delayInterrupted = interrupted;
-}
+import { setDelayInterrupted } from '@just-every/task/dist/src/core/thought_utils.js';
 import { formatHistoryForSummary, createSummary } from './summary_utils.js';
 import { truncateLargeValues } from './file_utils.js';
 import { readableTime } from './date_tools.js';
@@ -543,15 +538,20 @@ export async function addHumanMessage(
     } else {
         // Fallback: create structured content from plain text
         // This ensures backward compatibility
-        console.log('[addHumanMessage] Creating structured content from plain text:', content);
+        console.log(
+            '[addHumanMessage] Creating structured content from plain text:',
+            content
+        );
         addHistory(
             {
                 type: 'message',
                 role: 'user',
-                content: [{
-                    type: 'input_text',
-                    text: `${source || person} said:\n${content}`,
-                }],
+                content: [
+                    {
+                        type: 'input_text',
+                        text: `${source || person} said:\n${content}`,
+                    },
+                ],
             } as any,
             thread
         );

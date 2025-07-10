@@ -42,7 +42,6 @@ export async function select_design_assets(
         instructions:
             'Respond with {"assets": [..]} only using the provided keys and order of creation.',
         modelSettings: {
-            force_json: true,
             json_schema: {
                 name: 'asset_plan',
                 type: 'json_schema',

@@ -152,7 +152,7 @@ const AgentBox: React.FC<AgentBoxWithParentProcess> = ({
                     <MessageList
                         messages={messages}
                         isTyping={isTyping}
-                        colors={colors}
+                        rgb={colors.rgb}
                     />
                 </AutoScrollContainer>
             </div>

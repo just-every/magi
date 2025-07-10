@@ -42,11 +42,13 @@ export interface Patch {
 interface PatchesViewerProps {
     compact?: boolean;
     onSelectPatch?: (patch: Patch) => void;
+    onCountChange?: (count: number) => void;
 }
 
 const PatchesViewer: React.FC<PatchesViewerProps> = ({
     compact = false,
     onSelectPatch,
+    onCountChange,
 }) => {
     const [patches, setPatches] = useState<Patch[]>([]);
     const [selectedPatch, setSelectedPatch] = useState<Patch | null>(null);
@@ -89,6 +91,9 @@ const PatchesViewer: React.FC<PatchesViewerProps> = ({
 
             if (data.success) {
                 setPatches(data.data);
+                if (onCountChange) {
+                    onCountChange(data.data.length);
+                }
             } else {
                 setError('Failed to fetch patches');
             }
@@ -234,7 +239,9 @@ const PatchesViewer: React.FC<PatchesViewerProps> = ({
 
         return (
             <div className="compact-patches">
-                <div className="middle-title">Patches ({pendingPatches.length})</div>
+                <div className="middle-title">
+                    Patches ({pendingPatches.length})
+                </div>
                 <ul className="compact-patches-list">
                     {pendingPatches.map(patch => (
                         <li

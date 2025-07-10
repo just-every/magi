@@ -30,7 +30,7 @@ function getAvailableVoices(): VoiceOption[] {
 }
 
 // Get all available voices
-router.get('/api/voices', (req: Request, res: Response) => {
+router.get('/voices', (req: Request, res: Response) => {
     try {
         const availableVoices = getAvailableVoices();
         const currentVoiceId = getCurrentVoice();
@@ -60,7 +60,7 @@ router.get('/api/voices', (req: Request, res: Response) => {
 });
 
 // Get current voice
-router.get('/api/voices/current', (req: Request, res: Response) => {
+router.get('/voices/current', (req: Request, res: Response) => {
     try {
         const currentVoiceId = getCurrentVoice();
         const currentVoice = getVoiceById(currentVoiceId);
@@ -80,7 +80,7 @@ router.get('/api/voices/current', (req: Request, res: Response) => {
 });
 
 // Set current voice
-router.post('/api/voices/current', (req: Request, res: Response) => {
+router.post('/voices/current', (req: Request, res: Response) => {
     try {
         const { voiceId } = req.body;
 
@@ -127,7 +127,7 @@ router.post('/api/voices/current', (req: Request, res: Response) => {
 });
 
 // Preview a voice
-router.post('/api/voices/preview', async (req: Request, res: Response) => {
+router.post('/voices/preview', async (req: Request, res: Response) => {
     try {
         const { voiceId } = req.body;
 

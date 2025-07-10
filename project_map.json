@@ -50,7 +50,10 @@
       "important_files": [
         "src/magi.ts",
         "src/magi_agents/overseer_agent.ts",
-        "src/magi_agents/operator_agent.ts"
+        "src/magi_agents/operator_agent.ts",
+        "src/code_providers/claude_code.ts",
+        "src/code_providers/codex.ts",
+        "src/code_providers/gemini_cli.ts"
       ]
     },
     {
@@ -166,6 +169,7 @@
       "paths": [
         "/engine/src/magi_agents",
         "/engine/src/model_providers",
+        "/engine/src/code_providers",
         "/engine/src/utils"
       ]
     },
@@ -258,6 +262,7 @@
     "Custom Tools": "Dynamic tool creation and modification by agents at runtime",
     "Browser Control": "CDP-based browser automation",
     "Multi-provider": "Support for various LLM providers with automatic fallback",
-    "Project Templates": "Ready-to-use templates for different project types"
+    "Project Templates": "Ready-to-use templates for different project types",
+    "Code Providers": "Specialized CLI-based code generation tools (Claude Code, Codex, Gemini CLI)"
   }
 }

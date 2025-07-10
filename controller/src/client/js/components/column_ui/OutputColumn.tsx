@@ -54,7 +54,11 @@ const extractTextFromCommand = (command: any): string => {
             // If parsing fails, use the original string
             text = command;
         }
-    } else if (command && command.contentArray && Array.isArray(command.contentArray)) {
+    } else if (
+        command &&
+        command.contentArray &&
+        Array.isArray(command.contentArray)
+    ) {
         // If it's already an object with contentArray
         text = command.contentArray
             .map((item: any) => {
@@ -67,7 +71,10 @@ const extractTextFromCommand = (command: any): string => {
             .join(' ');
     } else {
         // Fallback to stringifying if we can't extract
-        text = typeof command === 'object' ? JSON.stringify(command) : String(command || '');
+        text =
+            typeof command === 'object'
+                ? JSON.stringify(command)
+                : String(command || '');
     }
 
     // Extract text after "Word:" pattern and get first sentence
@@ -85,7 +92,10 @@ const extractTextFromCommand = (command: any): string => {
         } else {
             // If no sentence ending found, take up to first newline or entire text
             const newlineIndex = afterPattern.indexOf('\n');
-            text = newlineIndex > -1 ? afterPattern.substring(0, newlineIndex).trim() : afterPattern.trim();
+            text =
+                newlineIndex > -1
+                    ? afterPattern.substring(0, newlineIndex).trim()
+                    : afterPattern.trim();
         }
     }
 
@@ -143,25 +153,33 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
     let consoleEvents: ConsoleEvent[];
     let designEvents: DesignEvent[];
     let logs: string;
+    let isTyping: boolean = false;
+    let agent: AgentData | undefined;
 
     if (selectedItem?.type === 'process') {
         const process = selectedItem.data as ProcessData;
         if (process) {
+            agent = process.agent;
             name = process.agent?.name;
             messages = process.agent?.messages || [];
             logs = process.logs || '';
             screenshots = process.agent?.screenshots || [];
             consoleEvents = process.agent?.consoleEvents || [];
             designEvents = process.agent?.designEvents || [];
+            isTyping = process.agent?.isTyping || false;
         }
     } else if (selectedItem?.type === 'agent') {
-        const agent = selectedItem ? (selectedItem.data as AgentData) : null;
-        if (agent) {
-            name = agent.name || '';
-            messages = agent.messages || [];
-            screenshots = agent.screenshots || [];
-            consoleEvents = agent.consoleEvents || [];
-            designEvents = agent.designEvents || [];
+        const agentData = selectedItem
+            ? (selectedItem.data as AgentData)
+            : null;
+        if (agentData) {
+            agent = agentData;
+            name = agentData.name || '';
+            messages = agentData.messages || [];
+            screenshots = agentData.screenshots || [];
+            consoleEvents = agentData.consoleEvents || [];
+            designEvents = agentData.designEvents || [];
+            isTyping = agentData.isTyping || false;
         }
     }
 
@@ -279,7 +297,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
 
         const process = selectedItem.data as ProcessData;
         if (!process) return null;
-        const rbg =
+        const rgb =
             process.id === coreProcessId ? PRIMARY_RGB : process.colors.rgb;
 
         const { id, command } = process;
@@ -381,7 +399,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                                     (tab === 'browser' ? ' active' : '')
                                 }
                                 style={{
-                                    backgroundColor: `rgba(${tab === 'browser' ? rbg : '255 255 255'} / 0.1)`,
+                                    backgroundColor: `rgba(${tab === 'browser' ? rgb : '255 255 255'} / 0.1)`,
                                 }}
                             >
                                 Browser
@@ -402,7 +420,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                                     (tab === 'design' ? ' active' : '')
                                 }
                                 style={{
-                                    backgroundColor: `rgba(${tab === 'design' ? rbg : '255 255 255'} / 0.08)`,
+                                    backgroundColor: `rgba(${tab === 'design' ? rgb : '255 255 255'} / 0.08)`,
                                 }}
                             >
                                 Designs
@@ -423,7 +441,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                                     (tab === 'design' ? ' active' : '')
                                 }
                                 style={{
-                                    backgroundColor: `rgba(${tab === 'design' ? rbg : '255 255 255'} / 0.1)`,
+                                    backgroundColor: `rgba(${tab === 'design' ? rgb : '255 255 255'} / 0.1)`,
                                 }}
                             >
                                 Designs
@@ -444,7 +462,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                                     (tab === 'console' ? ' active' : '')
                                 }
                                 style={{
-                                    backgroundColor: `rgba(${tab === 'console' ? rbg : '255 255 255'} / 0.1)`,
+                                    backgroundColor: `rgba(${tab === 'console' ? rgb : '255 255 255'} / 0.1)`,
                                 }}
                             >
                                 Console
@@ -464,7 +482,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                                 (tab === 'output' ? ' active' : '')
                             }
                             style={{
-                                backgroundColor: `rgba(${tab === 'output' ? rbg : '255 255 255'} / 0.1)`,
+                                backgroundColor: `rgba(${tab === 'output' ? rgb : '255 255 255'} / 0.1)`,
                             }}
                         >
                             Output
@@ -483,7 +501,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                                 (tab === 'llm' ? ' active' : '')
                             }
                             style={{
-                                backgroundColor: `rgba(${tab === 'llm' ? rbg : '255 255 255'} / 0.1)`,
+                                backgroundColor: `rgba(${tab === 'llm' ? rgb : '255 255 255'} / 0.1)`,
                             }}
                         >
                             Requests
@@ -502,7 +520,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                                 (tab === 'docker' ? ' active' : '')
                             }
                             style={{
-                                backgroundColor: `rgba(${tab === 'docker' ? rbg : '255 255 255'} / 0.1)`,
+                                backgroundColor: `rgba(${tab === 'docker' ? rgb : '255 255 255'} / 0.1)`,
                             }}
                         >
                             Container Log
@@ -514,7 +532,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                 {tab === 'console' && consoleEvents ? (
                     <div
                         className="process-content flex-grow-1 p-4"
-                        style={{ backgroundColor: `rgba(${rbg} / 0.1)` }}
+                        style={{ backgroundColor: `rgba(${rgb} / 0.1)` }}
                     >
                         <ConsoleDisplay
                             consoleEvents={consoleEvents}
@@ -524,7 +542,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                 ) : (
                     <AutoScrollContainer
                         className="process-content flex-grow-1 p-4"
-                        style={{ backgroundColor: `rgba(${rbg} / 0.1)` }}
+                        style={{ backgroundColor: `rgba(${rgb} / 0.1)` }}
                     >
                         {tab === 'browser' && screenshots && (
                             <BrowserDisplay
@@ -539,7 +557,12 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                             />
                         )}
                         {tab === 'output' && (
-                            <MessageList messages={messages} colors={{rbg}} />
+                            <MessageList
+                                messages={messages}
+                                rgb={rgb}
+                                isTyping={isTyping}
+                                agent={agent}
+                            />
                         )}
                         {tab === 'llm' && (
                             <LogsViewer
@@ -574,7 +597,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
             ? (processes.get(selectedItem.parentId) as ProcessData | undefined)
             : null;
         const statusInfo = getStatusIcon(parentProcess);
-        const rbg =
+        const rgb =
             parentProcess && parentProcess.id === coreProcessId
                 ? PRIMARY_RGB
                 : parentProcess?.colors.rgb;
@@ -666,7 +689,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                                     (tab === 'browser' ? ' active' : '')
                                 }
                                 style={{
-                                    backgroundColor: `rgba(${tab === 'browser' ? rbg : '255 255 255'} / 0.08)`,
+                                    backgroundColor: `rgba(${tab === 'browser' ? rgb : '255 255 255'} / 0.08)`,
                                 }}
                             >
                                 Browser
@@ -687,7 +710,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                                     (tab === 'console' ? ' active' : '')
                                 }
                                 style={{
-                                    backgroundColor: `rgba(${tab === 'console' ? rbg : '255 255 255'} / 0.08)`,
+                                    backgroundColor: `rgba(${tab === 'console' ? rgb : '255 255 255'} / 0.08)`,
                                 }}
                             >
                                 Console
@@ -707,7 +730,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                                 (tab === 'output' ? ' active' : '')
                             }
                             style={{
-                                backgroundColor: `rgba(${tab === 'output' ? rbg : '255 255 255'} / 0.08)`,
+                                backgroundColor: `rgba(${tab === 'output' ? rgb : '255 255 255'} / 0.08)`,
                             }}
                         >
                             Output
@@ -726,7 +749,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                                 (tab === 'llm' ? ' active' : '')
                             }
                             style={{
-                                backgroundColor: `rgba(${tab === 'llm' ? rbg : '255 255 255'} / 0.08)`,
+                                backgroundColor: `rgba(${tab === 'llm' ? rgb : '255 255 255'} / 0.08)`,
                             }}
                         >
                             Requests
@@ -737,7 +760,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                 {tab === 'console' && consoleEvents ? (
                     <div
                         className="agent-content flex-grow-1 p-4"
-                        style={{ backgroundColor: `rgba(${rbg} / 0.08)` }}
+                        style={{ backgroundColor: `rgba(${rgb} / 0.08)` }}
                     >
                         <ConsoleDisplay
                             consoleEvents={consoleEvents}
@@ -747,7 +770,7 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                 ) : (
                     <AutoScrollContainer
                         className="agent-content flex-grow-1 p-4"
-                        style={{ backgroundColor: `rgba(${rbg} / 0.08)` }}
+                        style={{ backgroundColor: `rgba(${rgb} / 0.08)` }}
                     >
                         {tab === 'browser' && screenshots && (
                             <BrowserDisplay
@@ -762,7 +785,12 @@ const OutputColumn: React.FC<OutputColumnProps> = ({
                             />
                         )}
                         {tab === 'output' && (
-                            <MessageList messages={messages} colors={{rbg}} />
+                            <MessageList
+                                messages={messages}
+                                rgb={rgb}
+                                isTyping={isTyping}
+                                agent={agent}
+                            />
                         )}
                         {tab === 'llm' && selectedItem && (
                             <LogsViewer

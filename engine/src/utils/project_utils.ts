@@ -279,6 +279,144 @@ export async function create_project(
 }
 
 /**
+ * Delete a project and its files
+ * @param project_id The ID of the project to delete
+ * @returns A string indicating success or failure
+ */
+export async function delete_project(project_id: string): Promise<string> {
+    const db = await getDB();
+
+    try {
+        // Check if project exists
+        const existingProject = await db.query(
+            'SELECT project_id, is_generated FROM projects WHERE project_id = $1',
+            [project_id]
+        );
+
+        if (existingProject.rows.length === 0) {
+            return `Error: Project '${project_id}' does not exist.`;
+        }
+
+        const isGenerated = existingProject.rows[0].is_generated;
+
+        // Don't allow deletion of external projects
+        if (!isGenerated) {
+            return `Error: Cannot delete external project '${project_id}'. Only generated projects can be deleted.`;
+        }
+
+        // Get communication manager
+        const communicationManager = getCommunicationManager();
+        let listenerAttached = false;
+
+        // Create the promise and set up the listener BEFORE sending the event
+        const projectDeletePromise = new Promise<string>((resolve, reject) => {
+            let timeoutHandle: NodeJS.Timeout | null = null;
+            let resolved = false;
+
+            const listener = async (message: any) => {
+                if (resolved) return; // Ignore if already resolved
+
+                console.log(
+                    `[delete_project] Received message type: ${message.type}`
+                );
+
+                if (message.type === 'project_delete_complete') {
+                    const projectMessage = message as ProjectMessage;
+                    console.log(
+                        `[delete_project] Project delete complete for: ${projectMessage.project_id} (waiting for: ${project_id})`
+                    );
+
+                    if (projectMessage.project_id === project_id) {
+                        resolved = true;
+                        cleanup();
+                        if (projectMessage.failed) {
+                            reject(
+                                new Error(
+                                    `Project deletion failed: ${projectMessage.message}`
+                                )
+                            );
+                        } else {
+                            resolve(
+                                `Project '${project_id}' deleted successfully: ${projectMessage.message}`
+                            );
+                        }
+                    }
+                }
+            };
+
+            const cleanup = () => {
+                if (timeoutHandle) {
+                    clearTimeout(timeoutHandle);
+                    timeoutHandle = null;
+                }
+                // Remove the listener
+                if (listenerAttached) {
+                    try {
+                        const index =
+                            communicationManager['commandListeners'].indexOf(
+                                listener
+                            );
+                        if (index > -1) {
+                            communicationManager['commandListeners'].splice(
+                                index,
+                                1
+                            );
+                        }
+                    } catch (err) {
+                        console.error('Error removing listener:', err);
+                    }
+                }
+            };
+
+            // Add the listener
+            communicationManager.onCommand(listener);
+            listenerAttached = true;
+            console.log(
+                `[delete_project] Listener attached for project deletion: ${project_id}`
+            );
+
+            // NOW send the delete event (after listener is attached)
+            console.log(
+                `[delete_project] Sending project_delete event for: ${project_id}`
+            );
+            sendStreamEvent({
+                type: 'project_delete',
+                project_id: project_id,
+            });
+
+            // Set up timeout
+            timeoutHandle = setTimeout(
+                () => {
+                    if (!resolved) {
+                        resolved = true;
+                        cleanup();
+                        reject(
+                            new Error(
+                                `Timeout waiting for project '${project_id}' to be deleted (2 minutes)`
+                            )
+                        );
+                    }
+                },
+                2 * 60 * 1000
+            ); // 2 minute timeout
+        });
+
+        // Delete from database first
+        await db.query('DELETE FROM projects WHERE project_id = $1', [
+            project_id,
+        ]);
+
+        // Wait for the project files to be deleted
+        return await projectDeletePromise;
+    } catch (error) {
+        console.error('Error deleting project:', error);
+        return `Error deleting project: ${error instanceof Error ? error.message : String(error)}`;
+    } finally {
+        db.release();
+    }
+}
+
+/**
  * Get all project tools as an array of tool definitions
  */
 export function getProjectTools(): ToolFunction[] {
@@ -302,6 +440,14 @@ export function getProjectTools(): ToolFunction[] {
                         .join('\n')}`,
                     enum: PROJECT_TYPES,
                 },
+            }
+        ),
+        createToolFunction(
+            delete_project,
+            'Delete a generated project and all its files. Only generated projects can be deleted, not external projects.',
+            {
+                project_id:
+                    'The ID of the project to delete. Use list_available_projects() to see available projects.',
             }
         ),
     ];

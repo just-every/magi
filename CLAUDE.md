@@ -72,6 +72,35 @@ docker compose up -d   # spin up Postgres & pgvector
 4. `docker compose up -d db`
 5. `npm run dev` – open http://localhost:3010
 
+### Code Provider Setup (Optional)
+To use specialized code generation providers, install the corresponding CLI tools:
+- **Claude Code**: Install from https://github.com/anthropics/claude-code (requires Claude API key)
+- **Codex**: Install OpenAI Codex CLI (requires OpenAI API key)
+- **Gemini CLI**: Install from https://github.com/google-gemini/gemini-cli (requires Gemini API key or Google auth)
+
+#### Setup Commands:
+```bash
+# Agent-assisted setup (automatically detects and opens auth URLs)
+npm run setup:agent claude    # Claude with agent assistance
+npm run setup:agent gemini    # Gemini with agent assistance
+
+# Individual provider setup
+npm run setup:claude    # Claude Code setup (Docker-based)
+npm run setup:gemini    # Gemini CLI setup (interactive)
+
+# Test CLI authentication flow (for debugging)
+npm run setup:test-cli claude
+npm run setup:test-cli gemini
+```
+
+#### Manual Setup:
+- **Gemini CLI**: 
+  1. Create `~/.gemini/settings.json` with `{"authMethod": "api_key", "apiKey": "YOUR_KEY"}`
+  2. Or set environment variable: `GEMINI_API_KEY=YOUR_KEY`
+  3. Get API key from: https://aistudio.google.com/apikey
+
+- **Claude Code**: Run `claude` and follow the interactive prompts
+
 ## Package Management
 - **ALWAYS** use `npm run update:all` when updating packages - this ensures all workspaces (root, controller, task) are updated together
 - Never use `npm update` alone as it only updates the current directory
@@ -106,6 +135,10 @@ docker compose up -d   # spin up Postgres & pgvector
 - Browser control - CDP-based browser automation
 - Multi-provider support - Works with various LLM providers with automatic fallback
 - Project Templates - Ready-to-use templates for different project types
+- Code Providers - Specialized CLI-based code generation tools:
+  - **Claude Code** - Anthropic's Claude CLI with concurrency control and fallback to Codex
+  - **Codex** - OpenAI's code generation CLI tool
+  - **Gemini CLI** - Google's Gemini CLI for code generation
 
 ## Architecture Overview
 - **Controller Service** - Node.js Express backend + Socket.IO + React frontend

@@ -11,6 +11,7 @@ import {
 } from '@just-every/ensemble';
 import { claudeCodeProvider } from '../code_providers/claude_code.js';
 import { codexProvider } from '../code_providers/codex.js';
+import { geminiCliProvider } from '../code_providers/gemini_cli.js';
 import { ModelProvider as MagiModelProvider } from '../types/shared-types.js';
 /**
  * Create a wrapper that adapts a magi ModelProvider to ensemble's ModelProvider interface
@@ -71,7 +72,7 @@ export function registerCodeProviders(): void {
     );
 
     // Register Codex provider
-    /*registerExternalModel(
+    registerExternalModel(
         {
             id: 'codex',
             provider: 'magi-codex' as any, // Unique provider ID to avoid conflicts
@@ -92,17 +93,43 @@ export function registerCodeProviders(): void {
             },
         },
         createProviderAdapter(codexProvider)
-    );*/
+    );
 
-    console.log('[MAGI] Registered code providers: claude-code, codex');
+    // Register Gemini CLI provider
+    registerExternalModel(
+        {
+            id: 'gemini-cli',
+            provider: 'magi-gemini-cli' as any, // Unique provider ID to avoid conflicts
+            features: {
+                context_length: 128000, // Gemini's context window
+                tool_use: true,
+                input_modality: ['text'],
+                output_modality: ['text'],
+                streaming: true,
+            },
+            cost: {
+                input_per_million: 2, // $2 per 1M tokens (estimate)
+                output_per_million: 10, // $10 per 1M tokens (estimate)
+            },
+            score: 82,
+            scores: {
+                code: 92, // High code score for Gemini
+            },
+        },
+        createProviderAdapter(geminiCliProvider)
+    );
+
+    console.log(
+        '[MAGI] Registered code providers: claude-code, codex, gemini-cli'
+    );
 
     // Override the code model class to use our custom providers
     overrideModelClass('code', {
-        models: ['claude-code', 'codex'],
-        random: false, // Always prefer claude-code first
+        models: ['claude-code', 'gemini-cli'], //, 'codex'],
+        //random: false, // Always prefer claude-code first, then gemini-cli, then codex
     });
 
     console.log(
-        '[MAGI] Overrode code model class to use claude-code and codex'
+        '[MAGI] Overrode code model class to use claude-code, gemini-cli, and codex'
     );
 }

@@ -317,7 +317,7 @@ export class PatchMonitor extends EventEmitter {
             }
         }
 
-        for (const [key, count] of this.metrics.userActivity) {
+        for (const [key] of this.metrics.userActivity) {
             if (key.endsWith(hour)) {
                 const [userId] = key.split(':');
                 summary.currentHour.activeUsers.add(userId);

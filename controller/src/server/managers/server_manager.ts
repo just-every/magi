@@ -16,6 +16,7 @@ import {
     ProcessCommandEvent,
     ServerInfoEvent,
     AppSettings,
+    AgentProcess,
 } from '../../types/index';
 import {
     getServerVersion,
@@ -35,7 +36,12 @@ import {
     setTelegramEnabled,
 } from '../utils/talk';
 import { initTelegramBot, closeTelegramBot } from '../utils/telegram_bot';
-import { loadAppSettings, saveAppSettings } from '../utils/storage';
+import {
+    loadAppSettings,
+    saveAppSettings,
+    loadData,
+    saveData,
+} from '../utils/storage';
 import { openUI } from '../utils/cdp';
 
 const docker = new Docker();
@@ -172,18 +178,11 @@ export class ServerManager {
         // Connect the PR events manager to the process manager
         this.processManager.setPrEventsManager(this.prEventsManager);
 
-        // Load persisted app settings if available
-        const settings = loadAppSettings();
-        this.uiMode = settings.uiMode;
-        this.isAudioEnabled = settings.isAudioEnabled;
-        this.isTelegramEnabled = settings.isTelegramEnabled;
+        // Load persisted app settings if available (async initialization)
+        this.initializeAppSettings();
 
         // Initialize the talk module with the communication manager
         setCommunicationManager(this.communicationManager);
-
-        // Apply persisted settings
-        setAudioEnabled(this.isAudioEnabled);
-        setTelegramEnabled(this.isTelegramEnabled);
 
         // Initialize the Telegram bot
         initTelegramBot(this.communicationManager, this.processManager).catch(
@@ -194,6 +193,49 @@ export class ServerManager {
 
         this.setupWebSockets();
         this.setupSignalHandlers();
+    }
+
+    /**
+     * Initialize app settings asynchronously
+     */
+    private async initializeAppSettings(): Promise<void> {
+        try {
+            const settings = await loadAppSettings();
+            this.uiMode = settings.uiMode;
+            this.isAudioEnabled = settings.isAudioEnabled;
+            this.isTelegramEnabled = settings.isTelegramEnabled;
+
+            // Apply persisted settings
+            setAudioEnabled(this.isAudioEnabled);
+            setTelegramEnabled(this.isTelegramEnabled);
+        } catch (error) {
+            console.error('Error loading app settings:', error);
+            // Use defaults if loading fails
+            this.uiMode = 'column';
+            this.isAudioEnabled = true;
+            this.isTelegramEnabled = true;
+        }
+
+        // Check for initial command from environment
+        console.log(
+            'Checking for MAGI_INITIAL_COMMAND environment variable...'
+        );
+        console.log(
+            'Environment MAGI_INITIAL_COMMAND:',
+            process.env.MAGI_INITIAL_COMMAND
+        );
+        if (process.env.MAGI_INITIAL_COMMAND) {
+            const initialCommand = process.env.MAGI_INITIAL_COMMAND;
+            console.log('✓ Initial command set:', initialCommand);
+
+            // Execute the command after a short delay to ensure server is ready
+            setTimeout(() => {
+                console.log('Executing initial command:', initialCommand);
+                this.handleCommandRun(initialCommand);
+            }, 1000);
+        } else {
+            console.log('No initial command found in environment');
+        }
     }
 
     /**
@@ -923,7 +965,7 @@ export class ServerManager {
         });
 
         // Exclude /magi_output and /api paths from the catch-all route
-        this.app.get('*', (req, res, next) => {
+        this.app.get('/*path', (req, res, next) => {
             // Check if the request path starts with /magi_output or /api
             if (
                 req.path.startsWith('/magi_output/') ||
@@ -1048,13 +1090,14 @@ export class ServerManager {
      *
      * @param socket - The connected socket
      */
-    private handleSocketConnection(socket: Socket): void {
+    private async handleSocketConnection(socket: Socket): Promise<void> {
         const clientId = socket.id.substring(0, 8);
         console.log(`Client connected: ${clientId}`);
 
         // Send server info to the client
         socket.emit('server:info', {
-            version: getServerVersion(),
+            version: await getServerVersion(),
+            yourName: process.env.YOUR_NAME || '',
         } as ServerInfoEvent);
 
         // Send current states to new clients
@@ -1081,7 +1124,10 @@ export class ServerManager {
             socket.emit('process:create', {
                 id,
                 isCore: this.processManager.coreProcessId === id,
-                manager: this.processManager.coreProcessId === id ? process.env.PERSON_NAME : process.env.AI_NAME,
+                manager:
+                    this.processManager.coreProcessId === id
+                        ? process.env.YOUR_NAME
+                        : process.env.AI_NAME,
                 command: processData.command,
                 status: processData.status,
                 colors: processData.colors,
@@ -1156,49 +1202,75 @@ export class ServerManager {
         });
 
         // Handle set_uimode_state event
-        socket.on('set_uimode_state', (uimode: 'column' | 'canvas') => {
+        socket.on('set_uimode_state', async (uimode: 'column' | 'canvas') => {
             console.log(`Client ${clientId} set uimode to: ${uimode}`);
-            this.handleSetUIModeState(uimode);
+            await this.handleSetUIModeState(uimode);
         });
 
         // Handle set_audio_state event
-        socket.on('set_audio_state', (audioState: boolean) => {
+        socket.on('set_audio_state', async (audioState: boolean) => {
             console.log(`Client ${clientId} set audio state to: ${audioState}`);
-            this.handleSetAudioState(audioState);
+            await this.handleSetAudioState(audioState);
         });
 
         // Handle set_telegram_state event
-        socket.on('set_telegram_state', (telegramState: boolean) => {
+        socket.on('set_telegram_state', async (telegramState: boolean) => {
             console.log(
                 `Client ${clientId} set telegram state to: ${telegramState}`
             );
-            this.handleSetTelegramState(telegramState);
+            await this.handleSetTelegramState(telegramState);
         });
 
         // Handle update_app_settings event
-        socket.on('update_app_settings', (settings: AppSettings) => {
+        socket.on('update_app_settings', async (settings: AppSettings) => {
             console.log(
                 `Client ${clientId} sent app settings update:`,
                 settings
             );
-            this.handleUpdateAppSettings(settings);
+            await this.handleUpdateAppSettings(settings);
         });
+
+        // Handle cost limit events
+        socket.on('CLIENT_GET_COST_LIMIT', async () => {
+            console.log(`Client ${clientId} requested cost limit`);
+            await this.handleGetCostLimit(socket);
+        });
+
+        socket.on(
+            'CLIENT_SET_COST_LIMIT',
+            async (data: { dailyLimit: number | null }) => {
+                console.log(`Client ${clientId} setting cost limit:`, data);
+                await this.handleSetCostLimit(socket, data);
+            }
+        );
 
         // Handle audio streaming events
-        socket.on('audio:stream_start', async (data: { sampleRate?: number }) => {
-            console.log(`Client ${clientId} starting audio stream`);
-            const { handleAudioStreamStart } = await import('../utils/audio_stream_handler.js');
-            await handleAudioStreamStart(socket, data);
-        });
+        socket.on(
+            'audio:stream_start',
+            async (data: { sampleRate?: number }) => {
+                console.log(`Client ${clientId} starting audio stream`);
+                const { handleAudioStreamStart } = await import(
+                    '../utils/audio_stream_handler.js'
+                );
+                await handleAudioStreamStart(socket, data);
+            }
+        );
 
-        socket.on('audio:stream_data', async (data: { audio: ArrayBuffer | string }) => {
-            const { handleAudioStreamData } = await import('../utils/audio_stream_handler.js');
-            handleAudioStreamData(socket, data);
-        });
+        socket.on(
+            'audio:stream_data',
+            async (data: { audio: ArrayBuffer | string }) => {
+                const { handleAudioStreamData } = await import(
+                    '../utils/audio_stream_handler.js'
+                );
+                handleAudioStreamData(socket, data);
+            }
+        );
 
         socket.on('audio:stream_stop', async () => {
             console.log(`Client ${clientId} stopping audio stream`);
-            const { handleAudioStreamStop } = await import('../utils/audio_stream_handler.js');
+            const { handleAudioStreamStop } = await import(
+                '../utils/audio_stream_handler.js'
+            );
             handleAudioStreamStop(socket);
         });
 
@@ -1206,7 +1278,9 @@ export class ServerManager {
         socket.on('disconnect', async () => {
             console.log(`Client disconnected: ${clientId}`);
             // Clean up audio session if exists
-            const { cleanupAudioSession } = await import('../utils/audio_stream_handler.js');
+            const { cleanupAudioSession } = await import(
+                '../utils/audio_stream_handler.js'
+            );
             cleanupAudioSession(socket.id);
             // Note: We don't stop any processes when a client disconnects,
             // as other clients may still be monitoring them
@@ -1235,6 +1309,45 @@ export class ServerManager {
         if (!this.bootstrapRan) {
             this.bootstrapRan = true;
             console.log('First command received, bootstrapping projects...');
+            try {
+                await bootstrapProjectsOnce(this.processManager);
+            } catch (err) {
+                console.error('Failed to bootstrap projects:', err);
+            }
+        }
+    }
+
+    /**
+     * Start the overseer in idle mode when no initial command is provided
+     */
+    async startOverseerIdleMode(): Promise<void> {
+        // Generate a unique process ID
+        const processId = `AI-${Math.random().toString(36).substring(2, 8)}`;
+
+        // Create a process with a special idle mode marker
+        // Using a special marker that won't be confused with user input
+        const idleModeMarker = '[IDLE_MODE_START]';
+
+        const agentProcess: AgentProcess = {
+            processId: processId,
+            started: new Date(),
+            status: 'running',
+            tool: 'other',
+            command: idleModeMarker,
+            name: 'Overseer',
+            output: 'Starting overseer in idle mode...',
+        };
+
+        await this.processManager.createProcess(
+            processId,
+            idleModeMarker,
+            agentProcess
+        );
+
+        // Run bootstrap for projects
+        if (!this.bootstrapRan) {
+            this.bootstrapRan = true;
+            console.log('Starting overseer, bootstrapping projects...');
             try {
                 await bootstrapProjectsOnce(this.processManager);
             } catch (err) {
@@ -1395,7 +1508,9 @@ export class ServerManager {
     /**
      * Handle uimode_state_update event
      */
-    private handleSetUIModeState(uiMode: 'canvas' | 'column'): void {
+    private async handleSetUIModeState(
+        uiMode: 'canvas' | 'column'
+    ): Promise<void> {
         // Update local state
         this.uiMode = uiMode;
 
@@ -1403,17 +1518,21 @@ export class ServerManager {
         this.io.emit('uimode_state_update', this.uiMode);
 
         // Save to persistent storage
-        saveAppSettings({
-            uiMode: uiMode, // Keep the current UI mode
-            isAudioEnabled: this.isAudioEnabled,
-            isTelegramEnabled: this.isTelegramEnabled,
-        });
+        try {
+            await saveAppSettings({
+                uiMode: uiMode, // Keep the current UI mode
+                isAudioEnabled: this.isAudioEnabled,
+                isTelegramEnabled: this.isTelegramEnabled,
+            });
+        } catch (error) {
+            console.error('Error saving app settings:', error);
+        }
     }
 
     /**
      * Handle set_audio_state event
      */
-    private handleSetAudioState(audioState: boolean): void {
+    private async handleSetAudioState(audioState: boolean): Promise<void> {
         // Update local state
         this.isAudioEnabled = audioState;
         setAudioEnabled(audioState);
@@ -1425,17 +1544,23 @@ export class ServerManager {
         this.io.emit('audio_state_update', this.isAudioEnabled);
 
         // Save to persistent storage
-        saveAppSettings({
-            uiMode: this.uiMode,
-            isAudioEnabled: audioState,
-            isTelegramEnabled: this.isTelegramEnabled,
-        });
+        try {
+            await saveAppSettings({
+                uiMode: this.uiMode,
+                isAudioEnabled: audioState,
+                isTelegramEnabled: this.isTelegramEnabled,
+            });
+        } catch (error) {
+            console.error('Error saving app settings:', error);
+        }
     }
 
     /**
      * Handle set_telegram_state event
      */
-    private handleSetTelegramState(telegramState: boolean): void {
+    private async handleSetTelegramState(
+        telegramState: boolean
+    ): Promise<void> {
         // Update local state
         this.isTelegramEnabled = telegramState;
         setTelegramEnabled(telegramState);
@@ -1447,17 +1572,23 @@ export class ServerManager {
         this.io.emit('telegram_state_update', this.isTelegramEnabled);
 
         // Save to persistent storage
-        saveAppSettings({
-            uiMode: this.uiMode,
-            isAudioEnabled: this.isAudioEnabled,
-            isTelegramEnabled: telegramState,
-        });
+        try {
+            await saveAppSettings({
+                uiMode: this.uiMode,
+                isAudioEnabled: this.isAudioEnabled,
+                isTelegramEnabled: telegramState,
+            });
+        } catch (error) {
+            console.error('Error saving app settings:', error);
+        }
     }
 
     /**
      * Handle update_app_settings event - save and apply all settings at once
      */
-    private handleUpdateAppSettings(settings: AppSettings): void {
+    private async handleUpdateAppSettings(
+        settings: AppSettings
+    ): Promise<void> {
         console.log('Updating app settings:', settings);
 
         // Update audio state if it changed
@@ -1481,7 +1612,70 @@ export class ServerManager {
         }
 
         // Save all settings to persistent storage
-        saveAppSettings(settings);
-        console.log('App settings saved to storage');
+        try {
+            await saveAppSettings(settings);
+            console.log('App settings saved to storage');
+        } catch (error) {
+            console.error('Error saving app settings:', error);
+        }
+    }
+
+    /**
+     * Handle get cost limit request
+     */
+    private async handleGetCostLimit(socket: Socket): Promise<void> {
+        try {
+            // Load cost limit from storage
+            const costLimitStr = await loadData('dailyCostLimit.json');
+            let dailyLimit: number | null = null;
+
+            if (costLimitStr) {
+                try {
+                    const data = JSON.parse(costLimitStr);
+                    dailyLimit = data.dailyLimit;
+                } catch (err) {
+                    console.error('Error parsing cost limit data:', err);
+                }
+            }
+
+            // Send to requesting client
+            socket.emit('COST_LIMIT_DATA', { dailyLimit });
+        } catch (error) {
+            console.error('Error loading cost limit:', error);
+            socket.emit('COST_LIMIT_DATA', { dailyLimit: null });
+        }
+    }
+
+    /**
+     * Handle set cost limit request
+     */
+    private async handleSetCostLimit(
+        socket: Socket,
+        data: { dailyLimit: number | null }
+    ): Promise<void> {
+        const { dailyLimit } = data;
+
+        try {
+            // Save to storage
+            await saveData(
+                'dailyCostLimit.json',
+                JSON.stringify({ dailyLimit })
+            );
+
+            // Emit confirmation to requesting client
+            socket.emit('COST_LIMIT_SAVED');
+
+            // Broadcast to all clients
+            this.io.emit('COST_LIMIT_DATA', { dailyLimit });
+
+            console.log(
+                `Cost limit updated to: ${dailyLimit ? `$${dailyLimit}` : 'No limit'}`
+            );
+        } catch (error) {
+            console.error('Error saving cost limit:', error);
+            socket.emit('COST_LIMIT_ERROR', {
+                error: 'Failed to save cost limit',
+            });
+        }
     }
 }

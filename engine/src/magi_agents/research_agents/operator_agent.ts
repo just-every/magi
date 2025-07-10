@@ -61,10 +61,12 @@ Depth mode: ${depth}. Save all output files in ${outputDir}.`;
                 content: `=== Operator Status ===\n\nCurrent Time: ${dateFormat()}\nYour Running Time: ${readableTime(
                     new Date().getTime() - startTime.getTime()
                 )}\nYour Thought Delay: ${getThoughtDelay()} seconds\n\nActive Tools:\n${(() => {
-    const tools = runningToolTracker.getAllRunningTools();
-    if (tools.length === 0) return 'No running tools.';
-    return tools.map(t => `- ${t.toolName} (${t.id}) by ${t.agentName}`).join('\n');
-})()}\nOutput Directory: ${outputDir}\nDepth Mode: ${depth}`,
+                    const tools = runningToolTracker.getAllRunningTools();
+                    if (tools.length === 0) return 'No running tools.';
+                    return tools
+                        .map(t => `- ${t.toolName} (${t.id}) by ${t.agentName}`)
+                        .join('\n');
+                })()}\nOutput Directory: ${outputDir}\nDepth Mode: ${depth}`,
             });
             return [agent, messages];
         },

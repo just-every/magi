@@ -11,17 +11,12 @@ import { createSearchAgent } from './common_agents/search_agent.js';
 import { createShellAgent } from './common_agents/shell_agent.js';
 import { createDesignAgent } from './web_agents/design_agent.js';
 import { createOverseerAgent } from './overseer_agent.js';
-import {
-    Agent,
-    ModelClassID,
-    type ProviderStreamEvent,
-} from '@just-every/ensemble';
+import { Agent, ModelClassID } from '@just-every/ensemble';
 import type { MagiAgent } from '../types/shared-types.js';
 import { createOperatorAgent } from './operator_agent.js';
 import { createProjectOperatorAgent } from './project_agents/operator_agent.js';
 import { createWebOperatorAgent } from './web_agents/operator_agent.js';
 import { createResearchOperatorAgent } from './research_agents/operator_agent.js';
-import { sendComms } from '../utils/communication.js';
 
 // Export all constants from the constants module
 export * from './constants.js';

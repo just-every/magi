@@ -83,14 +83,16 @@ function validateProjectRepositories(): void {
  * Initialize and start the MAGI System server
  */
 async function main(): Promise<void> {
-    // Add CPU usage debug logging
-    setInterval(() => {
-        const usage = process.cpuUsage();
-        const totalUsage = usage.user + usage.system;
-        console.log(
-            `[DEBUG] CPU usage - user: ${usage.user}, system: ${usage.system}, total: ${totalUsage}`
-        );
-    }, 10000);
+    // Add CPU usage debug logging (reduced frequency)
+    if (process.env.NODE_ENV === 'development') {
+        setInterval(() => {
+            const usage = process.cpuUsage();
+            const totalUsage = usage.user + usage.system;
+            console.log(
+                `[DEBUG] CPU usage - user: ${usage.user}, system: ${usage.system}, total: ${totalUsage}`
+            );
+        }, 60000); // Reduced to every 60 seconds
+    }
 
     // Check OpenAI API key
     if (!process.env.OPENAI_API_KEY) {
@@ -122,7 +124,7 @@ async function main(): Promise<void> {
         '/api/versions',
         createVersionRoutes(serverManager.getVersionManager())
     );
-    app.use(voiceRoutes);
+    app.use('/api', voiceRoutes);
     app.use('/api', uploadRoutes);
 
     // Expose the PR events manager for route handlers to use

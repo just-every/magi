@@ -3,7 +3,8 @@
  *
  * Provides file-based storage functionality for persisting data across restarts.
  */
-import fs from 'fs';
+import fs from 'fs/promises';
+import { existsSync, mkdirSync, statSync, readdirSync } from 'fs';
 import path from 'path';
 import { AppSettings } from '../../types/index';
 
@@ -14,7 +15,7 @@ const localPath = path.join(process.cwd(), 'dist/.server/magi_storage');
 
 // Check if external path is available
 const useExternalPath =
-    fs.existsSync('/external/host/magi') || fs.existsSync('/external/host');
+    existsSync('/external/host/magi') || existsSync('/external/host');
 
 // Set the storage directory
 const STORAGE_DIR = useExternalPath ? externalPath : localPath;
@@ -22,9 +23,9 @@ const STORAGE_DIR = useExternalPath ? externalPath : localPath;
 /**
  * Initializes the storage directory
  */
-export function initStorage(): void {
-    if (!fs.existsSync(STORAGE_DIR)) {
-        fs.mkdirSync(STORAGE_DIR, { recursive: true });
+export async function initStorage(): Promise<void> {
+    if (!existsSync(STORAGE_DIR)) {
+        mkdirSync(STORAGE_DIR, { recursive: true });
     }
 }
 
@@ -34,10 +35,10 @@ export function initStorage(): void {
  * @param key - The key to store data under
  * @param value - The string value to store
  */
-export function saveData(key: string, value: string): void {
-    initStorage();
+export async function saveData(key: string, value: string): Promise<void> {
+    await initStorage();
     const filePath = path.join(STORAGE_DIR, key);
-    fs.writeFileSync(filePath, value, 'utf8');
+    await fs.writeFile(filePath, value, 'utf8');
 }
 
 /**
@@ -46,12 +47,12 @@ export function saveData(key: string, value: string): void {
  * @param key - The key of the data to load
  * @returns The stored value, or undefined if not found
  */
-export function loadData(key: string): string | undefined {
-    initStorage();
+export async function loadData(key: string): Promise<string | undefined> {
+    await initStorage();
     const filePath = path.join(STORAGE_DIR, key);
 
-    if (fs.existsSync(filePath)) {
-        return fs.readFileSync(filePath, 'utf8');
+    if (existsSync(filePath)) {
+        return await fs.readFile(filePath, 'utf8');
     }
 
     return undefined;
@@ -62,20 +63,20 @@ export function loadData(key: string): string | undefined {
  *
  * @returns An object mapping filenames to their contents
  */
-export function loadAllData(): Record<string, string> {
-    initStorage();
+export async function loadAllData(): Promise<Record<string, string>> {
+    await initStorage();
 
-    if (!fs.existsSync(STORAGE_DIR)) {
+    if (!existsSync(STORAGE_DIR)) {
         return {};
     }
 
-    const files = fs.readdirSync(STORAGE_DIR);
+    const files = readdirSync(STORAGE_DIR);
     const result: Record<string, string> = {};
 
     for (const file of files) {
         const filePath = path.join(STORAGE_DIR, file);
-        if (fs.statSync(filePath).isFile()) {
-            result[file] = fs.readFileSync(filePath, 'utf8');
+        if (statSync(filePath).isFile()) {
+            result[file] = await fs.readFile(filePath, 'utf8');
         }
     }
 
@@ -87,8 +88,8 @@ export function loadAllData(): Record<string, string> {
  *
  * @param settings - The app settings object
  */
-export function saveAppSettings(settings: AppSettings): void {
-    saveData('appSettings.json', JSON.stringify(settings, null, 2));
+export async function saveAppSettings(settings: AppSettings): Promise<void> {
+    await saveData('appSettings.json', JSON.stringify(settings, null, 2));
 }
 
 /**
@@ -96,8 +97,8 @@ export function saveAppSettings(settings: AppSettings): void {
  *
  * @returns The app settings, or default settings if not found
  */
-export function loadAppSettings(): AppSettings {
-    const data = loadData('appSettings.json');
+export async function loadAppSettings(): Promise<AppSettings> {
+    const data = await loadData('appSettings.json');
 
     // Default settings
     const defaultSettings: AppSettings = {

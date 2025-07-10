@@ -64,7 +64,7 @@ The system enables real-time speech-to-text (STT) transcription with Voice Activ
 #### Server → Client
 - `audio:stream_started` - Confirm session started
 - `audio:transcription_start` - Transcription began
-- `audio:transcription_delta` - Partial transcription update
+- `audio:transcription_turn_delta` - Partial transcription update
 - `audio:transcription_complete` - Final transcription result
 - `audio:speech_start` - VAD detected speech
 - `audio:speech_end` - VAD detected silence

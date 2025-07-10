@@ -49,7 +49,7 @@ async function checkExistingChromeInstance(port: number): Promise<boolean> {
         const { execSync } = await import('child_process');
         try {
             execSync(`nc -z localhost ${port}`);
-        } catch (e) {
+        } catch {
             console.log(`Port ${port} is not open, no Chrome instance found`);
             return false;
         }
@@ -92,7 +92,7 @@ async function connectToExistingChrome(
             const output = execSync(`lsof -i:${port} -t`).toString().trim();
             pid = parseInt(output, 10);
             console.log(`Found Chrome process with PID: ${pid}`);
-        } catch (e) {
+        } catch {
             console.log(`Could not determine PID of Chrome on port ${port}`);
         }
 
@@ -123,7 +123,7 @@ async function connectToExistingChrome(
                                 `Chrome process ${pid} still running, using SIGKILL`
                             );
                             execSync(`kill -KILL ${pid}`);
-                        } catch (e) {
+                        } catch {
                             // Process not found, which means it's already terminated
                             console.log(
                                 `Chrome process ${pid} successfully terminated`
@@ -304,7 +304,7 @@ export async function launchChrome(
 
             const chromeVersion = execSync(chromeCommand).toString().trim();
             console.log(`Detected Chrome version: ${chromeVersion}`);
-        } catch (e) {
+        } catch {
             console.log(
                 'Could not detect Chrome version, but continuing anyway'
             );
@@ -448,7 +448,7 @@ export async function shutdownChrome(
             const { execSync } = await import('child_process');
             execSync(`ps -p ${pid} > /dev/null 2>&1`);
             return true; // Process exists
-        } catch (e) {
+        } catch {
             return false; // Process doesn't exist
         }
     };
@@ -624,7 +624,7 @@ export async function getChromeInfo(): Promise<{
                         .toString()
                         .trim();
                     pid = parseInt(output, 10);
-                } catch (e) {
+                } catch {
                     // Ignore error
                 }
 
@@ -638,7 +638,7 @@ export async function getChromeInfo(): Promise<{
                         getDefaultChromeUserDataDir(),
                 };
             }
-        } catch (e) {
+        } catch {
             // Ignore errors and return not running
         }
     }

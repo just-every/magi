@@ -136,7 +136,7 @@ export function getHelperDescriptions(): string[] {
  */
 declare function quick_llm_call(
     messages: string | Array<{ type: 'message'; role: 'user' | 'system' | 'developer'; content: string }>,
-    modelClass: 'reasoning_mini' | 'reasoning' | 'code' | 'writing' | 'summary' | 'vision' | 'search' | 'image_generation',
+    modelClass: 'reasoning_mini' | 'reasoning' | 'code' | 'writing' | 'summary' | 'vision' | 'image_generation',
 ): Promise<string>;`);
 
     lines.push(`/**

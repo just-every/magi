@@ -465,7 +465,6 @@ YOUR TASK:
 Return **valid JSON** that matches the \`design_specification\` schema.
 `,
             modelSettings: {
-                force_json: true,
                 json_schema: {
                     name: 'design_specification',
                     type: 'json_schema',

@@ -157,12 +157,13 @@ export const getToolResultContent = (
 
     try {
         // Prettify JSON output
-        let jsonFormat = JSON.parse(resultContent);
-        if(jsonFormat) {
+        const jsonFormat = JSON.parse(resultContent);
+        if (jsonFormat) {
             resultContent = JSON.stringify(jsonFormat, null, 4);
         }
+    } catch {
+        // Ignore invalid JSON
     }
-    catch(e) {}
 
     return { content: resultContent, imagePath };
 };

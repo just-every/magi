@@ -1,33 +1,47 @@
 /**
  * UserMessage Component
- * Renders messages from the user
+ * Renders messages from the user using the unified BaseMessage wrapper
  */
 import * as React from 'react';
-import { ClientMessage } from '../../context/SocketContext';
+import { ClientMessage, useSocket } from '../../context/SocketContext';
 import MessageContent from '../ui/MessageContent';
-/**
- * ProcessGrid Component
- * Renders the main grid view of all processes with zooming and panning capabilities
- */
+import BaseMessage from './BaseMessage';
 
 interface UserMessageProps {
     message: ClientMessage;
+    defaultCollapsed?: boolean;
 }
 
-const UserMessage: React.FC<UserMessageProps> = ({ message }) => {
-    // For structured content, use MessageContent component
+const UserMessage: React.FC<UserMessageProps> = ({
+    rgb,
+    message,
+    defaultCollapsed = false,
+}) => {
+    const { yourName } = useSocket();
+    const getTitle = (): string => {
+        if (message.title) return message.title;
+
+        // Create a preview from content if no title
+        if (typeof message.content === 'string') {
+            const preview = message.content.replace(/\n/g, ' ').trim();
+            return preview.length > 80
+                ? preview.substring(0, 77) + '...'
+                : preview;
+        }
+        return 'User message';
+    };
+
     return (
-        <div className="message-group user-message" key={message.id}>
-            <div className="message-header">
-                {message.sender && <span className="message-model">{message.sender}</span>}
-                {message.title && <div className="message-title">
-                    {message.title}
-                </div>}
-            </div>
-            <div className="message-bubble user-bubble">
-                <MessageContent content={message.content} />
-            </div>
-        </div>
+        <BaseMessage
+            rgb={rgb}
+            message={message}
+            defaultCollapsed={defaultCollapsed}
+            title={getTitle()}
+            subtitle={message.sender || yourName || 'You'}
+            className="user-message"
+        >
+            <MessageContent content={message.content} />
+        </BaseMessage>
     );
 };
 

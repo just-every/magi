@@ -5,6 +5,7 @@ FROM node:23-slim AS latest-versions
 
 RUN set -e; \
     npm view @anthropic-ai/claude-code  dist-tags.latest  > /tmp/CLAUDE_VER && \
+    npm view @google/gemini-cli         dist-tags.latest  > /tmp/GEMINI_VER && \
     npm view @openai/codex              dist-tags.latest  > /tmp/CODEX_VER
 
 ###############################################################################
@@ -62,7 +63,7 @@ RUN groupadd --gid ${TARGET_GID} ${GROUP_NAME} || true && \
 ########################################################################
 # ---- App directory setup --------------------------------------------
 ########################################################################
-RUN mkdir -p /app /magi_output /claude_shared /custom_tools && \
+RUN mkdir -p /app /magi_output /magi_auth /custom_tools && \
     chown -R ${USER_NAME}:${GROUP_NAME} /app
 
 WORKDIR /app
@@ -87,14 +88,31 @@ COPY --from=builder --chown=${USER_NAME}:${GROUP_NAME} /build/node_modules ./nod
 ########################################################################
 # ---- 1️⃣  Install exact AI CLI versions (cached until new tags) -----
 ########################################################################
-COPY --from=latest-versions /tmp/CLAUDE_VER /tmp/
-COPY --from=latest-versions /tmp/CODEX_VER  /tmp/
+COPY --from=latest-versions /tmp/CLAUDE_VER /tmp/GEMINI_VER /tmp/
 
+# Install Claude CLI
 RUN --mount=type=cache,target=/root/.npm \
     set -e; \
     CLAUDE=$(cat /tmp/CLAUDE_VER); \
-    CODEX=$(cat /tmp/CODEX_VER); \
-    npm install -g "@anthropic-ai/claude-code@$CLAUDE" "@openai/codex@$CODEX"
+    GEMINI=$(cat /tmp/GEMINI_VER); \
+    npm install -g "@anthropic-ai/claude-code@$CLAUDE" "@google/gemini-cli@$GEMINI"
+
+# Build and install Codex from source with PR #996 fix
+# Git is already installed earlier in the Dockerfile, so we can proceed directly
+RUN git config --global http.sslVerify false && \
+    git clone https://github.com/openai/codex.git /tmp/codex && \
+    cd /tmp/codex && \
+    git fetch origin pull/996/head:pr-996 && \
+    git checkout pr-996 && \
+    (npm install -g pnpm || true) && \
+    pnpm install && \
+    pnpm --dir ./codex-cli run build && \
+    cd ./codex-cli && \
+    npm pack && \
+    npm install -g openai-codex-*.tgz && \
+    cd / && \
+    rm -rf /tmp/codex && \
+    git config --global http.sslVerify true
 
 ########################################################################
 # ---- 2️⃣  Copy source & build (only these layers redo on edits) -----

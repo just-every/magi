@@ -20,7 +20,6 @@ import {
     ConsoleEvent,
     DesignEvent,
     AgentStatusEvent,
-    AudioEvent,
 } from '../../../types/shared-types';
 // Comment out direct import - we'll use simpler approach to avoid TypeScript errors
 // import { ContainerConnection, MagiMessage } from '../../../server/managers/communication_manager';
@@ -100,6 +99,9 @@ export interface ToolResultMessage extends ClientMessage {
     result: unknown;
 }
 
+// Re-export ProcessStatus type for components to use
+export { ProcessStatus };
+
 // Define the context interface
 interface SocketContextInterface {
     socket: Socket | null;
@@ -120,6 +122,7 @@ interface SocketContextInterface {
     toggleAudioState: () => void;
     isTelegramEnabled: boolean;
     toggleTelegramState: () => void;
+    yourName: string;
 }
 
 export interface AgentData {
@@ -135,6 +138,8 @@ export interface AgentData {
     consoleEvents?: ConsoleEvent[]; // Store console data for this agent
     designEvents?: DesignEvent[]; // Store design images for this agent
     statusEvent?: AgentStatusEvent; // Store the last status event for this agent
+    duration?: number; // Duration in milliseconds from agent_done event
+    cost?: number; // Cost from agent_done event
 }
 
 // Define the process data structure
@@ -179,6 +184,7 @@ const SocketContext = createContext<SocketContextInterface>({
     toggleAudioState: () => {},
     isTelegramEnabled: true,
     toggleTelegramState: () => {},
+    yourName: '',
 });
 
 // Define props for the provider
@@ -200,6 +206,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     const [uiMode, setUiMode] = useState<'canvas' | 'column'>('column');
     const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(true);
     const [isTelegramEnabled, setIsTelegramEnabled] = useState<boolean>(true);
+    const [yourName, setYourName] = useState<string>('');
 
     // Initialize socket connection
     useEffect(() => {
@@ -213,19 +220,27 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         // It could be integrated here to load processes on initial connection.
 
         // Set up event listeners
-        socketInstance.on('server:info', (data: { version: string }) => {
-            // If we have a previous version and it's different from current version,
-            // and this is a server restart, reload the page to get the latest code
-            if (serverVersion && serverVersion !== data.version) {
-                console.log(
-                    'Server was restarted. Reloading page to get latest code...'
-                );
-                window.location.reload();
-                return;
-            }
+        socketInstance.on(
+            'server:info',
+            (data: { version: string; yourName?: string }) => {
+                console.log('***Received server:info', data);
 
-            setServerVersion(data.version);
-        });
+                // If we have a previous version and it's different from current version,
+                // and this is a server restart, reload the page to get the latest code
+                if (serverVersion && serverVersion !== data.version) {
+                    console.log(
+                        'Server was restarted. Reloading page to get latest code...'
+                    );
+                    window.location.reload();
+                    return;
+                }
+
+                setServerVersion(data.version);
+                if (data.yourName) {
+                    setYourName(data.yourName);
+                }
+            }
+        );
 
         // Handle cost information updates
         socketInstance.on('cost:info', (costData: GlobalCostData) => {
@@ -238,8 +253,6 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
             console.log('***Received system:status', systemStatus);
             setSystemStatus(systemStatus);
         });
-
-        setSystemStatus;
 
         // Handle pause state updates from the server
         socketInstance.on('pause_state_update', (pauseState: boolean) => {
@@ -270,7 +283,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
         // Handle complete app settings updates from the server
         socketInstance.on('app_settings_update', (settings: AppSettings) => {
-            console.log(`Received app_settings_update:`, settings);
+            console.log('Received app_settings_update:', settings);
 
             // Apply all settings
             if (settings.uiMode) {
@@ -296,10 +309,13 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                 let messageContent: any = event.command;
                 try {
                     const parsed = JSON.parse(event.command);
-                    if (parsed.contentArray && Array.isArray(parsed.contentArray)) {
+                    if (
+                        parsed.contentArray &&
+                        Array.isArray(parsed.contentArray)
+                    ) {
                         messageContent = parsed.contentArray;
                     }
-                } catch (e) {
+                } catch {
                     // Not JSON, use as-is
                 }
 
@@ -316,7 +332,13 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     content: messageContent,
                     timestamp: new Date().toISOString(),
                     sender: event.manager,
-                    ...(event.isCore === false && { title: extractTitle(typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent)) })
+                    ...(event.isCore === false && {
+                        title: extractTitle(
+                            typeof messageContent === 'string'
+                                ? messageContent
+                                : JSON.stringify(messageContent)
+                        ),
+                    }),
                 };
 
                 newProcesses.set(event.id, {
@@ -390,7 +412,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     ].includes(event.message.event.type))
             ) {
                 console.log(
-                    `process:message`,
+                    'process:message',
                     event.id,
                     event.message.event.type,
                     event.message
@@ -409,27 +431,23 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     new Date().toISOString();
                 const eventType = streamingEvent.type;
 
-                // Handle audio_stream events even for non-existent processes (e.g., voice previews)
-                if (eventType === 'audio_stream' && isAudioEnabled) {
-                    const audioEvent = streamingEvent as AudioEvent;
+                // Handle audio events (format_info and audio_stream) even for non-existent processes (e.g., voice previews)
+                if (
+                    (eventType === 'audio_stream' ||
+                        eventType === 'format_info') &&
+                    isAudioEnabled
+                ) {
+                    const audioEvent = streamingEvent as any;
+
+                    // Pass the event directly to handleAudioMessage with the correct format
                     handleAudioMessage({
                         event: {
-                            pcmParameters: audioEvent.pcmParameters
-                                ? {
-                                      sampleRate:
-                                          audioEvent.pcmParameters.sampleRate ||
-                                          44100,
-                                      channels:
-                                          audioEvent.pcmParameters.channels ||
-                                          1,
-                                      bitDepth:
-                                          audioEvent.pcmParameters.bitDepth ||
-                                          16,
-                                  }
-                                : undefined,
-                            data: audioEvent.data || '',
-                            chunkIndex: audioEvent.chunkIndex || 0,
-                            isFinalChunk: audioEvent.isFinalChunk || false,
+                            type: eventType,
+                            pcmParameters: audioEvent.pcmParameters,
+                            format: audioEvent.format,
+                            data: audioEvent.data,
+                            chunkIndex: audioEvent.chunkIndex,
+                            isFinalChunk: audioEvent.isFinalChunk,
                         },
                     });
                     return newProcesses; // No state update needed
@@ -756,9 +774,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                 }
 
                 // Handle different event types
-                if (
-                    eventType === 'connected'
-                ) {
+                if (eventType === 'connected') {
                     // User message - already handled in process:create but good as a fallback
                     if ('command' in streamingEvent) {
                         const content = streamingEvent.command || '';
@@ -785,8 +801,11 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                             toolParams = JSON.parse(
                                 toolCall.function.arguments
                             );
-                        } catch (e) {
-                            console.error('Error parsing tool arguments:', e);
+                        } catch (_error) {
+                            console.error(
+                                'Error parsing tool arguments:',
+                                _error
+                            );
                         }
 
                         // Generate command representation for certain tool types
@@ -1061,10 +1080,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         title: 'Task Done',
                         content: streamingEvent.output,
                     });
-                } else if (
-                    eventType === 'agent_start' ||
-                    eventType === 'agent_updated'
-                ) {
+                } else if (eventType === 'agent_start') {
                     // Agent-related events for managing sub-agents and agent properties
 
                     // Check for parent-child relationship
@@ -1124,6 +1140,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                             model: streamingEvent.agent.model || undefined,
                             modelClass:
                                 streamingEvent.agent.modelClass || undefined,
+                            isTyping: eventType === 'agent_start',
                         });
 
                         // If this is the first time we've seen this agent, flush any pending data
@@ -1136,12 +1153,38 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                 // Turn off typing indicator for any response
                 if (
                     eventType === 'message_complete' ||
-                    eventType === 'tool_done'
+                    eventType === 'tool_done' ||
+                    eventType === 'agent_done'
                 ) {
-                    updateAgent(
-                        { isTyping: false },
-                        streamingEvent.agent?.agent_id
-                    );
+                    const updates: Partial<AgentData> = { isTyping: false };
+
+                    // For agent_done, also store duration and cost
+                    if (eventType === 'agent_done') {
+                        // Use request_duration if available, otherwise fall back to duration_with_tools
+                        if (
+                            'request_duration' in streamingEvent &&
+                            typeof streamingEvent.request_duration === 'number'
+                        ) {
+                            updates.duration = streamingEvent.request_duration;
+                        } else if (
+                            'duration_with_tools' in streamingEvent &&
+                            typeof streamingEvent.duration_with_tools ===
+                                'number'
+                        ) {
+                            updates.duration =
+                                streamingEvent.duration_with_tools;
+                        }
+
+                        // Use request_cost for the cost
+                        if (
+                            'request_cost' in streamingEvent &&
+                            typeof streamingEvent.request_cost === 'number'
+                        ) {
+                            updates.cost = streamingEvent.request_cost;
+                        }
+                    }
+
+                    updateAgent(updates, streamingEvent.agent?.agent_id);
                 } else if (eventType === 'agent_status') {
                     updateAgent(
                         { statusEvent: streamingEvent },
@@ -1236,7 +1279,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
             // Disconnect the socket
             socketInstance.disconnect();
         };
-    }, [serverVersion, coreProcessId]);
+    }, [serverVersion]);
 
     // Define command functions
     const runCommand = (command: string) => {
@@ -1259,10 +1302,13 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                     let messageContent: any = command;
                     try {
                         const parsed = JSON.parse(command);
-                        if (parsed.contentArray && Array.isArray(parsed.contentArray)) {
+                        if (
+                            parsed.contentArray &&
+                            Array.isArray(parsed.contentArray)
+                        ) {
                             messageContent = parsed.contentArray;
                         }
-                    } catch (e) {
+                    } catch {
                         // Not JSON, use as-is
                     }
 
@@ -1273,7 +1319,13 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                         content: messageContent,
                         timestamp: new Date().toISOString(),
                         sender: process.manager,
-                        ...(process.isCore === false && { title: extractTitle(typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent)) })
+                        ...(process.isCore === false && {
+                            title: extractTitle(
+                                typeof messageContent === 'string'
+                                    ? messageContent
+                                    : JSON.stringify(messageContent)
+                            ),
+                        }),
                     };
                     process.agent!.messages.push(userMessage);
 
@@ -1382,6 +1434,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         toggleAudioState,
         isTelegramEnabled,
         toggleTelegramState,
+        yourName,
     };
 
     return (

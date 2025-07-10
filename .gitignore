@@ -1,9 +1,12 @@
 # Local state and volume mapping
 .custom_tools
 .magi_output
+.magi_home
 .server
 .chrome
 .claude
+.gemini
+.cache
 
 # Python bytecode
 __pycache__/

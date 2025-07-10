@@ -1,20 +1,19 @@
 /**
  * AssistantMessage Component
- * Renders messages from the AI assistant
+ * Renders messages from the AI assistant using the unified BaseMessage wrapper
  */
 import * as React from 'react';
-import { ClientMessage, type ToolResultMessage } from '../../context/SocketContext';
+import { ClientMessage, AgentData } from '../../context/SocketContext';
 import { parseMarkdown } from '../utils/MarkdownUtils';
 import MessageContent from '../ui/MessageContent';
+import BaseMessage from './BaseMessage';
 
 interface AssistantMessageProps {
+    rgb: string;
     message: ClientMessage;
     isLast: boolean;
-    colors?: {
-        rgb: string;
-        bgColor: string;
-        textColor: string;
-    };
+    defaultCollapsed?: boolean;
+    agent?: AgentData;
 }
 
 /**
@@ -25,12 +24,12 @@ interface AssistantMessageProps {
 export const getThinkingContent = (message: ClientMessage): string => {
     // If this is a delta message with chunks, ensure we display all concatenated content
     return typeof message.thinking_content === 'string'
-            ? message.thinking_content
-            : typeof message.thinking_content === 'object'
-              ? JSON.stringify(message.thinking_content, null, 2)
-              : message.thinking_content
-                ? String(message.thinking_content)
-                : '';
+        ? message.thinking_content
+        : typeof message.thinking_content === 'object'
+          ? JSON.stringify(message.thinking_content, null, 2)
+          : message.thinking_content
+            ? String(message.thinking_content)
+            : '';
 };
 
 /**
@@ -41,19 +40,20 @@ export const getThinkingContent = (message: ClientMessage): string => {
 export const getResponseContent = (message: ClientMessage): string => {
     // If this is a delta message with chunks, ensure we display all concatenated content
     return typeof message.content === 'string'
-            ? message.content
-            : typeof message.content === 'object'
-              ? JSON.stringify(message.content, null, 2)
-              : message.content
-                ? String(message.content)
-                : '';
+        ? message.content
+        : typeof message.content === 'object'
+          ? JSON.stringify(message.content, null, 2)
+          : message.content
+            ? String(message.content)
+            : '';
 };
 
-
 const AssistantMessage: React.FC<AssistantMessageProps> = ({
+    rgb,
     message,
     isLast,
-    colors,
+    defaultCollapsed = false,
+    agent,
 }) => {
     // Add a special class for delta messages (streaming)
     const bubbleClass =
@@ -65,48 +65,118 @@ const AssistantMessage: React.FC<AssistantMessageProps> = ({
     let thinkingContent = getThinkingContent(message);
     const responseContent = getResponseContent(message);
 
-    let title: string | undefined = message.isDelta && isLast ? "Thinking..." : undefined;
+    let title: string | undefined =
+        message.isDelta && isLast ? 'Thinking...' : undefined;
 
     // Check if thinkingContent starts with a bold line and extract title
     if (thinkingContent && typeof thinkingContent === 'string') {
-        const boldLineMatch = thinkingContent.match(/^\s*\*\*(.+?)\*\*\s*(\r?\n|$)/);
+        const boldLineMatch = thinkingContent.match(
+            /^\s*\*\*(.+?)\*\*\s*(\r?\n|$)/
+        );
         if (boldLineMatch) {
             title = boldLineMatch[1];
             // Remove the bold line from the beginning of thinkingContent
-            thinkingContent = thinkingContent.replace(/^\s*\*\*(.+?)\*\*\s*(\r?\n)?/, '');
+            thinkingContent = thinkingContent.replace(
+                /^\s*\*\*(.+?)\*\*\s*(\r?\n)?/,
+                ''
+            );
         }
     }
 
+    const getPreviewText = (): string => {
+        if (responseContent) {
+            const content =
+                typeof responseContent === 'string'
+                    ? responseContent.replace(/\n/g, ' ').trim()
+                    : 'Assistant response';
+            return content.length > 80
+                ? content.substring(0, 77) + '...'
+                : content;
+        }
+        if (thinkingContent) {
+            const content =
+                typeof thinkingContent === 'string'
+                    ? thinkingContent.replace(/\n/g, ' ').trim()
+                    : 'Thinking...';
+            return content.length > 80
+                ? content.substring(0, 77) + '...'
+                : content;
+        }
+        return 'Assistant message';
+    };
+
+    const getTitle = (): string => {
+        if (title) return title;
+        return getPreviewText();
+    };
+
+    const getSubtitle = (): string | undefined => {
+        const parts: string[] = [];
+
+        // Use live agent data if available, otherwise fall back to message.agent
+        const agentData = agent || message.agent;
+
+        // Add model name
+        if (agentData?.model) {
+            parts.push(agentData.model);
+        }
+
+        // Add duration if available
+        if (agentData?.duration) {
+            const seconds = (agentData.duration / 1000).toFixed(0);
+            parts.push(`${seconds}s`);
+        }
+
+        // Add cost if available
+        if (agentData?.cost) {
+            parts.push(`$${agentData.cost.toFixed(4)}`);
+        }
+
+        return parts.length > 0 ? parts.join(' • ') : undefined;
+    };
+
     return (
-        <div
-            className="message-group assistant-message"
-            key={message.message_id || message.id}
+        <BaseMessage
+            rgb={rgb}
+            message={message}
+            defaultCollapsed={defaultCollapsed}
+            title={getTitle()}
+            subtitle={getSubtitle()}
+            className="assistant-message"
         >
-            <div className="message-header">
-                {message.agent?.model && (
-                    <div className="message-model">{message.agent.model}</div>
-                )}
-                {title && (
-                    <div className="message-title">
-                        {title}
+            <>
+                {thinkingContent && (
+                    <div className={bubbleClass}>
+                        {typeof thinkingContent === 'string' ? (
+                            <div
+                                dangerouslySetInnerHTML={parseMarkdown(
+                                    thinkingContent
+                                )}
+                            />
+                        ) : (
+                            <MessageContent content={thinkingContent} />
+                        )}
                     </div>
                 )}
-            </div>
-            { thinkingContent && <div className={bubbleClass} style={{ color: `rgba(${colors.rgb} / 1)` }}>
-                {typeof thinkingContent === 'string' ? (
-                    <div dangerouslySetInnerHTML={parseMarkdown(thinkingContent)} />
-                ) : (
-                    <MessageContent content={thinkingContent} />
+                {responseContent && (
+                    <div
+                        className={
+                            bubbleClass + (thinkingContent ? ' mt-2' : '')
+                        }
+                    >
+                        {typeof responseContent === 'string' ? (
+                            <div
+                                dangerouslySetInnerHTML={parseMarkdown(
+                                    responseContent
+                                )}
+                            />
+                        ) : (
+                            <MessageContent content={responseContent} />
+                        )}
+                    </div>
                 )}
-            </div> }
-            { responseContent && <div className={bubbleClass} style={{ color: `rgba(${colors.rgb} / 1)` }}>
-                {typeof responseContent === 'string' ? (
-                    <div dangerouslySetInnerHTML={parseMarkdown(responseContent)} />
-                ) : (
-                    <MessageContent content={responseContent} />
-                )}
-            </div> }
-        </div>
+            </>
+        </BaseMessage>
     );
 };
 

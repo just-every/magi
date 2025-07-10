@@ -41,7 +41,6 @@ export async function generate_design_vibe_doc(
         instructions:
             'Return a JSON object {"competitors": ["..."]} with 3 short names or queries.',
         modelSettings: {
-            force_json: true,
             json_schema: {
                 name: 'competitors',
                 type: 'json_schema',

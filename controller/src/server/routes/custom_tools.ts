@@ -78,4 +78,35 @@ router.get('/:name', async (req, res) => {
     }
 });
 
+router.delete('/:name', async (req, res) => {
+    const name = sanitizeToolName(req.params.name);
+    const db = await getDB();
+    try {
+        // Delete from database
+        await db.query('DELETE FROM custom_tools WHERE name = $1', [name]);
+
+        // Delete tool files
+        try {
+            const safeName = sanitizeToolName(name);
+            const tsPath = path.join(TOOLS_DIR, `${safeName}.ts`);
+            const jsPath = path.join(TOOLS_DIR, `${safeName}.js`);
+
+            await fs.unlink(tsPath).catch(() => {});
+            await fs.unlink(jsPath).catch(() => {});
+        } catch (err) {
+            console.error('Failed to delete tool files:', err);
+        }
+
+        res.json({
+            success: true,
+            message: `Tool ${name} deleted successfully`,
+        });
+    } catch (error) {
+        console.error(`Error deleting custom tool ${name}:`, error);
+        res.status(500).json({ error: 'Failed to delete custom tool' });
+    } finally {
+        db.release();
+    }
+});
+
 export default router;

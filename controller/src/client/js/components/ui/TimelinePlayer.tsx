@@ -175,6 +175,7 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
             scrollback: 5000,
             convertEol: true,
             fontSize: 13,
+            fontFamily: "'Noto Sans Mono', 'Courier New', monospace",
             // Removed 'rows' option, FitAddon will handle it
         });
         const addon = new FitAddon();
@@ -695,7 +696,7 @@ const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
                                     currentPoint.screenshot
                                 );
                                 (e.target as HTMLImageElement).src =
-                                    `https://placehold.co/600x400/CCCCCC/4F4F4F?text=Error+Loading+Image`;
+                                    'https://placehold.co/600x400/CCCCCC/4F4F4F?text=Error+Loading+Image';
                             }}
                         />
                         {mode === 'design' &&

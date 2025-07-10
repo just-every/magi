@@ -340,9 +340,9 @@ const ProcessGrid: React.FC<ProcessGridProps> = ({ onProcessSelect }) => {
 
             const colors = isCoreProcess
                 ? {
-                      rgb: `0 0 0`,
-                      bgColor: `rgba(255 255 255)`,
-                      textColor: `rgba(0 0 0 / 0.9)`,
+                      rgb: '0 0 0',
+                      bgColor: 'rgba(255 255 255)',
+                      textColor: 'rgba(0 0 0 / 0.9)',
                   }
                 : process.colors;
 

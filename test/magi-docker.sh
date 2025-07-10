@@ -36,7 +36,7 @@ docker run --rm --name $CONTAINER_NAME \
     -e DATABASE_HOST=host.docker.internal \
     -e DATABASE_PORT=5432 \
     --env-file .env \
-    -v claude_credentials:/claude_shared:rw \
+    -v magi_home:/magi_home:rw \
     -v magi_output:/magi_output:rw \
     -v custom_tools:/custom_tools:rw \
     --add-host=host.docker.internal:host-gateway \

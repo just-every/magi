@@ -61,7 +61,7 @@ docker run --rm --name $CONTAINER_NAME \
     -e CONTROLLER_PORT=3010 \
     -e TZ=$(date +%Z) \
     --env-file .env \
-    -v claude_credentials:/claude_shared:rw \
+    -v magi_home:/magi_home:rw \
     -v magi_output:/magi_output:rw \
     -v custom_tools:/custom_tools:rw \
     -v "$ABS_PATH:/tmp/tool_script.ts:ro" \

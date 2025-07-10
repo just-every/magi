@@ -4,7 +4,6 @@
  * Provides automatic rollback capabilities for problematic patches
  */
 
-import { execSync } from 'child_process';
 import { getDB } from './db.js';
 import {
     execGitSafe,

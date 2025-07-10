@@ -49,15 +49,19 @@ export async function quick_llm_call(
     // Let the controller know this isn't the root agent
     quickAgent.parent_id = parent_id ?? 'quick';
 
-    // Set up historyThread for the agent
-    quickAgent.historyThread = [];
-
     // Prepare messages array
     const messagesArray: ResponseInput = messages
         ? typeof messages === 'string'
             ? [{ type: 'message', role: 'user', content: messages }]
             : messages
         : [];
+
+    // IMPORTANT: Don't set historyThread if we have messages to pass
+    // Setting historyThread to [] causes ensembleRequest to ignore the messages parameter
+    // Only set historyThread if we don't have any messages to pass
+    if (!messages || (Array.isArray(messages) && messages.length === 0)) {
+        quickAgent.historyThread = [];
+    }
 
     // Call the Runner with our agent and message array, passing the communicationManager
     // Runner.runStreamedWithTools already returns a string promise

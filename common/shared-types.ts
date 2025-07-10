@@ -167,9 +167,9 @@ export interface LLMResponse extends LLMMessage {
 }
 
 /**
- * Streaming event types - extends ensemble's StreamEventType with 'design'
+ * Streaming event types - extends ensemble's StreamEventType with additional types
  */
-export type StreamEventType = ProviderStreamEventType | 'design';
+export type StreamEventType = ProviderStreamEventType | 'design' | 'format_info' | 'complete' | 'project_create' | 'project_update' | 'project_delete';
 
 /**
  * Base streaming event interface
@@ -300,8 +300,8 @@ export interface Project {
 /**
  * Project updated streaming event
  */
-export interface ProjectEvent extends StreamEvent {
-    type: 'project_create' | 'project_update';
+export interface ProjectEvent extends Omit<StreamEvent, 'type'> {
+    type: 'project_create' | 'project_update' | 'project_delete';
     project_id: string;
 }
 
@@ -335,7 +335,7 @@ export interface ProcessEvent extends StreamEvent {
  * Agent updated streaming event
  */
 export interface AgentEvent extends StreamEvent {
-    type: 'agent_start' | 'agent_updated' | 'agent_done';
+    type: 'agent_start' | 'agent_done';
     agent: AgentExportDefinition;
     input?: string;
 }
@@ -416,6 +416,28 @@ export interface AudioEvent extends StreamEvent {
 }
 
 /**
+ * Audio format information event
+ */
+export interface FormatInfoEvent extends StreamEvent {
+    type: 'format_info';
+    timestamp: string;
+    pcmParameters: {
+        sampleRate: number;
+        channels: number;
+        bitDepth: number;
+    };
+    format: string;
+}
+
+/**
+ * Stream complete event
+ */
+export interface CompleteEvent extends StreamEvent {
+    type: 'complete';
+    timestamp: string;
+}
+
+/**
  * Screenshot streaming event
  */
 export interface ScreenshotEvent extends StreamEvent {
@@ -486,7 +508,6 @@ export interface CostUpdateData {
 export interface CostUpdateEvent extends StreamEvent {
     type: 'cost_update';
     usage: ModelUsage;
-    thought_delay?: number;
 }
 
 /**
@@ -531,6 +552,8 @@ export type StreamingEvent =
     | SystemUpdateEvent
     | QuotaUpdateEvent
     | AudioEvent
+    | FormatInfoEvent
+    | CompleteEvent
     | ScreenshotEvent
     | DesignEvent
     | DesignGridEvent
@@ -630,6 +653,7 @@ export interface ProcessCommandEvent {
  */
 export interface ServerInfoEvent {
     version: string; // Server version
+    yourName?: string; // Person's name from YOUR_NAME env var
 }
 
 /**
@@ -823,7 +847,6 @@ export type MessagePayloads = {
     process_waiting: Omit<ProcessEvent, 'type'>;
     process_terminated: Omit<ProcessEvent, 'type'>;
     agent_start: Omit<AgentEvent, 'type'>;
-    agent_updated: Omit<AgentEvent, 'type'>;
     agent_done: Omit<AgentEvent, 'type'>;
     message_start: Omit<MessageEvent, 'type'>;
     message_delta: Omit<MessageEvent, 'type'>;
@@ -874,6 +897,7 @@ export interface ServerMessage {
         | 'connect'
         | 'process_event'
         | 'project_update'
+        | 'project_delete_complete'
         | 'system_message'
         | 'system_command';
 }
@@ -889,7 +913,7 @@ export interface CommandMessage extends ServerMessage {
 }
 
 export interface ProjectMessage extends ServerMessage {
-    type: 'project_update';
+    type: 'project_update' | 'project_delete_complete';
     project_id: string;
     message: string;
     failed?: boolean;

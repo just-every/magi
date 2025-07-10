@@ -1,16 +1,23 @@
 /**
  * SystemMessage Component
- * Renders system messages
+ * Renders system messages using the unified BaseMessage wrapper
  */
 import * as React from 'react';
 import { ClientMessage } from '../../context/SocketContext';
 import { parseMarkdown } from '../utils/MarkdownUtils';
+import BaseMessage from './BaseMessage';
 
 interface SystemMessageProps {
+    rgb: string;
     message: ClientMessage;
+    defaultCollapsed?: boolean;
 }
 
-const SystemMessage: React.FC<SystemMessageProps> = ({ message }) => {
+const SystemMessage: React.FC<SystemMessageProps> = ({
+    rgb,
+    message,
+    defaultCollapsed = false,
+}) => {
     const content =
         typeof message.content === 'string'
             ? message.content
@@ -18,48 +25,35 @@ const SystemMessage: React.FC<SystemMessageProps> = ({ message }) => {
               ? JSON.stringify(message.content, null, 2)
               : String(message.content);
 
-    if (message.type === 'error') {
-        return (
-            <div
-                className="message-group system-message"
-                key={message.message_id || message.id}
-            >
-                <pre
-                    className={
-                        'message-bubble alert mb-0 ' +
-                        (message.type === 'error'
-                            ? ' alert-danger'
-                            : 'alert-secondary')
-                    }
-                    style={
-                        {whiteSpace: 'pre-wrap'}
-                    }
-                >
-                    { content }
-                </pre>
-            </div>
-        );
-    }
+    const getTitle = (): string => {
+        if (message.title) return message.title;
+
+        const preview =
+            content.length > 100 ? content.substring(0, 100) + '...' : content;
+        return message.type === 'error' ? `Error: ${preview}` : preview;
+    };
+
+    const isError = message.type === 'error';
 
     return (
-        <div
-            className="message-group assistant-message"
-            key={message.message_id || message.id}
+        <BaseMessage
+            rgb={rgb}
+            message={message}
+            defaultCollapsed={defaultCollapsed}
+            title={getTitle()}
+            subtitle={
+                message.agent?.model || (isError ? 'System Error' : 'System')
+            }
+            className={isError ? 'error-message' : 'system-message'}
         >
-            <div className="message-header">
-                {message.agent?.model && (
-                    <div className="message-model">{message.agent.model}</div>
-                )}
-                {message.title && (
-                    <div className="message-title">
-                        {message.title}
-                    </div>
-                )}
-            </div>
-            <div className="message-bubble assistant-bubble">
-                <div dangerouslySetInnerHTML={parseMarkdown(content)} />
-            </div>
-        </div>
+            {isError ? (
+                <pre className="error-content">{content}</pre>
+            ) : (
+                <div className="system-content">
+                    <div dangerouslySetInnerHTML={parseMarkdown(content)} />
+                </div>
+            )}
+        </BaseMessage>
     );
 };
 

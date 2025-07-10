@@ -49,7 +49,9 @@ Active Tools:
 ${(() => {
     const tools = runningToolTracker.getAllRunningTools();
     if (tools.length === 0) return 'No running tools.';
-    return tools.map(t => `- ${t.toolName} (${t.id}) by ${t.agentName}`).join('\n');
+    return tools
+        .map(t => `- ${t.toolName} (${t.id}) by ${t.agentName}`)
+        .join('\n');
 })()}`;
 
     // Add the system status to the messages

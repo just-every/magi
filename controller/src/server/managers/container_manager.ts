@@ -3,15 +3,11 @@
  *
  * Higher-level container management functionality for MAGI System.
  */
-import { spawn, execSync } from 'child_process';
+import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 
-import {
-    validateContainerName,
-    execPromise,
-    execPromiseFallback,
-} from '../utils/docker_commands';
+import { validateContainerName, execPromise } from '../utils/docker_commands';
 import { ProcessToolType } from '../../types/index';
 import {
     getProject,
@@ -149,7 +145,7 @@ async function prepareGitRepository(
                 await execPromise(
                     `git -C "${hostPath}" rev-parse --is-inside-work-tree`
                 );
-            } catch (error) {
+            } catch {
                 await execPromise(
                     `git config --global --add safe.directory "${hostPath}"`
                 );
@@ -160,7 +156,7 @@ async function prepareGitRepository(
                     `git -C "${hostPath}" rev-parse --is-inside-work-tree`
                 );
             }
-        } catch (error) {
+        } catch {
             console.error(`Can not access git at ${hostPath}`);
             throw new Error(`Can not access git at ${hostPath}`);
         }
@@ -184,7 +180,7 @@ async function prepareGitRepository(
                 // Only fetch if there are remotes configured
                 try {
                     await execPromise(`git -C "${hostPath}" fetch --all`);
-                } catch (fetchError) {
+                } catch {
                     // This is common in Docker environments without SSH keys
                     console.log(
                         'Note: Could not fetch from remote (this is normal for local repos or when SSH keys are not configured)'
@@ -364,14 +360,14 @@ export async function createNewProject(projectId: string): Promise<void> {
 
     try {
         // Initialize git repository
-        execSync('git config --global init.defaultBranch main');
-        execSync(`git -C "${projectPath}" init`);
+        await execPromise('git config --global init.defaultBranch main');
+        await execPromise(`git -C "${projectPath}" init`);
 
         // Set repo-local identity so the initial commit does not fail with
         // “Author identity unknown”.  We keep this local to the repository
         // (no --global) to avoid touching any host-level Git configuration.
-        execSync(`git -C "${projectPath}" config user.name "magi"`);
-        execSync(
+        await execPromise(`git -C "${projectPath}" config user.name "magi"`);
+        await execPromise(
             `git -C "${projectPath}" config user.email "magi+${projectId}@withmagi.com"`
         );
 
@@ -379,8 +375,10 @@ export async function createNewProject(projectId: string): Promise<void> {
         await copyTemplateToProject(projectPath, project.project_type, project);
 
         // Stage all files and create initial commit
-        execSync(`git -C "${projectPath}" add .`);
-        execSync(`git -C "${projectPath}" commit -m "Initial template setup"`);
+        await execPromise(`git -C "${projectPath}" add .`);
+        await execPromise(
+            `git -C "${projectPath}" commit -m "Initial template setup"`
+        );
 
         // Add entry to project history
         await addProjectHistory(projectId, 'Added initial template files');
@@ -629,7 +627,7 @@ export async function runDockerContainer(
               : ''
       } \
       --env-file ${path.resolve(projectRoot, '../.env')} \
-      -v claude_credentials:/claude_shared:rw \
+      -v magi_home:/magi_home:rw \
       -v magi_output:/magi_output:rw \
       -v custom_tools:/custom_tools:rw \
       -v /etc/timezone:/etc/timezone:ro \
@@ -682,7 +680,7 @@ export async function stopDockerContainer(processId: string): Promise<boolean> {
                 );
                 return true;
             }
-        } catch (inspectError) {
+        } catch {
             // Container doesn't exist, which is fine during cleanup
             console.log(
                 `Container ${containerName} doesn't exist, skipping stop command`
@@ -705,7 +703,6 @@ export async function stopDockerContainer(processId: string): Promise<boolean> {
                 const projects = fs.readdirSync(projectsDir);
                 for (const projectId of projects) {
                     const clonePath = path.join(projectsDir, projectId);
-                    const hostPath = path.join('/external/host', projectId);
 
                     // Since we're using clones now, we can simply remove the directory
                     console.log(`Removing git clone: ${clonePath}`);
@@ -784,7 +781,7 @@ export function monitorContainerLogs(
                         // This is just to validate that it's a proper message format
                     }
                 }
-            } catch (jsonError) {
+            } catch {
                 // Not valid JSON or not our format, that's okay
                 // This is just plain log data
             }
@@ -1042,7 +1039,7 @@ export async function cleanupAllContainers(): Promise<boolean> {
             await execPromise(
                 "docker ps -a --filter 'name=task-' -q | xargs -r docker rm -f 2>/dev/null || true"
             );
-        } catch (e) {
+        } catch {
             // Ignore any errors in this last-ditch effort
         }
 
