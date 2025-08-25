@@ -4,6 +4,7 @@
 
 import { runMECH, runMECHStreaming, type Agent as MechAgent } from '../interfaces/mech.js';
 import { createToolFunction, type ResponseInput, Agent, type AgentDefinition, type ProviderStreamEvent } from '@just-every/ensemble';
+import type { TaskCompleteEvent, TaskFatalErrorEvent, MetaMemoryEvent, MetaCognitionEvent } from '@just-every/task';
 // getManagerAgentTools removed - not used in this file
 import {
     MANAGER_ASSET_TYPES,
@@ -463,7 +464,7 @@ export async function* runManagerAgentStreaming(
     userPrompt: string,
     withInspiration: boolean = true,
     brandAssets: string[] = [] // eslint-disable-line @typescript-eslint/no-unused-vars
-): AsyncGenerator<ProviderStreamEvent, string, unknown> {
+): AsyncGenerator<ProviderStreamEvent | TaskCompleteEvent | TaskFatalErrorEvent | MetaMemoryEvent | MetaCognitionEvent, string, unknown> {
     const startTime = new Date();
 
     // Initialize manager progress tracker
