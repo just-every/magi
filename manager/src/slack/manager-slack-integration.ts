@@ -3,6 +3,7 @@ import { config } from 'dotenv';
 config();
 
 import { SlackCommunicationManager, createSlackManager } from './slack-communication-manager.js';
+import { CEOProjectManager } from './ceo-project-manager.js';
 import { SlackMessage } from './types.js';
 import type { MANAGER_ASSET_TYPES } from '../constants.js';
 import type { ProviderStreamEvent } from '@just-every/ensemble';
@@ -21,6 +22,7 @@ export class SlackManagerIntegration {
   private activeTaskGenerator: AsyncGenerator<ProviderStreamEvent> | null = null;
   private taskMessages: Map<string, SlackMessage[]> = new Map();
   private options: SlackManagerOptions;
+  private ceoPM: CEOProjectManager | null = null;
 
   constructor(options: SlackManagerOptions = {}) {
     this.options = {
@@ -42,6 +44,11 @@ export class SlackManagerIntegration {
     }
 
     await this.slackManager.connect();
+    // Attach CEO Project Manager with persistence
+    this.ceoPM = new CEOProjectManager(this.slackManager, {
+      storePath: process.env.MANAGER_PM_STORE || undefined,
+    });
+    this.ceoPM.startScheduler(60_000);
     
     // Set up message handlers
     this.setupMessageHandlers();
@@ -56,6 +63,10 @@ export class SlackManagerIntegration {
     this.slackManager.onMessage('*', async (message: SlackMessage) => {
       console.log(`📨 Received Slack message from ${message.user} in ${message.channel}:`);
       console.log(`💬 Text: "${message.text}"`);
+      // Always allow CEO PM to inspect messages (handles pm:* and thread commands)
+      if (this.ceoPM) {
+        try { await this.ceoPM.handleMessage(message as any); } catch (e) { console.error('PM handler error', e); }
+      }
       
       // Check if this is a manager generation request
       const isManager = this.isManagerRequest(message.text);
@@ -221,7 +232,7 @@ export class SlackManagerIntegration {
           clearTimeout(generationTimeout);
         }
 
-        // Send the analysis results to Slack
+        // Send the analysis results to Slack (with non-stream fallback)
         if (finalResult && finalResult.trim()) {
           // Filter out meta-commentary about task completion
           const metaPhrases = [
@@ -267,11 +278,41 @@ export class SlackManagerIntegration {
             );
           }
         } else {
-          await this.slackManager.sendMessage(
-            channel,
-            `✅ ${assetType} analysis completed!\n\nThe analysis has been processed. Here's a summary of key findings and recommendations for your strategic planning.`,
-            { threadTs: thread_ts }
-          );
+          // Non-stream fallback attempt
+          try {
+            const { runSimpleManagerAgent } = await import('../agents/simple-manager-agent.js');
+            const text = await runSimpleManagerAgent(userPrompt, assetType as MANAGER_ASSET_TYPES);
+            const trimmed = (text || '').trim();
+            if (trimmed) {
+              // Chunk and send
+              const maxLength = 3000;
+              const chunks: string[] = [];
+              for (let i = 0; i < trimmed.length; i += maxLength) {
+                chunks.push(trimmed.substring(i, i + maxLength));
+              }
+              await this.slackManager.sendMessage(
+                channel,
+                `✅ **${assetType} Analysis Complete!**\n\n${chunks[0]}`,
+                { threadTs: thread_ts }
+              );
+              for (let i = 1; i < chunks.length; i++) {
+                await this.slackManager.sendMessage(channel, chunks[i], { threadTs: thread_ts });
+              }
+            } else {
+              // Still no content — send concise placeholder
+              await this.slackManager.sendMessage(
+                channel,
+                `✅ ${assetType} analysis completed, but I couldn’t format the full summary. Please try again or ask me to expand specific sections (e.g., "summarize risks", "list next steps").`,
+                { threadTs: thread_ts }
+              );
+            }
+          } catch (fallbackErr) {
+            await this.slackManager.sendMessage(
+              channel,
+              `✅ ${assetType} analysis completed!\n\nThe analysis has been processed. Here's a summary of key findings and recommendations for your strategic planning.`,
+              { threadTs: thread_ts }
+            );
+          }
         }
       } catch (managerError: any) {
         console.error('❌ Manager generation failed:', managerError);

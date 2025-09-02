@@ -2,3 +2,4 @@ export { SlackCommunicationManager, createSlackManager } from './slack-communica
 export { SlackManagerIntegration, initializeSlackIntegration } from './manager-slack-integration.js';
 export type { SlackConfig, SlackMessage, SlackConnectionOptions } from './types.js';
 export type { SlackManagerOptions } from './manager-slack-integration.js';
+export { CEOProjectManager } from './ceo-project-manager.js';

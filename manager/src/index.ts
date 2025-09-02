@@ -11,6 +11,8 @@ export { createManagerAgent, runManagerAgent, runManagerAgentStreaming } from '.
 export * from './constants.js';
 export * from './utils/grid-judge.js';
 export * from './utils/image-utils.js';
+export * from './services/project-manager.js';
+export * from './types/project.js';
 
 // Re-export types for convenience
 export type {
