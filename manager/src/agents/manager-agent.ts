@@ -243,8 +243,9 @@ As CEO, synthesize your research into actionable insights. Create a structured a
     const agentConfig = {
         name: 'ManagerAgent',
         agent_id: managerId,
-        modelClass: 'standard' as const, // Use standard modelClass to avoid thinking blocks issues
-        // modelOverride: 'claude-3-5-sonnet-20241022', // Let ensemble choose appropriate model
+        modelClass: 'standard' as const, // Keep class for routing features
+        // Force OpenAI GPT-5 for runTask executions
+        modelOverride: 'gpt-5',
         // Remove modelSettings - let ensemble handle thinking configuration
         tools: [
             createToolFunction(

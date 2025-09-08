@@ -74,9 +74,10 @@ async function main() {
   console.log('Try these commands in Slack:');
   console.log('  - "Create a market analysis for our product"');
   console.log('  - "Generate quarterly OKRs for engineering"');
-  console.log('  - "pm: Ship v1 by Dec 1, 2025"  (creates a human-task plan)');
-  console.log('    In the project thread: "pm status", "pm done 1", "pm owner 2 @eng-lead", "pm note 3 kickoff scheduled"');
-  console.log('  - "@yourbot help" for more info\n');
+  const botAt = '@' + ((slackManager as any).getBotUserName?.() || (process.env.MANAGER_BOT_NAME || 'magi').replace(/^@/,''));
+  console.log(`  - "${botAt}: Ship v1 by Dec 1, 2025"  (creates a human-task plan)`);
+  console.log(`    In the project thread: "${botAt} status", "${botAt} done 1", "${botAt} owner 2 @eng-lead", "${botAt} note 3 kickoff scheduled"`);
+  console.log(`  - "${botAt} help" for more info\n`);
 
   // Send welcome message to default channel
   await slackManager.sendMessage(
@@ -96,7 +97,7 @@ Just describe what management task you need and I'll help!`
   // Send PM usage hints
   await slackManager.sendMessage(
     defaultChannel || 'general',
-    `To plan human work, start a message with:\n• pm: <instruction>  (e.g., pm: Ship v1 by Dec 1, 2025)\nThen manage in the thread using: pm status · pm done <#> · pm owner <#> @who · pm note <#> <text>`
+    `To plan human work, start a message with:\n• ${botAt}: <instruction>  (e.g., ${botAt}: Ship v1 by Dec 1, 2025)\nThen manage in the thread using: ${botAt} status · ${botAt} done <#> · ${botAt} owner <#> @who · ${botAt} note <#> <text>`
   );
 
   // Keep the process running

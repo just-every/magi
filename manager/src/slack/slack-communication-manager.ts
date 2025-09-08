@@ -9,6 +9,8 @@ export class SlackCommunicationManager implements CommunicationManager {
   private config: SlackConfig;
   private messageHandlers: Map<string, (message: SlackMessage) => void> = new Map();
   private connectionReady = false;
+  private botUserId?: string;
+  private botUserName?: string;
 
   constructor(config: SlackConfig) {
     this.config = config;
@@ -43,6 +45,8 @@ export class SlackCommunicationManager implements CommunicationManager {
 
       // Test the connection
       const auth = await this.client.auth.test();
+      this.botUserId = auth.user_id as string | undefined;
+      this.botUserName = auth.user as string | undefined;
       console.log(`✅ Connected to Slack workspace as ${auth.user} (${auth.user_id})`);
       console.log(`🏢 Team: ${auth.team} (${auth.team_id})`);
       
@@ -79,6 +83,7 @@ export class SlackCommunicationManager implements CommunicationManager {
         text: message,
         thread_ts: options?.threadTs,
         blocks: options?.blocks,
+        mrkdwn: true,
       });
       
       console.log(`Message sent to Slack channel ${channel}: ${result.ts}`);
@@ -273,6 +278,14 @@ export class SlackCommunicationManager implements CommunicationManager {
 
   isConnected(): boolean {
     return this.connectionReady;
+  }
+
+  getBotUserId(): string | undefined {
+    return this.botUserId;
+  }
+
+  getBotUserName(): string | undefined {
+    return this.botUserName;
   }
 
   async disconnect(): Promise<void> {

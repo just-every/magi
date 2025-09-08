@@ -216,6 +216,28 @@ export class SlackManagerIntegration {
             } else if (event.type === 'text' && typeof event.text === 'string') {
               // Alternative event format
               updates.push(event.text);
+            } else if (event.type === 'response_output' && (event as any).output) {
+              // Ensemble/Task often emits structured outputs here
+              const out: any = (event as any).output;
+              if (out.type === 'message') {
+                // Gather text from string or array payloads
+                let text = '';
+                if (typeof out.content === 'string') {
+                  text = out.content;
+                } else if (Array.isArray(out.content)) {
+                  text = out.content.map((c: any) => (typeof c === 'string' ? c : c?.text || '')).join('');
+                }
+                if (text) {
+                  updates.push(text);
+                }
+              } else if (typeof out === 'string') {
+                updates.push(out);
+              }
+            } else if (event.type === 'stream_end') {
+              // Stream finished; join anything we have
+              if (!finalResult && updates.length > 0) {
+                finalResult = updates.join('');
+              }
             } else if (event.type === 'done' && updates.length > 0) {
               // If we have accumulated updates but no final result, join them
               finalResult = updates.join('');
@@ -255,13 +277,17 @@ export class SlackManagerIntegration {
             console.log('[handleManagerRequest] Warning: Cleaned result too short, using original');
             cleanedResult = finalResult;
           }
-          
-          // Split long results into chunks for Slack
-          const maxLength = 3000; // Slack message limit
-          const chunks = [];
-          for (let i = 0; i < cleanedResult.length; i += maxLength) {
-            chunks.push(cleanedResult.substring(i, i + maxLength));
+          // Unwrap full fenced code block if present (``` or ```markdown)
+          const fenceWrap = cleanedResult.trim().match(/^```[a-zA-Z0-9_-]*\n([\s\S]*)\n```\s*$/);
+          if (fenceWrap) {
+            cleanedResult = fenceWrap[1];
           }
+
+          // Convert markdown tables to code blocks so Slack keeps alignment
+          cleanedResult = convertTablesToCodeBlocks(cleanedResult);
+
+          // Split long results into chunks for Slack, preserving code fences
+          const chunks = splitForSlack(cleanedResult, 3000);
           
           await this.slackManager.sendMessage(
             channel,
@@ -282,14 +308,12 @@ export class SlackManagerIntegration {
           try {
             const { runSimpleManagerAgent } = await import('../agents/simple-manager-agent.js');
             const text = await runSimpleManagerAgent(userPrompt, assetType as MANAGER_ASSET_TYPES);
-            const trimmed = (text || '').trim();
-            if (trimmed) {
-              // Chunk and send
-              const maxLength = 3000;
-              const chunks: string[] = [];
-              for (let i = 0; i < trimmed.length; i += maxLength) {
-                chunks.push(trimmed.substring(i, i + maxLength));
-              }
+            let trimmed = (text || '').trim();
+            const fw = trimmed.match(/^```[a-zA-Z0-9_-]*\n([\s\S]*)\n```\s*$/);
+            if (fw) trimmed = fw[1];
+            trimmed = convertTablesToCodeBlocks(trimmed);
+            const chunks: string[] = splitForSlack(trimmed, 3000);
+            if (chunks.length) {
               await this.slackManager.sendMessage(
                 channel,
                 `✅ **${assetType} Analysis Complete!**\n\n${chunks[0]}`,
@@ -395,6 +419,28 @@ The Slack integration is working perfectly, but there's an issue with the manage
     
     console.log(`🏷️  Processing mention - checking if it's a manager request...`);
     
+    // If this is a bot-directed PM command (e.g., @magi: ..., @magi status),
+    // skip sending the generic help message — CEOProjectManager will handle it.
+    try {
+      const botId = (this.slackManager as any).getBotUserId?.() as string | undefined;
+      if (botId) {
+        const leadingMention = new RegExp(`^<@${botId}>\\s*`, 'i');
+        const mentionWithColon = new RegExp(`^<@${botId}>\\s*:\\s*`, 'i');
+        if (mentionWithColon.test(text)) {
+          console.log('ℹ️ Mention looks like PM create (@bot: ...). Suppressing help.');
+          return; // let CEO PM handle
+        }
+        const after = text.replace(leadingMention, '').trim();
+        if (/^(status|projects|add|plan|recreate|retask|reset\s+tasks|can|auto|run|done|owner|note)\b/i.test(after)) {
+          console.log('ℹ️ Mention matches PM command. Suppressing help.');
+          return; // let CEO PM handle
+        }
+      }
+    } catch (e) {
+      // Non-fatal: fall through to normal behavior
+      console.log('⚠️ PM mention pre-check failed:', e);
+    }
+    
     // Check if the mention contains a management request
     const isManagement = this.isManagerRequest(text);
     
@@ -475,4 +521,57 @@ export async function initializeSlackIntegration(
   }
   
   return null;
+}
+
+// Convert GitHub-style markdown tables to fenced code blocks for Slack alignment
+function convertTablesToCodeBlocks(text: string): string {
+  const lines = text.split(/\r?\n/);
+  const rebuilt: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const header = lines[i];
+    const isHeader = /\|.*\|/.test(header || '') && (i + 1 < lines.length) && /^\s*\|?\s*:?[-]{2,}/.test(lines[i + 1] || '');
+    if (isHeader) {
+      const block: string[] = [header];
+      i++;
+      // include the separator row
+      if (i < lines.length) block.push(lines[i]);
+      i++;
+      while (i < lines.length && /\|/.test(lines[i])) {
+        block.push(lines[i]);
+        i++;
+      }
+      rebuilt.push('```');
+      rebuilt.push(...block);
+      rebuilt.push('```');
+      continue;
+    }
+    rebuilt.push(header);
+    i++;
+  }
+  return rebuilt.join('\n');
+}
+
+// Split into Slack-safe chunks without breaking fenced code blocks
+function splitForSlack(text: string, maxLen: number): string[] {
+  const out: string[] = [];
+  let i = 0;
+  while (i < text.length) {
+    if (text.startsWith('```', i)) {
+      const endFence = text.indexOf('\n```', i + 3);
+      const fenceEnd = endFence >= 0 ? endFence + 4 : text.length;
+      const block = text.slice(i, fenceEnd);
+      if (!out.length || (out[out.length - 1].length + block.length + 1) > maxLen) out.push(block);
+      else out[out.length - 1] += '\n' + block;
+      i = fenceEnd;
+      continue;
+    }
+    const nextParaEnd = text.indexOf('\n\n', i);
+    const segEnd = nextParaEnd === -1 ? text.length : nextParaEnd + 2;
+    const seg = text.slice(i, segEnd);
+    if (!out.length || (out[out.length - 1].length + seg.length) > maxLen) out.push(seg);
+    else out[out.length - 1] += seg;
+    i = segEnd;
+  }
+  return out.filter(Boolean);
 }

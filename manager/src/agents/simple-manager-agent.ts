@@ -68,15 +68,25 @@ export async function runSimpleManagerAgent(
         const task = `Please provide a ${assetType || 'strategic analysis'} for: ${userPrompt}`;
         const response = await runMECH(agent, task);
 
-        // Extract the final content from the MECH response
-        let result = 'Analysis completed successfully.';
-        if (response.status === 'complete' && response.history.length > 0) {
-            const lastMessage = response.history[response.history.length - 1];
-            if (lastMessage && 'type' in lastMessage && lastMessage.type === 'message' &&
-                'role' in lastMessage && lastMessage.role === 'assistant' &&
-                'content' in lastMessage && typeof lastMessage.content === 'string') {
-                result = lastMessage.content;
+        // Prefer the assembled response string when available
+        let result = (response.response || '').trim();
+
+        // If missing, try to extract from history
+        if (!result && response.history.length > 0) {
+            const lastMessage = response.history[response.history.length - 1] as any;
+            if (lastMessage?.type === 'message') {
+                const content = lastMessage.content;
+                if (typeof content === 'string') {
+                    result = content;
+                } else if (Array.isArray(content)) {
+                    result = content.map((c: any) => (typeof c === 'string' ? c : c?.text || '')).join('');
+                }
             }
+        }
+
+        // Fallback placeholder only if still empty
+        if (!result) {
+            result = 'Analysis completed successfully.';
         }
         console.log(`[SimpleManagerAgent] Analysis completed, length: ${result.length} characters`);
         

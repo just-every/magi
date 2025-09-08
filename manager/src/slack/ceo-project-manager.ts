@@ -132,7 +132,28 @@ export class CEOProjectManager {
   }
 
   async handleMessage(message: { channel: string; text: string; user?: string; ts?: string; thread_ts?: string; }): Promise<void> {
-    const txt = (message.text || '').trim();
+    const raw = (message.text || '').trim();
+    const botId = (this.slack as any).getBotUserId?.() as string | undefined;
+    const botNameEnv = (process.env.MANAGER_BOT_NAME || '').replace(/^@/, '');
+    const botName = botNameEnv || (this.slack as any).getBotUserName?.() || 'magi';
+
+    // Build regexes to detect a leading mention of this bot, supporting both
+    // Slack mention format (<@UXXXX>) and a plain-text @name fallback.
+    const mentionIdRe = botId ? new RegExp(`^<@${botId}>\s*:?\s*`, 'i') : null;
+    const mentionNameRe = new RegExp(`^@${botName}\\b\s*:?\s*`, 'i');
+
+    let txt: string | null = null;
+    if (mentionIdRe && mentionIdRe.test(raw)) {
+      // Normalize to historic parser by mapping leading mention to `pm` prefix
+      txt = raw.replace(mentionIdRe, (m: string) => (/:\s*$/.test(m) ? 'pm: ' : 'pm '));
+    } else if (mentionNameRe.test(raw)) {
+      txt = raw.replace(mentionNameRe, (m: string) => (m.includes(':') ? 'pm: ' : 'pm '));
+    }
+
+    // If the message doesn't start with an @magi (or bot) mention, ignore it.
+    if (!txt) {
+      return;
+    }
     // Create project: "pm: <title or instruction>"
     if (/^pm:\s*/i.test(txt)) {
       const instruction = txt.replace(/^pm:\s*/i, '').trim();
@@ -156,11 +177,11 @@ export class CEOProjectManager {
       return;
     }
 
-    // List projects anywhere: "pm projects"
+    // List projects anywhere: "@magi projects"
     if (/^pm\s+projects\b/i.test(txt)) {
       const plans = Array.from(this.plans.values());
       if (plans.length === 0) {
-        await this.slack.sendMessage(message.channel, 'No projects yet. Start one with: pm: <instruction>');
+        await this.slack.sendMessage(message.channel, `No projects yet. Start one with: @${botName}: <instruction>`);
         return;
       }
       const blocks: any[] = [{ type: 'section', text: { type: 'mrkdwn', text: '*Active Projects*' } }, { type: 'divider' }];
@@ -177,22 +198,22 @@ export class CEOProjectManager {
       return;
     }
 
-    // Help / Commands: "pm help" | "pm commands"
+    // Help / Commands: "@magi help" | "@magi commands"
     if (/^pm\s+(help|commands)\b/i.test(txt)) {
       const blocks: any[] = [
         { type: 'section', text: { type: 'mrkdwn', text: '*CEO Project Manager — Commands*' } },
         { type: 'divider' },
-        { type: 'section', text: { type: 'mrkdwn', text: '`pm: <instruction>` — Create a project from an instruction' } },
-        { type: 'section', text: { type: 'mrkdwn', text: '`pm status [<project-id>]` — Show status in channel' } },
-        { type: 'section', text: { type: 'mrkdwn', text: '`pm projects` — List all projects' } },
-        { type: 'section', text: { type: 'mrkdwn', text: '`pm plan [<project-id>]` — Refine tasks; AI auto-runs automatable work' } },
-        { type: 'section', text: { type: 'mrkdwn', text: '`pm recreate [<project-id>]` — Re-create tasks from instruction; AI auto-runs automatable' } },
-        { type: 'section', text: { type: 'mrkdwn', text: '`pm add <text>` — Add a quick task' } },
-        { type: 'section', text: { type: 'mrkdwn', text: '`pm can <#> [<project-id>]` — Check if task is automatable' } },
-        { type: 'section', text: { type: 'mrkdwn', text: '`pm auto <#> [<project-id>]` — Run AI automation for a task' } },
-        { type: 'section', text: { type: 'mrkdwn', text: '`pm done <#> [<project-id>]` — Mark task complete' } },
-        { type: 'section', text: { type: 'mrkdwn', text: '`pm owner <#> @who [<project-id>]` — Reassign owner' } },
-        { type: 'section', text: { type: 'mrkdwn', text: '`pm note <#> <text> [<project-id>]` — Add a note' } },
+        { type: 'section', text: { type: 'mrkdwn', text: '`@' + botName + ': <instruction>` — Create a project from an instruction' } },
+        { type: 'section', text: { type: 'mrkdwn', text: '`@' + botName + ' status [<project-id>]` — Show status in channel' } },
+        { type: 'section', text: { type: 'mrkdwn', text: '`@' + botName + ' projects` — List all projects' } },
+        { type: 'section', text: { type: 'mrkdwn', text: '`@' + botName + ' plan [<project-id>]` — Refine tasks; AI auto-runs automatable work' } },
+        { type: 'section', text: { type: 'mrkdwn', text: '`@' + botName + ' recreate [<project-id>]` — Re-create tasks from instruction; AI auto-runs automatable' } },
+        { type: 'section', text: { type: 'mrkdwn', text: '`@' + botName + ' add <text>` — Add a quick task' } },
+        { type: 'section', text: { type: 'mrkdwn', text: '`@' + botName + ' can <#> [<project-id>]` — Check if task is automatable' } },
+        { type: 'section', text: { type: 'mrkdwn', text: '`@' + botName + ' auto <#> [<project-id>]` — Run AI automation for a task' } },
+        { type: 'section', text: { type: 'mrkdwn', text: '`@' + botName + ' done <#> [<project-id>]` — Mark task complete' } },
+        { type: 'section', text: { type: 'mrkdwn', text: '`@' + botName + ' owner <#> @who [<project-id>]` — Reassign owner' } },
+        { type: 'section', text: { type: 'mrkdwn', text: '`@' + botName + ' note <#> <text> [<project-id>]` — Add a note' } },
         { type: 'divider' },
         { type: 'context', elements: [{ type: 'mrkdwn', text: 'Persistence: `.output/projects.json` (override with MANAGER_PM_STORE / MANAGER_OUTPUT_DIR)' }] },
       ];
@@ -201,8 +222,8 @@ export class CEOProjectManager {
     }
 
     // Plan/refine concrete tasks for a project
-    // pm plan         -> refine the single project in channel
-    // pm plan <id>    -> refine that project
+    // @magi plan         -> refine the single project in channel
+    // @magi plan <id>    -> refine that project
     if (/^pm\s+plan(\s+\S+)?$/i.test(txt)) {
       const idMatch = txt.match(/^pm\s+plan\s+(\S+)$/i);
       const selId = idMatch?.[1];
@@ -211,7 +232,7 @@ export class CEOProjectManager {
       if (selId) target = inChannel.find(p => p.id === selId) || this.plans.get(selId);
       if (!target && inChannel.length === 1) target = inChannel[0];
       if (!target) {
-        await this.slack.sendMessage(message.channel, 'Project not found. Use `pm projects` or `pm plan <project-id>`.');
+        await this.slack.sendMessage(message.channel, `Project not found. Use ` + '`@' + botName + ' projects` or `@' + botName + ' plan <project-id>`.');
         return;
       }
       await this.slack.sendMessage(message.channel, `🛠️ Refining plan for ${target.title}... this may take ~20–40s.`);
@@ -229,7 +250,7 @@ export class CEOProjectManager {
     }
 
     // Re-create tasks for an existing project (aliases)
-    // pm recreate [<id>]  |  pm retask [<id>]  |  pm reset tasks [<id>]
+    // @magi recreate [<id>]  |  @magi retask [<id>]  |  @magi reset tasks [<id>]
     if (/^pm\s+(recreate|retask|reset\s+tasks)(\s+\S+)?$/i.test(txt)) {
       const idMatch = txt.match(/^pm\s+(?:recreate|retask|reset\s+tasks)\s+(\S+)$/i);
       const selId = idMatch?.[1];
@@ -238,7 +259,7 @@ export class CEOProjectManager {
       if (selId) target = inChannel.find(p => p.id === selId) || this.plans.get(selId);
       if (!target && inChannel.length === 1) target = inChannel[0];
       if (!target) {
-        await this.slack.sendMessage(message.channel, 'Project not found. Use `pm projects` or `pm recreate <project-id>`.');
+        await this.slack.sendMessage(message.channel, `Project not found. Use ` + '`@' + botName + ' projects` or `@' + botName + ' recreate <project-id>`.');
         return;
       }
       await this.slack.sendMessage(message.channel, `♻️ Re-creating tasks for ${target.title}... this may take ~20–40s.`);
@@ -255,12 +276,12 @@ export class CEOProjectManager {
       return;
     }
 
-    // Quick add task: pm add <text>
+    // Quick add task: @magi add <text>
     if (/^pm\s+add\s+.+/i.test(txt)) {
       const title = txt.replace(/^pm\s+add\s+/i, '').trim();
       const inChannel = [...this.plans.values()].filter(p => p.slack.channel === message.channel);
       if (inChannel.length === 0) {
-        await this.slack.sendMessage(message.channel, 'No project in this channel. Start one with `pm: <instruction>` or use `pm add` in the project channel.');
+        await this.slack.sendMessage(message.channel, `No project in this channel. Start one with ` + '`@' + botName + ': <instruction>` or use `@' + botName + ' add` in the project channel.');
         return;
       }
       const target = inChannel.length === 1 ? inChannel[0] : inChannel[0]; // simple heuristic: first project
@@ -272,7 +293,7 @@ export class CEOProjectManager {
       return;
     }
 
-    // Can we automate this? pm can <#> [<project-id>]
+    // Can we automate this? @magi can <#> [<project-id>]
     if (/^pm\s+can\s+.+/i.test(txt)) {
       const tokens = txt.split(/\s+/);
       const possibleIndex = tokens.find(t => /^\d+$/.test(t));
@@ -280,18 +301,18 @@ export class CEOProjectManager {
       const inChannel = [...this.plans.values()].filter(p => p.slack.channel === message.channel);
       const target = possibleId ? inChannel.find(p => p.id === possibleId) : (inChannel.length === 1 ? inChannel[0] : undefined);
       if (!target || !possibleIndex) {
-        await this.slack.sendMessage(message.channel, 'Usage: pm can <#> [<project-id>]');
+        await this.slack.sendMessage(message.channel, 'Usage: @' + botName + ' can <#> [<project-id>]');
         return;
       }
       const idx = Number(possibleIndex) - 1;
       const task = target.tasks[idx];
       if (!task) { await this.slack.sendMessage(message.channel, 'Task not found.'); return; }
       const can = isAutomatable(task) && task.status !== 'completed';
-      await this.slack.sendMessage(message.channel, can ? `🤖 Yes — I can run task ${possibleIndex} (${task.title}). Use: pm auto ${possibleIndex}` : `🙅 Not safe to automate task ${possibleIndex} right now.`);
+      await this.slack.sendMessage(message.channel, can ? `🤖 Yes — I can run task ${possibleIndex} (${task.title}). Use: @${botName} auto ${possibleIndex}` : `🙅 Not safe to automate task ${possibleIndex} right now.`);
       return;
     }
 
-    // Run automation: pm auto <#> [<project-id>]  | aliases: pm run
+    // Run automation: @magi auto <#> [<project-id>]  | aliases: @magi run
     if (/^pm\s+(auto|run)\s+.+/i.test(txt)) {
       const tokens = txt.split(/\s+/);
       const possibleIndex = tokens.find(t => /^\d+$/.test(t));
@@ -299,7 +320,7 @@ export class CEOProjectManager {
       const inChannel = [...this.plans.values()].filter(p => p.slack.channel === message.channel);
       const target = possibleId ? inChannel.find(p => p.id === possibleId) : (inChannel.length === 1 ? inChannel[0] : undefined);
       if (!target || !possibleIndex) {
-        await this.slack.sendMessage(message.channel, 'Usage: pm auto <#> [<project-id>]');
+        await this.slack.sendMessage(message.channel, 'Usage: @' + botName + ' auto <#> [<project-id>]');
         return;
       }
       const idx = Number(possibleIndex) - 1;
@@ -328,7 +349,7 @@ export class CEOProjectManager {
       return;
     }
 
-    // Channel-level status: "pm status [<project-id>]"
+    // Channel-level status: "@magi status [<project-id>]"
     const statusMatch = txt.match(/^pm\s+status(?:\s+(\S+))?$/i);
     if (statusMatch) {
       let target: ProjectPlan | undefined;
@@ -340,7 +361,7 @@ export class CEOProjectManager {
         if (inChannel.length === 1) target = inChannel[0];
         if (inChannel.length > 1) {
           // Disambiguate
-          const blocks: any[] = [{ type: 'section', text: { type: 'mrkdwn', text: '*Multiple projects in this channel*\nUse `pm status <project-id>`' } }, { type: 'divider' }];
+          const blocks: any[] = [{ type: 'section', text: { type: 'mrkdwn', text: '*Multiple projects in this channel*\nUse `@' + botName + ' status <project-id>`' } }, { type: 'divider' }];
           inChannel.forEach((p, i) => {
             const open = p.tasks.filter(t => t.status !== 'completed').length;
             const total = p.tasks.length;
@@ -352,7 +373,7 @@ export class CEOProjectManager {
       }
 
       if (!target) {
-        await this.slack.sendMessage(message.channel, 'Project not found. Use `pm projects` to list all, or `pm status <project-id>`.');
+        await this.slack.sendMessage(message.channel, `Project not found. Use ` + '`@' + botName + ' projects` to list all, or `@' + botName + ' status <project-id>`.');
         return;
       }
 
@@ -365,10 +386,10 @@ export class CEOProjectManager {
 
     // Channel-level complete/owner/note with optional project-id disambiguation
     // Supported:
-    //  - pm done <#>
-    //  - pm done <project-id> <#>  OR  pm done <#> <project-id>
-    //  - pm owner <#> @who [<project-id>]
-    //  - pm note <#> <text> [<project-id>]
+    //  - @magi done <#>
+    //  - @magi done <project-id> <#>  OR  @magi done <#> <project-id>
+    //  - @magi owner <#> @who [<project-id>]
+    //  - @magi note <#> <text> [<project-id>]
     const tokens = txt.split(/\s+/);
     if (tokens.length >= 3 && tokens[0].toLowerCase() === 'pm') {
       const cmd = tokens[1].toLowerCase();
@@ -384,7 +405,7 @@ export class CEOProjectManager {
 
         if (!target) {
           if (inChannel.length > 1) {
-            const blocks: any[] = [{ type: 'section', text: { type: 'mrkdwn', text: '*Multiple projects in this channel*\nAdd the project id to your command, e.g., `pm done 1 proj_abcd1234`' } }, { type: 'divider' }];
+            const blocks: any[] = [{ type: 'section', text: { type: 'mrkdwn', text: '*Multiple projects in this channel*\nAdd the project id to your command, e.g., `@' + botName + ' done 1 proj_abcd1234`' } }, { type: 'divider' }];
             inChannel.forEach((p, i) => {
               const open = p.tasks.filter(t => t.status !== 'completed').length;
               blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*${i + 1}. ${p.title}* — ID: ${p.id}  |  open: *${open}/${p.tasks.length}*` } });
@@ -411,7 +432,7 @@ export class CEOProjectManager {
             // owner arg is the first token that starts with @ after the index
             const at = tokens.slice(2).find(t => /^@/.test(t));
             if (!at) {
-              await this.slack.sendMessage(message.channel, 'Please specify an owner, e.g., `pm owner 2 @eng-lead`');
+              await this.slack.sendMessage(message.channel, 'Please specify an owner, e.g., `@' + botName + ' owner 2 @eng-lead`');
               return;
             }
             reassignTask(target, target.tasks[idx].id, at);
@@ -426,7 +447,7 @@ export class CEOProjectManager {
             const after = tokens.slice(textStart + 1).filter(t => !/^proj_/.test(t));
             const noteText = after.join(' ').trim();
             if (!noteText) {
-              await this.slack.sendMessage(message.channel, 'Please include a note, e.g., `pm note 3 kickoff scheduled`');
+              await this.slack.sendMessage(message.channel, 'Please include a note, e.g., `@' + botName + ' note 3 kickoff scheduled`');
               return;
             }
             addTaskNote(target, target.tasks[idx].id, noteText);

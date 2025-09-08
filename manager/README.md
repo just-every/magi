@@ -211,11 +211,11 @@ npm run slack-bot
 
 The bot supports:
 - CEO analysis streams (type strategy/analysis requests in Slack)
-- CEO Project Manager for humans:
-  - Create a project: `pm: Ship v1 by Dec 1, 2025`
-  - Commands: `pm status`, `pm projects`, `pm add <text>`, `pm plan`, `pm recreate`
-  - Task updates: `pm done <#>`, `pm owner <#> @who`, `pm note <#> <text>`
-  - Global: `pm projects` to list all active projects
+- CEO Project Manager for humans (mention-based):
+  - Create a project: `@magi: Ship v1 by Dec 1, 2025`
+  - Commands: `@magi status`, `@magi projects`, `@magi add <text>`, `@magi plan`, `@magi recreate`
+  - Task updates: `@magi done <#>`, `@magi owner <#> @who`, `@magi note <#> <text>`
+  - Global: `@magi projects` to list all active projects
   - Plans auto-save to `.output/projects.json` (override via `MANAGER_PM_STORE` or `MANAGER_OUTPUT_DIR`).
   - Audit log: `.output/projects.audit.jsonl` (one JSON line per event)
 

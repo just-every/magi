@@ -21,11 +21,11 @@ async function main() {
     try { await pm.handleMessage(msg as any); } catch (e) { console.error(e); }
   });
 
-  console.log('✅ CEO Project Manager is listening. Type "pm: <instruction>" in Slack.');
+  const botName = (slack as any).getBotUserName?.() || (process.env.MANAGER_BOT_NAME || 'magi').replace(/^@/, '');
+  console.log(`✅ CEO Project Manager is listening. Type "@${botName}: <instruction>" in Slack.`);
 }
 
 main().catch(err => {
   console.error(err);
   process.exit(1);
 });
-
