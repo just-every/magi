@@ -24,5 +24,8 @@
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "js-yaml": "^4.2.0"
   }
 }
