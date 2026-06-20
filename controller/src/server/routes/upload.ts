@@ -16,11 +16,16 @@ const execAsync = promisify(exec);
 
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
+type MulterLimits = NonNullable<Parameters<typeof multer>[0]>['limits'] & {
+    fieldNestingDepth?: number;
+};
+const uploadLimits: MulterLimits = {
+    fileSize: 100 * 1024 * 1024, // 100MB max file size
+    fieldNestingDepth: 0,
+};
 const upload = multer({
     storage,
-    limits: {
-        fileSize: 100 * 1024 * 1024, // 100MB max file size
-    },
+    limits: uploadLimits,
 });
 
 /**
