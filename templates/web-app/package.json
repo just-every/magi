@@ -18,7 +18,7 @@
     "@radix-ui/react-slot": "^1.2.2",
     "bcryptjs": "^3.0.2",
     "class-variance-authority": "^0.7.1",
-    "next": "15.5.21",
+    "next": "15.5.25",
     "next-auth": "^4.24.11",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -35,14 +35,15 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9.26.0",
-    "eslint-config-next": "^15.5.21",
+    "eslint-config-next": "^15.5.25",
     "prisma": "^6.7.0",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
     "typescript": "^5"
   },
   "overrides": {
-    "js-yaml": "^4.2.0",
-    "postcss": "^8.5.23"
+    "js-yaml": "4.3.2",
+    "postcss": "^8.5.23",
+    "sharp": "^0.35.4"
   }
 }

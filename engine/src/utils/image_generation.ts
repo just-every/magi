@@ -21,7 +21,7 @@ import {
 } from './design/constants.js';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { createBase64FromImage } from './image_utils.js';
-import sharp from 'sharp';
+import sharp, { type FormatEnum } from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
 import { quick_llm_call } from './llm_call_utils.js';
 
@@ -62,7 +62,7 @@ async function resizeImageIfNeeded(base64Image: string): Promise<string> {
     // Resize the image preserving aspect ratio
     const resizedBuffer = await sharp(buffer)
         .resize({ width: MAX_WIDTH })
-        .toFormat(imageFormat as keyof sharp.FormatEnum)
+        .toFormat(imageFormat as keyof FormatEnum)
         .toBuffer();
 
     // Convert back to base64
