@@ -87,7 +87,7 @@
         "openai": "^5.2.0",
         "pg": "^8.16.0",
         "proper-lockfile": "^4.1.2",
-        "simple-git": "^3.28.0",
+        "simple-git": "^3.36.0",
         "ws": "^8.21.0"
     }
 }
